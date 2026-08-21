@@ -1,0 +1,2276 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Capital Sandbox — Multiplayer</title>
+<!-- Schriften des Entwurfs. Fällt offline sauber auf System-Schriften zurück,
+     das Spiel läuft schließlich auch im LAN ohne Internet. -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0a0e15; --panel:#121824; --panel2:#1a2231; --line:#273144;
+  --text:#e3e9f4; --dim:#8695ab; --accent:#38bdf8; --accent2:#a78bfa;
+  --up:#34d399; --down:#fb7185; --font:"Inter",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{background:var(--bg);color:var(--text);font-family:var(--font);overflow:hidden}
+canvas{display:block;cursor:grab} canvas.drag{cursor:grabbing}
+button{font-family:var(--font)}
+input,select{background:var(--panel2);border:1px solid var(--line);border-radius:8px;color:var(--text);padding:7px 9px;font-size:12.5px;font-family:var(--font)}
+
+/* ---- Intro-Video ----
+ * Liegt über allem, bis es durchgelaufen oder übersprungen ist. */
+#intro{position:fixed;inset:0;z-index:200;background:#000;display:grid;place-items:center}
+#intro[hidden]{display:none}
+#introVideo{width:100%;height:100%;object-fit:contain;background:#000}
+#introBar{position:absolute;right:22px;bottom:20px;display:flex;gap:8px}
+#introBar button{background:rgba(10,14,21,.72);border:1px solid rgba(255,255,255,.16);border-radius:9px;
+  color:#e3e9f4;padding:8px 15px;font-size:12.5px;font-weight:600;cursor:pointer;font-family:var(--font);
+  backdrop-filter:blur(6px);transition:background .15s,border-color .15s}
+#introBar button:hover{background:rgba(20,28,40,.9);border-color:rgba(56,189,248,.5)}
+#introBar button[hidden]{display:none}
+
+/* ---------------- Startscreen (Lobby) ----------------
+ * Übernommenes Figma-Design: dunkle Karte mit Lichtschein, Skyline aus echten
+ * Spiel-Sprites, zweispaltiger Aufbau, Branchenkarten mit eigener Akzentfarbe.
+ * Alle Element-IDs und Klassen bleiben, damit die bestehende Spiellogik
+ * unverändert weiterläuft. */
+#join{position:fixed;inset:0;z-index:100;overflow:auto;padding:10px 16px;
+  background:#070b10;display:flex;align-items:flex-start;justify-content:center}
+/* Vignette, Scanlines und Lichtschein von oben liegen hinter der Karte */
+#join::before{content:"";position:fixed;inset:0;pointer-events:none;z-index:0;
+  background:radial-gradient(ellipse at center, transparent 30%, rgba(0,0,0,.7) 100%)}
+#join::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:1;
+  background:repeating-linear-gradient(0deg, rgba(255,255,255,.012) 0px, rgba(255,255,255,.012) 1px, transparent 1px, transparent 3px)}
+#joinGlow{position:fixed;top:0;left:50%;transform:translateX(-50%);width:1000px;height:320px;pointer-events:none;z-index:1;
+  background:radial-gradient(ellipse at 50% 0%, rgba(56,189,248,.12) 0%, rgba(167,139,250,.07) 50%, transparent 75%)}
+#join .card{position:relative;z-index:10;width:min(1000px,100%);
+  background:linear-gradient(160deg,#131c2b 0%,#0e1520 40%,#0c1220 100%);
+  border:1px solid #1e2d45;border-radius:22px;overflow:hidden;
+  box-shadow:0 0 0 1px rgba(56,189,248,.06), 0 24px 80px rgba(0,0,0,.8), 0 0 60px rgba(56,189,248,.04)}
+#joinParticles{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;opacity:.45}
+
+/* ---- Kopfbereich ---- */
+#join .hero{position:relative;padding:14px 28px 0}
+#joinStatus{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;font-family:var(--mono)}
+#joinStatus .left,#joinStatus .right{display:flex;align-items:center;gap:11px}
+.pulse{position:relative;display:inline-flex;width:8px;height:8px;flex:none}
+.pulse i{position:absolute;inset:0;border-radius:50%;background:var(--up);opacity:.5;animation:ping 1.2s cubic-bezier(0,0,.2,1) infinite}
+.pulse b{position:relative;width:8px;height:8px;border-radius:50%;background:var(--up);box-shadow:0 0 6px var(--up)}
+@keyframes ping{75%,100%{transform:scale(2);opacity:0}}
+#joinStatusText{font-size:10.5px;font-weight:600;color:var(--up);letter-spacing:.08em;text-transform:uppercase}
+#joinSlots{display:flex;align-items:center;gap:6px}
+#joinSlots .slot{width:8px;height:8px;border-radius:50%;background:#1a2231;border:1px solid #273144;transition:all .2s}
+#joinSlots .slot.on{background:var(--accent);border:none;box-shadow:0 0 6px rgba(56,189,248,.6)}
+#joinSlots .count{font-size:10.5px;color:var(--dim);margin-left:4px}
+#join h1{position:relative;display:flex;align-items:baseline;gap:10px;margin-bottom:11px;
+  font-size:28px;font-weight:800;letter-spacing:-.045em;line-height:1;color:#f0f6ff}
+#join h1 span{color:var(--accent);text-shadow:0 0 30px rgba(56,189,248,.5)}
+#join h1::after{content:"";position:absolute;bottom:-6px;left:0;width:180px;height:1px;
+  background:linear-gradient(to right, rgba(56,189,248,.4), transparent)}
+#join .tag{font-size:12.5px;color:#6a7f9a;line-height:1.6;max-width:560px;margin-bottom:12px}
+/* Umschalter hosten / beitreten */
+#netmode{display:inline-flex;gap:0;padding:3px;background:#070b10;border:1px solid #1a2535;
+  border-radius:11px;box-shadow:inset 0 1px 4px rgba(0,0,0,.5)}
+#netmode .netopt{padding:7px 20px;border-radius:8px;font-size:12.5px;font-weight:600;letter-spacing:-.01em;
+  cursor:pointer;border:none;background:none;color:#4a6080;transition:all .18s;font-family:var(--font);white-space:nowrap}
+#netmode .netopt:hover{color:#7e97b8}
+#netmode .netopt.on{background:linear-gradient(135deg,#1e3a5a 0%,#164060 100%);color:var(--accent);
+  box-shadow:0 0 16px rgba(56,189,248,.2), inset 0 1px 0 rgba(56,189,248,.15)}
+/* Skyline aus echten Gebäude-Sprites des Spiels */
+/* Die Gebäude-PNGs haben viel durchsichtigen Rand — bei Originalgröße wirken sie
+ * verloren. Deshalb vergrößert dargestellt und der Streifen oben beschnitten. */
+.skyline{position:relative;height:50px;margin-top:8px;overflow:hidden}
+.skyline .row{display:flex;align-items:flex-end;justify-content:center;gap:7px;height:100%;padding-bottom:2px}
+/* Zugeschnittene Sprites (assets/skyline/): der untere Bildrand IST die
+ * Gebäudekante, dadurch stehen alle auf einer gemeinsamen Grundlinie.
+ * Nur die Höhe wird gesetzt, die Breite folgt dem Seitenverhältnis. */
+.skyline img{flex:none;width:auto;opacity:.92;filter:drop-shadow(0 3px 8px rgba(0,0,0,.6))}
+.skyline .fade{position:absolute;top:0;bottom:0;width:144px;pointer-events:none}
+.skyline .fade.l{left:0;background:linear-gradient(to right,#0e1520,transparent)}
+.skyline .fade.r{right:0;background:linear-gradient(to left,#0e1520,transparent)}
+.skyline .fog{position:absolute;left:0;right:0;bottom:0;height:22px;pointer-events:none;
+  background:linear-gradient(to top,#0e1520 0%,transparent 100%)}
+.rule{height:1px;background:linear-gradient(to right,transparent 0%,var(--accent) 25%,var(--accent2) 75%,transparent 100%);opacity:.35}
+
+/* ---- Zweispaltiger Rumpf ---- */
+#join .body{display:grid;grid-template-columns:1fr 1px 1fr}
+#join .divider{width:1px;background:linear-gradient(to bottom,transparent,#1e2d45 20%,#1e2d45 80%,transparent)}
+#join .col{padding:13px 26px;display:flex;flex-direction:column;gap:10px}
+@media(max-width:820px){#join .body{grid-template-columns:1fr}
+  #join .divider{width:auto;height:1px;background:linear-gradient(to right,transparent,#1e2d45 20%,#1e2d45 80%,transparent)}
+  #join .col{padding:22px 22px}
+  .skyline{height:54px}}
+/* Feldbeschriftung in Versalien */
+.flabel{display:block;font-size:11px;font-weight:700;color:var(--dim);letter-spacing:.08em;
+  text-transform:uppercase;font-family:var(--mono);margin-bottom:6px}
+#join p{font-size:11px;color:#4a6080;line-height:1.5}
+/* Eingaben mit eingelassenem Look und Fokus-Schein */
+#join input,#join select{background:#0a1018;border:1px solid #1e2d45;border-radius:10px;
+  padding:9px 13px;font-size:13.5px;color:var(--text);outline:none;font-family:var(--font);
+  box-shadow:inset 0 1px 3px rgba(0,0,0,.4);transition:border-color .15s,box-shadow .15s;width:100%}
+#join input:focus,#join select:focus{border-color:var(--accent);
+  box-shadow:0 0 0 3px rgba(56,189,248,.1), inset 0 1px 3px rgba(0,0,0,.4)}
+#join select{appearance:none;cursor:pointer;padding-right:36px;font-size:13px;
+  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='7' viewBox='0 0 12 7' fill='none'><path d='M1 1l5 5 5-5' stroke='%234a6080' stroke-width='1.5' stroke-linecap='round'/></svg>");
+  background-repeat:no-repeat;background-position:right 12px center}
+/* Farbwahl */
+#join .colors{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+#join .colors button{width:22px;height:22px;border-radius:50%;border:2px solid transparent;cursor:pointer;
+  padding:0;transition:transform .12s,box-shadow .12s,border-color .12s}
+#join .colors button:hover{transform:scale(1.25)}
+#join .colors button.on{border-color:#fff}
+/* Einladen / Beitreten */
+.joinbox{background:#080d14;border:1px solid #1a2535;border-radius:12px;padding:10px 13px}
+.joinbox+.joinbox{margin-top:8px}
+.joinbox .lbl{display:flex;align-items:center;gap:8px;font-size:10.5px;color:#4a6080;font-weight:600;
+  text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px}
+.joinbox .lbl svg{flex:none}
+.joinbox .row{display:flex;gap:8px;align-items:center}
+#inviteUrl{flex:1;min-width:0;background:#0d1522;border:1px solid #1a2535;border-radius:7px;
+  padding:6px 10px;font-size:11px;color:#4a6080;font-family:var(--mono);box-shadow:none}
+.copybtn{background:#0d1522;border:1px solid #1a2535;border-radius:7px;padding:6px 12px;font-size:11px;
+  font-weight:600;color:#4a6080;cursor:pointer;transition:all .15s;white-space:nowrap;font-family:var(--font)}
+.copybtn:hover{color:#7e97b8;border-color:#243348}
+.copybtn.done{background:rgba(52,211,153,.15);border-color:var(--up);color:var(--up)}
+#hostCode{font-family:var(--mono);font-size:24px;font-weight:700;color:var(--accent);
+  letter-spacing:.28em;text-shadow:0 0 20px rgba(56,189,248,.45)}
+#jcode{text-align:center;text-transform:uppercase;font-family:var(--mono);font-size:22px;
+  letter-spacing:.22em;padding:12px}
+/* Branchenkarten */
+#jind{display:flex;flex-direction:column;gap:6px}
+.indopt{position:relative;display:flex;align-items:center;gap:12px;text-align:left;overflow:hidden;
+  background:#07090f;border:1px solid #141d2c;border-radius:12px;padding:7px 11px;cursor:pointer;
+  transition:all .15s;font-family:var(--font)}
+.indopt img{flex:none;width:34px;height:34px;object-fit:contain;position:relative;z-index:1;
+  filter:drop-shadow(0 4px 6px rgba(0,0,0,.5))}
+.indopt .txt{position:relative;z-index:1}
+.indopt b{display:block;font-size:13px;font-weight:700;color:#c0cfe3;letter-spacing:-.01em}
+.indopt small{display:block;font-size:11px;color:#4a6080;line-height:1.45;margin-top:2px}
+.indopt .chosen{display:none;font-size:9.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;
+  font-family:var(--mono);border-radius:4px;padding:2px 7px;margin-left:8px;vertical-align:2px}
+.indopt .head{display:flex;align-items:center}
+.indopt:hover{border-color:#22314a}
+.indopt.on{background:var(--ac08);border-color:var(--ac50);box-shadow:0 0 20px var(--ac18), inset 0 1px 0 var(--ac15)}
+.indopt.on b{color:var(--ac)}
+.indopt.on .chosen{display:inline-block;color:var(--ac);background:var(--ac18);border:1px solid var(--ac35)}
+/* Bot-Leiste */
+#botbox{background:#07090f;border:1px solid #141d2c;border-radius:12px;padding:8px 14px;margin-bottom:12px;
+  display:flex;align-items:center;flex-wrap:wrap;gap:10px 18px}
+.botHead{display:flex;align-items:center;gap:10px}
+#botLevel{display:inline-flex;gap:0;padding:2px;background:#050810;border:1px solid #1a2535;border-radius:9px}
+#botLevel button{padding:4px 11px;border:none;background:none;border-radius:7px;font-size:11px;font-weight:600;
+  color:#4a6080;cursor:pointer;font-family:var(--font);transition:all .16s}
+#botLevel button:hover{color:#7e97b8}
+#botLevel button.on{background:linear-gradient(135deg,#1e3a5a 0%,#164060 100%);color:var(--accent);
+  box-shadow:0 0 12px rgba(56,189,248,.18), inset 0 1px 0 rgba(56,189,248,.15)}
+#botCounts{display:flex;align-items:center;gap:13px;flex-wrap:wrap;flex:1;justify-content:flex-end}
+.botrow{display:flex;align-items:center;gap:7px}
+.botrow>span{font-size:11.5px;color:#8695ab}
+.botrow .pick{display:inline-flex;gap:2px;padding:2px;background:#050810;border:1px solid #1a2535;border-radius:7px}
+.botrow .pick button{width:19px;height:18px;border:none;background:none;border-radius:5px;font-size:10.5px;
+  font-weight:700;color:#3d5170;cursor:pointer;font-family:var(--mono);transition:all .14s}
+.botrow .pick button:hover{color:#7e97b8}
+.botrow .pick button.on{background:rgba(56,189,248,.14);color:var(--accent);box-shadow:inset 0 0 0 1px rgba(56,189,248,.3)}
+#botNote{width:100%;margin:0}
+#botbox.gesperrt{opacity:.45;pointer-events:none}
+@media(max-width:820px){#botbox{gap:8px 12px}#botCounts{gap:10px}}
+/* Ablauf in drei Schritten */
+.how{background:#07090f;border:1px solid #141d2c;border-radius:12px;padding:9px 10px;
+  display:flex;flex-direction:column;gap:7px;margin-top:auto}
+.how .hrow{display:flex;align-items:flex-start;gap:12px}
+.how .hrow span{flex:none;display:grid;place-items:center;width:22px;height:22px;border-radius:50%;
+  margin-top:1px;font-size:10px;font-weight:700;font-family:var(--mono);color:var(--accent);
+  background:rgba(56,189,248,.1);border:1px solid rgba(56,189,248,.3);box-shadow:0 0 8px rgba(56,189,248,.1)}
+.how .hrow b{font-size:12.5px;font-weight:700;color:#c0cfe3}
+.how .hrow em{font-style:normal;font-size:11.5px;color:#4a6080}
+/* Fußbereich */
+#join .foot{position:relative;padding:2px 28px 14px}
+#join .foot .rule{background:linear-gradient(to right,transparent,#1e2d45 20%,#1e2d45 80%,transparent);
+  opacity:1;margin-bottom:14px}
+#join .go{position:relative;overflow:hidden;width:100%;border:none;border-radius:13px;padding:12px 0;
+  font-size:15px;font-weight:800;letter-spacing:-.025em;color:#05101a;cursor:pointer;font-family:var(--font);
+  background:linear-gradient(90deg,#7dd3fc 0%,var(--accent) 60%,#0ea5e9 100%);
+  box-shadow:0 0 28px rgba(56,189,248,.25), 0 2px 8px rgba(56,189,248,.15), inset 0 1px 0 rgba(255,255,255,.2);
+  transition:all .2s}
+#join .go:hover{transform:translateY(-1px);
+  background:linear-gradient(90deg,#93dcfd 0%,var(--accent) 50%,#0ea5e9 100%);
+  box-shadow:0 0 50px rgba(56,189,248,.5), 0 4px 20px rgba(56,189,248,.3), inset 0 1px 0 rgba(255,255,255,.25)}
+#join .go::after{content:"";position:absolute;inset:0;transform:translateX(-100%);
+  background:linear-gradient(90deg,transparent 0%,rgba(255,255,255,.1) 50%,transparent 100%)}
+#join .go:hover::after{animation:shimmer .6s ease-out}
+@keyframes shimmer{from{transform:translateX(-100%)}to{transform:translateX(100%)}}
+#joinFoot{display:flex;align-items:center;justify-content:space-between;margin-top:9px;
+  font-family:var(--mono);font-size:10.5px;color:#273144}
+#joinFoot .right{display:flex;align-items:center;gap:8px}
+#joinErr{color:var(--down);font-size:12.5px;min-height:0;text-align:center;margin-bottom:6px}
+
+#topbar{position:fixed;top:0;left:0;right:0;height:74px;z-index:20;display:flex;flex-direction:column;pointer-events:none}
+#ticker{height:32px;background:rgba(9,13,20,.92);border-bottom:1px solid var(--line);overflow:hidden;position:relative;pointer-events:auto}
+#tickerTrack{display:flex;gap:34px;white-space:nowrap;position:absolute;left:0;top:0;height:100%;align-items:center;padding:0 10px;font-family:var(--mono);font-size:12.5px;font-variant-numeric:tabular-nums}
+.tk{color:var(--dim)} .tk b{color:var(--text);margin:0 4px}
+#status{height:42px;display:flex;align-items:center;justify-content:space-between;padding:0 14px;background:linear-gradient(180deg,rgba(9,13,20,.85),transparent);pointer-events:auto}
+#status .left{display:flex;align-items:center;gap:12px}
+.logo{width:26px;height:26px;border-radius:6px;display:grid;place-items:center;font-weight:800;color:#0a0e15;font-size:14px}
+#networth{color:var(--dim);font-size:12px} #networth b{color:var(--text)}
+#status .right{display:flex;align-items:center;gap:16px;font-family:var(--mono);font-variant-numeric:tabular-nums}
+#cash{color:var(--accent);font-weight:700;font-size:16px}
+#lvlwrap{display:flex;flex-direction:column;gap:3px;width:110px}
+#lvlwrap small{font-size:10px;color:var(--dim);text-transform:uppercase;letter-spacing:.06em;font-family:var(--font)}
+#xpbar{height:5px;background:var(--panel2);border-radius:3px;overflow:hidden}
+#xpfill{height:100%;width:0%;background:var(--accent2);transition:width .4s}
+#players{display:flex;gap:5px}
+#players .pl{width:22px;height:22px;border-radius:6px;font-size:10px;display:grid;place-items:center;color:#0a0e15;font-weight:800;cursor:default}
+
+#dock{position:fixed;left:50%;transform:translateX(-50%);bottom:14px;z-index:20;display:flex;gap:6px;background:rgba(19,26,38,.95);border:1px solid var(--line);border-radius:14px;padding:7px}
+.dockbtn{width:66px;padding:7px 2px 6px;border:none;background:none;color:var(--dim);border-radius:10px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:3px;font-size:10.5px}
+.dockbtn.on{background:var(--panel2);color:var(--accent)}
+
+.panel{position:fixed;top:84px;right:14px;bottom:76px;width:min(440px,94vw);z-index:15;background:rgba(19,26,38,.97);border:1px solid var(--line);border-radius:14px;display:none;flex-direction:column;overflow:hidden}
+.panel.open{display:flex}
+.phead{padding:12px 16px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center}
+.phead h2{font-size:15px}
+.phead .x{background:none;border:none;color:var(--dim);font-size:16px;cursor:pointer}
+.pbody{flex:1;overflow-y:auto;padding:12px 14px}
+table{width:100%;border-collapse:collapse;font-size:12px}
+th{text-align:left;color:var(--dim);font-weight:500;font-size:10px;text-transform:uppercase;letter-spacing:.05em;padding:4px 5px;border-bottom:1px solid var(--line)}
+td{padding:5px;border-bottom:1px solid rgba(36,48,68,.5);font-family:var(--mono);font-variant-numeric:tabular-nums}
+td:first-child{font-family:var(--font)}
+.buyb,.sellb,.mini{border:none;border-radius:6px;padding:4px 9px;cursor:pointer;font-size:11px;font-weight:600}
+.buyb{background:var(--up);color:#08130b} .sellb{background:var(--down);color:#fff}
+.mini{background:var(--panel2);color:var(--text);border:1px solid var(--line)}
+.formrow{display:flex;gap:7px;margin:10px 0;flex-wrap:wrap;align-items:center}
+.formrow input{width:82px} .formrow select{max-width:150px}
+.sec{font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--dim);margin:12px 0 6px}
+.invgrid{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+.invtile{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:10px}
+.invtile h4{font-size:12.5px;margin-bottom:4px}
+.invtile .qty{font-family:var(--mono);font-size:16px;font-weight:700}
+.invtile .val{font-size:11px;color:var(--dim);font-family:var(--mono)}
+.bond,.auction,.contract{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:10px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:12.5px}
+.meta{font-size:11px;color:var(--dim);font-family:var(--mono)}
+.rbadge{font-family:var(--mono);font-size:11px;padding:2px 7px;border-radius:6px;font-weight:700}
+.issue{width:100%;margin-top:4px;background:var(--accent);color:#0a0e15;border:none;border-radius:9px;padding:10px;font-weight:700;cursor:pointer;font-size:13px}
+#rooms{display:flex;gap:5px;flex-wrap:wrap;padding:10px 14px 0}
+.room{border:1px solid var(--line);background:none;color:var(--dim);border-radius:7px;padding:4px 9px;font-size:11px;cursor:pointer}
+.room.on{color:var(--accent2);border-color:var(--accent2)}
+#chatlog{flex:1;overflow-y:auto;padding:12px 14px;display:flex;flex-direction:column;gap:7px;font-size:12.5px}
+.msg .who{font-weight:600;margin-right:6px}
+#chatform{display:flex;gap:8px;padding:10px 14px;border-top:1px solid var(--line)}
+#chatin{flex:1}
+#chatform button{background:var(--accent2);border:none;border-radius:8px;padding:0 14px;font-weight:700;color:#062222;cursor:pointer}
+#ctrbar{padding:8px 14px;border-top:1px solid var(--line);display:flex;gap:6px;flex-wrap:wrap;align-items:center;font-size:11.5px}
+#ctrbar select,#ctrbar input{padding:5px 7px;font-size:11.5px} #ctrbar input{width:64px}
+
+#tilemenu{position:fixed;z-index:25;background:rgba(19,26,38,.98);border:1px solid var(--line);border-radius:12px;padding:12px;width:255px;display:none}
+#tilemenu h3{font-size:13px;margin-bottom:8px}
+#tilemenu .opt{display:flex;justify-content:space-between;width:100%;background:var(--panel2);border:1px solid var(--line);color:var(--text);border-radius:8px;padding:8px 10px;margin-bottom:6px;cursor:pointer;font-size:12px}
+#tilemenu .opt small{color:var(--accent);font-family:var(--mono)}
+#tilemenu .opt:disabled{opacity:.4;cursor:default}
+#tilemenu .note{font-size:11px;color:var(--dim);margin-bottom:8px}
+/* Tutorial */
+#tut{position:fixed;left:14px;bottom:14px;z-index:30;width:min(400px,92vw);background:rgba(19,26,38,.98);border:1px solid var(--accent);border-radius:14px;padding:16px;display:none;box-shadow:0 8px 30px rgba(0,0,0,.5)}
+#tutHead{display:flex;gap:12px;align-items:flex-end;margin:-16px -16px 10px;padding:12px 16px 0;border-radius:14px 14px 0 0;background:linear-gradient(180deg,rgba(56,189,248,.10),transparent)}
+#tutHead img{width:74px;height:74px;object-fit:cover;object-position:top;border-radius:50%;border:2px solid var(--accent);background:#20293a;flex-shrink:0}
+#tutHead .who{padding-bottom:8px}
+#tutHead .who b{font-size:13.5px;display:block}
+#tutHead .who span{font-size:10.5px;color:var(--dim);letter-spacing:.05em;text-transform:uppercase}
+#tut .step{font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--accent);margin-bottom:6px}
+#tut h3{font-size:15px;margin-bottom:8px}
+#tut p{font-size:12.5px;color:var(--dim);line-height:1.55;margin-bottom:12px}
+#tut p b{color:var(--text)} #tut p em{color:var(--accent2);font-style:normal}
+#tut .row{display:flex;justify-content:space-between;align-items:center}
+#tut .dots{display:flex;gap:4px}
+#tut .dots span{width:6px;height:6px;border-radius:3px;background:var(--panel2)}
+#tut .dots span.on{background:var(--accent)}
+#tut .btns{display:flex;gap:8px}
+#tutNext{background:var(--accent);color:#0a0e15;border:none;border-radius:8px;padding:7px 14px;font-weight:700;cursor:pointer;font-size:12.5px}
+#tutSkip{background:none;border:none;color:var(--dim);cursor:pointer;font-size:11.5px}
+#tutWait{font-size:11.5px;color:var(--accent2);display:none;align-items:center;gap:6px}
+@keyframes tutpulse{0%,100%{opacity:.4}50%{opacity:1}}
+#tutWait::before{content:"●";animation:tutpulse 1.2s infinite}
+#toasts{position:fixed;top:86px;left:50%;transform:translateX(-50%);z-index:40;display:flex;flex-direction:column;gap:6px;align-items:center}
+.toast{background:var(--panel2);border:1px solid var(--line);border-left:3px solid var(--accent);border-radius:9px;padding:8px 14px;font-size:12.5px;animation:tin .25s}
+.toast.err{border-left-color:var(--down)}
+@keyframes tin{from{opacity:0;transform:translateY(-8px)}to{opacity:1}}
+#win{position:fixed;inset:0;z-index:60;background:rgba(11,16,24,.92);display:none;place-items:center;text-align:center}
+#win h1{font-size:34px;color:var(--accent);line-height:1.1}
+#win{overflow:auto;padding:24px 16px;align-items:flex-start!important}
+.wincard{width:min(860px,100%);background:linear-gradient(180deg,rgba(24,32,46,.97),rgba(16,22,33,.97));
+  border:1px solid var(--line);border-radius:20px;overflow:hidden;text-align:left;
+  box-shadow:0 30px 80px -30px #000}
+.winhead{padding:24px 28px 18px;background:linear-gradient(180deg,rgba(56,189,248,.10),transparent);
+  border-bottom:1px solid var(--line)}
+#winsub{color:var(--dim);font-size:13px;margin-top:6px}
+#wintable{padding:16px 28px 4px;overflow-x:auto}
+#wintable table{width:100%;border-collapse:collapse;font-size:12.5px}
+#wintable th{text-align:right;font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;
+  color:var(--dim);font-weight:600;padding:0 0 8px;font-family:var(--mono);white-space:nowrap}
+#wintable th:first-child,#wintable td:first-child{text-align:left}
+#wintable td{padding:7px 0;border-top:1px solid rgba(39,49,68,.7);text-align:right;
+  font-family:var(--mono);font-variant-numeric:tabular-nums;white-space:nowrap}
+#wintable td:first-child{font-family:var(--font)}
+#wintable th+th,#wintable td+td{padding-left:16px}
+#wintable tr.sieger td{background:rgba(56,189,248,.07)}
+#wintable .pl{display:inline-grid;place-items:center;width:20px;height:20px;border-radius:6px;
+  font-size:10px;font-weight:800;color:#0a0e15;margin-right:8px;vertical-align:-4px}
+#winawards{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:14px 28px 4px}
+@media(max-width:700px){#winawards{grid-template-columns:1fr}}
+.award{background:#07090f;border:1px solid #141d2c;border-radius:11px;padding:10px 12px}
+.award .t{font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--dim);font-family:var(--mono)}
+.award .n{font-size:13.5px;font-weight:700;margin-top:3px}
+.award .v{font-size:12px;color:var(--accent);font-family:var(--mono)}
+.award .z{font-size:11px;color:var(--dim);margin-top:2px;line-height:1.35}
+.winfoot{padding:16px 28px 24px;border-top:1px solid var(--line);margin-top:14px}
+.winfoot p{color:var(--dim);font-size:11.5px;margin-top:10px;text-align:center}
+#win > div{display:flex;flex-direction:column;align-items:center;gap:6px}
+#winNew{margin-top:18px;background:linear-gradient(180deg,#7dd3fc,var(--accent));color:#0a0e15;border:none;
+  border-radius:13px;padding:13px 26px;font-weight:800;font-size:15px;cursor:pointer;font-family:var(--font);
+  box-shadow:0 10px 26px -12px rgba(56,189,248,.85);transition:transform .1s,box-shadow .16s}
+#winNew:hover{transform:translateY(-1px);box-shadow:0 14px 30px -12px rgba(56,189,248,.95)}
+#winNew:active{transform:translateY(1px)}
+</style>
+</head>
+<body>
+<!-- Intro: läuft einmal je Serverstart, danach nicht mehr (siehe bootId) -->
+<div id="intro" hidden>
+  <video id="introVideo" playsinline preload="auto"></video>
+  <div id="introBar">
+    <button id="introSound" type="button" hidden>Ton einschalten</button>
+    <button id="introSkip" type="button">Überspringen</button>
+  </div>
+</div>
+
+<div id="join">
+<div id="joinGlow"></div>
+<div class="card">
+  <canvas id="joinParticles"></canvas>
+
+  <div class="hero">
+    <!-- Statuszeile: zeigt echte Verbindungs- und Spielerzahl, keine Platzhalter -->
+    <div id="joinStatus">
+      <div class="left">
+        <span class="pulse" id="joinPulse"><i></i><b></b></span>
+        <span id="joinStatusText">Verbinde …</span>
+      </div>
+      <div class="right">
+        <div id="joinSlots"></div>
+      </div>
+    </div>
+
+    <h1>Capital <span>Sandbox</span></h1>
+    <div class="tag">Bau dir eine Firma auf, versorge die Stadt, handle mit den anderen —
+      und wenn du genug Anteile hast, kaufst du sie einfach auf.</div>
+
+    <div id="netmode">
+      <button type="button" class="netopt on" data-net="host">Neue Runde starten</button>
+      <button type="button" class="netopt" data-net="join">Einer Runde beitreten</button>
+    </div>
+
+    <!-- Skyline aus den echten Gebäude-Sprites des Spiels -->
+    <div class="skyline" aria-hidden="true">
+      <div class="row">
+        <img src="assets/skyline/plantage-0.png" alt="" style="height:26px">
+        <img src="assets/skyline/farm-0.png" alt="" style="height:32px">
+        <img src="assets/skyline/markt-0.png" alt="" style="height:36px">
+        <img src="assets/skyline/buero-1.png" alt="" style="height:52px">
+        <img src="assets/skyline/kontor-0.png" alt="" style="height:38px">
+        <img src="assets/skyline/wasserwerk-0.png" alt="" style="height:30px">
+        <img src="assets/skyline/chipfabrik-0.png" alt="" style="height:44px">
+        <img src="assets/skyline/ewerk-0.png" alt="" style="height:34px">
+        <img src="assets/skyline/buero-0.png" alt="" style="height:48px">
+        <img src="assets/skyline/mine-0.png" alt="" style="height:32px">
+        <img src="assets/skyline/stahlwerk-0.png" alt="" style="height:34px">
+        <img src="assets/skyline/raffinerie-0.png" alt="" style="height:42px">
+        <img src="assets/skyline/kontor-0.png" alt="" style="height:36px">
+        <img src="assets/skyline/farm-0.png" alt="" style="height:28px">
+        <img src="assets/skyline/buero-1.png" alt="" style="height:46px">
+        <img src="assets/skyline/markt-0.png" alt="" style="height:34px">
+      </div>
+      <div class="fade l"></div><div class="fade r"></div><div class="fog"></div>
+    </div>
+    <div class="rule"></div>
+  </div>
+
+  <div class="body">
+    <div class="col">
+      <div>
+        <label class="flabel" for="jname">Firmenname</label>
+        <input id="jname" placeholder="z. B. Nordwerk &amp; Co." maxlength="20" autocomplete="off">
+        <div class="colors" id="jcolors"></div>
+      </div>
+
+      <div>
+        <label class="flabel" for="jgoal">Spielziel</label>
+        <select id="jgoal">
+          <option value="100000">$100.000 — schnelle Runde, etwa eine Stunde</option>
+          <option value="250000" selected>$250.000 — der Klassiker, etwa zwei Stunden</option>
+          <option value="500000">$500.000 — ein langer Abend</option>
+          <option value="1000000">$1 Mio. — für Ausdauernde</option>
+          <option value="10000000">$10 Mio. — Marathon</option>
+        </select>
+        <p id="goalNote" style="margin-top:7px">Der erste Spieler der Runde legt das Ziel fest — danach gilt es für alle.</p>
+      </div>
+
+      <div>
+        <label class="flabel" id="netstep">Mitspieler einladen</label>
+        <div id="invite">
+          <div class="joinbox">
+            <div class="lbl">
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><circle cx="6" cy="6" r="5" stroke="#38bdf8" stroke-width="1" opacity=".5"/><path d="M3 6c0-1.66 1.34-3 3-3s3 1.34 3 3" stroke="#38bdf8" stroke-width="1" stroke-linecap="round"/></svg>
+              Gleiches Netzwerk
+            </div>
+            <div class="row">
+              <input id="inviteUrl" readonly value="…">
+              <button class="copybtn" id="inviteCopy" type="button">Kopieren</button>
+            </div>
+            <p id="inviteHint" style="margin-top:8px"></p>
+          </div>
+          <div class="joinbox">
+            <div class="lbl">
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><rect x="1" y="3" width="10" height="7" rx="1.5" stroke="#a78bfa" stroke-width="1" opacity=".5"/><path d="M4 3V2a2 2 0 014 0v1" stroke="#a78bfa" stroke-width="1" stroke-linecap="round"/></svg>
+              Von woanders
+            </div>
+            <div class="row" style="justify-content:space-between">
+              <span id="hostCode">…</span>
+              <button class="copybtn" id="hostCodeCopy" type="button">Kopieren</button>
+            </div>
+          </div>
+        </div>
+        <div id="joinCodeRow" style="display:none">
+          <div class="joinbox">
+            <div class="lbl">
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><rect x="1" y="3" width="10" height="7" rx="1.5" stroke="#a78bfa" stroke-width="1" opacity=".5"/><path d="M4 3V2a2 2 0 014 0v1" stroke="#a78bfa" stroke-width="1" stroke-linecap="round"/></svg>
+              Code deines Hosts
+            </div>
+            <input id="jcode" placeholder="AB3XQ" maxlength="8" autocomplete="off">
+            <p id="joinCodeStatus" style="margin-top:8px"></p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="divider"></div>
+
+    <div class="col">
+      <div>
+        <label class="flabel">Deine Branche</label>
+        <p style="font-size:12px">Du baust nur Gebäude deiner Branche — alles andere kaufst du bei den anderen ein.</p>
+      </div>
+
+      <div id="jind">
+        <button type="button" data-ind="agrar" class="indopt on" style="--ac:#34d399;--ac08:rgba(52,211,153,.03);--ac15:rgba(52,211,153,.08);--ac18:rgba(52,211,153,.09);--ac35:rgba(52,211,153,.21);--ac50:rgba(52,211,153,.31)">
+          <img src="assets/skyline/farm-0.png" alt="">
+          <span class="txt"><span class="head"><b>Landwirtschaft</b><span class="chosen">Gewählt</span></span>
+          <small>Obst, Kannabis, Saft und Medikamente — der einfachste Einstieg.</small></span></button>
+        <button type="button" data-ind="rohstoff" class="indopt" style="--ac:#fb7185;--ac08:rgba(251,113,133,.03);--ac15:rgba(251,113,133,.08);--ac18:rgba(251,113,133,.09);--ac35:rgba(251,113,133,.21);--ac50:rgba(251,113,133,.31)">
+          <img src="assets/skyline/mine-0.png" alt="">
+          <span class="txt"><span class="head"><b>Rohstoff &amp; Bau</b><span class="chosen">Gewählt</span></span>
+          <small>Erze, Stahl, Ziegel und Beton. Ohne dich baut hier niemand.</small></span></button>
+        <button type="button" data-ind="versorger" class="indopt" style="--ac:#fbbf24;--ac08:rgba(251,191,36,.03);--ac15:rgba(251,191,36,.08);--ac18:rgba(251,191,36,.09);--ac35:rgba(251,191,36,.21);--ac50:rgba(251,191,36,.31)">
+          <img src="assets/skyline/ewerk-0.png" alt="">
+          <span class="txt"><span class="head"><b>Wasser, Strom &amp; Öl</b><span class="chosen">Gewählt</span></span>
+          <small>Läuft schnell und ununterbrochen — jeder braucht es dauernd.</small></span></button>
+        <button type="button" data-ind="tech" class="indopt" style="--ac:#a78bfa;--ac08:rgba(167,139,250,.03);--ac15:rgba(167,139,250,.08);--ac18:rgba(167,139,250,.09);--ac35:rgba(167,139,250,.21);--ac50:rgba(167,139,250,.31)">
+          <img src="assets/skyline/chipfabrik-0.png" alt="">
+          <span class="txt"><span class="head"><b>Technologie</b><span class="chosen">Gewählt</span></span>
+          <small>Silizium und Elektronik — damit leveln alle ihre Fabriken hoch.</small></span></button>
+      </div>
+      <div class="how">
+        <div class="hrow"><span>1</span><div><b>Bauen</b> <em>— Kachel freischalten, Betrieb hochziehen, Rohstoffe verarbeiten.</em></div></div>
+        <div class="hrow"><span>2</span><div><b>Handeln</b> <em>— Im eigenen Laden, an der Börse mit den anderen oder für die Stadt.</em></div></div>
+        <div class="hrow"><span>3</span><div><b>Gewinnen</b> <em>— Wer zuerst das Vermögensziel knackt, gewinnt die Runde.</em></div></div>
+      </div>
+
+
+    </div>
+  </div>
+
+  <div class="foot">
+    <!-- Bot-Mitspieler: Anzahl je Branche (0-2) und Spielstärke -->
+    <div id="botbox">
+      <div class="botHead">
+        <label class="flabel" style="margin:0">Bots</label>
+        <div id="botLevel">
+          <button type="button" data-lvl="einfach">Einfach</button>
+          <button type="button" data-lvl="mittel" class="on">Mittel</button>
+          <button type="button" data-lvl="schwer">Schwer</button>
+        </div>
+      </div>
+      <div id="botCounts">
+        <div class="botrow" data-b="agrar"><span>Agrar</span><div class="pick"><button type="button" data-n="0">0</button><button type="button" data-n="1" class="on">1</button><button type="button" data-n="2">2</button></div></div>
+        <div class="botrow" data-b="rohstoff"><span>Rohstoff</span><div class="pick"><button type="button" data-n="0">0</button><button type="button" data-n="1" class="on">1</button><button type="button" data-n="2">2</button></div></div>
+        <div class="botrow" data-b="versorger"><span>Versorger</span><div class="pick"><button type="button" data-n="0">0</button><button type="button" data-n="1" class="on">1</button><button type="button" data-n="2">2</button></div></div>
+        <div class="botrow" data-b="tech"><span>Technik</span><div class="pick"><button type="button" data-n="0">0</button><button type="button" data-n="1" class="on">1</button><button type="button" data-n="2">2</button></div></div>
+      </div>
+      <p id="botNote"><b id="botSum">4 Bots</b> · <span id="botLevelNote">bauen zügig aus, leveln Gebäude auf</span> · <span id="botWho">legt der erste Spieler fest</span></p>
+    </div>
+    <div class="rule"></div>
+    <div id="joinErr"></div>
+    <button class="go" id="jgo">Firma gründen</button>
+    <div id="joinFoot">
+      <span>capital-sandbox · läuft im Browser · keine Installation</span>
+      <div class="right"><span class="pulse"><i></i><b></b></span><span id="joinWaiting">—</span></div>
+    </div>
+  </div>
+
+</div></div>
+
+<canvas id="cv"></canvas>
+
+<div id="topbar">
+  <div id="ticker" title="Ø-Kurse als Orientierung — sie werden alle 30 Sekunden aktualisiert, der Pfeil zeigt die Richtung gegenüber den letzten 30 Sekunden."><div id="tickerTrack"><span class="tk">Warte auf erste Trades — der Ticker zeigt nur echte Transaktionspreise.</span></div></div>
+  <div id="status">
+    <div class="left"><div class="logo" id="mylogo">?</div><span id="coname"></span>
+      <span id="networth">NW <b id="nwv">$0</b> / <span id="goalv">$250.000</span> · Rating <b id="myrat">—</b></span></div>
+    <div class="right">
+      <div id="players"></div>
+      <span id="cash">$0</span>
+      <div id="lvlwrap"><small>Level <span id="lvl">1</span></small><div id="xpbar"><div id="xpfill"></div></div></div>
+      <button id="music" title="Musik an/aus" style="background:none;border:1px solid var(--line);border-radius:7px;color:var(--dim);width:24px;height:24px;cursor:pointer;display:grid;place-items:center;padding:0"></button>
+      <input id="musicVol" type="range" min="0" max="100" value="22" title="Lautstärke" style="width:56px;accent-color:var(--accent);vertical-align:middle">
+      <button id="help" title="Tutorial erneut ansehen" style="background:none;border:1px solid var(--line);border-radius:7px;color:var(--dim);width:24px;height:24px;cursor:pointer;font-size:13px">?</button>
+    </div>
+  </div>
+</div>
+
+<div id="dock"></div>
+
+<div class="panel" id="p-boerse">
+  <div class="phead"><h2>Warenbörse (P2P)</h2><button class="x" data-close>✕</button></div>
+  <div class="pbody">
+    <div class="formrow">
+      <select id="oGood"></select>
+      <select id="oSide"><option value="sell">Verkauf</option><option value="buy">Kauf</option></select>
+      <input id="oQty" type="number" min="1" placeholder="Menge">
+      <input id="oPrice" type="number" min="0.01" step="0.01" placeholder="Preis $">
+      <button class="buyb" id="oPlace">Order platzieren</button>
+    </div>
+    <div class="formrow" style="margin-top:0">
+      <span class="meta">Anzeigen:</span>
+      <select id="exFilter"><option value="">Alle Waren</option></select>
+    </div>
+    <div id="exbook"></div>
+  </div>
+</div>
+
+<div class="panel" id="p-lager">
+  <div class="phead"><h2>Warenlager</h2><button class="x" data-close>✕</button></div>
+  <div class="pbody"><div class="invgrid" id="invgrid"></div></div>
+</div>
+
+<div class="panel" id="p-bonds">
+  <div class="phead"><h2>Anleihen &amp; Finanzen</h2><button class="x" data-close>✕</button></div>
+  <div class="pbody">
+    <div class="sec">Anleihe emittieren</div>
+    <div class="formrow">
+      <input id="bPrin" type="number" min="100" value="3000" title="Nennwert $">
+      <input id="bRate" type="number" min="1" max="50" value="8" title="Zins % / min">
+      <input id="bTerm" type="number" min="30" value="180" title="Laufzeit s">
+      <button class="issue" id="bIssue" style="width:auto;margin:0;padding:8px 12px">Emittieren</button>
+    </div>
+    <div id="bondlist"></div>
+    <div class="note" style="margin-top:10px">Firmenanteile werden nicht mehr hier, sondern in der <b>Stadtbank</b> gehandelt — das Gebäude im Zentrum der Karte anklicken.</div>
+    <div class="sec">Zwangsversteigerungen</div>
+    <div id="auctionlist"><span class="meta">Keine laufenden Auktionen.</span></div>
+  </div>
+</div>
+
+<!-- Stadtbank: fester Ort auf der Karte, an dem alle Spieler Firmenanteile handeln.
+     Erreichbar nur über die Bank-Kachel im Zentrum, nicht über die Leiste unten. -->
+<div class="panel" id="p-bank">
+  <div class="phead"><h2>Stadtbank — Aktienhandel</h2><button class="x" data-close>✕</button></div>
+  <div class="pbody">
+    <div class="note">Anteile werden in 25 %-Blöcken gehandelt. Der <b>Marktwert</b> einer Firma ist
+      ihr Firmenwert (Bargeld, Lager, Gebäude, Anleihen abzüglich Schulden) — ein 25 %-Block kostet
+      also ein Viertel davon. Wächst die Firma, wächst der Block mit: früh gekauft, später teurer
+      verkauft. Der <b>Umsatz der letzten 10 Minuten</b> steht daneben und zeigt, wie schnell eine
+      Firma gerade wächst. Dividende alle 10 min (<span id="divCountdown">10:00</span>).</div>
+
+    <div class="sec">Anteile anbieten</div>
+    <div class="formrow">
+      <select id="shCompany" title="Welche Firma"></select>
+      <select id="shCount"><option value="1">25 %</option><option value="2">50 %</option><option value="3">75 %</option><option value="4">100 %</option></select>
+      <input id="shPrice" type="number" min="1" value="1000" title="Preis $">
+      <select id="shTo"><option value="">Offener Markt (alle)</option></select>
+      <button class="issue" id="shList" style="width:auto;margin:0;padding:8px 12px">Anbieten</button>
+    </div>
+    <div class="meta" id="shHint" style="margin-top:4px"></div>
+
+    <div class="sec">Kaufanfrage an eine Firma</div>
+    <div class="formrow">
+      <select id="bidCompany" title="Welche Firma"></select>
+      <select id="bidCount"><option value="1">25 %</option><option value="2">50 %</option><option value="3">75 %</option><option value="4">100 %</option></select>
+      <input id="bidPrice" type="number" min="1" value="2000" title="Dein Gebot $">
+      <button class="issue" id="bidSend" style="width:auto;margin:0;padding:8px 12px">Anfragen</button>
+    </div>
+    <div class="meta" id="bidHint" style="margin-top:4px"></div>
+    <div id="bidlist"></div>
+
+    <div class="sec">Kurstafel</div>
+    <div id="bankboard"></div>
+
+    <div class="sec">Offene Angebote</div>
+    <div id="sharelist"></div>
+
+    <div class="sec">Dein Depot</div>
+    <div id="bankdepot"></div>
+  </div>
+</div>
+
+<div class="panel" id="p-firma">
+  <div class="phead"><h2>Unternehmen</h2><button class="x" data-close>✕</button></div>
+  <div class="pbody" id="firmabody"></div>
+</div>
+
+<div class="panel" id="p-lexikon">
+  <div class="phead"><h2>Lexikon</h2><button class="x" data-close>✕</button></div>
+  <div class="pbody" id="lexbody"></div>
+</div>
+
+<div class="panel" id="p-chat">
+  <div class="phead"><h2>Chat &amp; Direkthandel</h2><button class="x" data-close>✕</button></div>
+  <div id="rooms"></div>
+  <div id="chatlog"></div>
+  <div id="ctrbar">
+    <span style="color:var(--dim)">Vertrag:</span>
+    <select id="cTo"></select><select id="cGood"></select>
+    <input id="cQty" type="number" min="1" placeholder="Menge"><input id="cPrice" type="number" min="0.01" step="0.01" placeholder="$/Stk">
+    <button class="mini" id="cSend">Anbieten</button>
+  </div>
+  <form id="chatform"><input id="chatin" placeholder="Nachricht…" autocomplete="off"><button>➤</button></form>
+</div>
+
+<div id="quests" style="position:fixed;top:84px;left:14px;z-index:14;width:230px;background:rgba(19,26,38,.92);border:1px solid var(--line);border-radius:12px;padding:11px;display:none">
+  <div style="font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--accent2);margin-bottom:7px">Starter-Aufgaben</div>
+  <div id="questlist" style="display:flex;flex-direction:column;gap:6px;font-size:12px"></div>
+</div>
+
+<div id="tut">
+  <div id="tutHead">
+    <img src="assets/ceo.png" alt="Dr. Stefan Biesdorf">
+    <div class="who"><b>Dr. Stefan Biesdorf</b><span>CEO a. D. · dein Mentor</span></div>
+  </div>
+  <div class="step" id="tutStep"></div>
+  <h3 id="tutTitle"></h3>
+  <p id="tutText"></p>
+  <div class="row">
+    <div class="dots" id="tutDots"></div>
+    <span id="tutWait">Warte auf Bau …</span>
+    <div class="btns"><button id="tutSkip">Tutorial überspringen</button><button id="tutNext">Weiter</button></div>
+  </div>
+</div>
+
+<div id="tilemenu"></div>
+<div id="toasts"></div>
+<div id="win"><div class="wincard">
+  <div class="winhead">
+    <h1><span id="winname"></span> gewinnt!</h1>
+    <p id="winsub">Das Rundenziel wurde erreicht.</p>
+  </div>
+  <div id="wintable"></div>
+  <div id="winawards"></div>
+  <div class="winfoot">
+    <button id="winNew">Neue Runde starten</button>
+    <p>Setzt Karte, Firmen und Kurse zurück — auch für die Mitspieler.</p>
+  </div>
+</div></div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script src="vendor/peerjs.min.js"></script>
+<script>
+"use strict";
+/* ================================================================
+ * Client-Store & Socket-Layer
+ * Muster: Server sendet "state" (öffentlich) + "me" (privat).
+ * Der Store ist ein simples Observable — 1:1 austauschbar gegen
+ * Zustand/Redux: subscribe() ≙ useStore, set() ≙ dispatch.
+ * ================================================================ */
+const store = (() => {
+  const s = { state: null, me: null, meta: null, myId: null, room: "[DE] Handel", chat: {} };
+  const subs = new Set();
+  let flushPending = false;
+  /* Mehrere set()-Aufrufe im selben Frame (z. B. Bursts über die WebRTC-Bridge)
+   * werden zu einem einzigen render()-Aufruf zusammengefasst — sonst flackert
+   * die UI, weil DOM-Panels mehrfach pro Frame neu aufgebaut werden. */
+  function flush() { flushPending = false; subs.forEach(fn => fn(s)); }
+  return {
+    get: () => s,
+    set(patch) { Object.assign(s, patch); if (!flushPending) { flushPending = true; requestAnimationFrame(flush); } },
+    subscribe(fn) { subs.add(fn); return () => subs.delete(fn); },
+  };
+})();
+
+const fmt = n => "$" + Math.round(n).toLocaleString("de-DE");
+const fp = n => n < 10 ? "$" + (+n).toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : fmt(n);   // Preise: Cents bei billigen Waren
+const toast = (msg, err) => { const d = document.createElement("div");
+  d.className = "toast" + (err ? " err" : ""); d.textContent = msg;
+  document.getElementById("toasts").append(d); setTimeout(() => d.remove(), 4000); };
+// Jede Aktion läuft über ack — Server-Fehler landen als Toast beim Spieler
+const act = (ev, payload) => socket.emit(ev, payload, res => { if (res?.error) toast(res.error, true); });
+
+/* ---- Transport ----
+ * Normalfall: socket.io direkt zum eigenen lokalen Server (LAN/localhost).
+ * "Mit Code beitreten": derselbe socket.io-Vertrag (emit/on mit Ack), aber über
+ * eine WebRTC-Datenverbindung (PeerJS) zum Server-Tab des Hosts getunnelt — der
+ * Host bleibt Single Source of Truth, es gibt keine zweite Simulation. */
+let socket = io();
+/* Lokaler Kachel-Cache: die Karte hat pro Kachel viele Felder, die sich nach der
+ * Generierung NIE mehr ändern (x, y, zone, road, water, park, field, sand, deep,
+ * rock, unlockCost) — nur wenige tun es (locked, owner, btype, lien, shop, paused).
+ * Über die WebRTC-Bridge (s. startHosting) kommt die volle Karte genau einmal;
+ * danach nur noch `mapDelta` — eine Liste der Kacheln, an denen sich seit dem
+ * letzten Update wirklich etwas geändert hat (meist keine einzige, oder genau
+ * die eine, auf die gerade jemand gebaut hat). Die werden direkt im Cache
+ * überschrieben; alle anderen Kachel-Objekte bleiben unangetastet, es wird also
+ * pro Update weder die Karte neu übertragen noch clientseitig neu aufgebaut.
+ * Für die normale socket.io-Verbindung ist state.map immer vollständig, der
+ * Cache wird dann einfach nur aufgefrischt (kein Verhaltensunterschied). */
+let cachedFullMap = null;
+function mergeState(state) {
+  if (state.mapDelta) {                 // Online-Bridge: nur die geänderten Kacheln
+    if (!cachedFullMap) return state;   // sollte nicht vorkommen (erster Snapshot ist immer voll)
+    for (const d of state.mapDelta) {
+      const t = cachedFullMap[d.i];
+      if (!t) continue;
+      for (const k in d) if (k !== "i") t[k] = d[k];
+    }
+    return { ...state, map: cachedFullMap };
+  }
+  if (!state.map?.length) return state;
+  cachedFullMap = state.map;
+  return state;
+}
+/* Persistente Spieler-ID. socket.io verbindet sich nach einem Aussetzer (WLAN,
+ * Laptop-Schlaf, gedrosselter Hintergrund-Tab) automatisch neu — aber mit einer
+ * NEUEN Socket-ID, unter der der Server niemanden mehr kennt. Ohne erneutes
+ * "rejoin" wird man dabei zum Geist: man sieht das Spiel weiter, jede Aktion
+ * scheitert aber mit "Nicht registriert". Darum hier merken und bei jedem
+ * Wiederverbinden automatisch erneut anmelden. */
+let myToken = null;
+function reidentify(s) {
+  if (!myToken) return;   // noch nie registriert — nichts wiederherzustellen
+  s.emit("rejoin", { token: myToken }, res => {
+    if (res?.error) { toast("Sitzung abgelaufen — bitte Seite neu laden.", true); return; }
+    /* Der Ack liefert die vollständigen Spieldaten mit. Die zu verwerfen war ein
+     * Fehler: wurde der Server zwischenzeitlich um Waren oder Gebäude erweitert,
+     * blieb der Client auf dem Stand des Seitenaufrufs stehen und zeigte für
+     * alles Neue "undefined" an. */
+    enterGame(res);
+    toast("Verbindung wiederhergestellt.");
+  });
+}
+function bindSocketEvents(s) {
+  s.on("connect", () => reidentify(s));        // direkte socket.io-Verbindung
+  s.on("reconnected", () => reidentify(s));    // über die WebRTC-Bridge gemeldet
+  s.on("state", state => store.set({ state: mergeState(state) }));
+  s.on("me", me => store.set({ me }));
+  s.on("notice", ({ text }) => toast(text));
+  s.on("trade", t => toast(`${t.qty}× ${gname(t.good)} @ ${fmt(t.price)} (${t.seller} → ${t.buyer})`));
+  s.on("chat", ({ room, msg }) => {
+    /* Wie serverseitig bei 100 gedeckelt: der Chatverlauf wuchs hier sonst über
+     * die ganze Spielzeit unbegrenzt weiter, und das Chat-Panel baut bei jedem
+     * Update die komplette Liste neu auf. */
+    const c = store.get().chat;
+    const liste = (c[room] ??= []);
+    liste.push(msg);
+    if (liste.length > 100) liste.splice(0, liste.length - 100);
+    store.set({ chat: c });
+  });
+  s.on("contractOffer", c =>
+    toast(`${c.from} bietet dir ${c.qty}× ${gname(c.good)} für ${fmt(c.price)}/Stk — annehmen im Finanz-Panel? Chat-Panel → Verträge`));
+  s.on("shareOffer", o =>
+    toast(`${o.from} bietet dir ${o.count*25}% seiner Firma für ${fmt(o.price)} an — annehmen im Finanzen-Panel.`));
+  s.on("roundReset", () => backToLobby());
+  s.on("disconnect", () => toast("Verbindung zum Server verloren", true));
+}
+/* Zurück in die Lobby nach dem Rundenende. Wichtig ist, dabei wirklich ALLES
+ * zurückzusetzen, was sich auf die alte Runde bezieht — sonst zeichnet die neue
+ * Runde mit den Straßenverläufen der alten Karte (ROUTES), führt Kachel-Diffs
+ * auf dem alten Kartencache aus oder versucht, sich mit einem toten Token
+ * wieder anzumelden. */
+/* Abschlusstafel: Tabelle aller Firmen plus Auszeichnungen. Der Server liefert
+ * die Zahlen fertig mit (state.report), sobald die Runde entschieden ist. */
+let auswertungGezeigt = false;
+function zeigeAuswertung(state) {
+  if (auswertungGezeigt) return;          // einmal aufbauen, nicht im Sekundentakt neu
+  const r = state.report;
+  document.getElementById("winsub").textContent = r
+    ? `${fmt(state.winGoal)} Nettovermögen erreicht — nach ${r.dauerMin} Minuten.`
+    : `${fmt(state.winGoal)} Nettovermögen wurde erreicht.`;
+  if (!r) return;
+  auswertungGezeigt = true;
+
+  const kopf = ["Firma", "Nettovermögen", "Umsatz", "Produziert", "Gebäude", "Großaufträge", "Beteiligungen"];
+  document.getElementById("wintable").innerHTML = `<table><thead><tr>${
+    kopf.map(h => `<th>${h}</th>`).join("")}</tr></thead><tbody>${
+    r.zeilen.map((z, i) => `<tr class="${z.sieger ? "sieger" : ""}">
+      <td><span class="pl" style="background:${z.color}">${z.name[0].toUpperCase()}</span>${z.name}${z.sieger ? '<span style="color:var(--accent);font-weight:700"> · Sieger</span>' : ""}</td>
+      <td>${fmt(z.netWorth)}</td>
+      <td>${fmt(z.umsatz)}</td>
+      <td>${z.produziertStk.toLocaleString("de-DE")}</td>
+      <td>${z.gebaeude}${z.stufen ? ` <span style="color:var(--accent)">★${z.stufen}</span>` : ""}</td>
+      <td>${z.grossauftraege || "—"}</td>
+      <td>${z.beteiligungswert ? fmt(z.beteiligungswert) : "—"}</td>
+    </tr>`).join("")}</tbody></table>`;
+
+  document.getElementById("winawards").innerHTML = r.auszeichnungen.map(a => `
+    <div class="award"><div class="t">${a.titel}</div>
+      <div class="n" style="color:${a.color}">${a.name}</div>
+      <div class="v">${a.wert}</div>
+      ${a.zusatz ? `<div class="z">${a.zusatz}</div>` : ""}</div>`).join("");
+}
+
+function backToLobby() {
+  cachedFullMap = null;
+  ROUTES = null;
+  calmAvg = null; calmPrev = null; calmAt = 0;
+  pendingMerge = null;
+  myToken = null;
+  try { localStorage.removeItem(TOKEN_KEY); } catch {}
+  store.set({ state: null, me: null, meta: null, myId: null, chat: {} });
+  auswertungGezeigt = false;
+  document.getElementById("win").style.display = "none";
+  document.getElementById("joinErr").textContent = "";
+  openPanel("karte");
+  tutDone();
+  document.getElementById("join").style.display = "";
+  toast("Neue Runde — wähle deine Firma.");
+}
+bindSocketEvents(socket);
+
+/* Bridge: verpackt eine PeerJS-DataConnection als socket.io-kompatibles Objekt
+ * ({emit(ev,payload,ack), on(ev,fn)}) — der Rest des Clients merkt den Unterschied nicht. */
+function makeBridge(conn) {
+  const listeners = {}, pending = {};
+  let reqId = 0;
+  conn.on("data", msg => {
+    if (msg.t === "ack") { const cb = pending[msg.id]; delete pending[msg.id]; if (cb) cb(msg.res); }
+    else if (msg.t === "event") (listeners[msg.ev] || []).forEach(fn => fn(msg.payload));
+  });
+  conn.on("close", () => (listeners["disconnect"] || []).forEach(fn => fn()));
+  return {
+    emit(ev, payload, ack) { const id = ++reqId; if (ack) pending[id] = ack; conn.send({ t: "req", id, ev, payload }); },
+    on(ev, fn) { (listeners[ev] ??= []).push(fn); },
+  };
+}
+/* Host: nimmt eingehende WebRTC-Verbindungen an und spiegelt jede in eine eigene,
+ * ganz normale socket.io-Verbindung zum eigenen lokalen Server — für den Server
+ * sieht ein Fern-Mitspieler genauso aus wie ein zusätzlicher Browser-Tab. */
+let hostPeer = null, hostVersuch = 0, hostTimer = null;
+/* Der Online-Code entsteht über einen öffentlichen Vermittlungsdienst (PeerJS).
+ * Der ist gelegentlich kurz nicht erreichbar. Vorher gab ein einziger solcher
+ * Aussetzer dauerhaft auf — der Code stand dann bis zum Neuladen der Seite auf
+ * "nicht verfügbar", obwohl beim nächsten Versuch alles geklappt hätte.
+ * Jetzt wird mit wachsendem Abstand mehrfach neu versucht, ein Abriss im
+ * laufenden Betrieb automatisch wieder aufgebaut, und als letzte Möglichkeit
+ * lässt sich der Code per Klick von Hand neu anfordern. */
+function hostCodeText(t, klickbar = false) {
+  const el = document.getElementById("hostCode");
+  el.textContent = t;
+  el.style.cursor = klickbar ? "pointer" : "";
+  el.style.fontSize = t.length > 8 ? "13px" : "";
+  el.style.letterSpacing = t.length > 8 ? "0" : "";
+  el.onclick = klickbar ? () => { hostVersuch = 0; startHosting(); } : null;
+}
+function startHosting(retriesLeft = 2) {
+  if (hostTimer) { clearTimeout(hostTimer); hostTimer = null; }
+  if (hostPeer) { try { hostPeer.destroy(); } catch {} }
+  hostCodeText("verbinde …");
+  const code = "cs-" + Math.random().toString(36).slice(2, 7);
+  hostPeer = new Peer(code, { debug: 0 });
+  hostPeer.on("open", id => {
+    hostVersuch = 0;
+    hostCodeText(id.replace(/^cs-/, "").toUpperCase());
+  });
+  /* Bricht die Verbindung zum Vermittler später ab, bleibt der Code gültig —
+   * PeerJS kann dieselbe Kennung wieder anmelden. */
+  hostPeer.on("disconnected", () => { try { hostPeer.reconnect(); } catch {} });
+  hostPeer.on("error", err => {
+    const typ = err?.type || "";
+    if (typ === "unavailable-id" && retriesLeft > 0) { startHosting(retriesLeft - 1); return; }
+    /* Netz- oder Serverfehler: nach kurzer Pause erneut versuchen, bis zu 4-mal
+     * (2 s, 4 s, 8 s, 16 s). "peer-unavailable" betrifft nur eine einzelne
+     * Gegenstelle und ist hier kein Grund, alles neu aufzubauen. */
+    if (typ === "peer-unavailable") return;
+    if (hostVersuch < 4) {
+      const wartezeit = 2000 * 2 ** hostVersuch++;
+      hostCodeText(`neuer Versuch in ${wartezeit / 1000} s …`);
+      hostTimer = setTimeout(() => startHosting(2), wartezeit);
+      return;
+    }
+    hostCodeText("Code anfordern ↻", true);
+  });
+  hostPeer.on("connection", conn => {
+    conn.on("open", () => {
+      const relay = io({ forceNew: true });   // eigene, unabhängige Verbindung — keine Mehrfachnutzung des Host-Sockets
+      /* Verliert dieses Relay die Verbindung und baut sie neu auf, kennt der Server
+       * die neue Socket-ID nicht mehr — der Fern-Mitspieler müsste sich sonst
+       * stumm als Geist wiederfinden. Also Bescheid geben, damit er sich erneut
+       * anmeldet. Die Karte schickt der Server der neuen Verbindung ohnehin
+       * wieder vollständig, nur die noch gepufferten Einzeländerungen aus der
+       * alten Verbindung sind dann hinfällig. */
+      let relayWasConnected = false;
+      relay.on("connect", () => {
+        if (relayWasConnected) { pendingTiles.clear(); pendingFull = null; conn.send({ t: "event", ev: "reconnected" }); }
+        relayWasConnected = true;
+      });
+      conn.on("data", msg => { if (msg.t === "req") relay.emit(msg.ev, msg.payload, res => conn.send({ t: "ack", id: msg.id, res })); });
+      /* "state" feuert bei jeder Spieler-/Bot-Aktion, oft mehrmals pro Sekunde.
+       * Die Karte kommt vom Server inzwischen schon als Diff (siehe pushState),
+       * hier bleibt nur noch die Drosselung auf höchstens 4×/s.
+       * Wichtig dabei: Diffs dürfen NICHT einfach verworfen werden wie früher
+       * die vollen Snapshots. Jeder Diff trägt eine eigene Änderung — wer beim
+       * Drosseln den vorletzten wegwirft, verliert das Gebäude darin für immer.
+       * Darum werden die Kachel-Änderungen im Fenster gesammelt und gebündelt
+       * weitergereicht. */
+      let stateTimer = null, latestState = null, pendingTiles = new Map(), pendingFull = null;
+      relay.on("state", payload => {
+        latestState = payload;
+        if (payload.map) { pendingFull = payload; pendingTiles.clear(); }
+        else if (payload.mapDelta) for (const d of payload.mapDelta) pendingTiles.set(d.i, d);
+        if (stateTimer) return;
+        stateTimer = setTimeout(() => {
+          let out;
+          if (pendingFull) {
+            /* Volle Karte steht an: die seither gesammelten Änderungen direkt
+             * einarbeiten, dann als eine vollständige Karte rausgeben. */
+            const map = pendingFull.map;
+            for (const d of pendingTiles.values()) {
+              const t = map[d.i];
+              if (t) for (const k in d) if (k !== "i") t[k] = d[k];
+            }
+            out = { ...latestState, map };
+            delete out.mapDelta;
+            pendingFull = null;
+          } else {
+            out = { ...latestState, mapDelta: [...pendingTiles.values()] };
+            delete out.map;
+          }
+          pendingTiles.clear();
+          conn.send({ t: "event", ev: "state", payload: out });
+          stateTimer = null;
+        }, 250);
+      });
+      ["me", "notice", "trade", "chat", "contractOffer", "shareOffer"].forEach(ev => relay.on(ev, payload => conn.send({ t: "event", ev, payload })));
+      conn.on("close", () => { relay.disconnect(); if (stateTimer) clearTimeout(stateTimer); });
+    });
+  });
+}
+startHosting();   // im Hintergrund — stört das lokale LAN/Solo-Spiel nicht, falls kein Internet da ist
+
+const GOODS = () => store.get().meta?.goods || {};
+const BTYPES = () => store.get().meta?.btypes || {};
+/* Warenname mit Rückfallebene. Kennt der Client eine Ware (noch) nicht — etwa
+ * weil der Server seit dem Seitenaufruf um neue Waren erweitert wurde —, stand
+ * hier vorher wörtlich "undefined" in der Oberfläche. Lieber der rohe Schlüssel
+ * als ein kaputt aussehender Text. */
+const gname = g => GOODS()[g]?.name ?? g;
+
+/* ---- Join / Lobby ---- */
+const COLORS = ["#38bdf8","#a78bfa","#34d399","#fb7185","#fbbf24","#f97316","#e879f9","#64748b"];
+let myColor = COLORS[0];
+const jc = document.getElementById("jcolors");
+COLORS.forEach((c, i) => { const b = document.createElement("button"); b.style.background = c;
+  if (!i) b.classList.add("on");
+  b.addEventListener("click", () => { myColor = c; jc.querySelectorAll("button").forEach(x => x.classList.toggle("on", x === b)); });
+  jc.append(b); });
+let myIndustry = "agrar";
+document.querySelectorAll(".indopt:not(.netopt)").forEach(b => b.addEventListener("click", () => {
+  myIndustry = b.dataset.ind;
+  document.querySelectorAll(".indopt:not(.netopt)").forEach(x => x.classList.toggle("on", x === b));
+}));
+/* ---- Bot-Aufstellung ----
+ * Anzahl je Branche (0-2) und Spielstärke. Beides geht mit der Registrierung an
+ * den Server und gilt nur, wenn man der erste Spieler der Runde ist — danach
+ * laufen die Bots schon und eine Änderung mitten im Spiel wäre unfair. */
+let botLevel = "mittel";
+const botCounts = { agrar: 1, rohstoff: 1, versorger: 1, tech: 1 };
+const BOT_LEVEL_TEXT = {
+  einfach: "bauen langsam, handeln zurückhaltend, leveln nicht auf",
+  mittel:  "bauen zügig aus, leveln Gebäude auf, bieten bei Auktionen mit",
+  schwer:  "expandieren schnell, boosten ihre Produktion und bieten über Marktpreis",
+};
+function botNoteAktualisieren() {
+  const n = Object.values(botCounts).reduce((a, b) => a + b, 0);
+  document.getElementById("botSum").textContent = n === 0 ? "Keine Bots" : n === 1 ? "1 Bot" : `${n} Bots`;
+  document.getElementById("botLevelNote").textContent = n === 0 ? "du spielst allein gegen den Markt" : BOT_LEVEL_TEXT[botLevel];
+}
+document.querySelectorAll("#botLevel button").forEach(b => b.addEventListener("click", () => {
+  botLevel = b.dataset.lvl;
+  document.querySelectorAll("#botLevel button").forEach(x => x.classList.toggle("on", x === b));
+  botNoteAktualisieren();
+}));
+document.querySelectorAll(".botrow").forEach(row => {
+  row.querySelectorAll(".pick button").forEach(b => b.addEventListener("click", () => {
+    botCounts[row.dataset.b] = +b.dataset.n;
+    row.querySelectorAll(".pick button").forEach(x => x.classList.toggle("on", x === b));
+    botNoteAktualisieren();
+  }));
+});
+botNoteAktualisieren();
+
+/* Host vs. Beitreten-per-Code umschalten */
+let netMode = "host", remoteConn = null;
+document.querySelectorAll(".netopt").forEach(b => b.addEventListener("click", () => {
+  netMode = b.dataset.net;
+  document.querySelectorAll(".netopt").forEach(x => x.classList.toggle("on", x === b));
+  document.getElementById("invite").style.display = netMode === "host" ? "" : "none";
+  document.getElementById("joinCodeRow").style.display = netMode === "join" ? "" : "none";
+  /* Kurz halten — die Beschriftung steht jetzt in Versalien im Feldkopf */
+  document.getElementById("netstep").textContent = netMode === "join" ? "Runde beitreten" : "Mitspieler einladen";
+  /* Beim Beitreten wird die eigene Vermittlung abgebaut (man hostet ja nicht).
+   * Schaltet man zurück, muss sie neu aufgebaut werden — sonst bleibt das
+   * Code-Feld auf dem alten, längst ungültigen Wert stehen. */
+  if (netMode === "host" && (!hostPeer || hostPeer.destroyed)) { hostVersuch = 0; startHosting(); }
+  document.getElementById("jgo").textContent = netMode === "join" ? "Verbinden & mitspielen" : "Firma gründen";
+  /* Beim Beitreten ist das Rundenziel nicht die eigene Entscheidung — Auswahl
+   * ausblenden statt eine wirkungslose Einstellung anzubieten. */
+  document.getElementById("jgoal").style.display = netMode === "join" ? "none" : "";
+  document.getElementById("goalNote").textContent = netMode === "join"
+    ? "Das Rundenziel legt der Host der Runde fest."
+    : "Der erste Spieler der Runde legt das Ziel fest — danach gilt es für alle.";
+  /* Wer beitritt, findet die Bots bereits vor — Auswahl sichtbar lassen, aber sperren */
+  const bb = document.getElementById("botbox");
+  bb.classList.toggle("gesperrt", netMode === "join");
+  document.getElementById("botWho").textContent =
+    netMode === "join" ? "hat der Host festgelegt" : "legt der erste Spieler fest";
+}));
+/* Musik darf erst nach einer echten Nutzerinteraktion starten (Autoplay-Sperre) —
+ * die erste Berührung des Startscreens genügt, dann läuft sie schon in der Lobby. */
+document.getElementById("join").addEventListener("pointerdown", () => MUSIC.start(), { once: true });
+/* Session-Token: übersteht Tab-Reload/WLAN-Aussetzer — beim nächsten Laden wird
+ * automatisch versucht, nahtlos an den bestehenden Spielstand anzuknüpfen. */
+const TOKEN_KEY = "capitalSandboxToken";
+function enterGame(res) {
+  store.set({ meta: res, myId: res.you });
+  document.getElementById("join").style.display = "none";
+  initSelects();
+  MUSIC.start();
+}
+function doRegister(name) {
+  socket.emit("register", { name, color: myColor, winGoal: +document.getElementById("jgoal").value,
+                            industry: myIndustry, bots: botCounts, botLevel }, res => {
+    if (res?.error) { document.getElementById("joinErr").textContent = res.error; return; }
+    myToken = res.you;
+    try { localStorage.setItem(TOKEN_KEY, res.you); } catch {}
+    enterGame(res);
+    TUT = buildTut(res.industry || "agrar");   // Tutorial passend zur gewählten Industrie
+    tutShow(0);
+  });
+}
+/* Beim Laden automatisch versuchen, mit gespeichertem Token wieder beizutreten —
+ * nur im Host-Modus (lokaler Server); "Mit Code beitreten" ist immer ein bewusster,
+ * expliziter Vorgang und lädt sich kein fremdes Token. */
+(function attemptRejoin() {
+  let token; try { token = localStorage.getItem(TOKEN_KEY); } catch { token = null; }
+  if (!token) return;
+  socket.emit("rejoin", { token }, res => {
+    if (res?.error) { try { localStorage.removeItem(TOKEN_KEY); } catch {} return; }
+    myToken = token;
+    enterGame(res);
+  });
+})();
+document.getElementById("jgo").addEventListener("click", () => {
+  const name = document.getElementById("jname").value.trim();
+  document.getElementById("joinErr").textContent = "";
+  if (netMode === "host") { doRegister(name); return; }
+  /* Beitreten per Code: erst per WebRTC zum Host verbinden, dann wie gewohnt registrieren */
+  const code = document.getElementById("jcode").value.trim().toLowerCase();
+  if (!code) { document.getElementById("joinErr").textContent = "Bitte Online-Code eingeben"; return; }
+  const status = document.getElementById("joinCodeStatus");
+  status.textContent = "Verbinde …";
+  if (hostPeer) { hostPeer.destroy(); hostPeer = null; }   // eigenes Hosting nicht nötig, wenn wir selbst beitreten
+  const localSocket = socket;
+  const myPeer = new Peer({ debug: 0 });
+  myPeer.on("open", () => {
+    remoteConn = myPeer.connect("cs-" + code, { reliable: true });
+    remoteConn.on("open", () => {
+      status.textContent = "Verbunden ✓";
+      /* Wichtig: die Verbindung zum EIGENEN lokalen Server kappen. Sie liefert
+       * sonst weiter volle Snapshots einer ganz anderen Spielwelt (eigener Server,
+       * eigene Bots, eigene Karte) — die würden sich mit den Daten des Hosts
+       * abwechseln (Flackern) und den Kartencache bei jedem Tick komplett
+       * überschreiben, sodass die Delta-Updates ins Leere laufen. */
+      try { localSocket.disconnect(); } catch {}
+      cachedFullMap = null;   // Karte des eigenen Servers verwerfen — der Host schickt gleich seine
+      socket = makeBridge(remoteConn);
+      bindSocketEvents(socket);
+      doRegister(name);
+    });
+    remoteConn.on("error", () => { status.textContent = "Verbindung fehlgeschlagen — Code prüfen."; });
+  });
+  myPeer.on("error", () => { status.textContent = "Verbindung fehlgeschlagen — Code prüfen."; });
+});
+document.getElementById("jname").addEventListener("keydown", e => { if (e.key === "Enter") document.getElementById("jgo").click(); });
+
+/* ---- Startbildschirm: Partikelfeld und Statuszeile ----
+ * Das Partikelfeld ist reine Deko und läuft nur, solange die Lobby sichtbar ist —
+ * im Spiel selbst würde es sonst dauerhaft Rechenzeit neben der Karte fressen. */
+(function joinAmbience() {
+  const cv = document.getElementById("joinParticles"), join = document.getElementById("join");
+  const cx = cv.getContext("2d");
+  let raf = null, teilchen = [];
+  const anpassen = () => {
+    cv.width = cv.offsetWidth; cv.height = cv.offsetHeight;
+    if (teilchen.length) return;
+    for (let i = 0; i < 55; i++) teilchen.push({
+      x: Math.random() * cv.width, y: Math.random() * cv.height,
+      vx: (Math.random() - 0.5) * 0.18, vy: (Math.random() - 0.5) * 0.18,
+      a: Math.random() * 0.35 + 0.05, r: Math.random() * 1.2 + 0.4,
+    });
+  };
+  function zeichnen() {
+    cx.clearRect(0, 0, cv.width, cv.height);
+    for (const p of teilchen) {
+      p.x += p.vx; p.y += p.vy;
+      if (p.x < 0) p.x = cv.width; if (p.x > cv.width) p.x = 0;
+      if (p.y < 0) p.y = cv.height; if (p.y > cv.height) p.y = 0;
+      cx.beginPath(); cx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+      cx.fillStyle = `rgba(56,189,248,${p.a})`; cx.fill();
+    }
+    raf = requestAnimationFrame(zeichnen);
+  }
+  const start = () => { if (raf) return; anpassen(); zeichnen(); };
+  const stop = () => { if (raf) cancelAnimationFrame(raf); raf = null; };
+  addEventListener("resize", () => { if (raf) { teilchen = []; anpassen(); } });
+  /* Sichtbarkeit der Lobby beobachten, statt den Zustand an zwei Stellen zu pflegen */
+  new MutationObserver(() => join.style.display === "none" ? stop() : start())
+    .observe(join, { attributes: true, attributeFilter: ["style"] });
+  start();
+
+  /* Statuszeile mit echten Werten: Verbindungszustand und wer schon in der Runde
+   * ist. Der Server sendet seinen Zustand an jede Verbindung, auch an noch nicht
+   * angemeldete — die Zahl stimmt also schon vor dem Beitritt. */
+  const MAX = 8;
+  const slots = document.getElementById("joinSlots");
+  slots.innerHTML = Array.from({ length: MAX }, () => `<span class="slot"></span>`).join("")
+    + `<span class="count">0/${MAX}</span>`;
+  function statusZeichnen() {
+    if (join.style.display === "none") return;
+    const verbunden = socket.connected !== false;
+    const txt = document.getElementById("joinStatusText");
+    txt.textContent = verbunden ? "Server online" : "Keine Verbindung";
+    txt.style.color = verbunden ? "var(--up)" : "var(--down)";
+    document.getElementById("joinPulse").querySelectorAll("i,b").forEach(e =>
+      e.style.background = verbunden ? "var(--up)" : "var(--down)");
+    const n = Math.min(MAX, Object.keys(store.get().state?.players || {}).length);
+    slots.querySelectorAll(".slot").forEach((e, i) => e.classList.toggle("on", i < n));
+    slots.querySelector(".count").textContent = `${n}/${MAX}`;
+    document.getElementById("joinWaiting").textContent =
+      n === 0 ? "Runde ist leer" : n === 1 ? "1 Firma in der Runde" : `${n} Firmen in der Runde`;
+  }
+  setInterval(statusZeichnen, 1000);
+  store.subscribe(statusZeichnen);
+  statusZeichnen();
+})();
+/* Nach dem Sieg: Runde serverseitig neu aufsetzen. Der Server schickt daraufhin
+ * allen Verbundenen ein "roundReset", also auch uns selbst — der Rücksprung in
+ * die Lobby passiert dort und damit für alle gleichzeitig. */
+document.getElementById("winNew").addEventListener("click", () => act("newRound", {}));
+
+/* Einladungslink vom Server holen (öffentlicher Tunnel-Link zuerst, sonst LAN-IP).
+ * Dieselbe Antwort liefert die Kennung des Serverlaufs für das Intro mit. */
+fetch("/api/invite").then(r => r.json()).then(({ urls, bootId }) => {
+  const url = urls[0] || location.href;
+  document.getElementById("inviteUrl").value = url;
+  document.getElementById("inviteHint").textContent = url.startsWith("https")
+    ? "Öffentlicher Link — funktioniert auch außerhalb deines Netzwerks."
+    : "Funktioniert für alle im selben WLAN. Für einen öffentlichen Link: npm run share";
+  introVielleichtZeigen(bootId);
+}).catch(() => { document.getElementById("inviteUrl").value = location.href; });
+
+/* ---- Intro-Video ----
+ * Soll genau einmal je Serverstart laufen: der Server würfelt beim Hochfahren
+ * eine Kennung aus, der Browser merkt sich die zuletzt gesehene. Sind beide
+ * gleich, war das Intro in diesem Serverlauf schon dran — also überspringen.
+ * Damit kommt es nach jedem "sh start.sh" wieder, aber nicht bei jedem Reload. */
+const BOOT_KEY = "cs_intro_boot";
+function introVielleichtZeigen(bootId) {
+  if (!bootId) return;
+  let gesehen = null;
+  try { gesehen = localStorage.getItem(BOOT_KEY); } catch {}
+  if (gesehen === bootId) return;
+  const merken = () => { try { localStorage.setItem(BOOT_KEY, bootId); } catch {} };
+
+  const box = document.getElementById("intro");
+  const video = document.getElementById("introVideo");
+  const tonBtn = document.getElementById("introSound");
+  const skipBtn = document.getElementById("introSkip");
+  let beendet = false;
+  const beenden = () => {
+    if (beendet) return;
+    beendet = true;
+    merken();
+    video.pause();
+    box.hidden = true;
+    removeEventListener("keydown", aufTaste);
+  };
+  const aufTaste = e => { if (e.key === "Escape" || e.key === " " || e.key === "Enter") beenden(); };
+
+  box.hidden = false;
+  video.src = "assets/video/intro.mp4";
+  video.addEventListener("ended", beenden);
+  video.addEventListener("error", beenden);   // fehlt die Datei, nicht im Schwarzbild hängen bleiben
+  skipBtn.addEventListener("click", beenden);
+  addEventListener("keydown", aufTaste);
+  tonBtn.addEventListener("click", () => { video.muted = false; video.volume = 1; tonBtn.hidden = true; });
+
+  /* Browser blocken Ton ohne vorherige Nutzerinteraktion. Erst mit Ton
+   * versuchen; wird das abgelehnt, stumm weiterlaufen lassen und einen Knopf
+   * zum Einschalten anbieten — statt das Intro ganz ausfallen zu lassen. */
+  video.play().catch(() => {
+    video.muted = true;
+    tonBtn.hidden = false;
+    video.play().catch(beenden);
+  });
+}
+document.getElementById("inviteCopy").addEventListener("click", async () => {
+  const inp = document.getElementById("inviteUrl");
+  try { await navigator.clipboard.writeText(inp.value); }
+  catch { inp.select(); document.execCommand("copy"); }
+  const btn = document.getElementById("inviteCopy");
+  btn.textContent = "Kopiert"; btn.classList.add("done");
+  setTimeout(() => { btn.textContent = "Kopieren"; btn.classList.remove("done"); }, 1600);
+});
+document.getElementById("hostCodeCopy").addEventListener("click", async () => {
+  const code = document.getElementById("hostCode").textContent;
+  try { await navigator.clipboard.writeText(code); } catch {}
+  const btn = document.getElementById("hostCodeCopy");
+  btn.textContent = "Kopiert"; btn.classList.add("done");
+  setTimeout(() => { btn.textContent = "Kopieren"; btn.classList.remove("done"); }, 1600);
+});
+
+/* ---- Karte (Canvas, rendert nur den Server-State) ---- */
+const cv = document.getElementById("cv"), cx = cv.getContext("2d");
+const TW = 64, TH = 32; let cam = { x: 0, y: -120, z: 1 }, drag = null;
+function resize(){ cv.width = innerWidth * devicePixelRatio; cv.height = innerHeight * devicePixelRatio;
+  cv.style.width = innerWidth + "px"; cv.style.height = innerHeight + "px"; }
+addEventListener("resize", resize); resize();
+const iso = (x, y) => [(x - y) * TW / 2, (x + y) * TH / 2];
+const ZCOL = { zentrum:"#1e6fd9", industrie:"#3a3226", agrar:"#22371f", kueste:"#173b45", wasser:"#0e2f44" };
+/* Boden-Kacheln (Kenney Isometric Roads + Water Works, CC0) — ersetzen die reine
+ * Flächenfarbe durch echte Isometrie-Sprites; die Zonenfarbe bleibt als transparenter
+ * Farbwasch obendrauf für die Wiedererkennbarkeit der Zonen erhalten. */
+/* ---- Bodenkacheln ----
+ * Der Boden kommt jetzt aus flachen, kachelbaren Texturen (64x64) statt aus
+ * fertigen Isometrie-Sprites. Damit sie nicht wie aufgeklebte Quadrate wirken,
+ * wird jede Textur EINMAL beim Laden in eine Raute geschert und zwischengelagert
+ * — danach kostet das Zeichnen pro Bild genauso viel wie vorher.
+ * Die Straßen bleiben unverändert die Kenney-Sprites; sie werden nur in dieselbe
+ * Rautenform vorgerendert, pixelgenau mit demselben Zuschnitt wie bisher. */
+const TILE_SCALE = 4;          // Vorrendern in vierfacher Auflösung, damit es beim Hineinzoomen scharf bleibt
+const TILEIMG = {};            // Schlüssel -> vorgerenderte Raute (Canvas)
+function makeDiamond(zeichne) {
+  const c = document.createElement("canvas");
+  c.width = TW * TILE_SCALE; c.height = TH * TILE_SCALE;
+  const g = c.getContext("2d");
+  g.scale(TILE_SCALE, TILE_SCALE);
+  /* Rautenpfad, minimal überzeichnet — sonst blitzen zwischen den Kacheln
+   * haarfeine Lücken durch die Kantenglättung. */
+  const o = 0.5;
+  g.beginPath();
+  g.moveTo(TW/2, -o); g.lineTo(TW+o, TH/2); g.lineTo(TW/2, TH+o); g.lineTo(-o, TH/2);
+  g.closePath(); g.clip();
+  zeichne(g);
+  return c;
+}
+/* Flache Textur isometrisch auf die Raute scheren: die vier Ecken des
+ * Texturquadrats landen auf den vier Rautenspitzen. */
+function groundDiamond(img) {
+  const ts = img.naturalWidth;
+  return makeDiamond(g => {
+    g.transform(TW/2/ts, TH/2/ts, -TW/2/ts, TH/2/ts, TW/2, 0);
+    g.drawImage(img, 0, 0, ts, ts);
+  });
+}
+/* Kenney-Straßenblock: nur die flache Deckfläche (obere Bildhälfte) übernehmen —
+ * exakt derselbe Zuschnitt wie zuvor beim Zeichnen pro Bild. */
+function roadDiamond(img) {
+  return makeDiamond(g => g.drawImage(img, 0, 0, img.naturalWidth, img.naturalWidth / 2, 0, 0, TW, TH));
+}
+for (const [key, pfad, art] of [
+  ["gras",      "assets/ground/gras.png",      groundDiamond],
+  ["stadt",     "assets/ground/stadt.png",     groundDiamond],
+  ["industrie", "assets/ground/industrie.png", groundDiamond],
+  ["kueste",    "assets/ground/kueste.png",    groundDiamond],
+  ["sand",      "assets/ground/sand.png",      groundDiamond],
+  ["meer",      "assets/ground/meer.png",      groundDiamond],
+  ["road",      "assets/kenney/tiles/road.png",      roadDiamond],
+  ["roadNS",    "assets/kenney/tiles/roadNS.png",    roadDiamond],
+  ["roadEW",    "assets/kenney/tiles/roadEW.png",    roadDiamond],
+  ["crossroad", "assets/kenney/tiles/crossroad.png", roadDiamond],
+]) {
+  const img = new Image();
+  img.onload = () => TILEIMG[key] = art(img);
+  img.src = pfad;
+}
+const tileSprite = t => {
+  if (t.water) return TILEIMG.meer;
+  if (t.road) {
+    const isCol = t.x % 6 === 3, isRow = t.y % 6 === 3;
+    if (isCol && isRow) return TILEIMG.crossroad;
+    /* Vorsicht Isometrie: iso() bildet +x auf "rechts-unten" ab und +y auf
+     * "links-unten". Eine Spaltenstraße (x fest, y läuft) verläuft auf dem
+     * Bildschirm also von unten-links nach oben-rechts — dafür braucht es die
+     * Kachel, deren Asphalt oben-rechts und unten-links ausläuft, und das ist
+     * roadEW. Die Dateinamen meinen Weltachsen, nicht Bildschirmrichtungen;
+     * genau daran war die Zuordnung vorher um 90° verdreht. */
+    return isCol ? TILEIMG.roadEW : TILEIMG.roadNS;
+  }
+  if (t.sand) return TILEIMG.sand;
+  if (t.zone === "industrie") return TILEIMG.industrie;
+  if (t.zone === "kueste") return TILEIMG.kueste;
+  if (t.zone === "zentrum") return TILEIMG.stadt;
+  return TILEIMG.gras;
+};
+/* Gebäude-Sprites (Kenney City Kits, CC0) — public/assets/<btype>-<n>.png.
+ * Mehrere Varianten je Typ; die Kachelposition wählt deterministisch eine aus,
+ * damit alle Clients dasselbe Stadtbild sehen. Fallback: farbige Blöcke. */
+/* Stadtbank — eigenes Sprite unter assets/bank.png. Solange es fehlt, springt
+ * der Zeichencode auf das Handelskontor als Platzhalter zurück. */
+const BANKIMG = new Image(); BANKIMG.src = "assets/bank.png";
+const SPRITE_VARIANTS = { farm:3, plantage:2, mine:3, ewerk:3, wasserwerk:2, oelpumpe:2, buero:3, brunnen:1, markt:1, kontor:1, laden:1, bauhandel:1, saftpresse:1, stahlwerk:1, pharma:1, ziegelei:1, betonwerk:1, imkerei:1, baeckerei:1, windpark:1, raffinerie:1, siliziummine:1, chipfabrik:1,
+  autowerk:1, dieselwerk:1, eautowerk:1, autohaus:1, werbeagentur:1 };
+const SPRITES = {};
+for (const [b, n] of Object.entries(SPRITE_VARIANTS)) {
+  SPRITES[b] = [];
+  for (let i = 0; i < n; i++) {
+    const img = new Image();
+    img.onload = () => SPRITES[b][i] = img;
+    img.src = `assets/${b}-${i}.png`;
+  }
+}
+const spriteFor = (btype, x, y) => {
+  const arr = SPRITES[btype];
+  return arr?.length ? arr[(x * 7 + y * 13) % arr.length] : null;
+};
+/* Natur-Deko (Kenney Nature Kit, CC0): Bäume, Palmen, Felsen, Getreidefelder */
+const DECO = { tree: [], palm: [], rock: [], field: [] };
+for (const [d, n] of [["tree", 5], ["palm", 2], ["rock", 3], ["field", 3]]) for (let i = 0; i < n; i++) {
+  const img = new Image();
+  img.onload = () => DECO[d][i] = img;
+  img.src = `assets/deco/${d}-${i}.png`;
+}
+const decoFor = (t) => {
+  const arr = t.zone === "kueste" ? DECO.palm : DECO.tree;
+  return arr.length ? arr[(t.x * 11 + t.y * 5) % arr.length] : null;
+};
+function shade(hex, amt){ const n = parseInt(hex.slice(1), 16);
+  const c = v => Math.max(0, Math.min(255, v));
+  return `rgb(${c((n>>16)+amt)},${c(((n>>8)&255)+amt)},${c((n&255)+amt)})`; }
+
+/* Himmel-Hintergrund (Kenney Skyboxes, CC0) — nur ein leichter Ausschnitt (115 KB statt 1 MB Panorama) */
+const SKY = new Image(); SKY.src = "assets/kenney/sky/sky-day.png";
+
+/* Ambient-Deko (Kenney Car-Kit / Mini-Characters, CC0): rein kosmetische, clientseitige
+ * Bewegung entlang der Straßen — Position ist reine Funktion der Wanduhrzeit, braucht
+ * keinen Server-Zustand. */
+const AMBIENT = { cars: [], people: [] };
+const AMBIENT_FILES = {
+  cars: ["taxi", "sedan", "suv", "delivery", "police"],
+  people: ["character-male-a", "character-male-c", "character-male-e", "character-female-a", "character-female-c", "character-female-e"],
+};
+for (const [cat, files] of Object.entries(AMBIENT_FILES)) for (const f of files) {
+  const img = new Image();
+  img.onload = () => AMBIENT[cat].push(img);
+  img.src = `assets/kenney/${cat}/${f}.png`;
+}
+/* Bewegungspfade werden einmal aus der (statischen) Karte abgeleitet und gecacht. */
+let ROUTES = null;
+function buildRoutes(map) {
+  const cols = {}, rows = {};
+  for (const t of map) {
+    if (!t.road) continue;
+    (cols[t.x] ??= []).push(t);
+    (rows[t.y] ??= []).push(t);
+  }
+  const carLines = [];
+  for (const k in cols) if (cols[k].length > 10) carLines.push(cols[k].sort((a, b) => a.y - b.y));
+  for (const k in rows) if (rows[k].length > 10) carLines.push(rows[k].sort((a, b) => a.x - b.x));
+  return { carLines };
+}
+/* Position (in Kachel-Koordinaten) auf einer Punktfolge bei "Wegposition" u — pendelt vor & zurück. */
+function tilePosAtU(tiles, u) {
+  const n = tiles.length; if (n < 2) return null;
+  const period = (n - 1) * 2;
+  u = ((u % period) + period) % period;
+  const p = u < n - 1 ? u : period - u;
+  const i = Math.floor(p), f = p - i, a = tiles[i], b = tiles[Math.min(i + 1, n - 1)];
+  return { x: a.x + (b.x - a.x) * f, y: a.y + (b.y - a.y) * f };
+}
+function drawAmbient(now) {
+  if (!ROUTES) return;
+  const shadow = (sx, sy, rx, ry) => { cx.fillStyle = "rgba(0,0,0,.22)";
+    cx.beginPath(); cx.ellipse(sx, sy, rx, ry, 0, 0, Math.PI * 2); cx.fill(); };
+  /* Autos: 4 Straßenzüge, je ein Fahrzeug pendelt hin und her */
+  ROUTES.carLines.slice(0, 4).forEach((line, i) => {
+    const spr = AMBIENT.cars[i % AMBIENT.cars.length]; if (!spr) return;
+    const pos = tilePosAtU(line, now / 1000 * (0.35 + i * 0.05)); if (!pos) return;
+    const [sx, sy] = iso(pos.x, pos.y);
+    shadow(sx, sy + TH / 2 + 3, 12, 5);
+    cx.drawImage(spr, sx - 14, sy + TH / 2 - 20, 28, 28);
+  });
+  /* Fußgänger: kleine Pendelwege auf den Straßenzügen (Bürgersteig-Ersatz) */
+  ROUTES.carLines.slice(4, 4 + AMBIENT.people.length).forEach((line, i) => {
+    const spr = AMBIENT.people[i]; if (!spr || line.length < 2) return;
+    const pos = tilePosAtU(line, now / 1000 * (0.18 + i * 0.03) + i * 3); if (!pos) return;
+    const [sx, sy] = iso(pos.x, pos.y);
+    shadow(sx, sy + TH / 2 + 2, 6, 3);
+    cx.drawImage(spr, sx - 9, sy + TH / 2 - 16, 18, 18);
+  });
+}
+
+/* Karten-Symbole als Vektoren (statt Emoji): Schloss für gesperrte Kacheln,
+ * Warndreieck bei Pfandrecht, Pausenbalken bei angehaltener Produktion. */
+function drawLock(cxp, cyp) {
+  cx.fillStyle = "#38bdf8"; cx.strokeStyle = "#38bdf8"; cx.lineWidth = 1.4;
+  cx.beginPath(); cx.arc(cxp, cyp - 2.6, 2.4, Math.PI, 0); cx.stroke();
+  cx.fillRect(cxp - 3.6, cyp - 2.4, 7.2, 5.4);
+  cx.lineWidth = 1;
+}
+function drawWarn(cxp, cyp) {
+  cx.fillStyle = "#fb7185";
+  cx.beginPath(); cx.moveTo(cxp, cyp - 5); cx.lineTo(cxp + 5, cyp + 4); cx.lineTo(cxp - 5, cyp + 4);
+  cx.closePath(); cx.fill();
+  cx.fillStyle = "#0a0e15"; cx.fillRect(cxp - .7, cyp - 2, 1.4, 4);
+}
+function drawPause(cxp, cyp) {
+  cx.fillStyle = "#e3e9f4";
+  cx.fillRect(cxp - 3.4, cyp - 4, 2.4, 8); cx.fillRect(cxp + 1, cyp - 4, 2.4, 8);
+}
+/* ---- Sprites richtig aufsetzen ----
+ * Die Gebäude-Sprites haben unter dem Gebäude noch Leerraum (bei den Kenney-
+ * Kacheln genau 12 px). Bisher wurde dieser Fußpunkt auf die KACHELMITTE
+ * gesetzt — dadurch schwebte jedes Gebäude über seiner Kachel. Richtig ist:
+ * die Grundfläche des Gebäudes liegt mittig auf der Kachel, ihre vordere Ecke
+ * also unterhalb der Kachelmitte. Jedes Sprite wird deshalb beim ersten
+ * Zeichnen einmal vermessen und daraus berechnet, wie weit es nach unten gehört. */
+const spriteGeoCache = new WeakMap();
+function spriteGeo(img) {
+  let g = spriteGeoCache.get(img);
+  if (g) return g;
+  const w = img.naturalWidth || img.width, h = img.naturalHeight || img.height;
+  const c = document.createElement("canvas");
+  c.width = w; c.height = h;
+  const q = c.getContext("2d", { willReadFrequently: true });
+  q.drawImage(img, 0, 0);
+  let x0 = w, x1 = -1, y1 = -1;
+  try {
+    const d = q.getImageData(0, 0, w, h).data;
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+      if (d[(y * w + x) * 4 + 3] > 8) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y > y1) y1 = y; }
+    }
+  } catch { x0 = 0; x1 = w - 1; y1 = h - 1; }
+  /* footY: unterste sichtbare Zeile. halbBasis: halbe Höhe der Grundraute —
+   * eine isometrische Grundfläche ist doppelt so breit wie hoch, also Breite/4. */
+  g = { footY: y1 + 1, halbBasis: Math.max(2, (x1 - x0 + 1) / 4) };
+  spriteGeoCache.set(img, g);
+  return g;
+}
+/* y-Position, damit die Grundfläche des Sprites mittig auf der Kachel sitzt. */
+function standY(sy, img, size) {
+  const g = spriteGeo(img), sk = size / (img.naturalWidth || img.width);
+  return sy + TH / 2 + (g.halbBasis - g.footY) * sk;
+}
+/* Punktförmige Deko (Bäume, Felsen, Felder) hat keine eigene Grundfläche —
+ * ihr Fuß gehört schlicht auf die Kachelmitte. */
+function decoY(sy, img, size) {
+  const g = spriteGeo(img);
+  return sy + TH / 2 - g.footY * (size / (img.naturalWidth || img.width));
+}
+
+function draw() {
+  requestAnimationFrame(draw);
+  const st = store.get().state, now = Date.now();
+  cx.setTransform(devicePixelRatio,0,0,devicePixelRatio,0,0);
+  if (SKY.complete && SKY.naturalWidth) {
+    const scale = innerHeight / SKY.naturalHeight, dw = SKY.naturalWidth * scale, dh = innerHeight;
+    for (let x = 0; x < innerWidth + dw; x += dw) cx.drawImage(SKY, x, 0, dw, dh);
+    const grad = cx.createLinearGradient(0, 0, 0, innerHeight);
+    grad.addColorStop(0, "rgba(10,14,21,0)"); grad.addColorStop(.55, "rgba(10,14,21,.78)"); grad.addColorStop(1, "#0a0e15");
+    cx.fillStyle = grad; cx.fillRect(0, 0, innerWidth, innerHeight);
+  } else { cx.fillStyle = "#0a0e15"; cx.fillRect(0,0,innerWidth,innerHeight); }
+  if (!st) return;
+  if (!ROUTES) ROUTES = buildRoutes(st.map);
+  cx.translate(innerWidth/2 + cam.x, 120 + cam.y); cx.scale(cam.z, cam.z);
+  for (const t of st.map) {
+    const [sx, sy] = iso(t.x, t.y);
+    cx.beginPath(); cx.moveTo(sx,sy); cx.lineTo(sx+TW/2,sy+TH/2); cx.lineTo(sx,sy+TH); cx.lineTo(sx-TW/2,sy+TH/2); cx.closePath();
+    const img = tileSprite(t);
+    /* Die Rauten sind beim Laden fertig vorgerendert — hier nur noch platzieren. */
+    if (img) cx.drawImage(img, sx - TW / 2, sy, TW, TH);
+    else { cx.fillStyle = t.park ? "#2f4a2a" : t.road ? "#1c2430" : t.sand ? "#4d4632" : t.deep ? "#092536" : ZCOL[t.zone]; cx.fill(); }
+    cx.strokeStyle = "rgba(255,255,255,.05)"; cx.stroke();
+    /* Der frühere Zonen-Farbwasch entfällt: jede Zone hat jetzt ihre eigene
+     * Textur, ein Farbschleier darüber würde sie nur trüben. Nur das offene
+     * Meer bekommt weiterhin einen Dunkel-Ton, damit sich Tiefe abhebt. */
+    if (t.water && t.deep) { cx.globalAlpha = 0.35; cx.fillStyle = "#092536"; cx.fill(); cx.globalAlpha = 1; }
+    if (t.locked) { cx.fillStyle="rgba(0,0,0,.45)"; cx.fill();
+      drawLock(sx, sy + TH / 2 - 1); }
+  }
+  /* 2. Durchgang: Gebäude & Deko — nach Boden, damit Sprites nicht überdeckt werden */
+  for (const t of st.map) {
+    const [sx, sy] = iso(t.x, t.y);
+    if (t.park && !t.btype) {
+      const d = decoFor(t);
+      if (d) {
+        cx.fillStyle = "rgba(0,0,0,.18)";
+        cx.beginPath(); cx.ellipse(sx, sy + TH / 2, TW / 3.4, TH / 3.6, 0, 0, Math.PI * 2); cx.fill();
+        cx.drawImage(d, sx - 48, decoY(sy, d, 96), 96, 96);
+      }
+    }
+    if (t.rock && DECO.rock.length) {
+      const d = DECO.rock[(t.x * 7 + t.y * 3) % DECO.rock.length];
+      if (d) cx.drawImage(d, sx - 30, decoY(sy, d, 60), 60, 60);
+    }
+    if (t.field && !t.btype && DECO.field.length) {
+      const d = DECO.field[(t.x * 3 + t.y * 7) % DECO.field.length];
+      if (d) cx.drawImage(d, sx - 38, decoY(sy, d, 76), 76, 76);
+    }
+    if (t.bank) {
+      /* Bank: goldener Sockel, damit sie sich als städtisches Gebäude von den
+       * Spielergebäuden abhebt, plus Beschriftung. */
+      cx.fillStyle = "rgba(56,189,248,.28)";
+      cx.beginPath(); cx.moveTo(sx,sy); cx.lineTo(sx+TW/2,sy+TH/2); cx.lineTo(sx,sy+TH); cx.lineTo(sx-TW/2,sy+TH/2); cx.closePath(); cx.fill();
+      cx.strokeStyle = "#38bdf8"; cx.lineWidth = 1.6; cx.stroke(); cx.lineWidth = 1;
+      const bimg = (BANKIMG.complete && BANKIMG.naturalWidth) ? BANKIMG : spriteFor("kontor", t.x, t.y);
+      if (bimg) cx.drawImage(bimg, sx-36, standY(sy, bimg, 72), 72, 72);
+      cx.font = "bold 10px sans-serif"; cx.textAlign = "center"; cx.fillStyle = "#38bdf8";
+      cx.fillText("BANK", sx, sy + TH / 2 + 16);
+    }
+    if (t.btype) {
+      const owner = st.players[t.owner];
+      const col = owner?.color || "#666";
+      const spr = spriteFor(t.btype, t.x, t.y);
+      if (spr) {
+        // Besitzer-Markierung: eingefärbte Kachel unter dem Sprite
+        cx.fillStyle = col + "55";
+        cx.beginPath(); cx.moveTo(sx,sy); cx.lineTo(sx+TW/2,sy+TH/2); cx.lineTo(sx,sy+TH); cx.lineTo(sx-TW/2,sy+TH/2); cx.closePath(); cx.fill();
+        cx.strokeStyle = col; cx.lineWidth = 1.5; cx.stroke(); cx.lineWidth = 1;
+        // Sprite direkt auf die Kachel — Grundfläche mittig, ohne Bodenschatten
+        cx.drawImage(spr, sx-32, standY(sy, spr, 64), 64, 64);
+      } else {
+        const h = 14 + (BTYPES()[t.btype]?.cost || 1000) / 1500;
+        cx.fillStyle = col;
+        cx.beginPath(); cx.moveTo(sx,sy+TH-h); cx.lineTo(sx+TW/2-6,sy+TH/2+3-h); cx.lineTo(sx+TW/2-6,sy+TH/2+3); cx.lineTo(sx,sy+TH); cx.closePath(); cx.fill();
+        cx.fillStyle = shade(col,-40);
+        cx.beginPath(); cx.moveTo(sx,sy+TH-h); cx.lineTo(sx-TW/2+6,sy+TH/2+3-h); cx.lineTo(sx-TW/2+6,sy+TH/2+3); cx.lineTo(sx,sy+TH); cx.closePath(); cx.fill();
+        cx.fillStyle = shade(col,30);
+        cx.beginPath(); cx.moveTo(sx,sy+TH-h); cx.lineTo(sx+TW/2-6,sy+TH/2+3-h); cx.lineTo(sx,sy+6-h); cx.lineTo(sx-TW/2+6,sy+TH/2+3-h); cx.closePath(); cx.fill();
+      }
+      if (t.lien) drawWarn(sx, sy - 42);
+      if (t.paused) drawPause(sx + (t.lien ? 13 : 0), sy - 42);
+      if (t.level > 1) { cx.font="bold 10px sans-serif"; cx.textAlign="center"; cx.fillStyle="#38bdf8";
+        cx.fillText(`★${t.level}`, sx, sy - 48); }
+    }
+  }
+  drawAmbient(now);
+}
+requestAnimationFrame(draw);
+
+cv.addEventListener("mousedown", e => { drag = { x:e.clientX, y:e.clientY, cx:cam.x, cy:cam.y, moved:false }; cv.classList.add("drag"); });
+addEventListener("mousemove", e => { if (!drag) return;
+  const dx = e.clientX-drag.x, dy = e.clientY-drag.y;
+  if (Math.abs(dx)+Math.abs(dy) > 4) drag.moved = true;
+  cam.x = drag.cx+dx; cam.y = drag.cy+dy; });
+addEventListener("mouseup", e => { if (drag && !drag.moved) clickTile(e); drag = null; cv.classList.remove("drag"); });
+cv.addEventListener("wheel", e => { e.preventDefault(); cam.z = Math.max(.5, Math.min(2.2, cam.z * (e.deltaY<0?1.1:.9))); }, { passive:false });
+
+const tm = document.getElementById("tilemenu");
+function pickTile(mx, my) {
+  const st = store.get().state; if (!st) return null;
+  const wx = (mx-innerWidth/2-cam.x)/cam.z, wy = (my-120-cam.y)/cam.z - TH/2;
+  const fx = (wx/(TW/2)+wy/(TH/2))/2, fy = (wy/(TH/2)-wx/(TW/2))/2;
+  const x = Math.round(fx), y = Math.round(fy);
+  return st.map.find(t => t.x===x && t.y===y) || null;
+}
+function clickTile(e) {
+  const t = pickTile(e.clientX, e.clientY); tm.style.display = "none";
+  const me = store.get().me, myId = store.get().myId;
+  /* Die Stadtbank ist kein Bauplatz, sondern der Handelsplatz für Firmenanteile */
+  if (t?.bank && me) { openPanel("bank"); return; }
+  if (!t || t.water || t.road || t.park || !me) return;
+  tm.style.display = "block";
+  tm.style.left = Math.min(innerWidth-275, e.clientX+10)+"px";
+  tm.style.top  = Math.min(innerHeight-330, e.clientY-10)+"px";
+  if (t.btype) {
+    const bt = BTYPES()[t.btype], mine = t.owner === myId;
+    const ownerName = store.get().state.players[t.owner]?.name ?? "—";
+    const avg = store.get().state.avg || {};
+    let shopHtml = "";
+    if (bt.retail && mine) {
+      shopHtml = (t.shop || []).map((s, i) => {
+        const goodOpts = bt.retail.goods.map(g =>
+          `<option value="${g}" ${s?.good === g ? "selected" : ""}>${gname(g)}</option>`).join("");
+        const info = s ? (() => {
+          /* Werbung hebt den Bezugspreis — dasselbe Preisschild bremst dann weniger */
+          const speed = Math.min(2, Math.pow((avg[s.good] ?? 1) * (me.ad?.boost || 1) / s.price, 2));
+          /* Der Durchsatz hängt zusätzlich am Stückwert: billige Massenware
+           * fließt schneller durch den Laden als teure Einzelstücke. */
+          const rate = bt.retail.base * (store.get().meta?.retailFlow?.[s.good] ?? 1) * speed;
+          const rest = s.qty != null ? ` · noch ${Math.ceil(s.qty)} Stk (~${Math.ceil(s.qty / Math.max(0.001, rate))} s)` : " · unbegrenzt";
+          return `verkauft ~${rate.toFixed(2)}/s ≈ ${fp(rate * s.price)}/s${rest}`;
+        })() : "Slot inaktiv — Ware, Menge &amp; Preis wählen";
+        return `<div style="background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:8px;margin-bottom:6px">
+          <div style="display:flex;gap:5px;margin-bottom:5px">
+            <select id="sg-${i}" style="flex:1">${goodOpts}</select>
+            <input id="sq-${i}" type="number" min="1" value="${s?.qty != null ? Math.ceil(s.qty) : ""}" placeholder="∞" style="width:56px" title="Menge (leer = unbegrenzt)">
+            <input id="sp-${i}" type="number" min="0.01" step="0.01" value="${s?.price ?? (avg[bt.retail.goods[0]] ?? 1).toFixed(2)}" style="width:64px" title="Stückpreis $">
+            <button class="mini" data-slot="${i}">OK</button>
+          </div>
+          <div class="note" style="margin:0">${info}</div></div>`;
+      }).join("");
+    }
+    const lvl = t.level || 1;
+    const canLevel = !!(bt.out || bt.proc);
+    const lvlMult = 1 + 0.3 * (lvl - 1);
+    let upgradeHtml = "";
+    if (canLevel && mine) {
+      if (lvl >= 5) {
+        upgradeHtml = `<div class="note" style="margin-top:6px">Stufe 5/5 — Höchststufe erreicht</div>`;
+      } else {
+        const ec = Math.ceil(bt.cost / 2500 * lvl), cc = Math.round(bt.cost * 0.35 * lvl);
+        const afford = me.inv.elektronik >= ec && me.cash >= cc;
+        upgradeHtml = `<button class="opt" id="upgrade" ${afford ? "" : "disabled"}>Auflevel auf Stufe ${lvl + 1} <small>${ec} Elektronik + ${fmt(cc)} · +30 % Ausstoß</small></button>`;
+      }
+    }
+    /* Werbeagentur: Kampagnen buchen. Reichweite zerfällt laufend, deshalb steht
+     * daneben, was der Aufschlag gerade wert ist und wie lange er noch trägt. */
+    let adHtml = "";
+    if (bt.ad && mine) {
+      const ad = me.ad || {};
+      const pakete = Object.entries(ad.pakete || {}).map(([k, pk]) =>
+        `<button class="opt" data-ad="${k}" ${me.cash >= pk.cost ? "" : "disabled"}>${pk.name}
+           <small>${fmt(pk.cost)} · +${pk.reach} Reichweite</small></button>`).join("");
+      const pct = Math.round((ad.boost - 1) * 100);
+      adHtml = `<div class="note" style="margin-top:6px">
+          Reichweite <b>${ad.reach}/100</b> · Preisaufschlag <b style="color:var(--accent2)">+${pct} %</b>
+          (Höchstwert +${Math.round((ad.cap || 0) * 100)} % bei ${ad.agenturen} Agentur${ad.agenturen === 1 ? "" : "en"})
+          <br>Deine Läden verkaufen damit ${pct > 0 ? `bis zu ${pct} % über Ø-Kurs, ohne langsamer zu werden` : "zum Ø-Kurs"}.
+          Ohne neue Kampagne ist die Reichweite in gut zwei Minuten aufgebraucht.
+        </div>` + pakete;
+    }
+    tm.innerHTML = `<h3>${bt.name}${canLevel ? ` <span style="color:var(--accent);font-size:12px">★${lvl}</span>` : ""}</h3><div class="note">Besitzer: ${mine ? "Du" : ownerName}${t.lien ? "<br>Pfandrecht aktiv" : ""}${t.paused ? "<br>Pausiert" : ""}${bt.out ? `<br>Produziert ${gname(bt.out)} (${(bt.rate*lvlMult).toFixed(2)}/s${lvl>1 ? ` · Basis ${bt.rate} ×${lvlMult.toFixed(1)}` : ""})` : ""}${bt.boosts ? `<br>Boost durch ${bt.boosts.map(r => gname(r)).join(" + ")} im Lager (+75 % je Rohstoff, wird verbraucht)` : ""}${bt.proc ? `<br>Verarbeitet ${Object.entries(bt.proc.in).map(([g,n]) => `${(n*lvlMult).toFixed(2)} ${gname(g)}`).join(" + ")}/s → <b>${(bt.proc.rate*lvlMult).toFixed(2)} ${gname(bt.proc.out)}/s</b>` : ""}${bt.retail ? `<br>Dein Preis bestimmt das Tempo: Ø-Kurs = volle Rate, teurer = langsamer, billiger = schneller (max. ×2)${(me.ad?.boost || 1) > 1.001 ? `<br><b style="color:var(--accent2)">Werbung aktiv: bis ${Math.round(((me.ad.boost)-1)*100)} % über Ø-Kurs ohne Tempoverlust</b>` : ""}` : ""}</div>`
+      + shopHtml + adHtml
+      + ((bt.retail || bt.proc) && mine ? `<button class="opt" id="pause">${t.paused ? "Fortsetzen" : "Pausieren"} <small>${bt.retail ? "Verkauf" : "Weiterverarbeitung"}</small></button>` : "")
+      + upgradeHtml
+      + (mine && !t.lien ? `<button class="opt" id="dem">Abreißen &amp; verkaufen <small>${fmt(bt.cost*.5)}</small></button>` : "");
+    tm.querySelectorAll("[data-ad]").forEach(b => b.addEventListener("click", () => {
+      act("bookAd", { paket: b.dataset.ad }); tm.style.display = "none";
+    }));
+    tm.querySelector("#pause")?.addEventListener("click", () => { act("togglePause", { x: t.x, y: t.y }); tm.style.display = "none"; });
+    tm.querySelector("#upgrade")?.addEventListener("click", () => { act("upgradeBuilding", { x: t.x, y: t.y }); tm.style.display = "none"; });
+    tm.querySelectorAll("[data-slot]").forEach(b => b.addEventListener("click", () => {
+      const i = +b.dataset.slot;
+      act("configureShop", { x: t.x, y: t.y, slot: i,
+        good: document.getElementById("sg-" + i).value,
+        qty: document.getElementById("sq-" + i).value,
+        price: document.getElementById("sp-" + i).value });
+      tm.style.display = "none";
+    }));
+    tm.querySelector("#dem")?.addEventListener("click", () => { act("demolish", { x:t.x, y:t.y }); tm.style.display="none"; });
+    return;
+  }
+  const myInds = store.get().state?.players?.[myId]?.industries || [store.get().meta?.industry];
+  const opts = Object.entries(BTYPES()).filter(([,b]) => b.zone === t.zone && (!b.industry || myInds.includes(b.industry)));
+  const mats = b => { const m = { ziegel: Math.ceil(b.cost / 400) };
+    if (b.cost >= 4000 && b.proc?.out !== "beton") m.beton = Math.ceil(b.cost / 2000);
+    return m; };
+  const matName = { ziegel: "Ziegel", beton: "Beton" };
+  const matTxt = b => Object.entries(mats(b)).map(([g, n]) => `${n} ${matName[g] || g}`).join(" + ");
+  const totalCost = b => b.cost + (t.locked ? t.unlockCost : 0);
+  const canAfford = b => me.cash >= totalCost(b) && Object.entries(mats(b)).every(([g, n]) => me.inv[g] >= n);
+  const lockNote = t.locked ? ` (inkl. ${fmt(t.unlockCost)} Freischaltung)` : "";
+  tm.innerHTML = `<h3>${t.locked ? "Gesperrt · " : ""}Bauen — ${t.zone}</h3>` + (opts.length ? `<div class="note">Baumaterial: Ziegel und Beton — Nachschub über die Börse. Später mit Elektronik auflevelbar.${lockNote}</div>` : `<div class="note">Deine Industrie kann hier nichts bauen — handle stattdessen an der Börse.</div>`)
+    + opts.map(([bid, b]) => `<button class="opt" data-b="${bid}" ${canAfford(b) ? "" : "disabled"}>${b.name}<small>${fmt(totalCost(b))} · ${matTxt(b)}</small></button>`).join("");
+  tm.querySelectorAll(".opt").forEach(btn => btn.addEventListener("click", () => {
+    act("build", { x:t.x, y:t.y, btype: btn.dataset.b }); tm.style.display = "none"; }));
+}
+addEventListener("keydown", e => { if (e.key === "Escape") tm.style.display = "none"; });
+
+/* ---- Dock & Panels ---- */
+const DOCK = [["karte","Karte"],["lager","Lager"],["boerse","Börse"],["bonds","Finanzen"],["firma","Firma"],["lexikon","Lexikon"],["chat","Chat"]];
+const dock = document.getElementById("dock");
+DOCK.forEach(([pid, label]) => { const b = document.createElement("button");
+  b.className = "dockbtn"; b.dataset.p = pid; b.textContent = label;
+  b.addEventListener("click", () => openPanel(pid)); dock.append(b); });
+function openPanel(pid) {
+  document.querySelectorAll(".panel").forEach(p => p.classList.remove("open"));
+  document.querySelectorAll(".dockbtn").forEach(b => b.classList.toggle("on", b.dataset.p === pid));
+  if (pid !== "karte") document.getElementById("p-"+pid)?.classList.add("open");
+  render(store.get());
+}
+document.querySelectorAll("[data-close]").forEach(x => x.addEventListener("click", () => {
+  x.closest(".panel").classList.remove("open");
+  document.querySelectorAll(".dockbtn").forEach(b => b.classList.toggle("on", b.dataset.p === "karte")); }));
+let pendingMerge = null;   // Firma, für die gerade die Fusions-Rückfrage offen ist
+openPanel("karte");
+
+function initSelects() {
+  const goodOpts = Object.entries(GOODS()).map(([k, g]) => `<option value="${k}">${g.name}</option>`).join("");
+  document.getElementById("oGood").innerHTML = goodOpts;
+  document.getElementById("cGood").innerHTML = goodOpts;
+  document.getElementById("exFilter").innerHTML = `<option value="">Alle Waren</option>` + goodOpts;
+  const roomsEl = document.getElementById("rooms");
+  roomsEl.innerHTML = "";
+  (store.get().meta.rooms).forEach(r => { const b = document.createElement("button");
+    b.className = "room" + (r === store.get().room ? " on" : ""); b.textContent = r;
+    b.addEventListener("click", () => { store.set({ room: r });
+      roomsEl.querySelectorAll(".room").forEach(x => x.classList.toggle("on", x === b)); });
+    roomsEl.append(b); });
+}
+
+/* ---- Aktionen (Orders, Bonds, Chat, Verträge) ---- */
+document.getElementById("exFilter").addEventListener("change", () => render(store.get()));
+document.getElementById("oPlace").addEventListener("click", () => act("placeOrder", {
+  side: document.getElementById("oSide").value, good: document.getElementById("oGood").value,
+  qty: document.getElementById("oQty").value, price: document.getElementById("oPrice").value }));
+document.getElementById("bIssue").addEventListener("click", () => act("issueBond", {
+  principal: document.getElementById("bPrin").value,
+  rate: document.getElementById("bRate").value / 100, term: document.getElementById("bTerm").value }));
+/* Alle Knöpfe der Bank laufen über EINEN delegierten Handler am Panel statt über
+ * Listener, die render() bei jedem State-Update neu an frische DOM-Knoten hängt.
+ * Sonst kann ein Zustandsupdate zwischen Maus-runter und Maus-hoch den Knopf
+ * austauschen — dann entsteht gar kein click-Event und der Klick verpufft. */
+document.getElementById("p-bank").addEventListener("click", e => {
+  const yes = e.target.closest("[data-merge-yes]");
+  if (yes) { act("mergeCompany", { targetId: yes.dataset.mergeYes }); pendingMerge = null; render(store.get()); return; }
+  if (e.target.closest("[data-merge-no]")) { pendingMerge = null; render(store.get()); return; }
+  const ask = e.target.closest("[data-merge]");
+  if (ask) { pendingMerge = ask.dataset.merge; render(store.get()); return; }
+  const buy = e.target.closest("[data-shbuy]");
+  if (buy) { act("buyShares", { listingId: +buy.dataset.shbuy }); return; }
+  const cancel = e.target.closest("[data-shcancel]");
+  if (cancel) { act("cancelShareListing", { listingId: +cancel.dataset.shcancel }); return; }
+  const bidOk = e.target.closest("[data-bidok]");
+  if (bidOk) { act("acceptShareBid", { bidId: +bidOk.dataset.bidok }); return; }
+  const bidNo = e.target.closest("[data-bidno]");
+  if (bidNo) { act("declineShareBid", { bidId: +bidNo.dataset.bidno }); return; }
+  const bidCancel = e.target.closest("[data-bidcancel]");
+  if (bidCancel) { act("cancelShareBid", { bidId: +bidCancel.dataset.bidcancel }); return; }
+});
+document.getElementById("bidSend").addEventListener("click", () => act("bidShares", {
+  companyId: document.getElementById("bidCompany").value,
+  count: document.getElementById("bidCount").value,
+  price: document.getElementById("bidPrice").value }));
+document.getElementById("shList").addEventListener("click", () => act("listShares", {
+  companyId: document.getElementById("shCompany").value || null,
+  count: document.getElementById("shCount").value, price: document.getElementById("shPrice").value,
+  toId: document.getElementById("shTo").value || null }));
+document.getElementById("chatform").addEventListener("submit", e => {
+  e.preventDefault(); const inp = document.getElementById("chatin");
+  if (inp.value.trim()) act("chat", { room: store.get().room, text: inp.value });
+  inp.value = ""; });
+document.getElementById("cSend").addEventListener("click", () => act("offerContract", {
+  toId: document.getElementById("cTo").value, good: document.getElementById("cGood").value,
+  qty: document.getElementById("cQty").value, price: document.getElementById("cPrice").value }));
+
+/* ================================================================
+ * Hintergrundmusik: 3 Tracks in zufälliger Reihenfolge, Endlosschleife.
+ * Start beim Beitreten (Klick = erlaubte User-Geste für Autoplay).
+ * ================================================================ */
+const MUSIC = (() => {
+  const tracks = [0, 1, 2, 3].sort(() => Math.random() - 0.5);
+  let i = 0, started = false;
+  const audio = new Audio();
+  let vol = 22; try { const v = +localStorage.getItem("cs_vol"); if (v >= 0 && v <= 100) vol = v; } catch {}
+  audio.volume = vol / 100;
+  let muted = false; try { muted = localStorage.getItem("cs_muted") === "1"; } catch {}
+  const btn = document.getElementById("music");
+  const volSlider = document.getElementById("musicVol");
+  volSlider.value = vol;
+  /* Lautsprecher als schlankes Inline-SVG — Wellen je nach Lautstärke, durchgestrichen bei stumm */
+  const icon = state => `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M4 9.5h3.5L12 5.5v13L7.5 14.5H4z" fill="currentColor" stroke="none"/>
+      ${state === "off" ? `<path d="M16 9.5l5 5m0-5l-5 5"/>`
+        : state === "low" ? `<path d="M16 9.6a3.4 3.4 0 010 4.8"/>`
+        : `<path d="M16 9.6a3.4 3.4 0 010 4.8"/><path d="M18.6 7a7 7 0 010 10"/>`}
+    </svg>`;
+  const paint = () => btn.innerHTML = icon(muted || vol === 0 ? "off" : vol < 50 ? "low" : "high");
+  paint();
+  const next = () => { audio.src = `assets/music/track-${tracks[i++ % tracks.length]}.mp3`;
+    if (!muted) audio.play().catch(() => {}); };
+  audio.addEventListener("ended", next);
+  btn.addEventListener("click", () => {
+    muted = !muted; try { localStorage.setItem("cs_muted", muted ? "1" : "0"); } catch {}
+    paint();
+    if (muted) audio.pause();
+    else { if (!audio.src) next(); else audio.play().catch(() => {}); }
+  });
+  volSlider.addEventListener("input", () => {
+    vol = +volSlider.value; audio.volume = vol / 100;
+    try { localStorage.setItem("cs_vol", vol); } catch {}
+    if (muted && vol > 0) { muted = false; try { localStorage.setItem("cs_muted", "0"); } catch {}
+      if (!audio.src) next(); else audio.play().catch(() => {}); }
+    paint();
+  });
+  return { start() { if (started) return; started = true; if (!muted) next(); } };
+})();
+
+/* ================================================================
+ * Tutorial: läuft nach dem ersten Beitritt (localStorage merkt sich
+ * den Abschluss). Bau-Schritte erkennen automatisch, wenn das
+ * geforderte Gebäude auf der Karte steht.
+ * ================================================================ */
+/* Tutorial je Industrie: gemeinsamer Rahmen + spezifische Bau-Schritte */
+const TUT_IND = {
+  agrar: [
+    { t: "Baue eine Farm", build: "farm",
+      p: `Klicke auf eine freie <em>grüne Agrar-Kachel</em> und wähle <b>Farm</b> ($1.200 + 3 Ziegel). Sie produziert <b>Obst</b> — dein Brot-und-Butter-Gut.` },
+    { t: "Baue einen Marktstand", build: "markt",
+      p: `Baue auf einer <em>blauen Zentrums-Kachel</em> einen <b>Marktstand</b> ($1.000 + 3 Ziegel). Klicke ihn danach an und lege <b>Ware, Menge und deinen Stückpreis</b> fest — er verkauft von allein.` },
+    { t: "Baue eine Plantage", build: "plantage",
+      p: `Jetzt eine <b>Plantage</b> ($2.200 + 6 Ziegel) auf einer Agrar-Kachel: <b>Kannabis</b> ist langsam, aber wertvoll (Ø ~$45). Später veredelst du mit Saftpresse und Pharma-Labor.` },
+    { t: "Dein Handelsbedarf",
+      p: `Deine Farmen laufen auf <b>+150 % Tempo</b>, wenn <em>Strom + Wasser</em> im Lager liegen (wird verbraucht). Beides produzieren die <b>Grundversorger</b> — kaufe es im <b>Börse-Panel</b> (Kauforder oder direkt aus dem Buch). Und für jeden weiteren Bau brauchst du <b>Ziegel der Bauindustrie</b>.` },
+  ],
+  rohstoff: [
+    { t: "Schalte Industrie frei & baue eine Mine", build: "mine",
+      p: `Deine Gebäude stehen in der <em>braunen Industrie-Zone</em> — klicke eine gesperrte Kachel, schalte sie frei ($2.000) und baue dort eine <b>Mine</b> ($1.400 + 4 Ziegel). Sie fördert <b>Erze</b> — dein Grundstoff für alles Weitere.` },
+    { t: "Baue eine Ziegelei", build: "ziegelei",
+      p: `Schalte eine weitere Industrie-Kachel frei und baue die <b>Ziegelei</b> ($1.500 + 4 Ziegel): Sie macht aus <em>Erzen + Wasser</em> → <b>Ziegel</b>. Und Ziegel braucht <b>jeder Spieler für jedes Gebäude</b> — du sitzt an der Quelle des gesamten Stadtwachstums.` },
+    { t: "Dein Handelsbedarf",
+      p: `Kaufe <em>Wasser, Strom + Öl</em> von den <b>Grundversorgern</b> über die Börse (Minen laufen mit Strom + Öl auf +150 %). Verkaufe Ziegel &amp; Erze über einen <b>Baustoffhandel</b> ($2.800) zu deinem Preis. Fernziele: <b>Stahlwerk</b> (Erze + Öl → Stahl, Ø ~$80) und <b>Betonwerk</b> (→ Beton für alle großen Gebäude).` },
+  ],
+  versorger: [
+    { t: "Baue einen Brunnen", build: "brunnen",
+      p: `Starte günstig: <b>Brunnen</b> ($800 + 2 Ziegel) auf einer <em>grünen Agrar-Kachel</em> — produziert <b>Wasser</b>, das Agrar- und Bauspieler ständig brauchen.` },
+    { t: "Baue ein Handelskontor", build: "kontor",
+      p: `Im <em>blauen Zentrum</em>: <b>Handelskontor</b> ($3.500 + 9 Ziegel) mit 2 Verkaufsslots für alles — hier verkaufst du Wasser, Strom &amp; Öl zu <b>deinem Preis</b>.` },
+    { t: "Dein Ausbau-Pfad",
+      p: `Sobald Kapital da ist: Industrie-Kachel freischalten ($2.000) und <b>E-Werk</b> ($2.000) bauen — <em>Strom braucht jede andere Industrie</em>. Danach Wasserwerk und an der Küste ($12.000) die <b>Ölpumpe</b>. Du bist das Rückgrat der Stadt: Alle Boosts laufen über deine Waren.` },
+  ],
+  tech: [
+    { t: "Schalte Industrie frei & baue eine Siliziummine", build: "siliziummine",
+      p: `Klicke eine gesperrte Kachel in der <em>braunen Industrie-Zone</em>, schalte sie frei ($2.000) und baue die <b>Siliziummine</b> ($1.400 + 4 Ziegel) — produziert <b>Silizium</b>, dein Rohstoff für alles Weitere.` },
+    { t: "Baue eine Chipfabrik", build: "chipfabrik",
+      p: `Schalte eine weitere Industrie-Kachel frei und baue die <b>Chipfabrik</b> ($3.200 + 8 Ziegel): Sie macht aus <em>Silizium + Strom</em> → <b>Elektronik</b>. Damit können <b>alle Spieler jeder Industrie</b> ihre Produktionsgebäude auflevel — jede Stufe +30 % Ausstoß, bis Stufe 5. Du lieferst den Rohstoff für das Wachstum der ganzen Stadt.` },
+    { t: "Dein Handelsbedarf",
+      p: `Kaufe <em>Strom</em> von den <b>Grundversorgern</b> über die Börse (Minen laufen damit auf +150 %). Verkaufe Elektronik &amp; Silizium über einen <b>Baustoffhandel</b> ($2.800) zu deinem Preis. Elektronik wird nicht zum Bauen gebraucht, sondern zum <b>Auflevel</b> bestehender Gebäude — je größer die Stadt wird, desto mehr wird nachgefragt.` },
+  ],
+};
+function buildTut(ind) {
+  const IND_NAME = { agrar: "Agrarwirtschaft", rohstoff: "Rohstoff- & Bauindustrie", versorger: "Grundversorgung", tech: "Technologie & Elektronik" };
+  return [
+    { t: "Willkommen bei Capital Sandbox",
+      p: `Ich habe diese Stadt dreißig Jahre lang als CEO geführt — jetzt zeige ich <b>dir</b>, wie man in der <b>${IND_NAME[ind]}</b> ein Imperium aufbaut. Dein Ziel: als Erster das <b>Rundenziel</b> erreichen (oben links). Die Leiste ganz oben ist der <b>Börsenticker</b> mit den Ø-Kursen.` },
+    { t: "Deine Rolle in der Stadt",
+      p: `Jeder Spieler führt EINE Industrie — du kannst <b>nur deren Gebäude</b> bauen (Läden kann jeder). Alles andere lieferst du dir über die <b>Börse</b>: Agrar braucht Wasser+Strom der Versorger, Rohstoff &amp; Bau braucht Strom+Öl+Wasser — und <b>alle brauchen Ziegel</b> der Rohstoff- &amp; Bauindustrie zum Bauen. Nur zusammen entsteht ein fertiges Produkt.` },
+    ...TUT_IND[ind],
+    { t: "Verkaufen: dein Preis, dein Tempo",
+      p: `Deine Läden verkaufen automatisch — du legst <b>Menge und Preis</b> fest (z. B. „100 für $7"): Beim Ø-Kurs volle Geschwindigkeit, teurer = langsamer, billiger = schneller. An der Börse warten außerdem die <b>Industrie-Bots</b>: Sie kaufen dir deine Waren ab und verkaufen dir Nachschub, ohne den Markt zu fluten.` },
+    { t: "Großaufträge & Finanzen",
+      p: `Städte stellen <b>Großaufträge</b> (Ø×2, fixiert!) — alle zahlen gemeinsam ein, im Lager-Panel. Im <b>Finanzen-Panel</b> gibt es Anleihen (Vorsicht: Pfändung bei Verzug). Unter <b>Firma</b> siehst du deinen Rang, im <b>Lexikon</b> alles Wissen. Und nun: Zeig dieser Stadt, was in dir steckt — ich behalte dich im Auge.` },
+  ];
+}
+let TUT = buildTut("agrar");
+let tutIdx = -1;
+const tutEl = document.getElementById("tut");
+function tutShow(i) {
+  tutIdx = i;
+  if (i < 0 || i >= TUT.length) { tutEl.style.display = "none"; return; }
+  const s = TUT[i];
+  tutEl.style.display = "block";
+  document.getElementById("tutStep").textContent = `Tutorial ${i + 1}/${TUT.length}`;
+  document.getElementById("tutTitle").textContent = s.t;
+  document.getElementById("tutText").innerHTML = s.p;
+  document.getElementById("tutDots").innerHTML = TUT.map((_, j) => `<span class="${j <= i ? "on" : ""}"></span>`).join("");
+  document.getElementById("tutNext").style.display = s.build ? "none" : "";
+  document.getElementById("tutWait").style.display = s.build ? "flex" : "none";
+  if (i === TUT.length - 1) document.getElementById("tutNext").textContent = "Los geht's!";
+}
+function tutDone() { tutIdx = -1; tutEl.style.display = "none"; try { localStorage.setItem("cs_tut_done", "1"); } catch {} }
+document.getElementById("tutNext").addEventListener("click", () => tutIdx >= TUT.length - 1 ? tutDone() : tutShow(tutIdx + 1));
+document.getElementById("tutSkip").addEventListener("click", tutDone);
+document.getElementById("help").addEventListener("click", () => tutShow(0));
+function tutCheck(state, myId) {   // Bau-Schritte automatisch abhaken
+  if (tutIdx < 0) return;
+  const s = TUT[tutIdx];
+  if (s?.build && state?.map.some(t => t.owner === myId && t.btype === s.build)) tutShow(tutIdx + 1);
+}
+
+/* ---- Render (auf jede Store-Änderung) ---- */
+const RCOL = { AAA:"#34d399", AA:"#6ecf90", A:"#a9c96a", BBB:"#e3c05a", BB:"#e79b5a", B:"#ef7f66", CCC:"#fb7185", D:"#8695ab" };
+/* Referenzkurse ("Ø") halten 30 Sekunden still, bevor der nächste Stand
+ * übernommen wird. Der echte Handelspreis läuft im Hintergrund weiter live mit —
+ * hier geht es allein um die Orientierung: eine Zahl, die im Sekundentakt
+ * zappelt, taugt nicht als Anhaltspunkt, um den eigenen Verkaufspreis danach zu
+ * setzen. Der Trendpfeil vergleicht dadurch auch 30 s gegen 30 s statt Sekunde
+ * gegen Sekunde und zeigt endlich eine Richtung statt Rauschen. */
+const CALM_MS = 30000;
+let calmAvg = null, calmPrev = null, calmAt = 0;
+function refAvg(live) {
+  if (!live) return calmAvg || {};
+  const now = Date.now();
+  if (!calmAvg) { calmAvg = { ...live }; calmPrev = { ...live }; calmAt = now; }
+  else if (now - calmAt >= CALM_MS) { calmPrev = calmAvg; calmAvg = { ...live }; calmAt = now; }
+  return calmAvg;
+}
+function render({ state, me, myId, chat, room }) {
+  if (!state || !me) return;
+  tutCheck(state, myId);
+  /* Tipp-Schutz: Panel nicht neu rendern, während man in einem seiner Felder tippt */
+  const typingIn = el => el && el.contains(document.activeElement) &&
+    /INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName);
+  const my = state.players[myId];
+  document.getElementById("cash").textContent = fmt(me.cash);
+  document.getElementById("lvl").textContent = me.lvl;
+  document.getElementById("xpfill").style.width = (me.xp / (me.lvl*100) * 100) + "%";
+  if (my) { document.getElementById("nwv").textContent = fmt(my.netWorth);
+    document.getElementById("myrat").textContent = my.rating;
+    document.getElementById("coname").textContent = my.name;
+    document.getElementById("mylogo").style.background = my.color;
+    document.getElementById("mylogo").textContent = my.name[0].toUpperCase(); }
+  if (state.winGoal) document.getElementById("goalv").textContent = fmt(state.winGoal);
+
+  /* Starter-Aufgaben-Widget: offene Aufgaben mit Fortschritt, fertig = ausgeblendet */
+  const qdefs = store.get().meta?.questDefs || [];
+  const open = qdefs.filter(d => !me.quests?.[d.id]?.done);
+  const qEl = document.getElementById("quests");
+  if (open.length && !state.winner) {
+    qEl.style.display = "block";
+    document.getElementById("questlist").innerHTML = open.map(d => {
+      const n = Math.min(d.target, Math.floor(me.quests?.[d.id]?.n || 0));
+      return `<div style="display:flex;justify-content:space-between;gap:8px">
+        <span>${d.text}</span>
+        <span style="font-family:var(--mono);color:var(--dim);white-space:nowrap">${d.target > 1 ? `${n}/${d.target}` : ""} <b style="color:var(--accent)">+$${d.reward}</b></span></div>`;
+    }).join("");
+  } else qEl.style.display = "none";
+  document.getElementById("players").innerHTML = Object.values(state.players)
+    .map(p => `<span class="pl" style="background:${p.color}" title="${p.name} · ${fmt(p.netWorth)} · ${p.rating}">${p.name[0].toUpperCase()}</span>`).join("");
+  if (state.winner) { document.getElementById("win").style.display = "grid";
+    document.getElementById("winname").textContent = state.winner;
+    zeigeAuswertung(state);
+  }
+
+  /* Ticker: ruhiger Ø-Kurs je Ware mit Trendpfeil + letztem echten Trade */
+  const avg = refAvg(state.avg);
+  const tickerHtml = Object.entries(avg).map(([k, p]) => {
+    const prev = calmPrev?.[k];
+    const dir = prev == null || p === prev ? "" : p > prev ? "▲" : "▼";
+    const cls = dir === "▲" ? "u" : dir === "▼" ? "d" : "";
+    const dec = p < 10 ? 2 : 0;
+    const lt = state.lastTrade[k];
+    return `<span class="tk">${gname(k)} Ø<b>$${p.toLocaleString("de-DE",{minimumFractionDigits:dec,maximumFractionDigits:dec})}</b><span class="${cls}">${dir}</span>${lt ? `<span style="opacity:.55"> · Trade ${fmt(lt)}</span>` : ""}</span>`;
+  }).join("");
+  /* Nur neu schreiben, wenn sich wirklich etwas geändert hat — sonst baut der
+   * Ticker sekündlich denselben Inhalt neu auf und flimmert dabei. */
+  const trackEl = document.getElementById("tickerTrack");
+  if (trackEl.dataset.sig !== tickerHtml) { trackEl.innerHTML = tickerHtml; trackEl.dataset.sig = tickerHtml; }
+
+  /* Börse: je Ware eine Karte mit getrennten Kauf-/Verkaufsspalten */
+  if (document.getElementById("p-boerse").classList.contains("open") &&
+      !typingIn(document.getElementById("p-boerse"))) {
+    const filt = document.getElementById("exFilter").value;
+    const mine = state.orders.filter(o => o.playerId === myId);
+    const byGood = {};
+    for (const o of state.orders) {
+      if (filt && o.good !== filt) continue;
+      if (o.playerId === myId) continue;
+      (byGood[o.good] ??= { buy: [], sell: [] })[o.side].push(o);
+    }
+    const row = (o, btnCls, btnTxt) => `
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:6px;padding:4px 0;border-bottom:1px solid rgba(36,48,68,.5)">
+        <span style="font-family:var(--mono);font-variant-numeric:tabular-nums">${o.qty}× <b>${fp(o.price)}</b>
+          <span class="meta" style="font-family:var(--font)"> ${o.player}</span></span>
+        <button class="${btnCls}" data-take="${o.id}">${btnTxt}</button>
+      </div>`;
+    document.getElementById("exbook").innerHTML =
+      (mine.length ? `<div class="sec">Meine Orders</div>` + mine.map(o => `
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:6px;padding:4px 0;border-bottom:1px solid rgba(36,48,68,.5)">
+          <span><span style="color:${o.side === "sell" ? "var(--down)" : "var(--up)"}">${o.side === "sell" ? "Verkauf" : "Kauf"}</span>
+            <span style="font-family:var(--mono)">${o.qty}× ${gname(o.good)} @ ${fp(o.price)}</span></span>
+          <button class="mini" data-cancel="${o.id}">Storno</button></div>`).join("") : "") +
+      (Object.keys(byGood).length ? Object.entries(byGood).map(([g, { buy, sell }]) => `
+        <div class="sec" style="display:flex;justify-content:space-between"><span>${gname(g)}</span>
+          <span style="font-family:var(--mono);text-transform:none;letter-spacing:0">Ø ${fp(avg[g] ?? 0)}</span></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+          <div><div class="meta" style="color:var(--up);margin-bottom:2px">GESUCHE — verkaufe an sie</div>
+            ${buy.sort((a, b) => b.price - a.price).map(o => row(o, "sellb", "Beliefern")).join("") || `<span class="meta">keine</span>`}</div>
+          <div><div class="meta" style="color:var(--down);margin-bottom:2px">ANGEBOTE — kaufe direkt</div>
+            ${sell.sort((a, b) => a.price - b.price).map(o => row(o, "buyb", "Kaufen")).join("") || `<span class="meta">keine</span>`}</div>
+        </div>`).join("")
+      : `<div class="meta" style="margin-top:8px">${filt ? "Keine fremden Orders für diese Ware." : "Orderbuch leer — platziere die erste Order."}</div>`);
+    document.querySelectorAll("[data-take]").forEach(b => b.addEventListener("click", () => act("takeOrder", { orderId:+b.dataset.take })));
+    document.querySelectorAll("[data-cancel]").forEach(b => b.addEventListener("click", () => act("cancelOrder", { orderId:+b.dataset.cancel })));
+  }
+
+  /* Lager + Gruppenauftrag */
+  if (document.getElementById("p-lager").classList.contains("open") &&
+      !typingIn(document.getElementById("invgrid"))) {
+    const rows = Object.entries(me.inv).filter(([,q]) => q >= 0.5);
+    /* Gruppenauftrag der Stadt */
+    const go = state.groupOrder;
+    const myName = state.players[myId]?.name;
+    const goVol = go ? Object.values(go.needs).reduce((s, n) => s + n.req * n.pay, 0) : 0;
+    const goHtml = go ? `<div class="sec" style="grid-column:1/-1">Großauftrag: ${go.city} <span class="meta">· Gesamttopf ${fmt(goVol)} · noch ${Math.floor(go.ttl/60)}:${String(go.ttl%60).padStart(2,"0")} min · Stückpreise fixiert (Ø×2)</span></div>` +
+      Object.entries(go.needs).map(([g, n]) => {
+        const pct = Math.min(100, n.have / n.req * 100).toFixed(0);
+        const mine = go.contrib[myName]?.[g] || 0;
+        return `<div class="contract" style="grid-column:1/-1;flex-direction:column;align-items:stretch;gap:6px">
+          <div style="display:flex;justify-content:space-between"><b>${gname(g)}</b>
+            <span class="meta">${n.have} / ${n.req}${mine ? ` · von dir: ${mine}` : ""} · zahlt fix ${fp(n.pay)}/Stk</span></div>
+          <div style="height:7px;background:var(--panel2);border-radius:4px;overflow:hidden"><div style="height:100%;width:${pct}%;background:var(--accent2)"></div></div>
+          <div style="display:flex;gap:6px;justify-content:flex-end;align-items:center">
+            <span class="meta">Lager: ${Math.floor(me.inv[g])}</span>
+            <input type="number" min="1" id="go-${g}" placeholder="Menge" style="width:70px">
+            <button class="buyb" data-go="${g}" ${me.inv[g] < 1 || n.have >= n.req ? "disabled" : ""}>Einzahlen</button>
+          </div></div>`;
+      }).join("") : "";
+    document.getElementById("invgrid").innerHTML = goHtml +
+      (rows.length ? rows.map(([k,q]) =>
+        `<div class="invtile"><h4>${gname(k)}</h4><div class="qty">${Math.floor(q).toLocaleString("de-DE")}</div>
+         <div class="val">Ø ${fp(avg[k] ?? 0)} · Wert ${fmt(q * (avg[k] ?? 0))}</div></div>`).join("")
+      : `<span class="meta" style="grid-column:1/-1">Lager leer — baue Produktion oder kaufe an der Börse.</span>`);
+    document.querySelectorAll("[data-go]").forEach(b => b.addEventListener("click", () => {
+      const g = b.dataset.go;
+      const qty = +document.getElementById("go-" + g).value || Math.floor(me.inv[g]);
+      act("contribute", { good: g, qty });
+    }));
+  }
+
+  /* Bonds + Auktionen + Verträge */
+  if (document.getElementById("p-bonds").classList.contains("open") &&
+      !typingIn(document.getElementById("p-bonds"))) {
+    const badge = r => `<span class="rbadge" style="background:${RCOL[r]}22;color:${RCOL[r]}">${r}</span>`;
+    const myContracts = state.contracts.filter(c => c.toId === myId);
+    document.getElementById("bondlist").innerHTML =
+      (myContracts.length ? `<div class="sec">Vertragsangebote an dich</div>` + myContracts.map(c =>
+        `<div class="contract"><div><b>${c.from}</b><div class="meta">${c.qty}× ${gname(c.good)} @ ${fmt(c.price)}/Stk = ${fmt(c.qty*c.price)}</div></div>
+         <div><button class="buyb" data-acc="${c.id}">Annehmen</button> <button class="mini" data-dec="${c.id}">Ablehnen</button></div></div>`).join("") : "") +
+      `<div class="sec">Anleihen-Markt (nur Spieler-Emissionen)</div>` +
+      (state.bonds.length ? state.bonds.map(b => `<div class="bond">
+        <div><b>${b.issuer}</b> ${badge(b.issuerRating)}<div class="meta">${fmt(b.principal)} · ${(b.rate*100).toFixed(1)} %/min · Rest ${b.termLeft}s${b.holder ? " · Gläubiger: "+b.holder : ""}${b.strikes>0 ? " · Verzug" : ""}</div></div>
+        ${!b.holder && b.issuerId!==myId ? `<button class="buyb" data-bond="${b.id}">Kaufen</button>` : ""}</div>`).join("")
+      : `<span class="meta">Keine Emissionen. Ratings entstehen aus Nettovermögen & Schulden der Spieler.</span>`);
+    document.getElementById("auctionlist").innerHTML = state.auctions.length ? state.auctions.map(a =>
+      `<div class="auction"><div><b>${BTYPES()[a.btype]?.name}</b>
+        <div class="meta">Mindestgebot ${fmt(a.minBid)} · Höchstgebot ${a.bestBid ? fmt(a.bestBid) : "—"} · ${a.tLeft}s</div></div>
+       <div style="display:flex;gap:5px"><input type="number" style="width:80px" id="bid-${a.id}" placeholder="${Math.max(a.minBid, a.bestBid+1)}">
+       <button class="buyb" data-auc="${a.id}">Bieten</button></div></div>`).join("")
+      : `<span class="meta">Keine laufenden Auktionen.</span>`;
+    document.querySelectorAll("[data-bond]").forEach(b => b.addEventListener("click", () => act("buyBond", { bondId:+b.dataset.bond })));
+    document.querySelectorAll("[data-auc]").forEach(b => b.addEventListener("click", () =>
+      act("bid", { auctionId:+b.dataset.auc, amount: document.getElementById("bid-"+b.dataset.auc).value })));
+    document.querySelectorAll("[data-acc]").forEach(b => b.addEventListener("click", () => act("acceptContract", { contractId:+b.dataset.acc })));
+    document.querySelectorAll("[data-dec]").forEach(b => b.addEventListener("click", () => act("declineContract", { contractId:+b.dataset.dec })));
+  }
+
+  /* Stadtbank: Kurstafel, Angebote und Depot — der gesamte Anteilshandel */
+  if (document.getElementById("p-bank").classList.contains("open") &&
+      !typingIn(document.getElementById("p-bank"))) {
+    const dm = Math.floor((state.nextDividendIn ?? 600) / 60), ds = (state.nextDividendIn ?? 600) % 60;
+    document.getElementById("divCountdown").textContent = `${dm}:${String(ds).padStart(2,"0")}`;
+
+    /* Verkaufen kann man eigene Anteile (Emission) und zugekaufte fremde (Weiterverkauf) */
+    const sellable = [{ id: myId, name: "Eigene Firma", blocks: Math.round((me.ownPct ?? 0) / 25),
+                        price: me.blockPrice ?? 0 }]
+      .concat((me.portfolio || []).map(h => ({ id: h.id, name: h.company, blocks: h.count, price: h.blockPrice })))
+      .filter(o => o.blocks > 0);
+    const shCo = document.getElementById("shCompany"), shCoPrev = shCo.value;
+    shCo.innerHTML = sellable.map(o =>
+      `<option value="${o.id}">${o.name} (${o.blocks * 25} %)</option>`).join("")
+      || `<option value="">Keine Anteile</option>`;
+    if (sellable.some(o => o.id === shCoPrev)) shCo.value = shCoPrev;
+    const sel = sellable.find(o => o.id === shCo.value);
+    document.getElementById("shHint").textContent = sel
+      ? `Richtpreis nach Marktwert: ${fmt(sel.price)} je 25 %-Block.`
+      : "Du hältst gerade keine Anteile zum Verkauf.";
+
+    const shToSel = document.getElementById("shTo"), shToPrev = shToSel.value;
+    shToSel.innerHTML = `<option value="">Offener Markt (alle)</option>` + Object.values(state.players)
+      .filter(p => p.id !== myId).map(p => `<option value="${p.id}">Nur an ${p.name}</option>`).join("");
+    shToSel.value = shToPrev;
+
+    /* Kurstafel: alle Firmen mit Marktwert und laufendem Umsatz */
+    document.getElementById("bankboard").innerHTML = Object.values(state.players)
+      .sort((a, b) => (b.marketValue || 0) - (a.marketValue || 0))
+      .map(p => {
+        const held = p.id === myId ? (me.ownPct ?? 0)
+          : ((me.portfolio || []).find(h => h.id === p.id)?.pct || 0);
+        return `<div class="bond">
+          <div><b style="color:${p.color}">${p.name}</b>${p.id === myId ? ` <span class="meta">(du)</span>` : ""}
+            <div class="meta">Marktwert ${fmt(p.marketValue || 0)} · Umsatz 10 min ${fmt(p.rev10 || 0)}${held ? ` · dein Anteil ${held} %` : ""}</div></div>
+          <span style="font-family:var(--mono);color:var(--accent)">${fmt(p.blockPrice || 0)}<span class="meta"> /25 %</span></span>
+        </div>`;
+      }).join("");
+
+    /* Angebote */
+    const mine = state.shareListings.filter(l => l.sellerId === myId);
+    const toMe = state.shareListings.filter(l => l.sellerId !== myId && l.toId === myId);
+    const open = state.shareListings.filter(l => l.sellerId !== myId && !l.toId);
+    const priceTag = l => {
+      const co = state.players[l.companyId];
+      const fair = co ? co.blockPrice * l.count : 0;
+      if (!fair) return "";
+      const diff = Math.round((l.price / fair - 1) * 100);
+      const col = diff <= 0 ? "var(--up)" : diff > 25 ? "var(--down)" : "var(--dim)";
+      return ` · <span style="color:${col}">${diff > 0 ? "+" : ""}${diff} % zum Marktwert</span>`;
+    };
+    const offerRow = l => `<div class="bond">
+      <div><b>${l.company}</b><div class="meta">${l.count*25} % · ${l.isIssue ? "Emission der Firma" : `von ${l.seller}`}${priceTag(l)}</div></div>
+      <div style="display:flex;align-items:center;gap:8px"><span style="font-family:var(--mono)">${fmt(l.price)}</span>
+      <button class="buyb" data-shbuy="${l.id}">Kaufen</button></div></div>`;
+    document.getElementById("sharelist").innerHTML =
+      (mine.length ? `<div class="sec">Deine Angebote</div>` + mine.map(l =>
+        `<div class="bond"><div><b>${l.company}</b><div class="meta">${l.count*25} % für ${fmt(l.price)}${l.toId ? ` · nur für ${l.toName}` : " · offener Markt"}</div></div>
+         <button class="mini" data-shcancel="${l.id}">Storno</button></div>`).join("") : "") +
+      (toMe.length ? `<div class="sec">Nur für dich</div>` + toMe.map(offerRow).join("") : "") +
+      `<div class="sec">Offener Markt</div>` +
+      (open.length ? open.map(offerRow).join("") : `<span class="meta">Gerade keine Angebote.</span>`);
+
+    /* Kaufanfragen: Zielauswahl, eingegangene Anfragen, eigene laufende Anfragen */
+    const bidCo = document.getElementById("bidCompany"), bidCoPrev = bidCo.value;
+    const targets = Object.values(state.players).filter(p => p.id !== myId && p.ownPct > 0);
+    bidCo.innerHTML = targets.map(p => `<option value="${p.id}">${p.name} (${p.ownPct} % frei)</option>`).join("")
+      || `<option value="">Keine Firma hält noch eigene Anteile</option>`;
+    if (targets.some(p => p.id === bidCoPrev)) bidCo.value = bidCoPrev;
+    const bidTarget = targets.find(p => p.id === bidCo.value);
+    const bidCount = +document.getElementById("bidCount").value || 1;
+    document.getElementById("bidHint").textContent = bidTarget
+      ? `Marktwert für ${bidCount * 25} %: ${fmt((bidTarget.blockPrice || 0) * bidCount)} — darunter lehnen die meisten ab.`
+      : "Alle Firmen haben ihre Anteile bereits vollständig abgegeben.";
+
+    const bids = state.shareBids || [];
+    const bidsToMe = bids.filter(b => b.companyId === myId);
+    const myBids = bids.filter(b => b.bidderId === myId);
+    document.getElementById("bidlist").innerHTML =
+      (bidsToMe.length ? `<div class="sec">Anfragen an dich</div>` + bidsToMe.map(b => `<div class="bond">
+        <div><b>${b.bidder}</b><div class="meta">will ${b.count * 25} % deiner Firma · Marktwert ${fmt((me.blockPrice || 0) * b.count)} · noch ${b.ttl}s</div></div>
+        <div style="display:flex;align-items:center;gap:8px"><span style="font-family:var(--mono)">${fmt(b.price)}</span>
+        <button class="buyb" data-bidok="${b.id}">Annehmen</button>
+        <button class="mini" data-bidno="${b.id}">Ablehnen</button></div></div>`).join("") : "") +
+      (myBids.length ? `<div class="sec">Deine Anfragen</div>` + myBids.map(b => `<div class="bond">
+        <div><b>${b.company}</b><div class="meta">${b.count * 25} % für ${fmt(b.price)} · wartet auf Antwort · noch ${b.ttl}s</div></div>
+        <button class="mini" data-bidcancel="${b.id}">Zurückziehen</button></div>`).join("") : "");
+
+    /* Depot: was man an fremden Firmen hält, mit aktuellem Wert */
+    document.getElementById("bankdepot").innerHTML = me.portfolio?.length
+      ? me.portfolio.map(h => {
+          const mergeUi = h.pct < 100 ? ""
+            : pendingMerge === h.id
+              ? `<span class="meta" style="align-self:center">Gebäude, Kapital und Lager gehen an dich über.</span>
+                 <button class="buyb" data-merge-yes="${h.id}">Ja, übernehmen</button>
+                 <button class="mini" data-merge-no="1">Abbrechen</button>`
+              : `<button class="buyb" data-merge="${h.id}">Fusionieren</button>`;
+          return `<div class="bond">
+            <div><b>${h.company}</b><div class="meta">${h.pct} % · Wert ${fmt(h.value)} · Umsatz 10 min ${fmt(h.rev10)}${h.pct >= 100 ? ` — <b style="color:var(--accent)">bereit zur Fusion</b>` : ""}</div></div>
+            <div style="display:flex;gap:5px">${mergeUi}</div></div>`;
+        }).join("")
+      : `<span class="meta">Du hältst keine fremden Anteile. Kaufe oben einen Block — steigt der Marktwert der Firma, kannst du ihn teurer weiterverkaufen.</span>`;
+  }
+
+  /* Firmen-Dashboard: Rang, Verlauf, Bilanz, Verkaufsstatistik, Transaktionen */
+  if (document.getElementById("p-firma").classList.contains("open")) {
+    const bal = me.balance || {};
+    const nRank = my?.rank ?? "—", nPlayers = Object.keys(state.players).length;
+    /* Sparkline aus dem Nettovermögens-Verlauf */
+    const h = me.nwHist?.length > 1 ? me.nwHist : [bal.total || 0, bal.total || 0];
+    const min = Math.min(...h), max = Math.max(...h), span = Math.max(1, max - min);
+    const pts = h.map((v, i) => `${(i / (h.length - 1) * 380).toFixed(1)},${(60 - (v - min) / span * 52 + 4).toFixed(1)}`).join(" ");
+    const line = (label, val, neg) => `<tr><td>${label}</td><td style="text-align:right;color:${neg ? "var(--down)" : "var(--text)"}">${neg ? "− " : ""}${fmt(Math.abs(val))}</td></tr>`;
+    const sales = Object.entries(me.sales || {});
+    document.getElementById("firmabody").innerHTML = `
+      <div style="display:flex;justify-content:space-between;align-items:baseline">
+        <div style="font-size:20px;font-weight:700">Rang #${nRank} <span class="meta">von ${nPlayers}</span></div>
+        <div class="meta">Rating ${my?.rating ?? "—"} · Level ${me.lvl}</div>
+      </div>
+      <svg viewBox="0 0 380 64" style="width:100%;height:64px;margin:10px 0">
+        <polyline points="${pts}" fill="none" stroke="var(--up)" stroke-width="2"/>
+        <polyline points="${pts} 380,64 0,64" fill="rgba(79,195,106,.12)" stroke="none"/>
+      </svg>
+      <div class="meta" style="display:flex;justify-content:space-between"><span>${fmt(min)}</span><span>Unternehmenswert (20 min)</span><span>${fmt(max)}</span></div>
+      <div class="sec">Vermögensaufstellung</div>
+      <table>
+        ${line("Bargeld", bal.cash)}
+        ${line("Inventar (zu Marktwert)", bal.invVal)}
+        ${line("Gebäude", bal.bldVal)}
+        ${line("Anleihen-Investitionen", bal.bondVal)}
+        ${bal.debtVal ? line("Verbindlichkeiten", bal.debtVal, true) : ""}
+        <tr><td style="font-weight:600">Firmenwert gesamt</td><td style="text-align:right;font-weight:600">${fmt(bal.firmVal)}</td></tr>
+        ${line(`davon dein Anteil (${Math.round((bal.ownShare ?? 1) * 100)} %)`, (bal.firmVal || 0) * (bal.ownShare ?? 1))}
+        ${bal.holdings ? line("Beteiligungen an anderen Firmen", bal.holdings) : ""}
+        <tr><td style="font-weight:700">Nettovermögen</td><td style="text-align:right;font-weight:700;color:var(--accent)">${fmt(bal.total)}</td></tr>
+      </table>
+      <div class="sec">Zinsen</div>
+      <table>${line("Zinserträge", me.fin?.zinsErtrag || 0)}${(me.fin?.zinsAufwand) ? line("Zinsausgaben", me.fin.zinsAufwand, true) : line("Zinsausgaben", 0)}</table>
+      <div class="sec">Verkäufe je Ware</div>
+      ${sales.length ? `<table><tr><th>Ware</th><th>an Bots</th><th>an Spieler</th><th>Einkäufe</th></tr>` +
+        sales.map(([g, s]) => `<tr><td>${gname(g)}</td>
+          <td>${s.botQty || 0}× · ${fmt(s.botRev || 0)}</td>
+          <td>${s.playerQty || 0}× · ${fmt(s.playerRev || 0)}</td>
+          <td>${s.buyQty || 0}× · ${fmt(s.buyCost || 0)}</td></tr>`).join("") + "</table>"
+        : `<span class="meta">Noch keine Verkäufe.</span>`}
+      <div class="sec">Bewegungen (${(me.tx || []).length})</div>
+      ${(me.tx || []).length ? `<table>` + me.tx.map(x => `<tr>
+          <td><span class="meta">${x.cat}</span> ${x.text}</td>
+          <td style="text-align:right;font-family:var(--mono);color:${x.amt >= 0 ? "var(--up)" : "var(--down)"}">${x.amt >= 0 ? "+" : "−"} ${fmt(Math.abs(x.amt))}</td>
+        </tr>`).join("") + "</table>"
+        : `<span class="meta">Noch keine Bewegungen — baue, handle oder erfülle Vertriebsaufträge.</span>`}`;
+  }
+
+  /* Lexikon: alle Gebäude, Waren & Mechaniken */
+  if (document.getElementById("p-lexikon").classList.contains("open")) {
+    const B = BTYPES(), avg = state.avg || {};
+    const ZNAME = { agrar:"Agrar (grün)", zentrum:"Zentrum (blau)", industrie:"Industrie — $2.500/Kachel", kueste:"Küste — $12.000/Kachel" };
+    const bcard = (bid) => {
+      const b = B[bid]; if (!b) return "";
+      let what = "";
+      if (b.out) what = `Produziert <b>${b.rate} ${gname(b.out)}/s</b>` +
+        (b.boosts ? `<br>Boost: je 1 ${b.boosts.map(r => gname(r)).join(" / ")}/s aus dem Lager → <b>+75 %</b> (beides = ×2,5)` : "");
+      else if (b.proc) what = `Verarbeitet <b>${Object.entries(b.proc.in).map(([g,n]) => `${n} ${gname(g)}`).join(" + ")}/s</b> zu <b>${b.proc.rate} ${gname(b.proc.out)}/s</b> — läuft automatisch, solange Inputs im Lager sind`;
+      else if (b.ad) what = `<b>Schaltet Werbekampagnen frei.</b> Reichweite hebt den Preis, den deine Läden ohne Tempoverlust verlangen können — bis +20 % mit einer Agentur, je weitere +10 % (Höchstwert +40 %). Die Reichweite zerfällt laufend: ohne neue Kampagne sind die Preise nach gut zwei Minuten wieder beim Ø-Kurs.`;
+      else if (b.retail) what = `<b>${b.retail.slots} Verkaufsslot${b.retail.slots > 1 ? "s" : ""}</b> für ${b.retail.goods.map(g => gname(g)).join(", ")} · Grundtempo ${b.retail.base}/s, je nach Ware zwischen ${(b.retail.base * Math.min(...b.retail.goods.map(g => store.get().meta?.retailFlow?.[g] ?? 1))).toFixed(2)} und ${(b.retail.base * Math.max(...b.retail.goods.map(g => store.get().meta?.retailFlow?.[g] ?? 1))).toFixed(2)}/s<br>Du setzt den Preis selbst — Ø-Kurs = volle Rate, teurer verkauft langsamer, billiger schneller (max. ×2). Konfigurieren per Klick aufs Gebäude.`;
+      return `<div class="bond" style="align-items:flex-start">
+        <img src="assets/${bid}-0.png" width="44" height="44" style="image-rendering:auto;flex-shrink:0" alt="">
+        <div style="flex:1"><b>${b.name}</b> <span class="meta">· ${fmt(b.cost)} · ${ZNAME[b.zone] || b.zone}</span>
+        <div class="meta" style="margin-top:3px;line-height:1.5">${what}</div>
+        <div class="meta" style="margin-top:2px;color:var(--dim)">Baumaterial: ${Math.ceil(b.cost/400)} Ziegel${b.cost >= 4000 && b.proc?.out !== "beton" ? ` + ${Math.ceil(b.cost/2000)} Beton` : ""}${(b.out || b.proc) ? " · auflevelbar (+30 %/Stufe)" : ""} · Abriss erstattet ${fmt(b.cost * 0.5)}${b.industry ? ` · <b style="color:var(--accent2)">nur ${({agrar:"Agrar",rohstoff:"Rohstoff & Bau",versorger:"Versorger",tech:"Technologie"})[b.industry]}</b>` : " · jede Industrie"}</div></div></div>`;
+    };
+    document.getElementById("lexbody").innerHTML = `
+      <div class="sec">Agrarwirtschaft</div>${["farm","plantage","imkerei","saftpresse","pharma","baeckerei"].map(bcard).join("")}
+      <div class="sec">Rohstoff- &amp; Bauindustrie</div>${["mine","ziegelei","stahlwerk","betonwerk"].map(bcard).join("")}
+      <div class="sec">Grundbedürfnisse (Versorger)</div>${["brunnen","wasserwerk","ewerk","windpark","oelpumpe","raffinerie"].map(bcard).join("")}
+      <div class="sec">Technologie &amp; Elektronik</div>${["siliziummine","chipfabrik","autowerk","dieselwerk","eautowerk"].map(bcard).join("")}
+      <div class="sec">Verkauf (jede Industrie)</div>${["markt","bauhandel","kontor","laden","autohaus","werbeagentur"].map(bcard).join("")}
+      <div class="sec">Waren &amp; aktuelle Ø-Kurse</div>
+      <table><tr><th>Ware</th><th>Kategorie</th><th>Ø-Kurs</th></tr>
+      ${Object.entries(GOODS()).map(([k, g]) => `<tr><td>${g.name}</td><td>${g.cat}</td><td>${fmt(avg[k] ?? 0)}</td></tr>`).join("")}</table>
+      <div class="meta" style="margin-top:6px;line-height:1.5">Kurse regeln sich selbst: Überangebot drückt den Anker bis −50 %, Knappheit hebt ihn bis +30 %. Kurzfristige Schwankung max. ±$5.</div>
+      <div class="sec">Geld verdienen — die Rangfolge</div>
+      <table>
+        <tr><td>Großauftrag</td><td style="text-align:right">Ø-Kurs <b style="color:var(--accent)">×2 fixiert</b></td></tr>
+        <tr><td>Verarbeiten &amp; verkaufen</td><td style="text-align:right">Wertschöpfung (z. B. Obst → Saft)</td></tr>
+        <tr><td>Shops (eigener Preis)</td><td style="text-align:right">dein Preis, Tempo folgt</td></tr>
+        <tr><td>Markt-Bot (Börse)</td><td style="text-align:right">≈ Ø-Kurs, sofort</td></tr>
+        <tr><td>P2P-Börse &amp; Direktverträge</td><td style="text-align:right">Verhandlungssache</td></tr>
+        <tr><td>Anleihen &amp; Auktionen</td><td style="text-align:right">Zinsen / Schnäppchen</td></tr>
+      </table>
+      <div class="sec">Finanzen kompakt</div>
+      <div class="meta" style="line-height:1.6">Anleihen: selbst emittieren bringt Sofort-Kapital; Kupon läuft pro Sekunde. <b style="color:var(--down)">3 verpasste Zahlungen → Pfandrecht, 15 → Zwangsversteigerung</b> (Erlös an den Gläubiger, Startgebot 30 % des Neuwerts). Rating AAA–D entsteht aus Verschuldungsgrad und Firmengröße. Sieg: Rundenziel-Nettovermögen = Cash + Lager (Ø-Kurs) + 70 % Gebäudewert + Anleihen − Schulden.</div>`;
+  }
+
+  /* Chat */
+  if (document.getElementById("p-chat").classList.contains("open")) {
+    const log = document.getElementById("chatlog");
+    const atBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 40;
+    log.innerHTML = (chat[room] || []).map(m =>
+      `<div class="msg"><span class="who" style="color:${m.color}">${m.who}</span>${m.text}</div>`).join("")
+      || `<span class="meta">Noch keine Nachrichten in ${room}.</span>`;
+    if (atBottom) log.scrollTop = log.scrollHeight;
+    document.getElementById("cTo").innerHTML = Object.values(state.players)
+      .filter(p => p.id !== myId).map(p => `<option value="${p.id}">${p.name}</option>`).join("")
+      || `<option disabled>Keine Mitspieler</option>`;
+  }
+}
+store.subscribe(render);
+</script>
+</body>
+</html>
