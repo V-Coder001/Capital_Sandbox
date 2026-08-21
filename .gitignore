@@ -141,3 +141,10 @@ dist
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 .vite/
+
+# macOS Finder-Metadaten — gehören nie ins Repo
+.DS_Store
+
+# Alter, gepackter Deployment-Schnappschuss — die Quelldateien liegen ohnehin
+# direkt im Repo, das hier ist nur eine 21-MB-Dopplung
+deploy-bundle.tar.gz

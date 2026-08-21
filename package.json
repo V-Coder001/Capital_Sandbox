@@ -6,10 +6,12 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "share": "node server.js --share"
+    "share": "node server.js --share",
+    "gateway": "node gateway.js"
   },
   "dependencies": {
     "express": "^4.19.0",
+    "http-proxy": "^1.18.1",
     "localtunnel": "^2.0.2",
     "peerjs": "^1.5.5",
     "socket.io": "^4.7.0",

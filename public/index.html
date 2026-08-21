@@ -276,7 +276,7 @@ td:first-child{font-family:var(--font)}
 /* Tutorial */
 #tut{position:fixed;left:14px;bottom:14px;z-index:30;width:min(400px,92vw);background:rgba(19,26,38,.98);border:1px solid var(--accent);border-radius:14px;padding:16px;display:none;box-shadow:0 8px 30px rgba(0,0,0,.5)}
 #tutHead{display:flex;gap:12px;align-items:flex-end;margin:-16px -16px 10px;padding:12px 16px 0;border-radius:14px 14px 0 0;background:linear-gradient(180deg,rgba(56,189,248,.10),transparent)}
-#tutHead img{width:74px;height:74px;object-fit:cover;object-position:top;border-radius:50%;border:2px solid var(--accent);background:#20293a;flex-shrink:0}
+#tutHead img,#tutHead .mentorAvatar{width:74px;height:74px;object-fit:cover;object-position:top;border-radius:50%;border:2px solid var(--accent);background:#20293a;flex-shrink:0}
 #tutHead .who{padding-bottom:8px}
 #tutHead .who b{font-size:13.5px;display:block}
 #tutHead .who span{font-size:10.5px;color:var(--dim);letter-spacing:.05em;text-transform:uppercase}
@@ -514,7 +514,7 @@ td:first-child{font-family:var(--font)}
     <div id="joinErr"></div>
     <button class="go" id="jgo">Firma gründen</button>
     <div id="joinFoot">
-      <span>capital-sandbox · läuft im Browser · keine Installation</span>
+      <span>capital-sandbox · läuft im Browser · keine Installation · <a href="datenschutz.html" style="color:inherit;text-decoration:underline">Datenschutz</a></span>
       <div class="right"><span class="pulse"><i></i><b></b></span><span id="joinWaiting">—</span></div>
     </div>
   </div>
@@ -653,8 +653,12 @@ td:first-child{font-family:var(--font)}
 
 <div id="tut">
   <div id="tutHead">
-    <img src="assets/ceo.png" alt="Dr. Stefan Biesdorf">
-    <div class="who"><b>Dr. Stefan Biesdorf</b><span>CEO a. D. · dein Mentor</span></div>
+    <svg class="mentorAvatar" viewBox="0 0 74 74" role="img" aria-label="Hans Mustermann">
+      <circle cx="37" cy="37" r="37" fill="#20293a"/>
+      <circle cx="37" cy="30" r="13" fill="var(--accent)" opacity=".85"/>
+      <path d="M10 68c2-15 13-24 27-24s25 9 27 24" fill="var(--accent)" opacity=".85"/>
+    </svg>
+    <div class="who"><b>Hans Mustermann</b><span>CEO a. D. · dein Mentor</span></div>
   </div>
   <div class="step" id="tutStep"></div>
   <h3 id="tutTitle"></h3>
@@ -962,7 +966,81 @@ function startHosting(retriesLeft = 2) {
     });
   });
 }
-startHosting();   // im Hintergrund — stört das lokale LAN/Solo-Spiel nicht, falls kein Internet da ist
+/* ---- Mehrere gleichzeitige Runden (Gateway-Modus) ----
+ * Läuft dieses Deployment hinter gateway.js statt direkt hinter server.js,
+ * teilen sich mehrere unabhängige Runden dieselbe Adresse — jede über einen
+ * eigenen 5-stelligen Code unter /r/<CODE>/socket.io/. Erkennung: /api/mode
+ * gibt es nur beim Gateway, nicht bei einem pur lokal gestarteten server.js.
+ * Läuft stattdessen direkt server.js (lokal, LAN, start.sh), bleibt alles wie
+ * gehabt — inklusive des WebRTC-Beitritts weiter unten, den es im
+ * Gateway-Modus gar nicht braucht (alle erreichen ja denselben Server). */
+let MULTIROOM = false, GATEWAY_BOOT_ID = null, myRoomCode = null;
+const multiroomReady = fetch("/api/mode").then(r => r.ok ? r.json() : { multiroom: false })
+  .then(d => { MULTIROOM = !!d.multiroom; GATEWAY_BOOT_ID = d.bootId || null; })
+  .catch(() => { MULTIROOM = false; });
+/* Wechselt die aktive Verbindung auf eine bestimmte Runde. Genau wie beim
+ * WebRTC-Beitritt weiter unten: alte Verbindung sauber kappen, Kartencache
+ * verwerfen (die neue Runde hat eine andere Karte), neu binden. */
+function connectToRoom(code) {
+  try { socket.disconnect?.(); } catch {}
+  cachedFullMap = null;
+  socket = io({ path: `/r/${code}/socket.io` });
+  bindSocketEvents(socket);
+  return socket;
+}
+/* Ersetzt die Einladungs-Box (sonst LAN-Link + WebRTC-Code) durch den einen
+ * Rundencode, den das Gateway vergeben hat. */
+function renderInviteMultiroom() {
+  if (!MULTIROOM) return;
+  const box = document.getElementById("invite");
+  if (!box) return;
+  const link = myRoomCode ? `${location.origin}${location.pathname}?code=${myRoomCode}` : "";
+  box.innerHTML = `
+    <div class="joinbox">
+      <div class="lbl">Dein Rundencode — den brauchen deine Mitspieler</div>
+      <div class="row" style="justify-content:space-between">
+        <span id="hostCode">${myRoomCode || "erscheint beim Start"}</span>
+        <button class="copybtn" id="hostCodeCopy" type="button" ${myRoomCode ? "" : "disabled"}>Kopieren</button>
+      </div>
+      <p id="inviteHint" style="margin-top:8px">${myRoomCode
+        ? `Mitspieler geben den Code unter „Einer Runde beitreten“ ein — oder du schickst gleich den fertigen Link.`
+        : `Der Code erscheint, sobald du unten auf „Firma gründen“ klickst.`}</p>
+      ${myRoomCode ? `<div class="row" style="margin-top:8px;gap:6px">
+        <input id="inviteUrl" readonly value="${link}">
+        <button class="copybtn" id="inviteCopy" type="button">Link kopieren</button>
+      </div>` : ""}
+    </div>`;
+  document.getElementById("hostCodeCopy")?.addEventListener("click", async () => {
+    const btn = document.getElementById("hostCodeCopy");
+    try { await navigator.clipboard.writeText(document.getElementById("hostCode").textContent); } catch {}
+    btn.textContent = "Kopiert"; btn.classList.add("done");
+    setTimeout(() => { btn.textContent = "Kopieren"; btn.classList.remove("done"); }, 1600);
+  });
+  document.getElementById("inviteCopy")?.addEventListener("click", async () => {
+    const inp = document.getElementById("inviteUrl");
+    try { await navigator.clipboard.writeText(inp.value); } catch { inp.select(); document.execCommand("copy"); }
+    const btn = document.getElementById("inviteCopy");
+    btn.textContent = "Kopiert"; btn.classList.add("done");
+    setTimeout(() => { btn.textContent = "Link kopieren"; btn.classList.remove("done"); }, 1600);
+  });
+}
+multiroomReady.then(() => {
+  if (!MULTIROOM) { startHosting(); return; }   // im Hintergrund — stört das lokale LAN/Solo-Spiel nicht, falls kein Internet da ist
+  /* Öffnet man einen geteilten Link mit ?code=XXXXX, direkt den Beitritts-Tab
+   * mit vorausgefülltem Code zeigen — die Adresse danach wieder aufräumen.
+   * Läuft absichtlich erst hier (nach multiroomReady): die Netmode-Knöpfe
+   * bekommen ihren Klick-Handler erst weiter unten im Skript, ein Klick
+   * direkt an dieser Stelle liefe noch ins Leere. Da jedes .then() erst nach
+   * dem kompletten synchronen Skriptdurchlauf feuert, ist das hier garantiert
+   * schon passiert. */
+  const code = new URLSearchParams(location.search).get("code");
+  if (code) {
+    document.querySelectorAll("#netmode .netopt")[1]?.click();
+    const inp = document.getElementById("jcode");
+    if (inp) inp.value = code.toUpperCase();
+    history.replaceState(null, "", location.pathname);
+  }
+});
 
 const GOODS = () => store.get().meta?.goods || {};
 const BTYPES = () => store.get().meta?.btypes || {};
@@ -1026,8 +1104,11 @@ document.querySelectorAll(".netopt").forEach(b => b.addEventListener("click", ()
   document.getElementById("netstep").textContent = netMode === "join" ? "Runde beitreten" : "Mitspieler einladen";
   /* Beim Beitreten wird die eigene Vermittlung abgebaut (man hostet ja nicht).
    * Schaltet man zurück, muss sie neu aufgebaut werden — sonst bleibt das
-   * Code-Feld auf dem alten, längst ungültigen Wert stehen. */
-  if (netMode === "host" && (!hostPeer || hostPeer.destroyed)) { hostVersuch = 0; startHosting(); }
+   * Code-Feld auf dem alten, längst ungültigen Wert stehen. Im Gateway-Modus
+   * gibt es gar keine WebRTC-Vermittlung — dort zeigt die Box stattdessen den
+   * vom Gateway vergebenen Rundencode (siehe renderInviteMultiroom). */
+  if (MULTIROOM) { if (netMode === "host") renderInviteMultiroom(); }
+  else if (netMode === "host" && (!hostPeer || hostPeer.destroyed)) { hostVersuch = 0; startHosting(); }
   document.getElementById("jgo").textContent = netMode === "join" ? "Verbinden & mitspielen" : "Firma gründen";
   /* Beim Beitreten ist das Rundenziel nicht die eigene Entscheidung — Auswahl
    * ausblenden statt eine wirkungslose Einstellung anzubieten. */
@@ -1058,27 +1139,92 @@ function doRegister(name) {
                             industry: myIndustry, bots: botCounts, botLevel }, res => {
     if (res?.error) { document.getElementById("joinErr").textContent = res.error; return; }
     myToken = res.you;
-    try { localStorage.setItem(TOKEN_KEY, res.you); } catch {}
+    /* Im Gateway-Modus gehört zum Token auch der Rundencode — ohne den weiß ein
+     * späteres attemptRejoin() nicht, mit welcher der vielen gleichzeitigen
+     * Runden es sich überhaupt verbinden soll. */
+    try { localStorage.setItem(TOKEN_KEY, MULTIROOM ? JSON.stringify({ code: myRoomCode, token: res.you }) : res.you); } catch {}
     enterGame(res);
     TUT = buildTut(res.industry || "agrar");   // Tutorial passend zur gewählten Industrie
     tutShow(0);
   });
 }
-/* Beim Laden automatisch versuchen, mit gespeichertem Token wieder beizutreten —
- * nur im Host-Modus (lokaler Server); "Mit Code beitreten" ist immer ein bewusster,
- * expliziter Vorgang und lädt sich kein fremdes Token. */
-(function attemptRejoin() {
-  let token; try { token = localStorage.getItem(TOKEN_KEY); } catch { token = null; }
-  if (!token) return;
+/* Beim Laden automatisch versuchen, mit gespeichertem Token wieder beizutreten.
+ * "Mit Code beitreten" (WebRTC/Legacy) ist immer ein bewusster, expliziter
+ * Vorgang und lädt sich kein fremdes Token — im Gateway-Modus dagegen ist JEDE
+ * Verbindung (ob Host oder Beitreten) eine ganz normale Socket.io-Verbindung
+ * zur eigenen Runde, ein automatisches Wiederverbinden ist also für beide
+ * gleichermaßen sinnvoll. Wartet erst auf multiroomReady, weil sich sonst
+ * nicht entscheiden lässt, wie der gespeicherte Wert zu lesen ist (nackter
+ * Token vs. {code,token}-Objekt). */
+async function attemptRejoin() {
+  await multiroomReady;
+  let raw; try { raw = localStorage.getItem(TOKEN_KEY); } catch { raw = null; }
+  if (!raw) return;
+  let token = raw;
+  if (MULTIROOM) {
+    let code = null;
+    try { ({ code, token } = JSON.parse(raw)); } catch { code = null; }
+    if (!code || !token) { try { localStorage.removeItem(TOKEN_KEY); } catch {} return; }
+    myRoomCode = code;
+    connectToRoom(code);
+    renderInviteMultiroom();
+  }
   socket.emit("rejoin", { token }, res => {
     if (res?.error) { try { localStorage.removeItem(TOKEN_KEY); } catch {} return; }
     myToken = token;
     enterGame(res);
   });
-})();
-document.getElementById("jgo").addEventListener("click", () => {
+}
+attemptRejoin();
+document.getElementById("jgo").addEventListener("click", async () => {
   const name = document.getElementById("jname").value.trim();
   document.getElementById("joinErr").textContent = "";
+  await multiroomReady;
+
+  if (MULTIROOM) {
+    const jgoBtn = document.getElementById("jgo");
+    if (netMode === "host") {
+      /* Neue, komplett eigene Runde beim Gateway anfordern — das startet dort
+       * einen frischen, isolierten server.js-Prozess und liefert den Code, mit
+       * dem andere gezielt zu GENAU dieser Runde finden (statt zu irgendeiner). */
+      jgoBtn.disabled = true;
+      try {
+        const r = await fetch("/api/rooms", { method: "POST" });
+        const data = await r.json();
+        if (!r.ok || data.error) throw new Error(data.error || "Runde konnte nicht erstellt werden.");
+        myRoomCode = data.code;
+        connectToRoom(myRoomCode);
+        renderInviteMultiroom();
+        doRegister(name);
+      } catch (e) {
+        document.getElementById("joinErr").textContent = e.message;
+      } finally {
+        jgoBtn.disabled = false;
+      }
+      return;
+    }
+    /* Beitreten: im Gateway-Modus einfach eine ganz normale Socket.io-Verbindung
+     * zum Pfad der gewünschten Runde — kein WebRTC nötig, alle landen ja
+     * ohnehin auf demselben öffentlichen Server. */
+    const code = document.getElementById("jcode").value.trim().toUpperCase();
+    if (!code) { document.getElementById("joinErr").textContent = "Bitte Rundencode eingeben"; return; }
+    const status = document.getElementById("joinCodeStatus");
+    status.textContent = "Verbinde …";
+    try {
+      const r = await fetch("/api/rooms/" + encodeURIComponent(code));
+      const data = await r.json();
+      if (!data.exists) { status.textContent = "Diese Runde gibt es nicht (mehr) — Code prüfen."; return; }
+      myRoomCode = code;
+      connectToRoom(code);
+      status.textContent = "Verbunden ✓";
+      doRegister(name);
+    } catch {
+      status.textContent = "Verbindung fehlgeschlagen.";
+    }
+    return;
+  }
+
+  /* --- Ab hier: Legacy-Modus (server.js direkt, ohne Gateway) — unverändert --- */
   if (netMode === "host") { doRegister(name); return; }
   /* Beitreten per Code: erst per WebRTC zum Host verbinden, dann wie gewohnt registrieren */
   const code = document.getElementById("jcode").value.trim().toLowerCase();
@@ -1175,15 +1321,28 @@ document.getElementById("jname").addEventListener("keydown", e => { if (e.key ==
 document.getElementById("winNew").addEventListener("click", () => act("newRound", {}));
 
 /* Einladungslink vom Server holen (öffentlicher Tunnel-Link zuerst, sonst LAN-IP).
- * Dieselbe Antwort liefert die Kennung des Serverlaufs für das Intro mit. */
-fetch("/api/invite").then(r => r.json()).then(({ urls, bootId }) => {
-  const url = urls[0] || location.href;
-  document.getElementById("inviteUrl").value = url;
-  document.getElementById("inviteHint").textContent = url.startsWith("https")
-    ? "Öffentlicher Link — funktioniert auch außerhalb deines Netzwerks."
-    : "Funktioniert für alle im selben WLAN. Für einen öffentlichen Link: npm run share";
-  introVielleichtZeigen(bootId);
-}).catch(() => { document.getElementById("inviteUrl").value = location.href; });
+ * Dieselbe Antwort liefert die Kennung des Serverlaufs für das Intro mit.
+ * Läuft NUR im Legacy-Modus: das Gateway kennt /api/invite nicht (LAN-Link und
+ * Server-Tunnel ergeben bei einer zentral gehosteten Runde keinen Sinn mehr —
+ * dort übernimmt renderInviteMultiroom() dieselbe Stelle im Markup). Wartet
+ * bewusst auf multiroomReady, damit dieser Codepfad im Gateway-Modus gar nicht
+ * erst versucht, ein längst durch renderInviteMultiroom() ersetztes
+ * #inviteUrl-Element zu befüllen. */
+multiroomReady.then(() => {
+  if (MULTIROOM) {
+    renderInviteMultiroom();   // sonst zeigt die Box bis zum ersten Klick noch die alte LAN/WebRTC-Ansicht
+    introVielleichtZeigen(GATEWAY_BOOT_ID);
+    return;
+  }
+  fetch("/api/invite").then(r => r.json()).then(({ urls, bootId }) => {
+    const url = urls[0] || location.href;
+    document.getElementById("inviteUrl").value = url;
+    document.getElementById("inviteHint").textContent = url.startsWith("https")
+      ? "Öffentlicher Link — funktioniert auch außerhalb deines Netzwerks."
+      : "Funktioniert für alle im selben WLAN. Für einen öffentlichen Link: npm run share";
+    introVielleichtZeigen(bootId);
+  }).catch(() => { document.getElementById("inviteUrl").value = location.href; });
+});
 
 /* ---- Intro-Video ----
  * Soll genau einmal je Serverstart laufen: der Server würfelt beim Hochfahren

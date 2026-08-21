@@ -35,6 +35,38 @@ Das öffnet einen localtunnel und zeigt die `https://…`-URL im Terminal und
 im Join-Screen an. Hinweis: localtunnel ist ein Fremd-Dienst — für private
 Runden okay, für mehr Kontrolle eigenen Reverse-Proxy/Tailscale nutzen.
 
+## Mehrere gleichzeitige Runden (Gateway-Modus, für einen echten Server)
+
+`server.js` selbst kann pro Prozess immer nur EINE Runde halten — sein
+kompletter Zustand (Karte, Firmen, Börse, Bots) liegt in modulweiten
+Variablen. Für `./start.sh`/`npm start` ist das genau richtig (eine Gruppe,
+ein Rechner, eine Runde). Soll dasselbe Deployment mehreren Gruppen
+GLEICHZEITIG unabhängige Runden anbieten (z. B. auf einem gemieteten Server),
+gibt es dafür `gateway.js` als Alternative zu `server.js`:
+
+```bash
+npm run gateway
+```
+
+Jeder Klick auf „Neue Runde starten" lässt das Gateway einen frischen,
+komplett isolierten `server.js`-Kindprozess auf einem internen Port
+hochfahren und vergibt einen 5-stelligen Code. Mitspieler geben diesen Code
+unter „Einer Runde beitreten" ein (oder öffnen einen Link mit `?code=…`) und
+werden transparent — inklusive WebSocket — zur richtigen Runde durchgereicht.
+Nach Erreichen von `WIN_NW` oder `ROOM_IDLE_MIN` Minuten Leerlauf wird eine
+Runde automatisch wieder beendet.
+
+`server.js` selbst bleibt dabei unverändert — die Isolation kommt allein
+daher, dass jede Runde ein eigener echter Betriebssystemprozess ist, kein
+gemeinsam genutzter In-Memory-Zustand. `public/index.html` erkennt beim Laden
+selbst, ob es hinter `server.js` (Einzelrunde, WebRTC-Beitritt) oder
+`gateway.js` (mehrere Runden) läuft, und passt Join-Screen und
+Verbindungsaufbau entsprechend an.
+
+Umgebungsvariablen: `PORT` (öffentlicher Port), `MAX_ROOMS` (Höchstzahl
+gleichzeitiger Runden, Standard 20), `ROOM_IDLE_MIN` (Leerlauf-Grenze in
+Minuten, Standard 20).
+
 ## Architektur
 
 ```
@@ -85,8 +117,10 @@ game/
 
 ### Bekannte Grenzen (Prototyp)
 
-- Kein Reconnect-Token: bei Disconnect verfallen offene Orders (mit Erstattung),
-  Gebäude bleiben verwaist auf der Karte.
-- Kein Persistieren des Spielstands (alles in-memory).
-- Snapshot wird komplett gesendet (bei 26×26 und wenigen Spielern unkritisch);
-  ab größeren Karten auf Delta-Updates umstellen.
+- Kein Persistieren des Spielstands (alles in-memory) — ein Neustart des
+  Prozesses (oder im Gateway-Modus: das automatische Beenden einer leerlaufenden
+  Runde) löscht die laufende Runde unwiderruflich. Für einen dauerhaften Betrieb
+  bräuchte es ein periodisches Sichern von `G` auf die Platte.
+- Der Gateway-Modus isoliert Runden über echte Betriebssystemprozesse, nicht
+  über eine Datenbank — bei sehr vielen gleichzeitigen Runden (deutlich über
+  `MAX_ROOMS`) skaliert das irgendwann nicht mehr beliebig weiter.
