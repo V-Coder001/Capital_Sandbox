@@ -49,6 +49,26 @@ input,select{background:var(--panel2);border:1px solid var(--line);border-radius
   background:repeating-linear-gradient(0deg, rgba(255,255,255,.012) 0px, rgba(255,255,255,.012) 1px, transparent 1px, transparent 3px)}
 #joinGlow{position:fixed;top:0;left:50%;transform:translateX(-50%);width:1000px;height:320px;pointer-events:none;z-index:1;
   background:radial-gradient(ellipse at 50% 0%, rgba(56,189,248,.12) 0%, rgba(167,139,250,.07) 50%, transparent 75%)}
+/* ---- Werbeplakate links und rechts ----
+ * Füllen den leeren Raum neben der Karte auf breiten Bildschirmen. Bewusst
+ * abgedunkelt und leicht gekippt: sie sollen nach angeklebten Plakaten in der
+ * Spielwelt aussehen, nicht mit dem Formular um Aufmerksamkeit konkurrieren. */
+.posterWall{position:fixed;top:50%;z-index:2;width:clamp(170px,13vw,250px);
+  aspect-ratio:495/700;pointer-events:none;
+  border-radius:3px;background-size:cover;background-position:center;
+  box-shadow:0 18px 50px rgba(0,0,0,.75), 0 0 0 1px rgba(255,255,255,.05);
+  opacity:0;transition:opacity 1.1s ease, filter .5s ease}
+.posterWall.da{opacity:.72}
+.posterWall::after{content:"";position:absolute;inset:0;border-radius:3px;
+  background:linear-gradient(160deg,rgba(10,14,21,.05),rgba(10,14,21,.42));
+  box-shadow:inset 0 0 34px rgba(0,0,0,.42)}
+#posterL{left:max(18px,calc(50% - 500px - 13vw - 26px));transform:translateY(-50%) rotate(-2.4deg)}
+#posterR{right:max(18px,calc(50% - 500px - 13vw - 26px));transform:translateY(-50%) rotate(2deg)}
+/* Unter ~1360px reicht der Platz neben der 1000px-Karte nicht mehr — dann
+ * würden die Plakate das Formular überlappen statt es zu rahmen. */
+@media(max-width:1360px){.posterWall{display:none}}
+@media(prefers-reduced-motion:reduce){.posterWall{transition:none}}
+
 #join .card{position:relative;z-index:10;width:min(1000px,100%);
   background:linear-gradient(160deg,#131c2b 0%,#0e1520 40%,#0c1220 100%);
   border:1px solid #1e2d45;border-radius:22px;overflow:hidden;
@@ -404,6 +424,10 @@ td:first-child{font-family:var(--font)}
 
 <div id="join">
 <div id="joinGlow"></div>
+<!-- Werbeplakate im sonst leeren Raum neben der Karte. Rein dekorativ, daher
+     aria-hidden — für Screenreader wäre "Plakat" nur Rauschen. -->
+<div class="posterWall" id="posterL" aria-hidden="true"></div>
+<div class="posterWall" id="posterR" aria-hidden="true"></div>
 <div class="card">
   <canvas id="joinParticles"></canvas>
 
@@ -1502,6 +1526,35 @@ document.getElementById("jgo").addEventListener("click", async () => {
   myPeer.on("error", () => { status.textContent = "Verbindung fehlgeschlagen — Code prüfen."; });
 });
 document.getElementById("jname").addEventListener("keydown", e => { if (e.key === "Enter") document.getElementById("jgo").click(); });
+
+/* ---- Werbeplakate neben dem Startbildschirm ----
+ * Drei Plakate auf zwei Plätzen: sie wechseln langsam durch, sodass man beim
+ * Warten auf Mitspieler nach und nach alle sieht. Links und rechts zeigen nie
+ * dasselbe Motiv. Auf schmalen Fenstern blendet CSS sie ganz aus; der Timer
+ * läuft dann trotzdem, kostet aber praktisch nichts (ein Wechsel alle 9 s). */
+(function plakate() {
+  const MOTIVE = ["bank", "kontor", "mine"];
+  const links = document.getElementById("posterL"), rechts = document.getElementById("posterR");
+  if (!links || !rechts) return;
+  /* Vorladen, damit beim Einblenden nicht kurz eine leere Fläche steht */
+  MOTIVE.forEach(m => { const i = new Image(); i.src = `assets/poster/${m}.jpg`; });
+
+  let i = 0;
+  const setzen = (el, n) => {
+    el.style.backgroundImage = `url("assets/poster/${MOTIVE[n % MOTIVE.length]}.jpg")`;
+    el.classList.add("da");
+  };
+  setzen(links, 0);
+  setzen(rechts, 1);
+
+  setInterval(() => {
+    /* Immer nur eine Seite tauschen — beide gleichzeitig wirkt unruhig. */
+    const el = (i % 2 === 0) ? links : rechts;
+    el.classList.remove("da");
+    setTimeout(() => setzen(el, i + 2), 1100);   // erst nach dem Ausblenden wechseln
+    i++;
+  }, 9000);
+})();
 
 /* ---- Startbildschirm: Partikelfeld und Statuszeile ----
  * Das Partikelfeld ist reine Deko und läuft nur, solange die Lobby sichtbar ist —
