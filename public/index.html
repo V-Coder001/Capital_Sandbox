@@ -813,8 +813,14 @@ const fp = n => n < 10 ? "$" + (+n).toLocaleString("de-DE", { minimumFractionDig
 const toast = (msg, err) => { const d = document.createElement("div");
   d.className = "toast" + (err ? " err" : ""); d.textContent = msg;
   document.getElementById("toasts").append(d); setTimeout(() => d.remove(), 4000); };
-// Jede Aktion läuft über ack — Server-Fehler landen als Toast beim Spieler
-const act = (ev, payload) => socket.emit(ev, payload, res => { if (res?.error) toast(res.error, true); });
+/* Jede Aktion läuft über ack — Server-Fehler landen als Toast beim Spieler.
+ * Der passende Klang kommt erst mit der Bestätigung: eine abgelehnte Order
+ * soll nicht nach gelungenem Geschäft klingen. */
+const act = (ev, payload) => socket.emit(ev, payload, res => {
+  if (res?.error) { toast(res.error, true); return; }
+  const klang = SFX_AKTION[ev];
+  if (klang) SFX.spiel(klang);
+});
 
 /* ---- Transport ----
  * Normalfall: socket.io direkt zum eigenen lokalen Server (LAN/localhost).
@@ -939,7 +945,7 @@ function backToLobby() {
   auswertungGezeigt = false;
   document.getElementById("win").style.display = "none";
   document.getElementById("joinErr").textContent = "";
-  openPanel("karte");
+  openPanel("karte", true);   // Rückkehr in die Lobby ist kein Panel-Klick
   tutDone();
   document.getElementById("join").style.display = "";
   toast("Neue Runde — wähle deine Firma.");
@@ -2072,17 +2078,21 @@ const dock = document.getElementById("dock");
 DOCK.forEach(([pid, label]) => { const b = document.createElement("button");
   b.className = "dockbtn"; b.dataset.p = pid; b.textContent = label;
   b.addEventListener("click", () => openPanel(pid)); dock.append(b); });
-function openPanel(pid) {
+/* stumm=true nur für den Aufruf beim Seitenaufbau: dort gibt es weder eine
+ * Nutzergeste noch schon ein SFX-Modul (das entsteht erst weiter unten). */
+function openPanel(pid, stumm = false) {
+  if (!stumm) SFX.spiel("klick");
   document.querySelectorAll(".panel").forEach(p => p.classList.remove("open"));
   document.querySelectorAll(".dockbtn").forEach(b => b.classList.toggle("on", b.dataset.p === pid));
   if (pid !== "karte") document.getElementById("p-"+pid)?.classList.add("open");
   render(store.get());
 }
 document.querySelectorAll("[data-close]").forEach(x => x.addEventListener("click", () => {
+  SFX.spiel("klick");
   x.closest(".panel").classList.remove("open");
   document.querySelectorAll(".dockbtn").forEach(b => b.classList.toggle("on", b.dataset.p === "karte")); }));
 let pendingMerge = null;   // Firma, für die gerade die Fusions-Rückfrage offen ist
-openPanel("karte");
+openPanel("karte", true);
 
 function initSelects() {
   const goodOpts = Object.entries(GOODS()).map(([k, g]) => `<option value="${k}">${g.name}</option>`).join("");
@@ -2152,7 +2162,15 @@ const MUSIC = (() => {
   const tracks = [0, 1].sort(() => Math.random() - 0.5);
   let i = 0, started = false;
   const audio = new Audio();
-  let vol = 22; try { const v = +localStorage.getItem("cs_vol"); if (v >= 0 && v <= 100) vol = v; } catch {}
+  /* Ohne gespeicherten Wert liefert getItem null — und +null ist 0, was die
+   * Bereichsprüfung anstandslos passiert hat. Jeder neue Besucher startete
+   * dadurch auf Lautstärke 0 statt auf den gedachten 22, also komplett stumm.
+   * Deshalb erst auf "gar nichts gespeichert" prüfen. */
+  let vol = 22;
+  try {
+    const roh = localStorage.getItem("cs_vol");
+    if (roh !== null && roh !== "") { const v = +roh; if (Number.isFinite(v) && v >= 0 && v <= 100) vol = v; }
+  } catch {}
   audio.volume = vol / 100;
   let muted = false; try { muted = localStorage.getItem("cs_muted") === "1"; } catch {}
   const btn = document.getElementById("music");
@@ -2184,8 +2202,62 @@ const MUSIC = (() => {
       if (!audio.src) next(); else audio.play().catch(() => {}); }
     paint();
   });
-  return { start() { if (started) return; started = true; if (!muted) next(); } };
+  return {
+    start() { if (started) return; started = true; if (!muted) next(); },
+    /* Die Soundeffekte hängen an derselben Stummschaltung und demselben Regler —
+     * zwei getrennte Regler für ein Spiel dieser Größe wären Überbau. */
+    istStumm: () => muted || vol === 0,
+    lautstaerke: () => vol / 100,
+  };
 })();
+
+/* ================================================================
+ * Soundeffekte: Klick, Bauen, Geld.
+ * ================================================================
+ * Drei kurze Klänge, die an den Ausgang echter Aktionen gekoppelt sind —
+ * gespielt wird erst, wenn der Server bestätigt hat, nie schon beim Klick.
+ * Eine fehlgeschlagene Order soll nicht nach Erfolg klingen. */
+const SFX = (() => {
+  const DATEIEN = { klick: "klick", bau: "bau", geld: "geld" };
+  /* Je Klang mehrere Audio-Objekte im Wechsel: sonst schneidet ein schneller
+   * zweiter Klick den ersten ab, weil dasselbe Element neu gestartet wird. */
+  const POOL = 3, pools = {}, zeiger = {};
+  for (const [name, datei] of Object.entries(DATEIEN)) {
+    pools[name] = Array.from({ length: POOL }, () => {
+      const a = new Audio(`assets/sfx/${datei}.mp3`);
+      a.preload = "auto";
+      return a;
+    });
+    zeiger[name] = 0;
+  }
+  /* Effekte dürfen die Musik nicht übertönen, gehen bei leiser Musik aber auch
+   * nicht unter — daher angehoben und gedeckelt statt 1:1 übernommen. */
+  const pegel = () => Math.min(1, MUSIC.lautstaerke() * 2.2 + 0.12);
+  let letzte = 0;
+  return {
+    spiel(name) {
+      if (MUSIC.istStumm() || !pools[name]) return;
+      /* Sammelaktionen (z. B. mehrere Orders auf einmal) würden sonst eine
+       * Salve identischer Klänge auslösen. */
+      const jetzt = performance.now();
+      if (jetzt - letzte < 60) return;
+      letzte = jetzt;
+      const a = pools[name][zeiger[name]++ % POOL];
+      try { a.currentTime = 0; a.volume = pegel(); a.play().catch(() => {}); } catch {}
+    },
+  };
+})();
+/* Welche Aktion wie klingt. Alles, was nicht aufgeführt ist, bleibt still —
+ * ein Klang auf wirklich jeden Handgriff würde schnell nerven. */
+const SFX_AKTION = {
+  build: "bau", upgradeBuilding: "bau", demolish: "bau", unlockTile: "bau",
+  placeOrder: "geld", takeOrder: "geld", buyShares: "geld", bidShares: "geld",
+  acceptShareBid: "geld", listShares: "geld", buyBond: "geld", issueBond: "geld",
+  bid: "geld", acceptContract: "geld", contribute: "geld", mergeCompany: "geld",
+  bookAd: "geld", configureShop: "klick", togglePause: "klick",
+  offerContract: "klick", cancelOrder: "klick", cancelShareBid: "klick",
+  cancelShareListing: "klick", declineContract: "klick", declineShareBid: "klick",
+};
 
 /* ================================================================
  * Tutorial: läuft nach dem ersten Beitritt (localStorage merkt sich
