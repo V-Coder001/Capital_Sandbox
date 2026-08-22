@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Impressum — Capital Sandbox</title>
+<style>
+:root{
+  --bg:#0a0e15; --panel:#121824; --panel2:#1a2231; --line:#273144;
+  --text:#e3e9f4; --dim:#8695ab; --accent:#38bdf8; --accent2:#a78bfa;
+  --font:system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font-family:var(--font);
+  line-height:1.6;padding:40px 20px 80px}
+.wrap{max-width:720px;margin:0 auto}
+a{color:var(--accent)}
+h1{font-size:26px;color:var(--accent);margin-bottom:4px}
+.sub{color:var(--dim);font-size:13px;margin-bottom:32px}
+h2{font-size:16px;margin:34px 0 10px;color:var(--text);border-bottom:1px solid var(--line);padding-bottom:8px}
+h3{font-size:13.5px;margin:18px 0 6px;color:var(--dim);font-weight:600}
+p,li{font-size:13.5px;color:#c3cede}
+ul{padding-left:20px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px 18px;margin:12px 0}
+.card b{color:var(--text)}
+.mono{font-family:var(--mono);font-size:12px;background:var(--panel2);border-radius:5px;padding:2px 6px}
+.note{background:rgba(56,189,248,.08);border:1px solid rgba(56,189,248,.3);border-radius:10px;
+  padding:12px 14px;font-size:12.5px;color:var(--dim)}
+.warn{background:rgba(251,113,133,.08);border:1px solid rgba(251,113,133,.35);border-radius:10px;
+  padding:12px 14px;font-size:12.5px;margin-bottom:28px}
+.warn b{color:#fb7185}
+.fill{color:var(--accent2);font-style:italic}
+.back{display:inline-block;margin-top:36px;font-size:13px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="warn">
+    <b>Noch auszufüllen:</b> Name und E-Mail stehen drin — es fehlt vor allem die
+    <b>Postanschrift</b>, die bei einem Impressum Pflicht ist. Alle übrigen
+    <span class="fill">violett-kursiven</span> Stellen sind Platzhalter: ausfüllen, wenn sie
+    zutreffen, sonst ersatzlos löschen. Diese Vorlage ersetzt keine Rechtsberatung; im Zweifel
+    vor dem öffentlichen Betrieb juristisch prüfen lassen.
+  </div>
+
+  <h1>Impressum</h1>
+  <div class="sub">Angaben gemäß § 5 DDG · Stand: <span id="datum"></span></div>
+
+  <h2>Diensteanbieter</h2>
+  <div class="card">
+    <p>
+      Vincent Biesdorf<br>
+      Nördliche Münchner Straße 27<br>
+      <span class="fill">[PLZ und Ort]</span><br>
+      Deutschland
+    </p>
+    <p class="note" style="margin-bottom:0">Eine Postanschrift ist Pflicht — ein Postfach genügt
+      nicht. Wer aus Sorge vor der eigenen Privatadresse zögert: Für rein private, nicht
+      geschäftsmäßige Angebote greift die Impressumspflicht unter Umständen gar nicht (siehe unten),
+      eine Alternative ist eine ladungsfähige Anschrift über einen Dienstleister.</p>
+  </div>
+
+  <h2>Kontakt</h2>
+  <div class="card">
+    <p>
+      E-Mail: <a href="mailto:vincent.biesdorf@icloud.com">vincent.biesdorf@icloud.com</a><br>
+      Telefon: <span class="fill">[optional — Telefonnummer]</span>
+    </p>
+    <p class="note" style="margin-bottom:0">Eine E-Mail-Adresse ist Pflicht. Eine Telefonnummer ist
+      es nach der Rechtsprechung des EuGH nicht, solange eine zweite, schnelle Kontaktmöglichkeit
+      (z. B. ein Kontaktformular mit zugesagter Antwortzeit) besteht.</p>
+  </div>
+
+  <h2>Nur falls zutreffend</h2>
+  <p>Die folgenden Angaben sind <b>nur für manche Betreiber</b> Pflicht. Was auf dich nicht zutrifft,
+    lösch einfach aus dieser Seite heraus — falsche oder überflüssige Angaben schaden mehr, als sie
+    nützen.</p>
+
+  <h3>Bei Unternehmen, Vereinen und anderen juristischen Personen</h3>
+  <div class="card">
+    <p>
+      Rechtsform und Vertretungsberechtigte: <span class="fill">[z. B. „GmbH, vertreten durch den Geschäftsführer …"]</span><br>
+      Register und Registernummer: <span class="fill">[z. B. „Amtsgericht …, HRB …"]</span>
+    </p>
+  </div>
+
+  <h3>Bei Umsatzsteuerpflicht</h3>
+  <div class="card">
+    <p>Umsatzsteuer-Identifikationsnummer gemäß § 27a UStG:
+      <span class="fill">[USt-IdNr.]</span></p>
+  </div>
+
+  <h3>Bei redaktionellen Inhalten</h3>
+  <div class="card">
+    <p>Verantwortlich für den Inhalt nach § 18 Abs. 2 MStV:
+      <span class="fill">[Name und Anschrift]</span></p>
+    <p class="note" style="margin-bottom:0">Diese Angabe betrifft journalistisch-redaktionelle
+      Angebote. Ein reines Spiel ohne Nachrichten- oder Textbeiträge fällt in aller Regel nicht
+      darunter — dann kann dieser Abschnitt entfallen.</p>
+  </div>
+
+  <h2>Gilt die Impressumspflicht überhaupt?</h2>
+  <p>§ 5 DDG (seit Mai 2024 der Nachfolger des § 5 TMG) verpflichtet Anbieter
+    <b>geschäftsmäßiger, in der Regel gegen Entgelt angebotener</b> digitaler Dienste zu einem
+    Impressum. „Geschäftsmäßig" meint dabei nicht zwingend „mit Gewinnabsicht": Auch eine dauerhaft
+    und planmäßig betriebene, kostenlose Seite kann darunterfallen, etwa wenn sie Werbung enthält,
+    auf ein Unternehmen verweist oder ein Portfolio bewirbt.</p>
+  <p>Eine rein private Seite ohne jeden geschäftlichen Bezug — eine Spielrunde für Freunde,
+    niemand verdient daran — braucht streng genommen kein Impressum. Die Grenze ist im Einzelfall
+    schwer zu ziehen, und ein vollständiges Impressum schadet nie. Deshalb liegt diese Vorlage bei.</p>
+
+  <h2>Streitbeilegung</h2>
+  <p>Die Europäische Kommission hat ihre Plattform zur Online-Streitbeilegung („OS-Plattform")
+    zum 20. Juli 2025 eingestellt. Der früher übliche Verweis samt Link darauf gehört deshalb
+    <b>nicht mehr</b> in ein Impressum — er ginge ins Leere.</p>
+  <p>Sofern überhaupt Verbraucherverträge geschlossen werden, gilt: <span class="fill">[Wir sind
+    nicht bereit oder verpflichtet, an Streitbeilegungsverfahren vor einer
+    Verbraucherschlichtungsstelle teilzunehmen. — Diesen Satz nur stehen lassen, wenn er zutrifft.]</span></p>
+
+  <h2>Haftung für Inhalte und Links</h2>
+  <p>Als Diensteanbieter sind wir für eigene Inhalte auf diesen Seiten nach den allgemeinen Gesetzen
+    verantwortlich. Nach §§ 7 bis 10 DDG sind wir als Diensteanbieter jedoch nicht verpflichtet,
+    übermittelte oder gespeicherte fremde Informationen zu überwachen oder nach Umständen zu
+    forschen, die auf eine rechtswidrige Tätigkeit hinweisen. Verpflichtungen zur Entfernung oder
+    Sperrung der Nutzung von Informationen nach den allgemeinen Gesetzen bleiben davon unberührt.
+    Eine diesbezügliche Haftung ist erst ab dem Zeitpunkt der Kenntnis einer konkreten
+    Rechtsverletzung möglich; bei Bekanntwerden entsprechender Rechtsverletzungen entfernen wir
+    diese Inhalte umgehend.</p>
+  <p>Unser Angebot enthält Links zu externen Websites Dritter, auf deren Inhalte wir keinen Einfluss
+    haben. Für diese fremden Inhalte kann keine Gewähr übernommen werden; verantwortlich ist stets
+    der jeweilige Anbieter oder Betreiber der Seiten.</p>
+  <p class="note">Im Spiel können Mitspieler Firmennamen und Chatnachrichten frei eingeben. Solche
+    Eingaben sind fremde Inhalte im obigen Sinn — sie werden nicht dauerhaft gespeichert und
+    verschwinden spätestens mit dem Ende der jeweiligen Runde.</p>
+
+  <h2>Urheberrecht und verwendete Werke</h2>
+  <p>Die von uns erstellten Inhalte und Werke auf diesen Seiten unterliegen dem deutschen
+    Urheberrecht. Fremde Werke werden hier offengelegt:</p>
+
+  <div class="card">
+    <p><b>Grafiken (Gebäude, Fahrzeuge, Figuren, Gelände)</b> — erstellt von
+      <a href="https://kenney.nl" target="_blank" rel="noopener">Kenney</a> (kenney.nl) und
+      veröffentlicht unter <a href="https://creativecommons.org/publicdomain/zero/1.0/" target="_blank" rel="noopener">Creative
+      Commons Zero (CC0)</a>. Diese Lizenz erlaubt private, schulische und kommerzielle Nutzung; die
+      Nennung ist freiwillig und erfolgt hier gern. Der vollständige Lizenztext liegt dem Projekt als
+      <span class="mono">assets/LICENSE-kenney.txt</span> bei.</p>
+  </div>
+
+  <div class="card">
+    <p><b>Schriftarten</b> — über Google Fonts eingebunden, veröffentlicht unter der
+      <a href="https://openfontlicense.org" target="_blank" rel="noopener">SIL Open Font License</a>.
+      Details zur Datenübertragung stehen in der <a href="datenschutz.html">Datenschutzerklärung</a>.</p>
+  </div>
+
+  <div class="card">
+    <p><b>Musik und Intro-Video</b> — <span class="fill">[Herkunft und Lizenz eintragen: Titel,
+      Urheber, Lizenz bzw. Bezugsquelle. Diese Dateien liegen dem Projekt bei, ihre Herkunft ist
+      im Code nicht dokumentiert — bitte vor einer Veröffentlichung prüfen und hier angeben, oder
+      die Dateien austauschen.]</span></p>
+  </div>
+
+  <h2>Software</h2>
+  <p>Capital Sandbox ist ein privates Lern- und Spielprojekt. Der Quellcode ist öffentlich
+    einsehbar unter
+    <a href="https://github.com/V-Coder001/Capital_Sandbox" target="_blank" rel="noopener">github.com/V-Coder001/Capital_Sandbox</a>.
+    Das Spiel bildet wirtschaftliche Abläufe stark vereinfacht ab und ist ausdrücklich <b>keine</b>
+    Anlageberatung und keine Abbildung realer Märkte.</p>
+
+  <a class="back" href="/">← Zurück zum Spiel</a>
+  <a class="back" href="datenschutz.html" style="margin-left:18px">Datenschutz</a>
+</div>
+<script>document.getElementById("datum").textContent = new Date().toLocaleDateString("de-DE", { year: "numeric", month: "long", day: "numeric" });</script>
+</body>
+</html>
