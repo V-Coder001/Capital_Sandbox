@@ -130,7 +130,15 @@ const BTYPES = {
   siliziummine: { name: "Siliziummine",    cost: 1400, out: "silizium", rate: 10/30, zone: "industrie", industry: "tech", boosts: ["strom"] },
   /* Rohstoff- & Bauindustrie: fördert Erze und macht daraus das Baumaterial für ALLE */
   mine:       { name: "Mine",              cost: 1400, out: "erze",     rate: 0.383, zone: "industrie", industry: "rohstoff", boosts: ["strom", "oel"] },
-  ziegelei:   { name: "Ziegelei",          cost: 1500, out: null, rate: 0, zone: "industrie", industry: "rohstoff", proc: { in: { erze: 0.4, wasser: 0.4 }, out: "ziegel", rate: 10/30 } },
+  /* Ziegel und Elektronik waren die beiden unattraktivsten Waren der Wirtschaft
+   * (Wertschöpfung 1,63x bzw. 1,71x) — obwohl JEDES Gebäude Ziegel und JEDES
+   * Upgrade Elektronik braucht. Wer sich dagegen selbst versorgen konnte, verdiente
+   * am besten: Medikamente 2,59x ganz ohne fremde Branche. Das Spiel belohnte damit
+   * genau das Gegenteil dessen, wofür es gebaut ist. Entschärfte Rezepturen bringen
+   * beide auf ~2,2x, also auf Augenhöhe mit Stahl (2,18x). Bewusst über den
+   * Materialbedarf statt über den Verkaufspreis: So wird Herstellen lohnender,
+   * ohne dass Bauen für alle anderen teurer wird. */
+  ziegelei:   { name: "Ziegelei",          cost: 1500, out: null, rate: 0, zone: "industrie", industry: "rohstoff", proc: { in: { erze: 0.3, wasser: 0.3 }, out: "ziegel", rate: 10/30 } },
   betonwerk:  { name: "Betonwerk",         cost: 4000, out: null, rate: 0, zone: "industrie", industry: "rohstoff", proc: { in: { erze: 0.8, oel: 0.2 },    out: "beton",  rate: 10/30 } },
   /* Verkaufsgebäude (Shops): Ware + Stückpreis selbst festlegen; verkauft
    * dann passiv. Tempo hängt vom Preis ab: bei Ø-Kurs = volle Rate, teurer
@@ -141,7 +149,7 @@ const BTYPES = {
   baeckerei:  { name: "Bäckerei",    cost: 3400, out: null, rate: 0, zone: "zentrum",   industry: "agrar",    proc: { in: { obst: 1.1, honig: 0.35 }, out: "gebaeck", rate: 10/30 } },
   stahlwerk:  { name: "Stahlwerk",   cost: 6000, out: null, rate: 0, zone: "industrie", industry: "rohstoff", proc: { in: { erze: 1.0, oel: 0.2 },  out: "stahl",   rate: 10/30 } },
   raffinerie: { name: "Raffinerie",  cost: 4200, out: null, rate: 0, zone: "industrie", industry: "versorger", proc: { in: { oel: 0.5 },             out: "diesel",  rate: 10/30 } },
-  chipfabrik: { name: "Chipfabrik",  cost: 3200, out: null, rate: 0, zone: "industrie", industry: "tech",      proc: { in: { silizium: 0.9, strom: 0.6 }, out: "elektronik", rate: 10/30 } },
+  chipfabrik: { name: "Chipfabrik",  cost: 3200, out: null, rate: 0, zone: "industrie", industry: "tech",      proc: { in: { silizium: 0.7, strom: 0.5 }, out: "elektronik", rate: 10/30 } },
   /* Fahrzeugbau der Technologie-Industrie: drei Antriebsarten, die jeweils eine
    * andere Industrie mitversorgen — Benzin zieht Öl, Diesel zieht die Raffinerie,
    * Elektro zieht Strom und viel Elektronik. Stahl braucht jedes davon. */
@@ -1460,11 +1468,21 @@ function runTick() {
       continue;
     }
     if (!bt.out) continue;
+    const stufe = levelMult(t.level);
     let mult = 1;
+    /* Boost-Verbrauch hängt an der Größe des Betriebs, nicht an einer festen
+     * Stückzahl. Vorher verschlang jeder Betrieb 1 Einheit JE TICK — bei der
+     * Mine also 60 Öl pro Minute, mehr als drei Viertel dessen, was eine ganze
+     * Ölpumpe fördert. Öl fehlte dadurch überall sonst: Stahlwerk und
+     * Raffinerie brauchen es zwingend, also gab es weder Stahl noch Diesel und
+     * damit auch keine Fahrzeuge. Obendrein war der Handel für die Mine ein
+     * sicheres Verlustgeschäft (8,80 $ Einsatz für 4,60 $ Mehrertrag) — sie tat
+     * es trotzdem, weil der Verbrauch automatisch läuft. */
     for (const r of bt.boosts || []) {
-      if (p.inv[r] >= 1) { p.inv[r] -= 1; mult += BOOST_MULT; }
+      const bedarf = bt.rate * stufe * 0.5;
+      if ((p.inv[r] || 0) >= bedarf) { p.inv[r] -= bedarf; mult += BOOST_MULT; }
     }
-    const menge = bt.rate * mult * levelMult(t.level);   // Elektronik-Upgrade: +30 %/Stufe
+    const menge = bt.rate * mult * stufe;   // Elektronik-Upgrade: +30 %/Stufe
     p.inv[bt.out] += menge;
     p.stats.produziert[bt.out] = (p.stats.produziert[bt.out] || 0) + menge;
   }
@@ -1601,6 +1619,15 @@ function runTick() {
         return true;
       });
       G.shareBids = G.shareBids.filter(b => b.companyId !== pid && b.bidderId !== pid);
+      /* Laufende Auktionen mitziehen. Das Gebot wurde beim Bieten bereits vom
+       * Konto abgebucht; verschwindet der Bieter, war es bisher trotzdem noch
+       * das Höchstgebot: Es blockierte günstigere Gebote, und am Ende griff
+       * mangels Spieler der "verfällt"-Zweig — das Gebäude war weg und der
+       * Gläubiger ging leer aus, obwohl ein gültiges Gebot vorlag. Jetzt wird
+       * die Auktion wieder freigegeben, damit sie noch einen Käufer findet. */
+      for (const a of G.auctions) {
+        if (a.bestBidder === pid) { a.bestBidder = null; a.bestBid = 0; }
+      }
       delete G.players[pid];
       io.emit("notice", { text: `${p.name} hat die Sitzung endgültig verlassen.` });
     }
@@ -1686,7 +1713,13 @@ const BOT_CFGS = [
 
   { name: "Stadtwerke",      industry: "versorger", color: "#38bdf8",
     plan: ["kontor", "wasserwerk", "werbeagentur", "windpark"], needs: [],
-    alwaysSell: ["wasser", "strom"] },
+    /* Öl gehört hier zwingend dazu. Der eigentliche Ölförderer "Nordsee Öl"
+     * ist der ZWEITE Versorger-Bot und läuft bei der Voreinstellung von einem
+     * Bot je Branche gar nicht mit. Stadtwerke baut zwar über die
+     * Produktabdeckung eine Ölpumpe, verbrauchte das Öl aber still in der
+     * eigenen Raffinerie — am Markt kam nie welches an. Ohne Öl steht das
+     * Stahlwerk, ohne Stahl gibt es keine Fahrzeuge. */
+    alwaysSell: ["wasser", "strom", "oel"] },
   /* Reiner Ölförderer: baut immer weiter Ölpumpen und stellt alles Geförderte
    * sofort in den Markt. Öl ist mit 8 $ das wertvollste Grundgut, deshalb bleibt
    * er auch auf "Schwer" bei höchstens vier Pumpen gedeckelt. Bewusste Ausnahme
@@ -1903,8 +1936,24 @@ async function spawnBot(cfg, lvl = BOT_LEVELS[BOT_LEVEL_DEFAULT]) {
       for (const g of bedarf) {
         if (me.inv[g] < 25 && me.cash > 1500 &&
             !st.orders.some(o => o.playerId === myId && o.side === "buy" && o.good === g)) {
-          await em("placeOrder", { side: "buy", good: g, qty: 10,
-            price: Math.max(0.05, Math.round(st.avg[g] * (lvl.kaufAufschlag - 0.03) * 100) / 100) });
+          /* Aufschlag statt Abschlag. Vorher wurde hier mit (kaufAufschlag - 0.03)
+           * geboten, also auf Stufe "Mittel" zu Ø × 0,97 — während Verkäufer zu
+           * Ø × 1,02 anboten. Die beiden Seiten kreuzten sich nie, und die Folgen
+           * zogen sich durch die ganze Runde: Die Ziegelei bekam kein Wasser, die
+           * Chipfabrik keinen Strom. Beide brauchen ihre Zutat zwingend (die
+           * Produktion rechnet mit dem Minimum über alle Inputs), also entstanden
+           * NULL Ziegel und NULL Elektronik, während sich Erz und Silizium
+           * ungenutzt stapelten. Da jedes Gebäude Ziegel kostet und jedes Upgrade
+           * Elektronik, konnte nach Verbrauch des Startmaterials niemand mehr
+           * bauen oder aufleveln. Baumaterial wurde ein paar Zeilen weiter oben
+           * schon immer mit (kaufAufschlag + 0.03) nachgefragt — hier fehlte
+           * schlicht dieselbe Logik. */
+          /* Bis zur eigenen Obergrenze auffüllen statt pauschal 10 Stück. Eine
+           * Chipfabrik verbrennt 36 Strom/Minute; mit 10 Stück je Zyklus (Takt
+           * 26 s) kamen höchstens 23 an — sie lief also selbst bei perfekt
+           * gefüllten Orders dauerhaft am Limit und stand die meiste Zeit still. */
+          await em("placeOrder", { side: "buy", good: g, qty: Math.max(10, Math.ceil(25 - (me.inv[g] || 0))),
+            price: Math.max(0.05, Math.round(st.avg[g] * (lvl.kaufAufschlag + 0.03) * 100) / 100) });
         }
       }
       /* Grundversorger-Bots: definierte Waren laufend abstoßen statt zu horten,
@@ -1939,6 +1988,49 @@ async function spawnBot(cfg, lvl = BOT_LEVELS[BOT_LEVEL_DEFAULT]) {
           await em("upgradeBuilding", { x: upgradable.x, y: upgradable.y });
         }
       }
+      /* VERALTETE EIGENE ORDERS ZURÜCKZIEHEN.
+       * Der Bot legt nur dann eine neue Order an, wenn für die Ware noch keine
+       * eigene offen ist. Wandert der Kurs danach weg, bleibt die alte für immer
+       * im Buch stehen — und blockiert die Ware, weil ja "schon eine da ist".
+       * Gemessen beim Öl: Ø-Kurs 6,47, eigenes Angebot noch bei 7,42 aus einer
+       * Zeit mit Ø 7,57, daneben 37 Stück Nachfrage bei 6,62–6,64. Beide Seiten
+       * waren da, trafen sich aber nie. Deshalb: was deutlich neben dem Markt
+       * liegt, wird storniert und beim nächsten Durchlauf frisch gestellt. */
+      for (const o of st.orders.filter(o => o.playerId === myId)) {
+        const kurs = st.avg[o.good];
+        if (!kurs) continue;
+        /* Eng gefasst, weil die Bots selbst nur in einem schmalen Band handeln:
+         * Sie bieten zu Ø×1,03 und stellen zu Ø×0,98–1,02 an. Eine Toleranz von
+         * ±10 % war dadurch wirkungslos — gemessen lagen Angebot bei Ø×1,069 und
+         * Gebot bei Ø×0,989, also 8 % auseinander und trotzdem beide "in Ordnung".
+         * Sie standen sich gegenüber, ohne sich je zu treffen. */
+        const daneben = o.side === "sell" ? o.price > kurs * 1.05 : o.price < kurs * 1.00;
+        if (daneben) await em("cancelOrder", { orderId: o.id });
+      }
+      /* ZUERST ECHTE NACHFRAGE BEDIENEN.
+       * Die generische Regel darunter verlangt 18 Stück auf Lager. Verarbeitete
+       * Waren erreichen diese Schwelle nie: Der Bot verbaut seine Ziegel selbst
+       * und verbraucht seine Elektronik fürs Aufleveln, er pendelt also dauerhaft
+       * darunter. Das Ergebnis war ein Markt, auf dem Ziegel und Elektronik
+       * ständig nachgefragt, aber nie angeboten wurden — und in dem niemand mehr
+       * bauen oder aufleveln konnte, sobald das Startmaterial aufgebraucht war.
+       * Liegt ein fremdes Kaufgebot vor und ist mehr als die eigene Reserve da,
+       * wird jetzt verkauft: höchstes Gebot zuerst. */
+      /* Reserve gestaffelt: Von Baumaterial bleibt genug für das nächste eigene
+       * Gebäude liegen (sonst verkauft der Bot seine Ziegel und muss sie gleich
+       * darauf teurer zurückkaufen), von allem anderen nur ein kleiner Rest.
+       * Elektronik pendelte in der Messung um 9 Stück — mit einer pauschalen
+       * Reserve von 6 wären davon nur 3 je Zyklus in den Markt gegangen, zu
+       * wenig, um die Nachfrage je einzuholen. */
+      const reserveFuer = g => (g === "ziegel" || g === "beton") ? 12 : 3;
+      const gesucht = st.orders
+        .filter(o => o.side === "buy" && o.playerId !== myId &&
+                     (me.inv[o.good] || 0) > reserveFuer(o.good) + 1)
+        .sort((a, b) => b.price - a.price)[0];
+      if (gesucht) {
+        const menge = Math.min(gesucht.qty, Math.floor((me.inv[gesucht.good] || 0) - reserveFuer(gesucht.good)));
+        if (menge >= 1) await em("takeOrder", { orderId: gesucht.id, qty: menge });
+      }
       /* BÖRSE BEFÜLLEN ohne Überschuss: nur wenn das Buch dünn ist */
       for (const g of Object.keys(me.inv)) {
         if (me.inv[g] < 18) continue;
@@ -1963,14 +2055,11 @@ const PORT = process.env.PORT || 3000;
 httpServer.listen(PORT, async () => {
   console.log(`Capital Sandbox Server → http://localhost:${PORT}`);
   for (const u of lanUrls(PORT)) console.log(`  Einladungslink (LAN): ${u}`);
+  /* Früher spannte "--share" hier einen localtunnel auf. Das Paket ist raus:
+   * es schleppte zwei hochbewertete Sicherheitslücken (axios) mit und wurde
+   * überflüssig, seit es eine eigene öffentliche Adresse gibt. */
   if (process.argv.includes("--share")) {
-    try {
-      const { default: localtunnel } = await import("localtunnel");
-      const tunnel = await localtunnel({ port: PORT });
-      publicUrl = tunnel.url;
-      console.log(`  Einladungslink (öffentlich): ${publicUrl}`);
-    } catch (e) {
-      console.log(`  Tunnel nicht verfügbar (${e.message}) — LAN-Link nutzen.`);
-    }
+    console.log("  Hinweis: --share gibt es nicht mehr. Für öffentliche Runden das Gateway");
+    console.log("  hinter der eigenen Domain betreiben (npm run gateway), im Heimnetz genügt der LAN-Link.");
   }
 });

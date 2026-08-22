@@ -12,7 +12,7 @@ räumt alte Server weg, startet und öffnet den Browser:
 ./start.sh
 ```
 
-Varianten: `./start.sh --share` (öffentlicher Link), `BOT=0 ./start.sh` (ohne KI-Mitspieler).
+Variante: `BOT=0 ./start.sh` (ohne KI-Mitspieler).
 
 Alternativ klassisch (Node ≥ 18 vorausgesetzt, `brew install node`):
 
@@ -24,16 +24,13 @@ npm start
 Danach im Browser: `http://localhost:3000`.
 
 **Mitspieler einladen:** Der Join-Screen zeigt einen kopierbaren Einladungslink
-(die LAN-Adresse des Hosts, funktioniert für alle im selben WLAN).
-Für einen öffentlichen Link, der auch außerhalb des Netzwerks funktioniert:
+(die LAN-Adresse des Hosts, funktioniert für alle im selben WLAN). Wer von
+außerhalb mitspielen soll, verbindet sich über eine öffentlich erreichbare
+Instanz — siehe Gateway-Modus weiter unten.
 
-```bash
-npm run share
-```
-
-Das öffnet einen localtunnel und zeigt die `https://…`-URL im Terminal und
-im Join-Screen an. Hinweis: localtunnel ist ein Fremd-Dienst — für private
-Runden okay, für mehr Kontrolle eigenen Reverse-Proxy/Tailscale nutzen.
+Das frühere `npm run share` gibt es nicht mehr: Es hing an `localtunnel`, das
+zwei hochbewertete Sicherheitslücken mitbrachte und seit dem Gateway hinter
+einer eigenen Domain überflüssig ist.
 
 ## Mehrere gleichzeitige Runden (Gateway-Modus, für einen echten Server)
 
@@ -53,8 +50,9 @@ komplett isolierten `server.js`-Kindprozess auf einem internen Port
 hochfahren und vergibt einen 5-stelligen Code. Mitspieler geben diesen Code
 unter „Einer Runde beitreten" ein (oder öffnen einen Link mit `?code=…`) und
 werden transparent — inklusive WebSocket — zur richtigen Runde durchgereicht.
-Nach Erreichen von `WIN_NW` oder `ROOM_IDLE_MIN` Minuten Leerlauf wird eine
-Runde automatisch wieder beendet.
+Eine Runde wird beendet, sobald `ROOM_IDLE_MIN` Minuten lang niemand mehr
+verbunden war. Der Sieg selbst beendet den Prozess nicht — die Abschlusstafel
+bleibt stehen, bis der letzte Spieler gegangen ist.
 
 `server.js` selbst bleibt dabei unverändert — die Isolation kommt allein
 daher, dass jede Runde ein eigener echter Betriebssystemprozess ist, kein

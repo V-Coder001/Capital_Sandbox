@@ -49,10 +49,10 @@ if lsof -ti ":$PORT" >/dev/null 2>&1; then
   sleep 1
 fi
 
-# ---- 4. Starten (öffentlicher Link standardmäßig an) ----
-ARGS="--share"
-[ "$1" = "--lan" ] && ARGS=""
-"$NODE" server.js $ARGS > "$LOG" 2>&1 &
+# ---- 4. Starten ----
+# Der frühere öffentliche Tunnel (localtunnel) ist entfallen: zwei hohe
+# Sicherheitslücken, und seit dem Gateway hinter eigener Domain überflüssig.
+"$NODE" server.js > "$LOG" 2>&1 &
 SERVER_PID=$!
 trap "kill $SERVER_PID 2>/dev/null; exit 0" INT TERM EXIT
 
@@ -62,32 +62,15 @@ for i in $(seq 1 30); do
   sleep 0.5
 done
 
-# ---- 6. Auf den öffentlichen Link warten (max. 15 s), dann Übersicht ----
-PUBLIC=""
-if [ "$ARGS" = "--share" ]; then
-  echo "→ Erzeuge öffentlichen Einladungslink …"
-  for i in $(seq 1 30); do
-    PUBLIC=$(grep -o 'https://[a-z0-9-]*\.loca\.lt' "$LOG" | head -1 || true)
-    [ -n "$PUBLIC" ] && break
-    sleep 0.5
-  done
-fi
+# ---- 6. Übersicht ----
 IP=$(ipconfig getifaddr en0 2>/dev/null || ipconfig getifaddr en1 2>/dev/null || echo "")
 
 echo ""
 echo "════════════════════════════════════════════════════"
 echo "  🏙️  Capital Sandbox läuft!"
 echo ""
-if [ -n "$PUBLIC" ]; then
-echo "  👉 DIESEN LINK TEILEN (funktioniert überall):"
-echo "     $PUBLIC"
-echo ""
-[ -n "$IP" ] && echo "  Schneller im gleichen WLAN:  http://$IP:$PORT"
-else
 [ -n "$IP" ] && echo "  👉 DIESEN LINK TEILEN (gleiches WLAN):  http://$IP:$PORT"
 [ -z "$IP" ] && echo "  (Keine Netzwerk-IP gefunden — nur lokal spielbar)"
-[ "$ARGS" = "--share" ] && echo "  (Öffentlicher Tunnel kam nicht zustande — WLAN-Link nutzen)"
-fi
 echo ""
 echo "  Du selbst:  http://localhost:$PORT  (öffnet sich gleich)"
 echo "  Beenden:    Ctrl+C"
