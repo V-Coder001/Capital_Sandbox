@@ -1533,22 +1533,28 @@ document.getElementById("jname").addEventListener("keydown", e => { if (e.key ==
  * dasselbe Motiv. Auf schmalen Fenstern blendet CSS sie ganz aus; der Timer
  * läuft dann trotzdem, kostet aber praktisch nichts (ein Wechsel alle 9 s). */
 (function plakate() {
-  const MOTIVE = ["bank", "kontor", "mine"];
+  const MOTIVE = ["bank", "kontor", "mine", "autowerk", "oelpumpe", "wasserwerk", "windpark"];
   const links = document.getElementById("posterL"), rechts = document.getElementById("posterR");
   if (!links || !rechts) return;
-  /* Vorladen, damit beim Einblenden nicht kurz eine leere Fläche steht */
-  MOTIVE.forEach(m => { const i = new Image(); i.src = `assets/poster/${m}.jpg`; });
+  const url = n => `assets/poster/${MOTIVE[((n % MOTIVE.length) + MOTIVE.length) % MOTIVE.length]}.jpg`;
 
-  let i = 0;
-  const setzen = (el, n) => {
-    el.style.backgroundImage = `url("assets/poster/${MOTIVE[n % MOTIVE.length]}.jpg")`;
-    el.classList.add("da");
-  };
-  setzen(links, 0);
-  setzen(rechts, 1);
+  /* Zufälliger Einstieg, damit nicht bei jedem Seitenaufruf dieselben zwei
+   * Motive begrüßen — bei sieben Plakaten lohnt sich das. */
+  let i = Math.floor(Math.random() * MOTIVE.length);
+  const setzen = (el, n) => { el.style.backgroundImage = `url("${url(n)}")`; el.classList.add("da"); };
+  setzen(links, i);
+  setzen(rechts, i + 1);
+
+  /* Nur die beiden sichtbaren laden sofort; der Rest erst, wenn der Browser
+   * ohnehin nichts Wichtigeres zu tun hat. Alle sieben auf einmal (740 KB)
+   * würden sonst mit dem eigentlichen Seitenaufbau konkurrieren. */
+  const nachladen = () => MOTIVE.forEach((_, n) => { new Image().src = url(n); });
+  (window.requestIdleCallback || (f => setTimeout(f, 2500)))(nachladen);
 
   setInterval(() => {
-    /* Immer nur eine Seite tauschen — beide gleichzeitig wirkt unruhig. */
+    /* Immer nur eine Seite tauschen — beide gleichzeitig wirkt unruhig.
+     * Die andere Seite hält dabei stets das vorherige Motiv, links und rechts
+     * zeigen dadurch nie dasselbe. */
     const el = (i % 2 === 0) ? links : rechts;
     el.classList.remove("da");
     setTimeout(() => setzen(el, i + 2), 1100);   // erst nach dem Ausblenden wechseln
