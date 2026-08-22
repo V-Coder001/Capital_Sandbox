@@ -532,6 +532,7 @@ td:first-child{font-family:var(--font)}
       <div id="players"></div>
       <span id="cash">$0</span>
       <div id="lvlwrap"><small>Level <span id="lvl">1</span></small><div id="xpbar"><div id="xpfill"></div></div></div>
+      <button id="roomCodeTop" title="Rundencode kopieren — zeig ihn weiteren Mitspielern" style="display:none;background:none;border:1px solid var(--line);border-radius:7px;color:var(--dim);height:24px;cursor:pointer;padding:0 8px;font:11px/1 ui-monospace,monospace;letter-spacing:.05em"></button>
       <button id="music" title="Musik an/aus" style="background:none;border:1px solid var(--line);border-radius:7px;color:var(--dim);width:24px;height:24px;cursor:pointer;display:grid;place-items:center;padding:0"></button>
       <input id="musicVol" type="range" min="0" max="100" value="22" title="Lautstärke" style="width:56px;accent-color:var(--accent);vertical-align:middle">
       <button id="help" title="Tutorial erneut ansehen" style="background:none;border:1px solid var(--line);border-radius:7px;color:var(--dim);width:24px;height:24px;cursor:pointer;font-size:13px">?</button>
@@ -1133,7 +1134,27 @@ function enterGame(res) {
   document.getElementById("join").style.display = "none";
   initSelects();
   MUSIC.start();
+  updateRoomCodeTop();
 }
+/* Der Rundencode wird sonst nur auf dem Join-Screen gezeigt — sobald man den
+ * einmal verlassen hat, gibt es keine Möglichkeit mehr, weitere Mitspieler
+ * einzuladen. Diese Kopfzeilen-Schaltfläche hält ihn während der ganzen
+ * Runde erreichbar. */
+function updateRoomCodeTop() {
+  const btn = document.getElementById("roomCodeTop");
+  if (!btn) return;
+  if (!MULTIROOM || !myRoomCode) { btn.style.display = "none"; return; }
+  btn.style.display = "";
+  btn.textContent = myRoomCode;
+}
+document.getElementById("roomCodeTop").addEventListener("click", async () => {
+  const btn = document.getElementById("roomCodeTop");
+  if (!myRoomCode) return;
+  try { await navigator.clipboard.writeText(myRoomCode); } catch {}
+  const orig = myRoomCode;
+  btn.textContent = "Kopiert";
+  setTimeout(() => { btn.textContent = orig; }, 1600);
+});
 function doRegister(name) {
   socket.emit("register", { name, color: myColor, winGoal: +document.getElementById("jgoal").value,
                             industry: myIndustry, bots: botCounts, botLevel }, res => {
