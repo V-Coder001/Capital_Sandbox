@@ -1333,7 +1333,10 @@ io.on("connection", socket => {
   socket.on("chat", guard((p, { room, text }, ack) => {
     if (!ROOMS.includes(room)) return ack?.({ error: "Raum unbekannt" });
     text = String(text || "").slice(0, 300);
-    if (!text.trim()) return;
+    /* Auch dieser Fall muss quittiert werden. Ein blankes return ließ die
+     * Ack-Funktion des Clients für immer offen: wer darauf wartet, hängt, und
+     * socket.io hält den Rückruf bis zum Verbindungsende im Speicher. */
+    if (!text.trim()) return ack?.({ error: "Leere Nachricht" });
     const msg = { who: p.name, color: p.color, text, ts: Date.now() };
     G.chat[room].push(msg); if (G.chat[room].length > 100) G.chat[room].shift();
     io.emit("chat", { room, msg });
