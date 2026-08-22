@@ -322,6 +322,9 @@ const G = {
   chat: Object.fromEntries(ROOMS.map(r => [r, []])),
   contracts: [],        // {id, fromId, toId, good, qty, price, status}
   tick: 0, winner: null, report: null,
+  /* Warteraum: die Runde läuft erst, wenn der Host sie startet — bis dahin
+   * sammeln sich die Mitspieler, ohne dass Produktion oder Bots anlaufen. */
+  started: false, hostId: null,
   groupOrder: null, nextGroupIn: 20,   // erster Stadt-Auftrag nach 20 s
   shareListings: [],     // {id, companyId, sellerId, count(1-4 = 25%-Schritte), price, ts, toId}
   shareBids: [],         // Kaufanfragen an eine Firma: {id, companyId, bidderId, count, price, ttl}
@@ -649,6 +652,8 @@ function snapshot() {
   const rankOf = Object.fromEntries(ranked.map(([pid], i) => [pid, i + 1]));
   return {
     tick: G.tick, winner: G.winner, winGoal: WIN_NW, report: G.report || null,
+    started: G.started, hostId: G.hostId,
+    lobby: G.started ? null : { winGoal: WIN_NW, bots: botAuswahl, botLevel: botLevelKey },
     map: G.map.map(t => ({ x: t.x, y: t.y, zone: t.zone, road: t.road, water: t.water,
       park: t.park, field: t.field, sand: t.sand, deep: t.deep, rock: t.rock,
       bank: t.bank, locked: t.locked, unlockCost: t.unlockCost, owner: t.owner, btype: t.btype, lien: t.lien, shop: t.shop, paused: t.paused, level: t.level })),
@@ -863,24 +868,48 @@ io.on("connection", socket => {
     if (!name) return ack?.({ error: "Name fehlt" });
     if (Object.values(G.players).some(p => p.name === name)) return ack?.({ error: "Name vergeben" });
     if (!INDUSTRIES[industry]) return ack?.({ error: "Bitte eine Industrie wählen" });
-    /* Erster Spieler der Runde (Host) darf das Rundenziel festlegen */
+    /* Der erste Spieler wird Host: seine Angaben vom Startbildschirm sind die
+     * Voreinstellung des Warteraums, die er dort bis zum Start noch ändern kann. */
     if (Object.keys(G.players).length === 0 && WIN_CHOICES.includes(+winGoal)) WIN_NW = +winGoal;
-    /* Bot-Aufstellung legt ebenfalls der erste Spieler fest — danach laufen die
-     * Bots bereits und eine Änderung wäre mitten in der Runde unfair. */
     if (Object.keys(G.players).length === 0) {
       if (bots && typeof bots === "object") botAuswahl = bots;
       if (BOT_LEVELS[botLevel]) botLevelKey = botLevel;
     }
     const pid = crypto.randomUUID();
+    const istErster = Object.keys(G.players).length === 0;
     G.players[pid] = newPlayer(pid, name, color || "#e8b544", industry, socket.id);
     G.socketToPid[socket.id] = pid;
     socket.data.registered = true;
-    /* Die 4 Industrie-Bots starten, sobald der erste Mensch in der Runde ist */
-    if (!botsStarted && Object.keys(G.players).length === 1) startBots();
+    if (istErster) G.hostId = pid;   // Host: darf im Warteraum einstellen und die Runde starten
     io.emit("notice", { text: `${name} ist der Sitzung beigetreten.` + (Object.keys(G.players).length === 1 ? ` Rundenziel: ${WIN_NW.toLocaleString("de-DE")} $` : "") });
     ack?.({ ok: true, goods: GOODS, btypes: BTYPES, rooms: ROOMS, you: pid, winGoal: WIN_NW, questDefs: QUESTS, industry, industries: INDUSTRIES,
       botLevels: Object.fromEntries(Object.entries(BOT_LEVELS).map(([k, v]) => [k, v.name])),
       retailFlow: Object.fromEntries(Object.keys(GOODS).map(k => [k, +retailFlow(k).toFixed(3)])) });
+    pushState();
+  });
+
+  /* ---------- Warteraum ----------
+   * Solange die Runde nicht gestartet ist, darf der Host Ziel und Bots noch
+   * ändern — anders als früher, wo beides beim Registrieren festgenagelt war
+   * und Mitspieler, die später dazukamen, nichts mehr davon mitbekamen. */
+  socket.on("lobbySettings", ({ winGoal, bots, botLevel }, ack) => {
+    const pid = G.socketToPid[socket.id];
+    if (!pid || pid !== G.hostId) return ack?.({ error: "Das darf nur der Host" });
+    if (G.started) return ack?.({ error: "Die Runde läuft schon" });
+    if (WIN_CHOICES.includes(+winGoal)) WIN_NW = +winGoal;
+    if (bots && typeof bots === "object") botAuswahl = bots;
+    if (BOT_LEVELS[botLevel]) botLevelKey = botLevel;
+    ack?.({ ok: true });
+    pushState();
+  });
+  socket.on("startRound", (_payload, ack) => {
+    const pid = G.socketToPid[socket.id];
+    if (!pid || pid !== G.hostId) return ack?.({ error: "Nur der Host startet die Runde" });
+    if (G.started) return ack?.({ ok: true });
+    G.started = true;
+    startBots();
+    io.emit("notice", { text: `Die Runde läuft — Ziel: ${WIN_NW.toLocaleString("de-DE")} $` });
+    ack?.({ ok: true });
     pushState();
   });
 
@@ -1210,6 +1239,7 @@ io.on("connection", socket => {
     G.lastTrade = {};
     G.chat = Object.fromEntries(ROOMS.map(r => [r, []]));
     G.tick = 0; G.winner = null; G.report = null;
+    G.started = false; G.hostId = null;   // neue Runde beginnt wieder im Warteraum
     G.groupOrder = null; G.nextGroupIn = 20;
     G.nextDividendIn = DIVIDEND_INTERVAL;
     /* Preisanker zurücksetzen — sonst startet die neue Runde mit den
@@ -1352,6 +1382,15 @@ io.on("connection", socket => {
     if (!p) return;
     p.disconnected = true; p.disconnectedAt = Date.now(); p.socketId = null;
     io.emit("notice", { text: `${p.name} hat die Verbindung verloren — kann wieder beitreten.` });
+    /* Verlässt der Host den Warteraum, bevor die Runde läuft, könnte sonst
+     * niemand mehr starten — die Wartenden säßen dauerhaft fest. */
+    if (!G.started && pid === G.hostId) {
+      const ersatz = Object.values(G.players).find(o => o.id !== pid && !o.disconnected);
+      if (ersatz) {
+        G.hostId = ersatz.id;
+        io.emit("notice", { text: `${ersatz.name} übernimmt als Host.` });
+      }
+    }
     pushState();
   });
 });
@@ -1366,6 +1405,7 @@ setInterval(() => {
   if (PERF) perf.maxTickMs = Math.max(perf.maxTickMs, Number(process.hrtime.bigint() - _t0) / 1e6);
 }, 1000);
 function runTick() {
+  if (!G.started) return;   // Warteraum: nichts produzieren, keine Fristen laufen lassen
   G.tick++;
   /* Produktion: Enabler-Rohstoffe im Lager boosten (und werden verbraucht) */
   for (const t of G.map) {

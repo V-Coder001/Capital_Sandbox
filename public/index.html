@@ -140,6 +140,26 @@ input,select{background:var(--panel2);border:1px solid var(--line);border-radius
 .copybtn.done{background:rgba(52,211,153,.15);border-color:var(--up);color:var(--up)}
 #hostCode{font-family:var(--mono);font-size:24px;font-weight:700;color:var(--accent);
   letter-spacing:.28em;text-shadow:0 0 20px rgba(56,189,248,.45)}
+/* ---- Warteraum: zwischen Anmeldung und Rundenstart ---- */
+#lobbyWait{position:fixed;inset:0;z-index:99;display:none;overflow:auto;padding:20px 16px;
+  background:#070b10;align-items:flex-start;justify-content:center}
+#lobbyWait.on{display:flex}
+#lobbyWait .card{width:min(520px,100%);margin:auto;
+  background:linear-gradient(160deg,#131c2b 0%,#0e1520 40%,#0c1220 100%);
+  border:1px solid #1e2d45;border-radius:22px;padding:26px 28px;
+  box-shadow:0 24px 80px rgba(0,0,0,.8)}
+#lobbyWait h2{font-size:20px;margin-bottom:4px}
+#lobbyWait .sub{color:var(--dim);font-size:12.5px;margin-bottom:16px}
+#lwCode{font-family:var(--mono);font-size:30px;font-weight:700;color:var(--accent);
+  letter-spacing:.3em;text-shadow:0 0 20px rgba(56,189,248,.45)}
+#lwPlayers{display:flex;flex-direction:column;gap:6px;margin:4px 0 2px}
+#lwPlayers .pl{display:flex;align-items:center;gap:9px;font-size:13px}
+#lwPlayers .dot{width:12px;height:12px;border-radius:4px;flex:none}
+#lwPlayers .tag{font-size:10px;color:#4a6080;font-weight:600;text-transform:uppercase;letter-spacing:.06em}
+#lwStart{width:100%;margin-top:16px}
+#lwHint{text-align:center;color:var(--dim);font-size:12.5px;margin-top:16px}
+#lwSettings{margin-top:12px}
+#lwSettings.hide{display:none}
 #jcode{text-align:center;text-transform:uppercase;font-family:var(--mono);font-size:22px;
   letter-spacing:.22em;padding:12px}
 /* Branchenkarten */
@@ -519,6 +539,54 @@ td:first-child{font-family:var(--font)}
     </div>
   </div>
 
+</div></div>
+
+<div id="lobbyWait"><div class="card">
+  <h2>Warteraum</h2>
+  <p class="sub" id="lwSub">Sobald alle da sind, startet der Host die Runde.</p>
+
+  <div class="joinbox" id="lwCodeBox">
+    <div class="lbl">Rundencode — den brauchen deine Mitspieler</div>
+    <div class="row" style="justify-content:space-between">
+      <span id="lwCode">—</span>
+      <button class="copybtn" id="lwCodeCopy" type="button">Kopieren</button>
+    </div>
+  </div>
+
+  <div class="joinbox">
+    <div class="lbl">Wer ist da — <span id="lwCount">0</span>/8</div>
+    <div id="lwPlayers"></div>
+  </div>
+
+  <div class="joinbox" id="lwSettings">
+    <div class="lbl">Einstellungen — legst du als Host fest</div>
+    <div class="row" style="gap:8px">
+      <select id="lwGoal" style="flex:1">
+        <option value="100000">$100.000 — schnelle Runde, etwa eine Stunde</option>
+        <option value="250000">$250.000 — der Klassiker, etwa zwei Stunden</option>
+        <option value="500000">$500.000 — ein langer Abend</option>
+        <option value="1000000">$1 Mio. — für Ausdauernde</option>
+        <option value="10000000">$10 Mio. — Marathon</option>
+      </select>
+    </div>
+    <div class="row" style="gap:8px;margin-top:8px">
+      <span class="tag" style="font-size:10px;color:#4a6080">BOTS</span>
+      <div class="pick" id="lwBotLevel" style="display:flex;gap:4px">
+        <button type="button" data-lvl="einfach">Einfach</button>
+        <button type="button" data-lvl="mittel" class="on">Mittel</button>
+        <button type="button" data-lvl="schwer">Schwer</button>
+      </div>
+    </div>
+    <div id="lwBotCounts" style="margin-top:8px">
+      <div class="botrow" data-b="agrar"><span>Agrar</span><div class="pick"><button type="button" data-n="0">0</button><button type="button" data-n="1" class="on">1</button><button type="button" data-n="2">2</button></div></div>
+      <div class="botrow" data-b="rohstoff"><span>Rohstoff</span><div class="pick"><button type="button" data-n="0">0</button><button type="button" data-n="1" class="on">1</button><button type="button" data-n="2">2</button></div></div>
+      <div class="botrow" data-b="versorger"><span>Versorger</span><div class="pick"><button type="button" data-n="0">0</button><button type="button" data-n="1" class="on">1</button><button type="button" data-n="2">2</button></div></div>
+      <div class="botrow" data-b="tech"><span>Technik</span><div class="pick"><button type="button" data-n="0">0</button><button type="button" data-n="1" class="on">1</button><button type="button" data-n="2">2</button></div></div>
+    </div>
+  </div>
+
+  <button class="go" id="lwStart">Runde starten</button>
+  <p id="lwHint">Der Host startet die Runde, sobald alle da sind.</p>
 </div></div>
 
 <canvas id="cv"></canvas>
@@ -1155,6 +1223,92 @@ document.getElementById("roomCodeTop").addEventListener("click", async () => {
   btn.textContent = "Kopiert";
   setTimeout(() => { btn.textContent = orig; }, 1600);
 });
+
+/* ---------- Warteraum ----------
+ * Zwischen Anmeldung und Rundenstart: alle sehen, wer schon da ist, der Host
+ * stellt Ziel und Bots ein und startet die Runde, wenn es losgehen soll. */
+const lwEl = document.getElementById("lobbyWait");
+const escapeHtml = s => String(s).replace(/[&<>"']/g, c =>
+  ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+let lwBotLevel = "mittel", lwBots = { agrar: 1, rohstoff: 1, versorger: 1, tech: 1 };
+let lwEigeneAenderung = 0;   // kurz nach eigener Änderung nicht vom Server überschreiben lassen
+
+function lobbyWaitZeichnen() {
+  const { state, myId } = store.get();
+  if (!state || !myId) return;
+  if (state.started) { lwEl.classList.remove("on"); return; }
+  lwEl.classList.add("on");
+
+  const istHost = state.hostId === myId;
+  document.getElementById("lwCodeBox").style.display = (MULTIROOM && myRoomCode) ? "" : "none";
+  document.getElementById("lwCode").textContent = myRoomCode || "—";
+
+  const spieler = Object.values(state.players || {});
+  document.getElementById("lwCount").textContent = spieler.length;
+  document.getElementById("lwPlayers").innerHTML = spieler.map(p => `
+    <div class="pl">
+      <span class="dot" style="background:${p.color}"></span>
+      <span>${escapeHtml(p.name)}</span>
+      ${p.id === state.hostId ? '<span class="tag">Host</span>' : ""}
+      ${p.id === myId ? '<span class="tag">du</span>' : ""}
+    </div>`).join("") || '<div class="pl" style="color:var(--dim)">Noch niemand da.</div>';
+
+  document.getElementById("lwSettings").classList.toggle("hide", !istHost);
+  document.getElementById("lwStart").style.display = istHost ? "" : "none";
+  document.getElementById("lwHint").textContent = istHost
+    ? "Sobald du startest, laufen Produktion und Bots los — Einstellungen sind dann fest."
+    : "Der Host startet die Runde, sobald alle da sind.";
+
+  /* Nicht-Host sieht die Einstellungen des Hosts live mitlaufen; beim Host
+   * selbst würde ein Überschreiben kurz nach dem eigenen Klick zurückspringen. */
+  if (state.lobby && Date.now() - lwEigeneAenderung > 1500) {
+    document.getElementById("lwGoal").value = String(state.lobby.winGoal);
+    if (state.lobby.botLevel) lwBotLevel = state.lobby.botLevel;
+    if (state.lobby.bots) lwBots = { ...lwBots, ...state.lobby.bots };
+    lwPickerSpiegeln();
+  }
+}
+function lwPickerSpiegeln() {
+  document.querySelectorAll("#lwBotLevel button").forEach(b =>
+    b.classList.toggle("on", b.dataset.lvl === lwBotLevel));
+  document.querySelectorAll("#lwBotCounts .botrow").forEach(row => {
+    const n = lwBots[row.dataset.b] ?? 1;
+    row.querySelectorAll("button").forEach(b => b.classList.toggle("on", +b.dataset.n === n));
+  });
+}
+function lwSettingsSenden() {
+  lwEigeneAenderung = Date.now();
+  socket.emit("lobbySettings", {
+    winGoal: +document.getElementById("lwGoal").value,
+    bots: lwBots, botLevel: lwBotLevel,
+  });
+}
+document.getElementById("lwGoal").addEventListener("change", lwSettingsSenden);
+document.getElementById("lwBotLevel").addEventListener("click", e => {
+  const b = e.target.closest("button[data-lvl]"); if (!b) return;
+  lwBotLevel = b.dataset.lvl; lwPickerSpiegeln(); lwSettingsSenden();
+});
+document.getElementById("lwBotCounts").addEventListener("click", e => {
+  const b = e.target.closest("button[data-n]"); if (!b) return;
+  lwBots[b.closest(".botrow").dataset.b] = +b.dataset.n;
+  lwPickerSpiegeln(); lwSettingsSenden();
+});
+document.getElementById("lwCodeCopy").addEventListener("click", async () => {
+  const btn = document.getElementById("lwCodeCopy");
+  if (!myRoomCode) return;
+  try { await navigator.clipboard.writeText(myRoomCode); } catch {}
+  btn.textContent = "Kopiert"; btn.classList.add("done");
+  setTimeout(() => { btn.textContent = "Kopieren"; btn.classList.remove("done"); }, 1600);
+});
+document.getElementById("lwStart").addEventListener("click", () => {
+  const btn = document.getElementById("lwStart");
+  btn.disabled = true; btn.textContent = "Startet …";
+  socket.emit("startRound", {}, res => {
+    btn.disabled = false; btn.textContent = "Runde starten";
+    if (res?.error) toast(res.error, true);
+  });
+});
+store.subscribe(lobbyWaitZeichnen);
 function doRegister(name) {
   socket.emit("register", { name, color: myColor, winGoal: +document.getElementById("jgoal").value,
                             industry: myIndustry, bots: botCounts, botLevel }, res => {
@@ -1166,6 +1320,16 @@ function doRegister(name) {
     try { localStorage.setItem(TOKEN_KEY, MULTIROOM ? JSON.stringify({ code: myRoomCode, token: res.you }) : res.you); } catch {}
     enterGame(res);
     TUT = buildTut(res.industry || "agrar");   // Tutorial passend zur gewählten Industrie
+    tutErstBeiRundenstart();
+  });
+}
+/* Das Tutorial führt durchs Bauen — im Warteraum ginge das ins Leere, weil
+ * noch nichts produziert wird. Also erst zeigen, wenn die Runde wirklich läuft. */
+function tutErstBeiRundenstart() {
+  if (store.get().state?.started) { tutShow(0); return; }
+  const ab = store.subscribe(() => {
+    if (!store.get().state?.started) return;
+    ab?.();
     tutShow(0);
   });
 }
