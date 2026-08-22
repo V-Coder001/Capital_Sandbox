@@ -144,22 +144,58 @@ input,select{background:var(--panel2);border:1px solid var(--line);border-radius
 #lobbyWait{position:fixed;inset:0;z-index:99;display:none;overflow:auto;padding:20px 16px;
   background:#070b10;align-items:flex-start;justify-content:center}
 #lobbyWait.on{display:flex}
-#lobbyWait .card{width:min(520px,100%);margin:auto;
+#lobbyWait .card{position:relative;width:min(540px,100%);margin:auto;
   background:linear-gradient(160deg,#131c2b 0%,#0e1520 40%,#0c1220 100%);
-  border:1px solid #1e2d45;border-radius:22px;padding:26px 28px;
-  box-shadow:0 24px 80px rgba(0,0,0,.8)}
-#lobbyWait h2{font-size:20px;margin-bottom:4px}
-#lobbyWait .sub{color:var(--dim);font-size:12.5px;margin-bottom:16px}
+  border:1px solid #1e2d45;border-radius:22px;padding:24px 26px 22px;
+  box-shadow:0 0 0 1px rgba(56,189,248,.06), 0 24px 80px rgba(0,0,0,.8)}
+#lwHead{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:3px}
+#lobbyWait h2{font-size:20px}
+#lwPulse{display:flex;align-items:center;gap:7px;font-family:var(--mono);font-size:10.5px;
+  color:#4a6080;text-transform:uppercase;letter-spacing:.07em;white-space:nowrap}
+#lobbyWait .sub{color:var(--dim);font-size:12.5px;margin-bottom:15px}
+
+/* Code: der wichtigste Inhalt des Screens — bekommt entsprechend Gewicht */
+#lwCodeBox{background:linear-gradient(135deg,rgba(56,189,248,.07),rgba(56,189,248,.02));
+  border-color:#1d3a52}
 #lwCode{font-family:var(--mono);font-size:30px;font-weight:700;color:var(--accent);
   letter-spacing:.3em;text-shadow:0 0 20px rgba(56,189,248,.45)}
-#lwPlayers{display:flex;flex-direction:column;gap:6px;margin:4px 0 2px}
+
+#lwPlayers{display:flex;flex-direction:column;gap:7px;margin-top:2px}
 #lwPlayers .pl{display:flex;align-items:center;gap:9px;font-size:13px}
-#lwPlayers .dot{width:12px;height:12px;border-radius:4px;flex:none}
-#lwPlayers .tag{font-size:10px;color:#4a6080;font-weight:600;text-transform:uppercase;letter-spacing:.06em}
-#lwStart{width:100%;margin-top:16px}
-#lwHint{text-align:center;color:var(--dim);font-size:12.5px;margin-top:16px}
-#lwSettings{margin-top:12px}
+#lwPlayers .dot{width:11px;height:11px;border-radius:4px;flex:none;
+  box-shadow:0 0 0 1px rgba(255,255,255,.13), 0 0 9px currentColor}
+#lwPlayers .tag{font-size:9.5px;color:#4a6080;font-weight:700;text-transform:uppercase;
+  letter-spacing:.07em;border:1px solid #1a2535;border-radius:5px;padding:1px 5px}
+#lwPlayers .leer{color:var(--dim);font-size:12.5px}
+
+/* Einstellungen: eigene Regeln, weil die des Startbildschirms an #join bzw.
+ * #botLevel hängen und hier sonst als nackte Browser-Buttons erscheinen. */
 #lwSettings.hide{display:none}
+.lwRow{display:flex;align-items:center;gap:9px;margin-bottom:9px}
+.lwRow>label{flex:none;width:52px;font-size:11px;color:#4a6080;font-weight:600;
+  text-transform:uppercase;letter-spacing:.06em}
+#lwGoal{flex:1;min-width:0}
+#lwBotLevel{display:inline-flex;padding:2px;background:#050810;border:1px solid #1a2535;border-radius:9px}
+#lwBotLevel button{padding:4px 12px;border:none;background:none;border-radius:7px;font-size:11px;
+  font-weight:600;color:#4a6080;cursor:pointer;font-family:var(--font);transition:all .16s}
+#lwBotLevel button:hover{color:#7e97b8}
+#lwBotLevel button.on{background:linear-gradient(135deg,#1e3a5a 0%,#164060 100%);color:var(--accent);
+  box-shadow:0 0 12px rgba(56,189,248,.18), inset 0 1px 0 rgba(56,189,248,.15)}
+#lwBotCounts{display:grid;grid-template-columns:1fr 1fr;gap:7px 14px}
+#lwBotCounts .botrow{justify-content:space-between;gap:9px}
+#lwBotCounts .botrow>span{font-size:11.5px;color:#8695ab}
+#lwBotSum{margin:10px 0 0;font-size:11.5px;color:var(--dim)}
+#lwBotSum b{color:#8695ab}
+
+/* Startknopf: dieselbe Optik wie "Firma gründen" auf dem Startbildschirm */
+#lwStart{position:relative;overflow:hidden;width:100%;border:none;border-radius:13px;padding:12px 0;
+  margin-top:15px;font-size:14.5px;font-weight:700;font-family:var(--font);cursor:pointer;
+  color:#04121e;background:linear-gradient(135deg,#7dd3fc 0%,#38bdf8 50%,#0ea5e9 100%);
+  box-shadow:0 6px 22px rgba(56,189,248,.3);transition:transform .16s, box-shadow .16s}
+#lwStart:hover:not(:disabled){transform:translateY(-1px);box-shadow:0 9px 28px rgba(56,189,248,.42)}
+#lwStart:disabled{opacity:.6;cursor:default}
+#lwHint{text-align:center;color:var(--dim);font-size:12px;margin-top:13px;line-height:1.5}
+@media(max-width:520px){#lwBotCounts{grid-template-columns:1fr}#lobbyWait .card{padding:20px 18px}}
 #jcode{text-align:center;text-transform:uppercase;font-family:var(--mono);font-size:22px;
   letter-spacing:.22em;padding:12px}
 /* Branchenkarten */
@@ -542,11 +578,14 @@ td:first-child{font-family:var(--font)}
 </div></div>
 
 <div id="lobbyWait"><div class="card">
-  <h2>Warteraum</h2>
+  <div id="lwHead">
+    <h2>Warteraum</h2>
+    <span id="lwPulse"><span class="pulse"><i></i><b></b></span><span id="lwPulseText">wartet</span></span>
+  </div>
   <p class="sub" id="lwSub">Sobald alle da sind, startet der Host die Runde.</p>
 
   <div class="joinbox" id="lwCodeBox">
-    <div class="lbl">Rundencode — den brauchen deine Mitspieler</div>
+    <div class="lbl">Rundencode für deine Mitspieler</div>
     <div class="row" style="justify-content:space-between">
       <span id="lwCode">—</span>
       <button class="copybtn" id="lwCodeCopy" type="button">Kopieren</button>
@@ -559,33 +598,35 @@ td:first-child{font-family:var(--font)}
   </div>
 
   <div class="joinbox" id="lwSettings">
-    <div class="lbl">Einstellungen — legst du als Host fest</div>
-    <div class="row" style="gap:8px">
-      <select id="lwGoal" style="flex:1">
-        <option value="100000">$100.000 — schnelle Runde, etwa eine Stunde</option>
-        <option value="250000">$250.000 — der Klassiker, etwa zwei Stunden</option>
-        <option value="500000">$500.000 — ein langer Abend</option>
-        <option value="1000000">$1 Mio. — für Ausdauernde</option>
-        <option value="10000000">$10 Mio. — Marathon</option>
+    <div class="lbl">Einstellungen</div>
+    <div class="lwRow">
+      <label for="lwGoal">Ziel</label>
+      <select id="lwGoal">
+        <option value="100000">$100.000 · etwa 1 Stunde</option>
+        <option value="250000">$250.000 · etwa 2 Stunden</option>
+        <option value="500000">$500.000 · langer Abend</option>
+        <option value="1000000">$1 Mio. · für Ausdauernde</option>
+        <option value="10000000">$10 Mio. · Marathon</option>
       </select>
     </div>
-    <div class="row" style="gap:8px;margin-top:8px">
-      <span class="tag" style="font-size:10px;color:#4a6080">BOTS</span>
-      <div class="pick" id="lwBotLevel" style="display:flex;gap:4px">
+    <div class="lwRow">
+      <label>Bots</label>
+      <div id="lwBotLevel">
         <button type="button" data-lvl="einfach">Einfach</button>
         <button type="button" data-lvl="mittel" class="on">Mittel</button>
         <button type="button" data-lvl="schwer">Schwer</button>
       </div>
     </div>
-    <div id="lwBotCounts" style="margin-top:8px">
+    <div id="lwBotCounts">
       <div class="botrow" data-b="agrar"><span>Agrar</span><div class="pick"><button type="button" data-n="0">0</button><button type="button" data-n="1" class="on">1</button><button type="button" data-n="2">2</button></div></div>
       <div class="botrow" data-b="rohstoff"><span>Rohstoff</span><div class="pick"><button type="button" data-n="0">0</button><button type="button" data-n="1" class="on">1</button><button type="button" data-n="2">2</button></div></div>
       <div class="botrow" data-b="versorger"><span>Versorger</span><div class="pick"><button type="button" data-n="0">0</button><button type="button" data-n="1" class="on">1</button><button type="button" data-n="2">2</button></div></div>
       <div class="botrow" data-b="tech"><span>Technik</span><div class="pick"><button type="button" data-n="0">0</button><button type="button" data-n="1" class="on">1</button><button type="button" data-n="2">2</button></div></div>
     </div>
+    <p id="lwBotSum">—</p>
   </div>
 
-  <button class="go" id="lwStart">Runde starten</button>
+  <button id="lwStart" type="button">Runde starten</button>
   <p id="lwHint">Der Host startet die Runde, sobald alle da sind.</p>
 </div></div>
 
@@ -1247,16 +1288,27 @@ function lobbyWaitZeichnen() {
   document.getElementById("lwCount").textContent = spieler.length;
   document.getElementById("lwPlayers").innerHTML = spieler.map(p => `
     <div class="pl">
-      <span class="dot" style="background:${p.color}"></span>
+      <span class="dot" style="background:${p.color};color:${p.color}"></span>
       <span>${escapeHtml(p.name)}</span>
       ${p.id === state.hostId ? '<span class="tag">Host</span>' : ""}
       ${p.id === myId ? '<span class="tag">du</span>' : ""}
-    </div>`).join("") || '<div class="pl" style="color:var(--dim)">Noch niemand da.</div>';
+    </div>`).join("") || '<div class="leer">Noch niemand da.</div>';
+
+  /* Solange man allein wartet, ist das Teilen des Codes der nächste Schritt —
+   * das soll der Screen auch sagen, statt neutral "wartet" anzuzeigen. */
+  const allein = spieler.length <= 1;
+  document.getElementById("lwPulseText").textContent =
+    allein ? "wartet auf Mitspieler" : `${spieler.length} bereit`;
+  document.getElementById("lwSub").textContent = istHost
+    ? (allein && MULTIROOM
+        ? "Schick deinen Mitspielern den Code — oder starte allein gegen die Bots."
+        : "Du bist Host: stell ein, was du willst, und starte, wenn alle da sind.")
+    : "Sobald alle da sind, startet der Host die Runde.";
 
   document.getElementById("lwSettings").classList.toggle("hide", !istHost);
   document.getElementById("lwStart").style.display = istHost ? "" : "none";
   document.getElementById("lwHint").textContent = istHost
-    ? "Sobald du startest, laufen Produktion und Bots los — Einstellungen sind dann fest."
+    ? "Mit dem Start laufen Produktion und Bots an — die Einstellungen sind dann fest."
     : "Der Host startet die Runde, sobald alle da sind.";
 
   /* Nicht-Host sieht die Einstellungen des Hosts live mitlaufen; beim Host
@@ -1268,6 +1320,11 @@ function lobbyWaitZeichnen() {
     lwPickerSpiegeln();
   }
 }
+const LW_LEVEL_TEXT = {
+  einfach: "bauen gemächlich, halten sich an der Börse zurück",
+  mittel:  "bauen zügig aus, leveln Gebäude auf, bieten bei Auktionen mit",
+  schwer:  "expandieren aggressiv, unterbieten dich und kaufen Anteile auf",
+};
 function lwPickerSpiegeln() {
   document.querySelectorAll("#lwBotLevel button").forEach(b =>
     b.classList.toggle("on", b.dataset.lvl === lwBotLevel));
@@ -1275,6 +1332,12 @@ function lwPickerSpiegeln() {
     const n = lwBots[row.dataset.b] ?? 1;
     row.querySelectorAll("button").forEach(b => b.classList.toggle("on", +b.dataset.n === n));
   });
+  /* Die vier Zahlenreihen allein sagen nicht, worauf man sich einlässt —
+   * diese Zeile fasst Anzahl und Spielweise in einem Satz zusammen. */
+  const summe = Object.values(lwBots).reduce((a, b) => a + b, 0);
+  document.getElementById("lwBotSum").innerHTML = summe === 0
+    ? "<b>Keine Bots</b> · ihr spielt die Runde nur untereinander"
+    : `<b>${summe} ${summe === 1 ? "Bot" : "Bots"}</b> · ${LW_LEVEL_TEXT[lwBotLevel] || ""}`;
 }
 function lwSettingsSenden() {
   lwEigeneAenderung = Date.now();
