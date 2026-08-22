@@ -1380,6 +1380,13 @@ io.on("connection", socket => {
     delete G.socketToPid[socket.id];
     const p = G.players[pid];
     if (!p) return;
+    /* Nach einem Verbindungsabriss meldet sich der Client sofort über eine neue
+     * Verbindung zurück (rejoin), während das "disconnect" der alten oft erst
+     * danach eintrifft. Ohne diese Prüfung setzte dieser Nachzügler socketId
+     * wieder auf null — der Spieler blieb dann zwar handlungsfähig (Aktionen
+     * laufen über socketToPid), bekam aber nie wieder ein "me": Bargeld und
+     * Lager standen für den Rest der Runde eingefroren da, ohne Fehlermeldung. */
+    if (p.socketId && p.socketId !== socket.id) return;
     p.disconnected = true; p.disconnectedAt = Date.now(); p.socketId = null;
     io.emit("notice", { text: `${p.name} hat die Verbindung verloren — kann wieder beitreten.` });
     /* Verlässt der Host den Warteraum, bevor die Runde läuft, könnte sonst

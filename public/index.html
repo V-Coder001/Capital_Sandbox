@@ -873,11 +873,23 @@ function reidentify(s) {
     toast("Verbindung wiederhergestellt.");
   });
 }
+/* Wächter gegen einen stillen Ausfall: Der Server schickt "me" (Bargeld, Lager)
+ * mindestens einmal pro Sekunde. Bleibt es trotz stehender Verbindung lange aus,
+ * kennt der Server unsere aktuelle Verbindung nicht mehr — dann stünden Bargeld
+ * und Lager wortlos eingefroren da. Ein erneutes rejoin richtet das sofort. */
+let letztesMe = 0;
+setInterval(() => {
+  if (!myToken || !socket?.connected) return;
+  if (!store.get().meta) return;                  // noch nicht im Spiel
+  if (Date.now() - letztesMe < 15000) return;
+  letztesMe = Date.now();                         // nicht im Sekundentakt erneut versuchen
+  socket.emit("rejoin", { token: myToken }, () => {});
+}, 5000);
 function bindSocketEvents(s) {
   s.on("connect", () => reidentify(s));        // direkte socket.io-Verbindung
   s.on("reconnected", () => reidentify(s));    // über die WebRTC-Bridge gemeldet
   s.on("state", state => store.set({ state: mergeState(state) }));
-  s.on("me", me => store.set({ me }));
+  s.on("me", me => { letztesMe = Date.now(); store.set({ me }); });
   s.on("notice", ({ text }) => toast(text));
   s.on("trade", t => toast(`${t.qty}× ${gname(t.good)} @ ${fmt(t.price)} (${t.seller} → ${t.buyer})`));
   s.on("chat", ({ room, msg }) => {
