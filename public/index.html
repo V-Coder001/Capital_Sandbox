@@ -2183,7 +2183,8 @@ document.getElementById("cSend").addEventListener("click", () => act("offerContr
  * Start beim Beitreten (Klick = erlaubte User-Geste für Autoplay).
  * ================================================================ */
 const MUSIC = (() => {
-  const tracks = [0, 1, 2, 3].sort(() => Math.random() - 0.5);
+  /* Nur Titel, deren Herkunft im Impressum belegt ist (siehe impressum.html) */
+  const tracks = [0, 1].sort(() => Math.random() - 0.5);
   let i = 0, started = false;
   const audio = new Audio();
   let vol = 22; try { const v = +localStorage.getItem("cs_vol"); if (v >= 0 && v <= 100) vol = v; } catch {}
