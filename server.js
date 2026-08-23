@@ -59,6 +59,9 @@ export const GOODS = {
   gebaeck:  { name: "Gebäck",      cat: "Verarbeitet" },
   diesel:   { name: "Diesel",      cat: "Verarbeitet" },
   uebernachtung: { name: "Übernachtung", cat: "Verarbeitet" },
+  munition: { name: "Munition",  cat: "Verarbeitet" },
+  pistole:  { name: "Pistole",   cat: "Rüstung" },
+  panzer:   { name: "Panzer",    cat: "Rüstung" },
   ziegel:   { name: "Ziegel",      cat: "Baumaterial" },
   beton:    { name: "Beton",       cat: "Baumaterial" },
   elektronik: { name: "Elektronik", cat: "Baumaterial" },
@@ -70,13 +73,18 @@ export const GOODS = {
  * eigener Absatzweg (Autohaus). Am Handelskontor wären sie mit dessen hoher
  * Grundrate ein Gelddrucker, deshalb sind sie dort ausgenommen. */
 const VEHICLES = ["benzinauto", "dieselauto", "eauto"];
+/* Rüstungsgüter laufen wie Fahrzeuge über einen eigenen Absatzweg. Am
+ * Handelskontor mit seiner hohen Grundrate wäre ein Panzer zu 640 $ ein
+ * Gelddrucker — derselbe Grund, aus dem Autos dort ausgenommen sind. */
+const WEAPONS = ["pistole", "panzer"];
 /* Preise so gesetzt, dass jede Veredelungsstufe echten Mehrwert schafft. Vorher
  * waren Ziegel (20) billiger als das Erz, aus dem sie entstehen (1,8 Erz = 28,8 $)
  * — Verarbeiten hat Wert VERNICHTET, und die Rohstoffindustrie, deren ganzes
  * Geschäft das Verarbeiten ist, konnte nicht gewinnen. */
 const BASEP = { strom: 1.8, wasser: 1.4, oel: 8, obst: 7, erze: 16, kannabis: 45, honig: 14, silizium: 20,
                 saft: 46, stahl: 115, medizin: 140, gebaeck: 70, diesel: 42, uebernachtung: 38, ziegel: 34, beton: 82, elektronik: 98,
-                benzinauto: 300, dieselauto: 360, eauto: 440 };
+                benzinauto: 300, dieselauto: 360, eauto: 440,
+                munition: 26, pistole: 110, panzer: 420 };
 
 /* Industrien: jeder Spieler wählt beim Beitritt EINE — nur deren Gebäude sind
  * baubar (Shops kann jeder). Erzwingt Handel: Agrar braucht Wasser/Strom von
@@ -88,6 +96,7 @@ const INDUSTRIES = {
   versorger: { name: "Grundbedürfnisse (Wasser, Energie, Öl)" },
   tech:      { name: "Technologie & Elektronik" },
   touristik: { name: "Touristik" },
+  ruestung:  { name: "Rüstungsindustrie" },
 };
 /* Baumaterial-Bedarf jedes Gebäudes: Ziegel immer, Beton ab $4.000. Elektronik
  * wird NICHT zum Bauen gebraucht, sondern zum Aufleveln bestehender Gebäude
@@ -186,8 +195,23 @@ const BTYPES = {
   markt:      { name: "Marktstand",        cost: 1000, out: null, rate: 0, zone: "zentrum",   retail: { slots: 1, base: 0.5, goods: ["obst", "saft", "honig", "gebaeck"] } },
   bauhandel:  { name: "Baustoffhandel",    cost: 2800, out: null, rate: 0, zone: "industrie", retail: { slots: 1, base: 0.8, goods: ["erze", "oel", "stahl", "ziegel", "beton", "diesel", "silizium", "elektronik"] } },
   laden:      { name: "Grüner Laden",      cost: 4500, out: null, rate: 0, zone: "zentrum",   retail: { slots: 1, base: 0.3, goods: ["kannabis", "medizin"] } },
-  kontor:     { name: "Handelskontor",     cost: 3500, out: null, rate: 0, zone: "zentrum",   retail: { slots: 2, base: 0.7, goods: Object.keys(GOODS).filter(g => !VEHICLES.includes(g)) } },
+  kontor:     { name: "Handelskontor",     cost: 3500, out: null, rate: 0, zone: "zentrum",   retail: { slots: 2, base: 0.7, goods: Object.keys(GOODS).filter(g => !VEHICLES.includes(g) && !WEAPONS.includes(g)) } },
   autohaus:   { name: "Autohaus",           cost: 5000, out: null, rate: 0, zone: "zentrum",   retail: { slots: 2, base: 0.30, goods: VEHICLES } },
+  /* ---- Rüstungsindustrie ----
+   * Die Branche am Ende der Kette: Sie verarbeitet, was Rohstoff und
+   * Technologie liefern, und erzeugt die wertvollsten Güter im Spiel. Ihre
+   * Werte sind auf 2,2x Wertschöpfung und rund fünf Minuten Amortisation
+   * gerechnet, also auf dem Niveau von Stahlwerk und Chipfabrik. Der Einstieg
+   * über die Munitionsfabrik ist billig und braucht nur Erze und Öl; wer
+   * Panzer bauen will, hängt dagegen an drei fremden Branchen gleichzeitig. */
+  munitionsfabrik: { name: "Munitionsfabrik", cost: 1400, out: null, rate: 0, zone: "industrie", industry: "ruestung",
+                     proc: { in: { erze: 0.18, oel: 0.13 }, out: "munition", rate: 10/30 } },
+  waffenschmiede:  { name: "Waffenschmiede",  cost: 4000, out: null, rate: 0, zone: "industrie", industry: "ruestung",
+                     proc: { in: { stahl: 0.055, elektronik: 0.030, munition: 0.075 }, out: "pistole", rate: 10/45 } },
+  panzerwerk:      { name: "Panzerwerk",      cost: 8000, out: null, rate: 0, zone: "industrie", industry: "ruestung",
+                     proc: { in: { stahl: 0.105, elektronik: 0.055, diesel: 0.070 }, out: "panzer", rate: 10/95 } },
+  waffenhandel:    { name: "Waffenhandel",    cost: 5200, out: null, rate: 0, zone: "zentrum",
+                     retail: { slots: 2, base: 0.30, goods: WEAPONS } },
   /* Werbeagentur: produziert nichts und verkauft nichts. Sie schaltet
    * Kampagnen frei, die den Preis anheben, den die Kundschaft in den EIGENEN
    * Läden ohne Tempoverlust akzeptiert. Darf jede Industrie bauen. */
@@ -1720,6 +1744,7 @@ const INDUSTRY_COVERAGE = {
   versorger: ["brunnen", "ewerk", "oelpumpe", "raffinerie"],
   tech:      ["siliziummine", "chipfabrik", "autowerk", "dieselwerk", "eautowerk"],
   touristik: ["campingplatz", "strandhotel"],
+  ruestung:  ["munitionsfabrik", "waffenschmiede", "panzerwerk"],
 };
 
 /* Genau zwei Bots je Branche — der Startbildschirm lässt je Branche 0, 1 oder 2
@@ -1765,6 +1790,17 @@ const BOT_CFGS = [
   { name: "Küstenperle",     industry: "touristik", color: "#2dd4bf",
     plan: ["campingplatz", "kontor", "strandhotel", "werbeagentur"], maxGebaeude: 4,
     needs: ["wasser", "strom"], alwaysSell: ["uebernachtung"] },
+
+  /* Rüstung: baut erst die billige Munitionsfabrik, damit früh Geld reinkommt,
+   * und kauft Stahl, Elektronik und Diesel für die teureren Stufen zu. */
+  { name: "Stahlfaust",      industry: "ruestung",  color: "#f43f5e",
+    plan: ["kontor", "munitionsfabrik", "waffenhandel", "werbeagentur"], maxGebaeude: 5,
+    /* Bewusst nur die Zutaten der ersten Stufen: Jede Ware in dieser Liste
+     * bindet beim Einkauf bis zu 25 Stück Kapital. Mit Stahl (115 $) und
+     * Elektronik (98 $) gleichzeitig war der Bot sofort klamm und kam über
+     * die Munitionsfabrik nie hinaus — gemessen: Bargeld 2001 → 1136 bei
+     * einem einzigen Gebäude. */
+    needs: ["erze", "oel", "stahl"], alwaysSell: ["munition"] },
 ];
 let botsStarted = false;
 /* Vom ersten Spieler der Runde gewählt (siehe register): wie viele Bots je
@@ -1988,28 +2024,48 @@ async function spawnBot(cfg, lvl = BOT_LEVELS[BOT_LEVEL_DEFAULT]) {
           for (const g of BTYPES[t.btype]?.boosts || []) bedarf.add(g);
         }
       }
+      /* Einkaufsbudget statt Mindestkasse. Vorher stand hier die Bedingung
+       * `me.cash > 1500` — eine harte Sperre, die einen Bot dauerhaft lahmlegen
+       * konnte: Gemessen an Stahlfaust, der nach dem Bau seiner Waffenschmiede
+       * bei 1356 $ landete. Damit kaufte er GAR NICHTS mehr, auch kein Erz und
+       * kein Öl für ein paar Dollar. Ohne Zutaten stand die Produktion, ohne
+       * Produktion kam kein Umsatz, und ohne Umsatz kam er nie wieder über die
+       * 1500 — sein Bargeld stand über 8 Minuten unverändert auf 1356.
+       * Zweiter Fehler am selben Ort: pauschal auf 25 Stück auffüllen. Bei
+       * Stahl (~115 $) ist das eine Order über 2875 $ — mehr, als der Bot
+       * überhaupt besitzt; die Order kam nie zustande oder hätte die Kasse in
+       * einem Zug geleert. Jetzt wird ein Budget je Zyklus verteilt und die
+       * Menge daran angepasst: teure Zutaten kommen eben in kleineren
+       * Portionen, statt dass gar nicht gehandelt wird. Die Reserve stellt
+       * sicher, dass weiter Geld fürs Bauen übrig bleibt. */
+      /* Anteil bewusst niedrig: Ein erster Anlauf mit 70 % des Bargelds hat die
+       * Falle zwar geöffnet, dafür aber das Sparen abgewürgt — Montan & Bau AG
+       * verplante bei 2248 $ je Zyklus 1364 $ für Zutaten und wuchs damit nie an
+       * sein Stahlwerk (6000 $) heran. Mit höchstens einem Drittel bleibt beides
+       * möglich: laufender Nachschub UND Rücklage fürs nächste Gebäude. */
+      let einkaufsbudget = Math.max(0, Math.min(me.cash - 300, me.cash * 0.35));
       for (const g of bedarf) {
-        if (me.inv[g] < 25 && me.cash > 1500 &&
-            !st.orders.some(o => o.playerId === myId && o.side === "buy" && o.good === g)) {
-          /* Aufschlag statt Abschlag. Vorher wurde hier mit (kaufAufschlag - 0.03)
-           * geboten, also auf Stufe "Mittel" zu Ø × 0,97 — während Verkäufer zu
-           * Ø × 1,02 anboten. Die beiden Seiten kreuzten sich nie, und die Folgen
-           * zogen sich durch die ganze Runde: Die Ziegelei bekam kein Wasser, die
-           * Chipfabrik keinen Strom. Beide brauchen ihre Zutat zwingend (die
-           * Produktion rechnet mit dem Minimum über alle Inputs), also entstanden
-           * NULL Ziegel und NULL Elektronik, während sich Erz und Silizium
-           * ungenutzt stapelten. Da jedes Gebäude Ziegel kostet und jedes Upgrade
-           * Elektronik, konnte nach Verbrauch des Startmaterials niemand mehr
-           * bauen oder aufleveln. Baumaterial wurde ein paar Zeilen weiter oben
-           * schon immer mit (kaufAufschlag + 0.03) nachgefragt — hier fehlte
-           * schlicht dieselbe Logik. */
-          /* Bis zur eigenen Obergrenze auffüllen statt pauschal 10 Stück. Eine
-           * Chipfabrik verbrennt 36 Strom/Minute; mit 10 Stück je Zyklus (Takt
-           * 26 s) kamen höchstens 23 an — sie lief also selbst bei perfekt
-           * gefüllten Orders dauerhaft am Limit und stand die meiste Zeit still. */
-          await em("placeOrder", { side: "buy", good: g, qty: Math.max(10, Math.ceil(25 - (me.inv[g] || 0))),
-            price: Math.max(0.05, Math.round(st.avg[g] * (lvl.kaufAufschlag + 0.03) * 100) / 100) });
-        }
+        if (me.inv[g] >= 25) continue;
+        if (st.orders.some(o => o.playerId === myId && o.side === "buy" && o.good === g)) continue;
+        /* Aufschlag statt Abschlag. Vorher wurde mit (kaufAufschlag - 0.03)
+         * geboten, also auf Stufe "Mittel" zu Ø × 0,97 — während Verkäufer zu
+         * Ø × 1,02 anboten. Die beiden Seiten kreuzten sich nie: die Ziegelei
+         * bekam kein Wasser, die Chipfabrik keinen Strom. Beide brauchen ihre
+         * Zutat zwingend (die Produktion rechnet mit dem Minimum über alle
+         * Inputs), also entstanden NULL Ziegel und NULL Elektronik, während
+         * sich Erz und Silizium ungenutzt stapelten. Da jedes Gebäude Ziegel
+         * kostet und jedes Upgrade Elektronik, konnte danach niemand mehr
+         * bauen oder aufleveln. */
+        const preis = Math.max(0.05, Math.round(st.avg[g] * (lvl.kaufAufschlag + 0.03) * 100) / 100);
+        /* Bis zur eigenen Obergrenze auffüllen statt pauschal 10 Stück. Eine
+         * Chipfabrik verbrennt 36 Strom/Minute; mit 10 Stück je Zyklus (Takt
+         * 26 s) kamen höchstens 23 an — sie lief also selbst bei perfekt
+         * gefüllten Orders dauerhaft am Limit und stand die meiste Zeit still. */
+        const wunsch = Math.max(10, Math.ceil(25 - (me.inv[g] || 0)));
+        const qty = Math.min(wunsch, Math.floor(einkaufsbudget / preis));
+        if (qty < 1) continue;
+        einkaufsbudget -= qty * preis;
+        await em("placeOrder", { side: "buy", good: g, qty, price: preis });
       }
       /* Grundversorger-Bots: definierte Waren laufend abstoßen statt zu horten,
        * damit der Markt für diese Güter nie trockenläuft (unabhängig davon, wie
