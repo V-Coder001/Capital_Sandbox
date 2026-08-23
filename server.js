@@ -52,6 +52,7 @@ export const GOODS = {
   medizin:  { name: "Medikamente", cat: "Verarbeitet" },
   gebaeck:  { name: "Gebäck",      cat: "Verarbeitet" },
   diesel:   { name: "Diesel",      cat: "Verarbeitet" },
+  uebernachtung: { name: "Übernachtung", cat: "Verarbeitet" },
   ziegel:   { name: "Ziegel",      cat: "Baumaterial" },
   beton:    { name: "Beton",       cat: "Baumaterial" },
   elektronik: { name: "Elektronik", cat: "Baumaterial" },
@@ -68,7 +69,7 @@ const VEHICLES = ["benzinauto", "dieselauto", "eauto"];
  * — Verarbeiten hat Wert VERNICHTET, und die Rohstoffindustrie, deren ganzes
  * Geschäft das Verarbeiten ist, konnte nicht gewinnen. */
 const BASEP = { strom: 1.8, wasser: 1.4, oel: 8, obst: 7, erze: 16, kannabis: 45, honig: 14, silizium: 20,
-                saft: 46, stahl: 115, medizin: 140, gebaeck: 70, diesel: 42, ziegel: 34, beton: 82, elektronik: 98,
+                saft: 46, stahl: 115, medizin: 140, gebaeck: 70, diesel: 42, uebernachtung: 38, ziegel: 34, beton: 82, elektronik: 98,
                 benzinauto: 300, dieselauto: 360, eauto: 440 };
 
 /* Industrien: jeder Spieler wählt beim Beitritt EINE — nur deren Gebäude sind
@@ -80,6 +81,7 @@ const INDUSTRIES = {
   rohstoff:  { name: "Rohstoff- & Bauindustrie" },
   versorger: { name: "Grundbedürfnisse (Wasser, Energie, Öl)" },
   tech:      { name: "Technologie & Elektronik" },
+  touristik: { name: "Touristik" },
 };
 /* Baumaterial-Bedarf jedes Gebäudes: Ziegel immer, Beton ab $4.000. Elektronik
  * wird NICHT zum Bauen gebraucht, sondern zum Aufleveln bestehender Gebäude
@@ -119,6 +121,23 @@ const BTYPES = {
   ewerk:      { name: "Elektrizitätswerk", cost: 2000, out: "strom",    rate: 5,    zone: "industrie", industry: "versorger" },
   wasserwerk: { name: "Wasserwerk",        cost: 1800, out: "wasser",   rate: 5,    zone: "industrie", industry: "versorger" },
   oelpumpe:   { name: "Ölpumpe",           cost: 2500, out: "oel",      rate: 1.2,  zone: "kueste",    industry: "versorger" },
+  /* ---- Touristik ----
+   * Die erste Branche, die vor allem VERBRAUCHT statt zu produzieren. Ein
+   * Strandhotel zieht 150 Wasser und 75 Strom pro Minute — zwei davon binden
+   * ein komplettes Wasserwerk. Genau das fehlte: Grundversorgung staute sich
+   * bisher ungenutzt an, weil es zu wenige Abnehmer gab. Nebenbei bekommt die
+   * Küstenzone endlich einen Zweck; bislang durften dort nur Ölpumpe und
+   * Windpark stehen. Werte auf 2,2x Wertschöpfung gerechnet, also auf dem
+   * Niveau von Ziegelei, Stahlwerk und Chipfabrik. */
+  /* Campingplatz bewusst aufs freie Agrarland statt an die Küste: Dort kostet
+   * jede Kachel 700 $ Freischaltung. Der Einstiegsbetrieb muss ohne Vorkasse
+   * erreichbar sein — sonst steckt die Branche in einem Teufelskreis fest
+   * (gemessen: der Bot verbaute sein ganzes Startkapital in Freischaltungen,
+   * konnte danach keinen Strom mehr kaufen, das Hotel stand still und ohne
+   * Produktion kam auch kein Geld nach). Die Küste bleibt dem Hotel. */
+  campingplatz: { name: "Campingplatz", cost: 1500, out: "uebernachtung", rate: 10/60, zone: "agrar", industry: "touristik" },
+  strandhotel:  { name: "Strandhotel",  cost: 2400, out: null, rate: 0, zone: "kueste", industry: "touristik",
+                  proc: { in: { wasser: 2.5, strom: 1.25 }, out: "uebernachtung", rate: 10/30 } },
   brunnen:    { name: "Brunnen",           cost: 800,  out: "wasser",   rate: 2.5,  zone: "agrar",     industry: "versorger" },
   windpark:   { name: "Windpark",          cost: 2200, out: "strom",    rate: 5,    zone: "kueste",    industry: "versorger" },
   /* Agrarwirtschaft */
@@ -1694,6 +1713,7 @@ const INDUSTRY_COVERAGE = {
   rohstoff:  ["mine", "ziegelei", "betonwerk", "stahlwerk"],
   versorger: ["brunnen", "ewerk", "oelpumpe", "raffinerie"],
   tech:      ["siliziummine", "chipfabrik", "autowerk", "dieselwerk", "eautowerk"],
+  touristik: ["campingplatz", "strandhotel"],
 };
 
 /* Genau zwei Bots je Branche — der Startbildschirm lässt je Branche 0, 1 oder 2
@@ -1732,6 +1752,13 @@ const BOT_CFGS = [
     plan: ["bauhandel", "siliziummine", "werbeagentur", "kontor"], needs: ["strom", "stahl", "oel"] },
   { name: "Volt & Silicon",  industry: "tech",      color: "#e879f9",
     plan: ["kontor", "siliziummine", "werbeagentur", "autohaus"], needs: ["strom", "stahl"] },
+
+  /* Touristik: kauft Wasser und Strom zu und verkauft Übernachtungen über ein
+   * eigenes Kontor. Bewusst nur einer — die Branche ist neu und soll den Markt
+   * erst einmal nicht dominieren. */
+  { name: "Küstenperle",     industry: "touristik", color: "#2dd4bf",
+    plan: ["campingplatz", "kontor", "strandhotel", "werbeagentur"], maxGebaeude: 4,
+    needs: ["wasser", "strom"], alwaysSell: ["uebernachtung"] },
 ];
 let botsStarted = false;
 /* Vom ersten Spieler der Runde gewählt (siehe register): wie viele Bots je
@@ -1919,6 +1946,28 @@ async function spawnBot(cfg, lvl = BOT_LEVELS[BOT_LEVEL_DEFAULT]) {
         if (block > 0 && b.price >= verlangt) await em("acceptShareBid", { bidId: b.id });
         else await em("declineShareBid", { bidId: b.id });
       }
+      /* VERALTETE EIGENE ORDERS ZURÜCKZIEHEN.
+       * Der Bot legt nur dann eine neue Order an, wenn für die Ware noch keine
+       * eigene offen ist. Wandert der Kurs danach weg, bleibt die alte für immer
+       * im Buch stehen — und blockiert die Ware, weil ja "schon eine da ist".
+       * Gemessen beim Öl: Ø-Kurs 6,47, eigenes Angebot noch bei 7,42 aus einer
+       * Zeit mit Ø 7,57, daneben 37 Stück Nachfrage bei 6,62–6,64. Beide Seiten
+       * waren da, trafen sich aber nie. Deshalb: was deutlich neben dem Markt
+       * liegt, wird storniert. Das passiert bewusst GANZ AM ANFANG des Durchlaufs:
+       * Stand es am Ende, sah der Bot beim Prüfen seines Bedarfs noch die alte
+       * Order, übersprang sie deshalb, und die frische kam erst einen Takt
+       * später — bei 26 Sekunden Takt driftete der Kurs derweil weiter davon. */
+      for (const o of st.orders.filter(o => o.playerId === myId)) {
+        const kurs = st.avg[o.good];
+        if (!kurs) continue;
+        /* Eng gefasst, weil die Bots selbst nur in einem schmalen Band handeln:
+         * Sie bieten zu Ø×1,03 und stellen zu Ø×0,98–1,02 an. Eine Toleranz von
+         * ±10 % war dadurch wirkungslos — gemessen lagen Angebot bei Ø×1,069 und
+         * Gebot bei Ø×0,989, also 8 % auseinander und trotzdem beide "in Ordnung".
+         * Sie standen sich gegenüber, ohne sich je zu treffen. */
+        const daneben = o.side === "sell" ? o.price > kurs * 1.05 : o.price < kurs * 1.00;
+        if (daneben) await em("cancelOrder", { orderId: o.id });
+      }
       /* BEDARF DECKEN: stehende Kauforders für die Inputs der eigenen Industrie.
        * Auf "Schwer" kommen die Boost-Rohstoffe der eigenen Gebäude dazu — Strom
        * und Wasser im Lager steigern die Produktion um bis zu 150 %, das ist der
@@ -1961,8 +2010,18 @@ async function spawnBot(cfg, lvl = BOT_LEVELS[BOT_LEVEL_DEFAULT]) {
        * dick das Orderbuch schon ist — anders als die generische Regel unten). */
       for (const g of cfg.alwaysSell || []) {
         if (me.inv[g] < 2) continue;
-        if (st.orders.some(o => o.playerId === myId && o.side === "sell" && o.good === g)) continue;
-        await em("placeOrder", { side: "sell", good: g, qty: Math.floor(me.inv[g] * 0.8),
+        const menge = Math.floor(me.inv[g] * 0.8);
+        const offen = st.orders.find(o => o.playerId === myId && o.side === "sell" && o.good === g);
+        if (offen) {
+          /* Eine offene Order blockierte bisher jedes weitere Angebot — auch wenn
+           * der Bestand danach um ein Vielfaches gewachsen war. Gemessen bei den
+           * Stadtwerken: 411 Strom auf Lager, davon 10 am Markt, während die
+           * Touristik händeringend welchen suchte. Ist inzwischen deutlich mehr
+           * da, wird die alte Order durch eine größere ersetzt. */
+          if (menge < offen.qty * 2) continue;
+          await em("cancelOrder", { orderId: offen.id });
+        }
+        await em("placeOrder", { side: "sell", good: g, qty: menge,
           price: Math.max(0.05, Math.round(st.avg[g] * lvl.verkaufKurs * 100) / 100) });
       }
       /* Werbung: sobald eine eigene Agentur steht und die Reichweite absackt,
@@ -1987,25 +2046,6 @@ async function spawnBot(cfg, lvl = BOT_LEVELS[BOT_LEVEL_DEFAULT]) {
         if (me.inv.elektronik >= ec && me.cash > cc + 1000) {
           await em("upgradeBuilding", { x: upgradable.x, y: upgradable.y });
         }
-      }
-      /* VERALTETE EIGENE ORDERS ZURÜCKZIEHEN.
-       * Der Bot legt nur dann eine neue Order an, wenn für die Ware noch keine
-       * eigene offen ist. Wandert der Kurs danach weg, bleibt die alte für immer
-       * im Buch stehen — und blockiert die Ware, weil ja "schon eine da ist".
-       * Gemessen beim Öl: Ø-Kurs 6,47, eigenes Angebot noch bei 7,42 aus einer
-       * Zeit mit Ø 7,57, daneben 37 Stück Nachfrage bei 6,62–6,64. Beide Seiten
-       * waren da, trafen sich aber nie. Deshalb: was deutlich neben dem Markt
-       * liegt, wird storniert und beim nächsten Durchlauf frisch gestellt. */
-      for (const o of st.orders.filter(o => o.playerId === myId)) {
-        const kurs = st.avg[o.good];
-        if (!kurs) continue;
-        /* Eng gefasst, weil die Bots selbst nur in einem schmalen Band handeln:
-         * Sie bieten zu Ø×1,03 und stellen zu Ø×0,98–1,02 an. Eine Toleranz von
-         * ±10 % war dadurch wirkungslos — gemessen lagen Angebot bei Ø×1,069 und
-         * Gebot bei Ø×0,989, also 8 % auseinander und trotzdem beide "in Ordnung".
-         * Sie standen sich gegenüber, ohne sich je zu treffen. */
-        const daneben = o.side === "sell" ? o.price > kurs * 1.05 : o.price < kurs * 1.00;
-        if (daneben) await em("cancelOrder", { orderId: o.id });
       }
       /* ZUERST ECHTE NACHFRAGE BEDIENEN.
        * Die generische Regel darunter verlangt 18 Stück auf Lager. Verarbeitete

@@ -672,6 +672,10 @@ td:first-child{font-family:var(--font)}
           <img src="assets/skyline/chipfabrik-0.png" alt="">
           <span class="txt"><span class="head"><b>Technologie</b><span class="chosen">Gewählt</span></span>
           <small>Silizium und Elektronik — damit leveln alle ihre Fabriken hoch.</small></span></button>
+        <button type="button" data-ind="touristik" class="indopt" style="--ac:#2dd4bf;--ac08:rgba(45,212,191,.03);--ac15:rgba(45,212,191,.08);--ac18:rgba(45,212,191,.09);--ac35:rgba(45,212,191,.21);--ac50:rgba(45,212,191,.31)">
+          <img src="assets/skyline/hotel-0.png" alt="">
+          <span class="txt"><span class="head"><b>Touristik</b><span class="chosen">Gewählt</span></span>
+          <small>Verwandelt Wasser und Strom in Gäste — die Branche, die kauft statt zu horten.</small></span></button>
       </div>
     </div>
   </div>
@@ -735,6 +739,7 @@ td:first-child{font-family:var(--font)}
       <div class="botrow" data-b="rohstoff"><span>Rohstoff</span><div class="pick"><button type="button" data-n="0">0</button><button type="button" data-n="1" class="on">1</button><button type="button" data-n="2">2</button></div></div>
       <div class="botrow" data-b="versorger"><span>Versorger</span><div class="pick"><button type="button" data-n="0">0</button><button type="button" data-n="1" class="on">1</button><button type="button" data-n="2">2</button></div></div>
       <div class="botrow" data-b="tech"><span>Technik</span><div class="pick"><button type="button" data-n="0">0</button><button type="button" data-n="1" class="on">1</button><button type="button" data-n="2">2</button></div></div>
+      <div class="botrow" data-b="touristik"><span>Touristik</span><div class="pick"><button type="button" data-n="0">0</button><button type="button" data-n="1" class="on">1</button><button type="button" data-n="2">2</button></div></div>
     </div>
     <p id="lwBotSum">—</p>
   </div>
@@ -1367,7 +1372,7 @@ document.getElementById("roomCodeTop").addEventListener("click", async () => {
 const lwEl = document.getElementById("lobbyWait");
 const escapeHtml = s => String(s).replace(/[&<>"']/g, c =>
   ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-let lwBotLevel = "mittel", lwBots = { agrar: 1, rohstoff: 1, versorger: 1, tech: 1 };
+let lwBotLevel = "mittel", lwBots = { agrar: 1, rohstoff: 1, versorger: 1, tech: 1, touristik: 1 };
 let lwEigeneAenderung = 0;   // kurz nach eigener Änderung nicht vom Server überschreiben lassen
 
 function lobbyWaitZeichnen() {
@@ -2489,9 +2494,17 @@ const TUT_IND = {
     { t: "Dein Handelsbedarf",
       p: `Kaufe <em>Strom</em> von den <b>Grundversorgern</b> über die Börse (Minen laufen damit auf +150 %). Verkaufe Elektronik &amp; Silizium über einen <b>Baustoffhandel</b> ($2.800) zu deinem Preis. Elektronik wird nicht zum Bauen gebraucht, sondern zum <b>Auflevel</b> bestehender Gebäude — je größer die Stadt wird, desto mehr wird nachgefragt.` },
   ],
+  touristik: [
+    { t: "Baue einen Campingplatz", build: "campingplatz",
+      p: `Klicke eine freie <em>grüne Agrar-Kachel</em> und baue den <b>Campingplatz</b> ($1.500 + 4 Ziegel). Er braucht <b>keine Zutaten</b> und liefert dir sofort erste <b>Übernachtungen</b> — dein Einstieg ohne Handelspartner.` },
+    { t: "Schalte die Küste frei & baue ein Strandhotel", build: "strandhotel",
+      p: `Das <b>Strandhotel</b> ($2.400 + 6 Ziegel) ist das eigentliche Geschäft: Es macht aus <em>Wasser + Strom</em> deutlich mehr <b>Übernachtungen</b> als der Campingplatz. Achtung, es ist hungrig — 150 Wasser und 75 Strom pro Minute. Ohne Nachschub steht es still.` },
+    { t: "Dein Handelsbedarf",
+      p: `Du bist der <b>größte Kunde der Grundversorger</b>: Kaufe <em>Wasser und Strom</em> laufend an der Börse — beides liegt dort meist im Überfluss, weil es sonst kaum jemand abnimmt. Verkaufe deine Übernachtungen über ein <b>Handelskontor</b> ($3.500). Eine <b>Werbeagentur</b> lohnt sich für dich besonders: Sie hebt den Preis, den die Stadt in deinen eigenen Läden akzeptiert.` },
+  ],
 };
 function buildTut(ind) {
-  const IND_NAME = { agrar: "Agrarwirtschaft", rohstoff: "Rohstoff- & Bauindustrie", versorger: "Grundversorgung", tech: "Technologie & Elektronik" };
+  const IND_NAME = { agrar: "Agrarwirtschaft", rohstoff: "Rohstoff- & Bauindustrie", versorger: "Grundversorgung", tech: "Technologie & Elektronik", touristik: "Touristik" };
   return [
     { t: "Willkommen bei Capital Sandbox",
       p: `Ich habe diese Stadt dreißig Jahre lang als CEO geführt — jetzt zeige ich <b>dir</b>, wie man in der <b>${IND_NAME[ind]}</b> ein Imperium aufbaut. Dein Ziel: als Erster das <b>Rundenziel</b> erreichen (oben links). Die Leiste ganz oben ist der <b>Börsenticker</b> mit den Ø-Kursen.` },
@@ -2873,6 +2886,7 @@ function render({ state, me, myId, chat, room }) {
       <div class="sec">Rohstoff- &amp; Bauindustrie</div>${["mine","ziegelei","stahlwerk","betonwerk"].map(bcard).join("")}
       <div class="sec">Grundbedürfnisse (Versorger)</div>${["brunnen","wasserwerk","ewerk","windpark","oelpumpe","raffinerie"].map(bcard).join("")}
       <div class="sec">Technologie &amp; Elektronik</div>${["siliziummine","chipfabrik","autowerk","dieselwerk","eautowerk"].map(bcard).join("")}
+      <div class="sec">Touristik</div>${["campingplatz","strandhotel"].map(bcard).join("")}
       <div class="sec">Verkauf (jede Industrie)</div>${["markt","bauhandel","kontor","laden","autohaus","werbeagentur"].map(bcard).join("")}
       <div class="sec">Waren &amp; aktuelle Ø-Kurse</div>
       <table><tr><th>Ware</th><th>Kategorie</th><th>Ø-Kurs</th></tr>
