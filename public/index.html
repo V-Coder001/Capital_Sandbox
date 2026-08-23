@@ -103,6 +103,12 @@ input,select{background:var(--panel2);border:1px solid var(--line);border-radius
 #netmode .netopt:hover{color:#7e97b8}
 #netmode .netopt.on{background:linear-gradient(135deg,#1e3a5a 0%,#164060 100%);color:var(--accent);
   box-shadow:0 0 16px rgba(56,189,248,.2), inset 0 1px 0 rgba(56,189,248,.15)}
+#tutBuchAuf{display:inline-flex;align-items:center;gap:7px;margin-left:10px;padding:8px 16px;
+  border-radius:11px;border:1px solid #243348;background:#0b1119;color:#8695ab;
+  font-family:var(--font);font-size:12.5px;font-weight:600;cursor:pointer;transition:all .18s;vertical-align:top}
+#tutBuchAuf:hover{color:var(--accent2);border-color:rgba(167,139,250,.45);background:#101827}
+#tutBuchAuf svg{opacity:.8}
+@media(max-width:560px){#tutBuchAuf{margin:8px 0 0}}
 /* Skyline aus echten Gebäude-Sprites des Spiels */
 /* Die Gebäude-PNGs haben viel durchsichtigen Rand — bei Originalgröße wirken sie
  * verloren. Deshalb vergrößert dargestellt und der Streifen oben beschnitten. */
@@ -402,6 +408,70 @@ td:first-child{font-family:var(--font)}
   box-shadow:0 10px 26px -12px rgba(56,189,248,.85);transition:transform .1s,box-shadow .16s}
 #winNew:hover{transform:translateY(-1px);box-shadow:0 14px 30px -12px rgba(56,189,248,.95)}
 #winNew:active{transform:translateY(1px)}
+
+/* ===== Ausführliches Tutorial ===== */
+#tutBuch{position:fixed;inset:0;z-index:120;display:none;background:rgba(4,7,12,.86);
+  backdrop-filter:blur(6px);padding:20px;align-items:center;justify-content:center}
+#tutBuch.auf{display:flex}
+.tbCard{width:min(980px,100%);height:min(680px,92vh);display:flex;flex-direction:column;
+  background:linear-gradient(160deg,#131c2b 0%,#0e1520 45%,#0c1220 100%);
+  border:1px solid #1e2d45;border-radius:20px;overflow:hidden;
+  box-shadow:0 30px 90px rgba(0,0,0,.85)}
+.tbHead{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;
+  padding:20px 24px 14px;border-bottom:1px solid var(--line)}
+.tbHead h2{font-size:19px;color:var(--text)}
+#tbFortschritt{margin-top:3px;font-size:11.5px;color:var(--dim);font-family:var(--mono)}
+.tbZu{background:none;border:1px solid var(--line);border-radius:9px;width:30px;height:30px;
+  color:var(--dim);cursor:pointer;font-size:13px;flex:none}
+.tbZu:hover{color:var(--text);border-color:#33415c}
+.tbBody{flex:1;display:grid;grid-template-columns:216px 1fr;min-height:0}
+.tbNav{border-right:1px solid var(--line);overflow-y:auto;padding:10px 8px}
+.tbNav button{display:block;width:100%;text-align:left;padding:8px 11px;margin-bottom:2px;
+  background:none;border:none;border-radius:8px;color:#6b7f9c;font-family:var(--font);
+  font-size:12.5px;cursor:pointer;transition:all .15s;line-height:1.35}
+.tbNav button:hover{background:#0d1522;color:#a9bbd2}
+.tbNav button.on{background:rgba(56,189,248,.11);color:var(--accent);font-weight:600}
+.tbNav .num{font-family:var(--mono);font-size:10.5px;color:#3d5170;margin-right:7px}
+.tbNav button.on .num{color:var(--accent)}
+.tbInhalt{overflow-y:auto;padding:22px 28px 26px}
+.tbInhalt h3{font-size:17px;color:var(--text);margin-bottom:4px}
+.tbInhalt .lead{color:var(--accent2);font-size:12.5px;margin-bottom:14px;font-weight:600}
+.tbInhalt p{font-size:13.5px;color:#c3cede;line-height:1.65;margin-bottom:11px}
+.tbInhalt b{color:var(--text)}
+.tbInhalt ul{margin:0 0 11px 18px}
+.tbInhalt li{font-size:13.5px;color:#c3cede;line-height:1.6;margin-bottom:5px}
+.tbInhalt .kasten{background:#07090f;border:1px solid #141d2c;border-radius:11px;
+  padding:12px 15px;margin:0 0 12px}
+.tbInhalt .kasten .t{font-size:10.5px;font-family:var(--mono);text-transform:uppercase;
+  letter-spacing:.07em;color:var(--dim);margin-bottom:6px}
+/* Die Ketten sind bewusst einzeilig — auf schmalen Fenstern scrollen sie
+ * innerhalb ihres Kastens, statt die ganze Seite breit zu ziehen. */
+.tbInhalt .kette{font-family:var(--mono);font-size:12.5px;color:#a9bbd2;line-height:1.9;
+  overflow-x:auto;white-space:nowrap;padding-bottom:2px}
+.tbInhalt .kette b{color:var(--accent)}
+.tbInhalt .merk{border-left:2px solid var(--accent2);padding-left:12px;margin:0 0 12px;
+  font-size:13px;color:#a9bbd2;line-height:1.6}
+.tbFuss{display:flex;align-items:center;justify-content:space-between;gap:14px;
+  padding:13px 24px;border-top:1px solid var(--line)}
+.tbFuss button{padding:8px 18px;border-radius:9px;border:1px solid var(--line);background:#0d1522;
+  color:#8695ab;font-family:var(--font);font-size:12.5px;font-weight:600;cursor:pointer;transition:all .16s}
+.tbFuss button:hover:not(:disabled){color:var(--text);border-color:#33415c}
+.tbFuss button:disabled{opacity:.35;cursor:default}
+#tbWeiter{background:linear-gradient(135deg,#1e3a5a,#164060);border-color:rgba(56,189,248,.3);color:var(--accent)}
+.tbPunkte{display:flex;gap:5px;flex-wrap:wrap;justify-content:center}
+.tbPunkte i{width:6px;height:6px;border-radius:50%;background:#1e2a3d;transition:all .2s}
+.tbPunkte i.on{background:var(--accent);box-shadow:0 0 6px rgba(56,189,248,.6)}
+@media(max-width:760px){
+  .tbBody{grid-template-columns:1fr;grid-template-rows:auto 1fr}
+  .tbNav{border-right:none;border-bottom:1px solid var(--line);display:flex;gap:6px;
+    overflow-x:auto;padding:9px 10px}
+  .tbNav button{width:auto;white-space:nowrap;flex:none;font-size:12px}
+  .tbNav .num{display:none}
+  .tbInhalt{padding:18px 16px 22px}
+  .tbInhalt .kette{font-size:11px;line-height:1.8}
+  .tbInhalt .kasten{padding:11px 12px}
+  .tbCard{height:94vh}
+}
 </style>
 </head>
 <body>
@@ -444,6 +514,15 @@ td:first-child{font-family:var(--font)}
       <button type="button" class="netopt on" data-net="host">Neue Runde starten</button>
       <button type="button" class="netopt" data-net="join">Einer Runde beitreten</button>
     </div>
+    <!-- Ausführliche Einführung. Das kurze Tutorial in der Runde führt durchs
+         Bauen; hier steht das ganze Spiel erklärt, auch ohne laufende Partie. -->
+    <button type="button" id="tutBuchAuf">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+           stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/>
+      </svg>
+      Tutorial spielen
+    </button>
 
     <!-- Skyline aus den echten Gebäude-Sprites des Spiels -->
     <div class="skyline" aria-hidden="true">
@@ -767,6 +846,31 @@ td:first-child{font-family:var(--font)}
     <div class="dots" id="tutDots"></div>
     <span id="tutWait">Warte auf Bau …</span>
     <div class="btns"><button id="tutSkip">Tutorial überspringen</button><button id="tutNext">Weiter</button></div>
+  </div>
+</div>
+
+<!-- ===== Ausführliches Tutorial (Startbildschirm) =====
+     Erklärt das ganze Spiel, unabhängig von einer laufenden Runde. Das kurze
+     Tutorial in der Partie bleibt davon unberührt — es führt durchs erste Bauen,
+     dieses hier erklärt die Systeme dahinter. -->
+<div id="tutBuch" aria-hidden="true">
+  <div class="tbCard" role="dialog" aria-label="Tutorial">
+    <div class="tbHead">
+      <div>
+        <h2>Spielanleitung</h2>
+        <p id="tbFortschritt">Kapitel 1 von 1</p>
+      </div>
+      <button class="tbZu" id="tbZu" aria-label="Schließen">&#10005;</button>
+    </div>
+    <div class="tbBody">
+      <nav class="tbNav" id="tbNav"></nav>
+      <article class="tbInhalt" id="tbInhalt"></article>
+    </div>
+    <div class="tbFuss">
+      <button type="button" id="tbZurueck">Zurück</button>
+      <div class="tbPunkte" id="tbPunkte"></div>
+      <button type="button" id="tbWeiter">Weiter</button>
+    </div>
   </div>
 </div>
 
@@ -2757,6 +2861,262 @@ function render({ state, me, myId, chat, room }) {
   }
 }
 store.subscribe(render);
+
+/* ================================================================
+ * Ausführliches Tutorial (Startbildschirm)
+ * ================================================================
+ * Bewusst getrennt vom kurzen Tutorial in der laufenden Partie: Das dort führt
+ * Schritt für Schritt durchs erste Bauen, das hier erklärt die Systeme dahinter
+ * und ist auch ohne Runde lesbar. Die Zahlen entsprechen den Werten in
+ * server.js — das Lexikon im Spiel zeigt sie zusätzlich live. */
+const TUT_BUCH = [
+  { t: "Worum es geht", lead: "Das Ziel in einem Satz",
+    html: `
+      <p>Du führst eine Firma in einer gemeinsamen Stadt. Du baust Betriebe, stellst Waren
+      her und verkaufst sie — an die Stadt, an eure Läden oder direkt an die Mitspieler.
+      Wer als Erster das <b>Rundenziel</b> beim Nettovermögen erreicht, gewinnt.</p>
+      <div class="kasten"><div class="t">Nettovermögen</div>
+      Bargeld + Warenlager (zum aktuellen Kurs) + Gebäude (70 % vom Baupreis)
+      + gehaltene Anteile − Schulden. Oben links siehst du deinen Stand.</div>
+      <p>Es gibt <b>keine künstlichen Preise</b>. Jeder Kurs entsteht aus echten
+      Geschäften zwischen euch. Wenn alle dasselbe verkaufen, fällt der Preis — und
+      wenn eine Ware knapp wird, steigt er.</p>
+      <div class="merk">Der Host stellt Rundenziel und Bots im Warteraum ein.
+      Von 100.000 $ (etwa eine Stunde) bis 10 Mio. $ (Marathon).</div>` },
+
+  { t: "Deine Branche", lead: "Warum du nicht alles selbst bauen kannst",
+    html: `
+      <p>Beim Beitritt wählst du <b>eine von vier Branchen</b>. Du kannst nur deren
+      Betriebe bauen — alles andere musst du einkaufen. Das ist der Kern des Spiels:
+      Ihr seid aufeinander angewiesen.</p>
+      <ul>
+        <li><b>Landwirtschaft</b> — Obst, Kannabis, Honig; daraus Saft, Gebäck und Medikamente</li>
+        <li><b>Rohstoff &amp; Bau</b> — Erze; daraus Ziegel, Beton und Stahl</li>
+        <li><b>Wasser, Strom &amp; Öl</b> — die Grundversorgung, die jeder ständig braucht</li>
+        <li><b>Technologie</b> — Silizium, Elektronik und die drei Autowerke</li>
+      </ul>
+      <div class="merk">Läden darf jede Branche bauen — verkaufen kann also jeder.</div>
+      <p>Ohne die Bauindustrie stehen alle still: <b>Jedes Gebäude kostet Ziegel</b>,
+      teure zusätzlich Beton. Und ohne Technologie gibt es keine Elektronik, ohne die
+      niemand seine Betriebe hochstufen kann.</p>` },
+
+  { t: "Bauen &amp; Zonen", lead: "Wo was hindarf",
+    html: `
+      <p>Die Karte hat vier Zonen, erkennbar an der Farbe. Jeder Betrieb gehört in eine
+      bestimmte: Farmen aufs Grüne, Fabriken ins Industriegebiet, Läden ins Zentrum,
+      Ölpumpen an die Küste.</p>
+      <div class="kasten"><div class="t">Sperrzonen</div>
+      Industrie und Küste sind anfangs gesperrt. Eine Kachel dort freizuschalten kostet
+      extra — das wird beim Bauen automatisch mitbezahlt. Das Zentrum und die Agrarflächen
+      sind frei bebaubar.</div>
+      <p>Zum Bauen klickst du eine freie Kachel an und wählst den Betrieb. Du brauchst
+      genug Bargeld <b>und</b> das Baumaterial im Lager. Fehlen Ziegel, kauf sie an der
+      Börse — die Bauindustrie stellt sie dort ein.</p>
+      <p>Ein Abriss erstattet dir <b>die Hälfte</b> des Baupreises zurück.</p>` },
+
+  { t: "Produktion &amp; Boost", lead: "Wie deine Betriebe arbeiten",
+    html: `
+      <p>Betriebe produzieren automatisch, jede Sekunde ein Stück weit. Du musst nichts
+      anklicken — nur dafür sorgen, dass die Zutaten da sind.</p>
+      <div class="kasten"><div class="t">Der Boost</div>
+      Manche Betriebe laufen schneller, wenn ihr Betriebsstoff im Lager liegt: Eine Farm
+      mit <b>Strom und Wasser</b> produziert bis zu <b>zweieinhalbmal</b> so viel. Der
+      Verbrauch richtet sich nach der Größe des Betriebs und läuft automatisch, solange
+      Vorrat da ist.</div>
+      <p>Betriebe lassen sich mit <b>Elektronik</b> hochstufen: je Stufe rund
+      <b>+30 % Ausstoß</b>. Das ist der stärkste Hebel im späteren Spiel — und der Grund,
+      warum Elektronik immer gefragt ist.</p>
+      <div class="merk">Verarbeitende Betriebe rechnen mit der knappsten Zutat. Fehlt
+      auch nur eine, steht die Fabrik still — egal wie voll das Lager sonst ist.</div>` },
+
+  { t: "Verarbeitungsketten", lead: "Aus billig wird wertvoll",
+    html: `
+      <p>Rohstoffe bringen wenig. Das Geld liegt in der Veredelung — jede Stufe
+      vervielfacht den Wert.</p>
+      <div class="kasten"><div class="t">Landwirtschaft</div><div class="kette">
+        Obst <b>→</b> Saft (Saftpresse)<br>
+        Obst + Honig <b>→</b> Gebäck (Bäckerei)<br>
+        Kannabis <b>→</b> Medikamente (Pharma-Labor)
+      </div></div>
+      <div class="kasten"><div class="t">Rohstoff &amp; Bau</div><div class="kette">
+        Erze + Wasser <b>→</b> Ziegel (Ziegelei)<br>
+        Erze + Öl <b>→</b> Beton (Betonwerk)<br>
+        Erze + Öl <b>→</b> Stahl (Stahlwerk)
+      </div></div>
+      <div class="kasten"><div class="t">Versorger &amp; Technologie</div><div class="kette">
+        Öl <b>→</b> Diesel (Raffinerie)<br>
+        Silizium + Strom <b>→</b> Elektronik (Chipfabrik)<br>
+        Elektronik + Stahl + Öl <b>→</b> Benzin-Auto<br>
+        Elektronik + Stahl + Diesel <b>→</b> Diesel-Auto<br>
+        Elektronik + Stahl + Strom <b>→</b> Elektro-Auto
+      </div></div>
+      <p>Autos sind die wertvollsten Waren im Spiel — sie brauchen aber Zulieferungen aus
+      <b>drei fremden Branchen</b>. Wer sie bauen will, muss vorher Handelsbeziehungen
+      aufbauen.</p>` },
+
+  { t: "Lager", lead: "Was du besitzt und was es wert ist",
+    html: `
+      <p>Im Lager siehst du jede Ware mit Menge, aktuellem Ø-Kurs und Gesamtwert. Es hat
+      <b>keine Obergrenze</b> — horten ist erlaubt.</p>
+      <p>Aber: Lagerbestand ist totes Kapital. Er zählt zwar zum Nettovermögen, arbeitet
+      aber nicht für dich. Und wenn der Kurs fällt, schrumpft dein Vermögen, ohne dass du
+      etwas falsch gemacht hast.</p>
+      <div class="merk">Faustregel: Betriebsstoffe wie Strom und Wasser bevorraten,
+      Endprodukte zügig verkaufen.</div>` },
+
+  { t: "Eigene Läden", lead: "An die Stadt verkaufen",
+    html: `
+      <p>Läden verkaufen laufend an die Stadtbevölkerung — ohne dass ein Mitspieler
+      kaufen muss. Du baust einen Laden, klickst ihn an und legst je Verkaufsslot fest:
+      <b>welche Ware, zu welchem Preis</b>, optional eine Höchstmenge.</p>
+      <div class="kasten"><div class="t">Preis steuert das Tempo</div>
+      Zum Ø-Kurs verkaufst du mit voller Geschwindigkeit. Teurer heißt langsamer,
+      billiger heißt schneller — bis zum doppelten Tempo. Du entscheidest zwischen
+      Marge und Umschlag.</div>
+      <ul>
+        <li><b>Marktstand</b> — Agrarwaren</li>
+        <li><b>Baustoffhandel</b> — Baumaterial</li>
+        <li><b>Handelskontor</b> — fast alles, zwei Slots</li>
+        <li><b>Autohaus</b> — nur Fahrzeuge</li>
+      </ul>
+      <div class="merk">Achte beim Bauen darauf, was der Laden überhaupt führt — ein
+      Marktstand nützt dir nichts, wenn du Strom verkaufen willst.</div>` },
+
+  { t: "Börse", lead: "Handel unter Spielern",
+    html: `
+      <p>Die Börse ist ein echtes <b>Orderbuch</b>. Du stellst ein Angebot ein („verkaufe
+      50 Ziegel zu 34 $") oder ein Gebot („kaufe 20 Öl zu 9 $"). Passen zwei Seiten
+      zusammen, wird sofort ausgeführt.</p>
+      <div class="kasten"><div class="t">Dein Einsatz wird gesperrt</div>
+      Beim Verkaufsangebot wandert die Ware ins Depot, beim Kaufgebot das Geld. So kann
+      niemand dasselbe zweimal ausgeben. Stornierst du, bekommst du alles zurück.</div>
+      <p>Ausgeführt wird immer zum Preis der <b>bereits liegenden</b> Order. Bietest du
+      mehr als nötig, bekommst du die Differenz zurück — du zahlst nie mehr als den
+      tatsächlichen Marktpreis.</p>
+      <p>Der Ticker oben zeigt nur <b>echte Abschlüsse</b>. Steigt dort ein Preis, hat
+      wirklich jemand so viel bezahlt.</p>` },
+
+  { t: "Großaufträge", lead: "Die Stadt zahlt Festpreise",
+    html: `
+      <p>Von Zeit zu Zeit schreibt eine Stadt einen <b>Großauftrag</b> aus: Sie braucht
+      eine bestimmte Menge einer Ware und zahlt dafür einen <b>fest zugesagten Preis</b>,
+      meist deutlich über dem Marktwert.</p>
+      <div class="kasten"><div class="t">So läuft es</div>
+      Der Auftrag steht im Lager-Panel mit Ware, Restmenge und Frist. Du zahlst deine
+      Ware ein und bekommst sofort den Festpreis. Mehrere Spieler können sich denselben
+      Auftrag teilen — wer zuerst liefert, verdient.</div>
+      <p>Läuft die Frist ab, ohne dass die Menge zusammenkommt, gehen die eingezahlten
+      Waren an ihre Einzahler zurück. Du riskierst also nichts außer Zeit.</p>
+      <div class="merk">Großaufträge sind der beste Weg, große Mengen loszuwerden, ohne
+      den Kurs kaputtzumachen.</div>` },
+
+  { t: "Werbeagentur", lead: "Höhere Preise ohne Tempoverlust",
+    html: `
+      <p>Normalerweise gilt: Wer teurer verkauft, verkauft langsamer. Die Werbeagentur
+      hebelt genau das aus.</p>
+      <div class="kasten"><div class="t">Reichweite</div>
+      Du buchst eine Kampagne und baust <b>Reichweite</b> auf. Solange sie hoch ist,
+      akzeptiert die Kundschaft in <b>deinen eigenen Läden</b> einen höheren Preis, ohne
+      dass der Absatz einbricht — mit einer Agentur bis +20 %, mit weiteren bis +40 %.</div>
+      <p>Die Reichweite <b>zerfällt laufend</b>. Ohne Nachschub bist du nach gut zwei
+      Minuten wieder beim normalen Kurs. Werbung lohnt sich also nur, wenn du viel über
+      eigene Läden verkaufst — nicht für reine Börsenhändler.</p>` },
+
+  { t: "Stadtbank &amp; Anteile", lead: "Firmen kaufen und übernehmen",
+    html: `
+      <p>Jede Firma ist in <b>vier Anteile zu je 25 %</b> geteilt. Zu Beginn hältst du
+      alle vier an dir selbst. An der Stadtbank kannst du Anteile fremder Firmen kaufen
+      — oder eigene verkaufen, um an frisches Kapital zu kommen.</p>
+      <div class="kasten"><div class="t">Kaufanfrage</div>
+      Du bietest einer Firma einen Preis für 25 % oder mehr. Die andere Seite entscheidet,
+      ob sie annimmt. Der Erlös geht an die verkaufende Firma — sie tauscht Eigentum
+      gegen Kapital.</div>
+      <p><b>Dividenden:</b> Wer Anteile an einer Firma hält, bekommt regelmäßig einen
+      Teil ihres Umsatzes ausgezahlt — anteilig zum gehaltenen Prozentsatz. Eine
+      Beteiligung an einer starken Firma verdient also mit, ohne dass du etwas tust.</p>
+      <p><b>Übernahme:</b> Hältst du <b>alle vier Anteile</b>, kannst du die Firma
+      fusionieren. Ihr Bargeld, Lager und alle Gebäude gehen auf dich über. Das ist der
+      schnellste Weg an die Spitze — und der teuerste.</p>` },
+
+  { t: "Anleihen", lead: "Geld leihen und verleihen",
+    html: `
+      <p>Brauchst du Kapital, ohne Anteile abzugeben, gibst du eine <b>Anleihe</b> aus:
+      Du legst Betrag, Zinssatz und Laufzeit fest. Kauft ein Mitspieler sie, bekommst du
+      sofort das Geld und zahlst ihm dafür laufend Zinsen.</p>
+      <div class="kasten"><div class="t">Wenn du nicht zahlen kannst</div>
+      Verpasst du Zinszahlungen, wird zuerst ein <b>Pfandrecht</b> auf eines deiner
+      Gebäude eingetragen. Zahlst du weiter nicht, wird es <b>enteignet und versteigert</b>
+      — der Erlös geht an den Gläubiger.</div>
+      <p>Dein <b>Rating</b> (AAA bis D) ergibt sich aus deiner Verschuldung und Größe.
+      Es ist öffentlich sichtbar und beeinflusst, ob dir jemand Geld leiht.</p>
+      <div class="merk">Auf der anderen Seite: Fremde Anleihen zu kaufen ist eine ruhige
+      Einnahmequelle — vorausgesetzt, der Schuldner bleibt zahlungsfähig.</div>` },
+
+  { t: "Gewinnen", lead: "Die letzte Runde zählt",
+    html: `
+      <p>Sobald jemand das Rundenziel beim Nettovermögen erreicht, endet die Partie und
+      es erscheint die <b>Abschlusstafel</b>: Wer hat am meisten produziert, den besten
+      Einzelhandel gemacht, die meisten Anteile gehalten.</p>
+      <div class="kasten"><div class="t">Drei Wege zum Ziel</div>
+      <ul style="margin:0 0 0 16px">
+        <li><b>Produktion</b> — viele Betriebe, hochgestuft, dauerhaft versorgt</li>
+        <li><b>Handel</b> — knappe Waren früh erkennen und Spannen abschöpfen</li>
+        <li><b>Beteiligung</b> — an fremden Firmen mitverdienen und übernehmen</li>
+      </ul></div>
+      <p>Meist gewinnt eine Mischung. Reine Produktion ist langsam, reiner Handel braucht
+      Mitspieler mit Ware, reine Übernahme braucht sehr viel Kapital.</p>
+      <div class="merk">Viel Erfolg — und denk dran: Jeder Preis, den du siehst, hat ein
+      Mitspieler gemacht.</div>` },
+];
+
+(function tutorialBuch() {
+  const el = document.getElementById("tutBuch");
+  const nav = document.getElementById("tbNav");
+  const inhalt = document.getElementById("tbInhalt");
+  const punkte = document.getElementById("tbPunkte");
+  const fortschritt = document.getElementById("tbFortschritt");
+  const zurueck = document.getElementById("tbZurueck");
+  const weiter = document.getElementById("tbWeiter");
+  let i = 0;
+
+  nav.innerHTML = TUT_BUCH.map((k, n) =>
+    `<button type="button" data-k="${n}"><span class="num">${String(n + 1).padStart(2, "0")}</span>${k.t}</button>`).join("");
+  punkte.innerHTML = TUT_BUCH.map(() => "<i></i>").join("");
+
+  function zeichnen() {
+    const k = TUT_BUCH[i];
+    inhalt.innerHTML = `<h3>${k.t}</h3><div class="lead">${k.lead}</div>${k.html}`;
+    inhalt.scrollTop = 0;
+    nav.querySelectorAll("button").forEach((b, n) => b.classList.toggle("on", n === i));
+    punkte.querySelectorAll("i").forEach((p, n) => p.classList.toggle("on", n <= i));
+    fortschritt.textContent = `Kapitel ${i + 1} von ${TUT_BUCH.length}`;
+    zurueck.disabled = i === 0;
+    weiter.textContent = i === TUT_BUCH.length - 1 ? "Fertig" : "Weiter";
+    /* Das gewählte Kapitel auch in der Seitenspalte sichtbar halten — sonst
+     * verliert man auf schmalen Fenstern beim Blättern den Bezug. */
+    nav.querySelectorAll("button")[i]?.scrollIntoView({ block: "nearest", inline: "nearest" });
+  }
+  const auf = () => { el.classList.add("auf"); el.setAttribute("aria-hidden", "false"); zeichnen(); };
+  const zu = () => { el.classList.remove("auf"); el.setAttribute("aria-hidden", "true"); };
+
+  document.getElementById("tutBuchAuf").addEventListener("click", auf);
+  document.getElementById("tbZu").addEventListener("click", zu);
+  el.addEventListener("click", e => { if (e.target === el) zu(); });   // Klick daneben schließt
+  nav.addEventListener("click", e => {
+    const b = e.target.closest("button[data-k]");
+    if (b) { i = +b.dataset.k; zeichnen(); }
+  });
+  zurueck.addEventListener("click", () => { if (i > 0) { i--; zeichnen(); } });
+  weiter.addEventListener("click", () => {
+    if (i < TUT_BUCH.length - 1) { i++; zeichnen(); } else zu();
+  });
+  document.addEventListener("keydown", e => {
+    if (!el.classList.contains("auf")) return;
+    if (e.key === "Escape") zu();
+    else if (e.key === "ArrowRight" && i < TUT_BUCH.length - 1) { i++; zeichnen(); }
+    else if (e.key === "ArrowLeft" && i > 0) { i--; zeichnen(); }
+  });
+})();
 </script>
 </body>
 </html>
