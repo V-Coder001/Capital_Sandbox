@@ -49,6 +49,10 @@ const GATEWAY_BOOT_ID = crypto.randomUUID();
 const app = express();
 app.use(express.static("public"));
 app.get("/api/mode", (_req, res) => res.json({ multiroom: true, maxRooms: MAX_ROOMS, bootId: GATEWAY_BOOT_ID }));
+/* Wie viele Runden gerade laufen — der Startbildschirm zeigt das an, damit
+ * man sieht, ob überhaupt jemand spielt. Bewusst schlank gehalten, weil der
+ * Client das im Sekundentakt abfragt. */
+app.get("/api/stats", (_req, res) => res.json({ rooms: rooms.size, maxRooms: MAX_ROOMS }));
 
 /* Das Gateway selbst betreibt keinen Socket.io-Server (das übernehmen die
  * Kindprozesse unter /r/<CODE>/) — die Client-Bibliothek, die server.js sonst

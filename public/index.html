@@ -88,6 +88,18 @@ input,select{background:var(--panel2);border:1px solid var(--line);border-radius
 #joinSlots .slot{width:8px;height:8px;border-radius:50%;background:#1a2231;border:1px solid #273144;transition:all .2s}
 #joinSlots .slot.on{background:var(--accent);border:none;box-shadow:0 0 6px rgba(56,189,248,.6)}
 #joinSlots .count{font-size:10.5px;color:var(--dim);margin-left:4px}
+#codeSuche{display:flex;align-items:center;gap:7px}
+#codeSuche label{font-size:10.5px;font-weight:600;color:var(--dim);letter-spacing:.08em;text-transform:uppercase}
+#codeSuche input{width:74px;padding:3px 7px;background:#050810;border:1px solid #1a2535;border-radius:6px;
+  color:var(--accent);font-family:var(--mono);font-size:11.5px;letter-spacing:.16em;text-transform:uppercase}
+#codeSuche input:focus{outline:none;border-color:rgba(56,189,248,.5)}
+#codeSuche button{padding:3px 9px;background:#0d1522;border:1px solid #1a2535;border-radius:6px;
+  color:var(--dim);font-size:10.5px;font-weight:600;cursor:pointer;font-family:var(--font)}
+#codeSuche button:hover{color:#7e97b8;border-color:#243348}
+#codeSucheHinweis{font-size:10.5px}
+#codeSucheHinweis.ok{color:var(--up)}
+#codeSucheHinweis.fehler{color:var(--down)}
+#rundenZahl{font-size:10.5px;color:var(--dim);font-family:var(--mono);letter-spacing:.04em}
 #join h1{position:relative;display:flex;align-items:baseline;gap:10px;margin-bottom:11px;
   font-size:28px;font-weight:800;letter-spacing:-.045em;line-height:1;color:#f0f6ff}
 #join h1 span{color:var(--accent);text-shadow:0 0 30px rgba(56,189,248,.5)}
@@ -428,9 +440,19 @@ td:first-child{font-family:var(--font)}
       <div class="left">
         <span class="pulse" id="joinPulse"><i></i><b></b></span>
         <span id="joinStatusText">Verbinde …</span>
+        <!-- Im Gateway-Modus steht hier keine Verbindungsanzeige: Man ist vor dem
+             Beitritt mit gar keiner Runde verbunden, "keine Verbindung" wäre also
+             nur ein Fehlalarm. Stattdessen der direkte Weg in eine Runde. -->
+        <form id="codeSuche" style="display:none" autocomplete="off">
+          <label for="codeSucheInput">Runde suchen</label>
+          <input id="codeSucheInput" maxlength="5" placeholder="CODE" spellcheck="false">
+          <button type="submit">Los</button>
+          <span id="codeSucheHinweis"></span>
+        </form>
       </div>
       <div class="right">
         <div id="joinSlots"></div>
+        <span id="rundenZahl" style="display:none">—</span>
       </div>
     </div>
 
@@ -1528,8 +1550,22 @@ document.getElementById("jname").addEventListener("keydown", e => { if (e.key ==
   const slots = document.getElementById("joinSlots");
   slots.innerHTML = Array.from({ length: MAX }, () => `<span class="slot"></span>`).join("")
     + `<span class="count">0/${MAX}</span>`;
+  /* Im Gateway-Modus sagen Verbindungsampel und Spielerzahl vor dem Beitritt
+   * nichts aus: Man hängt an gar keiner Runde, "keine Verbindung" wäre bloß ein
+   * Fehlalarm, und "0/8" zählt Mitspieler einer Runde, die es noch nicht gibt.
+   * Dort stehen deshalb die Code-Suche und die Zahl der laufenden Runden. */
+  const suchForm = document.getElementById("codeSuche");
+  const rundenZahl = document.getElementById("rundenZahl");
   function statusZeichnen() {
     if (join.style.display === "none") return;
+    const mehrrunden = MULTIROOM;
+    document.getElementById("joinPulse").style.display = mehrrunden ? "none" : "";
+    document.getElementById("joinStatusText").style.display = mehrrunden ? "none" : "";
+    suchForm.style.display = mehrrunden ? "flex" : "none";
+    slots.style.display = mehrrunden ? "none" : "";
+    rundenZahl.style.display = mehrrunden ? "" : "none";
+    if (mehrrunden) return;   // Rest gilt nur für die Einzelrunde
+
     const verbunden = socket.connected !== false;
     const txt = document.getElementById("joinStatusText");
     txt.textContent = verbunden ? "Server online" : "Keine Verbindung";
@@ -1542,6 +1578,41 @@ document.getElementById("jname").addEventListener("keydown", e => { if (e.key ==
     document.getElementById("joinWaiting").textContent =
       n === 0 ? "Runde ist leer" : n === 1 ? "1 Firma in der Runde" : `${n} Firmen in der Runde`;
   }
+
+  /* Zahl der gleichzeitig laufenden Runden — nur im Gateway-Modus vorhanden.
+   * Läuft weiter, solange der Startbildschirm sichtbar ist. */
+  async function rundenZaehlen() {
+    if (!MULTIROOM || join.style.display === "none") return;
+    try {
+      const d = await (await fetch("/api/stats")).json();
+      rundenZahl.textContent = d.rooms === 0 ? "keine Runde aktiv"
+        : d.rooms === 1 ? "1 Runde läuft" : `${d.rooms} Runden laufen`;
+      document.getElementById("joinWaiting").textContent =
+        d.rooms === 0 ? "noch keine Runde" : `${d.rooms} von ${d.maxRooms} Plätzen belegt`;
+    } catch { rundenZahl.textContent = "—"; }
+  }
+  multiroomReady.then(() => { rundenZaehlen(); setInterval(rundenZaehlen, 5000); });
+
+  /* Code-Suche: prüft, ob es die Runde gibt, und legt sie im Beitritts-Tab
+   * vorbereitet ab — der eigentliche Beitritt passiert erst mit dem Firmennamen. */
+  suchForm.addEventListener("submit", async e => {
+    e.preventDefault();
+    const feld = document.getElementById("codeSucheInput");
+    const hinweis = document.getElementById("codeSucheHinweis");
+    const code = feld.value.trim().toUpperCase();
+    hinweis.className = "";
+    if (code.length < 4) { hinweis.className = "fehler"; hinweis.textContent = "Code eingeben"; return; }
+    hinweis.textContent = "suche …";
+    try {
+      const d = await (await fetch(`/api/rooms/${encodeURIComponent(code)}`)).json();
+      if (!d.exists) { hinweis.className = "fehler"; hinweis.textContent = "gibt es nicht"; return; }
+      hinweis.className = "ok"; hinweis.textContent = "gefunden";
+      document.querySelectorAll("#netmode .netopt")[1]?.click();
+      const jc = document.getElementById("jcode");
+      if (jc) jc.value = code;
+      document.getElementById("jname").focus();
+    } catch { hinweis.className = "fehler"; hinweis.textContent = "nicht erreichbar"; }
+  });
   setInterval(statusZeichnen, 1000);
   store.subscribe(statusZeichnen);
   statusZeichnen();
