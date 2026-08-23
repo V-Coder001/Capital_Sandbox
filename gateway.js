@@ -47,7 +47,7 @@ const CODE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";          // ohne verwechs
 const GATEWAY_BOOT_ID = crypto.randomUUID();
 
 const app = express();
-app.use(express.static("public"));
+app.use(express.static(path.join(__dirname, "public")));   // vom Dateistandort, nicht vom Arbeitsverzeichnis
 app.get("/api/mode", (_req, res) => res.json({ multiroom: true, maxRooms: MAX_ROOMS, bootId: GATEWAY_BOOT_ID }));
 /* Wie viele Runden gerade laufen — der Startbildschirm zeigt das an, damit
  * man sieht, ob überhaupt jemand spielt. Bewusst schlank gehalten, weil der

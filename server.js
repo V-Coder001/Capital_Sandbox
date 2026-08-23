@@ -8,9 +8,15 @@ import http from "http";
 import os from "os";
 import crypto from "crypto";
 import { Server } from "socket.io";
+import path from "path";
+import { fileURLToPath } from "url";
 
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
-app.use(express.static("public"));
+/* Vom Standort dieser Datei aus, nicht vom Arbeitsverzeichnis: Sonst liefert
+ * der Server stillschweigend nichts aus, sobald er von woanders gestartet wird
+ * — genau das ist beim Dev-Server passiert. */
+app.use(express.static(path.join(__dirname, "public")));
 
 /* Einladungslink: LAN-IP ermitteln, optional öffentlicher Tunnel (npm run share) */
 let publicUrl = null;
