@@ -2001,6 +2001,76 @@ async function spawnBot(cfg, lvl = BOT_LEVELS[BOT_LEVEL_DEFAULT]) {
        * nach unten deckeln (cfg.maxGebaeude). */
       const maxGeb = Math.min(lvl.maxGebaeude, cfg.maxGebaeude ?? Infinity, cfg.planLoop ? Infinity : gesamtplan.length);
       const planFertig = built >= maxGeb;
+
+      /* ---- Fremdkapital ----
+       * Bisher rührte kein Bot das Anleihesystem an: `issueBond` und `buyBond`
+       * kamen in der ganzen Bot-Schleife nicht vor. Der komplette
+       * Fremdkapitalmarkt lief damit nur, wenn zufällig zwei Menschen
+       * gleichzeitig spielten — in einer normalen Runde passierte dort nichts.
+       *
+       * AUFNEHMEN: Genau der Fall, der heute als Kapitalfalle aufgefallen ist —
+       * Stahlfaust stand mit 1356 $ fest, konnte keine Zutaten mehr kaufen und
+       * kam ohne Produktion nie wieder hoch. Wer Substanz hat, aber kein
+       * Bargeld, leiht sich jetzt welches, statt zu erstarren.
+       * Bedingungen bewusst eng: mindestens zwei Gebäude als Sicherheit, keine
+       * zweite Anleihe parallel, und ein Nettovermögen, das die Tilgung
+       * überhaupt tragen kann. */
+      const meineAnleihen = (st.bonds || []).filter(b => b.issuerId === myId);
+      const meinRating = st.players[myId]?.rating || "BBB";
+      const meinNw = st.players[myId]?.netWorth || 0;
+      /* Schwelle bewusst tief. Bei 1500 $ emittierte binnen Minuten FAST JEDER
+       * Bot — sie pendeln ohnehin dauernd um diesen Wert. In der Messung lagen
+       * dadurch fünf Anleihen gleichzeitig unverkauft am Markt, während der
+       * reichste Bot nur 3568 $ hatte. Eine Anleihe soll die Ausnahme für einen
+       * wirklich festgefahrenen Bot sein, nicht der Normalzustand. */
+      if (me.cash < 1000 && built >= 2 && !meineAnleihen.length && meinNw > 4000) {
+        /* Zins nach eigener Bonität — schlechtere Schuldner müssen mehr bieten,
+         * sonst zeichnet niemand. Der Satz gilt PRO MINUTE (Kupon je Sekunde =
+         * principal * rate / 60), über 300 s Laufzeit sind das also das
+         * Fünffache an Gesamtzins. */
+        const zinsNachBonitaet = { AAA: 0.015, AA: 0.02, A: 0.025, BBB: 0.03, BB: 0.04, B: 0.05, CCC: 0.065, D: 0.08 };
+        /* Bewusst klein gestückelt. Ein erster Anlauf mit bis zu 3000 $ ließ
+         * drei Anleihen vier Minuten lang unverkauft liegen: Wer zeichnen
+         * könnte, hat selten so viel entbehrliches Bargeld gleichzeitig. */
+        /* Klein halten: Ein 1800-$-Papier verlangt vom Zeichner rund 2600 $
+         * frei — so viel hat in dieser Wirtschaft selten jemand gleichzeitig.
+         * 1200 $ sind aus einer Kasse von 2000 $ darstellbar. */
+        const betrag = Math.min(1200, Math.round(meinNw * 0.1 / 100) * 100);
+        if (betrag >= 500) {
+          await em("issueBond", { principal: betrag, rate: zinsNachBonitaet[meinRating] ?? 0.04, term: 300 });
+        }
+      }
+      /* ZEICHNEN: Wer Kapital übrig hat, legt es an, statt es liegen zu lassen.
+       * Erst ab "Mittel" — dieselbe Grenze wie beim Aktienhandel. Nur solide
+       * Schuldner und höchstens ein Drittel der eigenen Kasse je Anleihe,
+       * damit ein Ausfall den Zeichner nicht mitreißt. */
+      if (lvl.leveln) {
+        /* Entbehrlich ist nur, was nach dem nächsten Gebäude übrig bleibt —
+         * ist der Bauplan fertig, liegt die ganze Kasse ohnehin ungenutzt da.
+         * Die vorherige feste Schwelle von 6000 $ hat nie gegriffen: Bots
+         * emittieren erst, wenn sie klamm sind, und zu diesem Zeitpunkt lag in
+         * der Messung KEIN Bot mehr darüber. Drei Anleihen blieben vier
+         * Minuten unverkauft liegen, während die Emittenten weiter ausbluteten
+         * (Stahlfaust 1246 -> 302 $). */
+        const naechsteKosten = planFertig ? 0 : (BTYPES[gesamtplan[built % gesamtplan.length]]?.cost || 0);
+        /* Ein dickes Polster darf auch dann gezeichnet werden, wenn noch ein
+         * Gebäude aussteht — die Anleihe zahlt Nennbetrag und Zins binnen 300 s
+         * zurück, der Bau verzögert sich also höchstens kurz. */
+        /* Die Polstergrenze lag mit 4500 $ knapp über dem, was ein Bot in
+         * dieser Wirtschaft je hält: In der Messung pendelte der reichste
+         * (ChipWerke) bei 3700–4400 und zeichnete deshalb nie, während eine
+         * Anleihe drei Minuten unverkauft lag. Die reguläre Rechnung greift
+         * bei ihm ohnehin nicht, weil sein nächstes Gebäude mehr kostet als
+         * seine gesamte Kasse. */
+        const entbehrlich = Math.max(me.cash - naechsteKosten - 800, me.cash > 3000 ? me.cash - 2000 : 0);
+        const solide = ["AAA", "AA", "A", "BBB"];
+        const kandidat = (st.bonds || [])
+          .filter(b => !b.holderId && b.issuerId !== myId
+                    && solide.includes(b.issuerRating)
+                    && b.principal <= entbehrlich && b.principal <= me.cash * 0.5)
+          .sort((a, b) => b.rate - a.rate)[0];   // bester Zins zuerst
+        if (kandidat) await em("buyBond", { bondId: kandidat.id });
+      }
       if (Date.now() - lastBuild > lvl.bauPause && !planFertig) {
         const btid = gesamtplan[built % gesamtplan.length], bt = BTYPES[btid];
         const mats = matCost(bt);
@@ -2016,7 +2086,10 @@ async function spawnBot(cfg, lvl = BOT_LEVELS[BOT_LEVEL_DEFAULT]) {
             const lt = st.map.find(t => t.zone === bt.zone && t.locked);
             if (lt && me.cash > bt.cost + lt.unlockCost + 800) t = lt;
           }
-          if (t && me.cash > bt.cost + (t.locked ? t.unlockCost : 0) + 800) {
+          /* Die Tilgungsreserve ist auch fürs Bauen tabu — sonst steht das
+           * Geld am Stichtag im Gebäude statt in der Kasse. */
+          const tilgungSperre = (st.bonds || []).find(b => b.issuerId === myId && b.holderId && b.termLeft < 90)?.principal || 0;
+          if (t && me.cash > bt.cost + (t.locked ? t.unlockCost : 0) + 800 + tilgungSperre) {
             const r = await em("build", { x: t.x, y: t.y, btype: btid });
             if (r?.ok) lastBuild = Date.now();
           }
@@ -2097,7 +2170,18 @@ async function spawnBot(cfg, lvl = BOT_LEVELS[BOT_LEVEL_DEFAULT]) {
        * verplante bei 2248 $ je Zyklus 1364 $ für Zutaten und wuchs damit nie an
        * sein Stahlwerk (6000 $) heran. Mit höchstens einem Drittel bleibt beides
        * möglich: laufender Nachschub UND Rücklage fürs nächste Gebäude. */
-      let einkaufsbudget = Math.max(0, Math.min(me.cash - 300, me.cash * 0.35));
+      /* Vor Fälligkeit einer eigenen Anleihe Geld zurücklegen. Ohne das rollt
+       * die Schuld ewig weiter: Der Bot gibt sein Bargeld laufend für Zutaten
+       * aus und hat zum Stichtag nie den Nennbetrag am Stück. Der Server setzt
+       * dann termLeft zurück auf 30 s und vergibt fünf Strikes — die der
+       * nächste bezahlte Kupon aber sofort wieder auf 0 setzt (siehe
+       * b.strikes = 0 im Kuponzweig). Gemessen an Stahlfaust: dieselbe Anleihe
+       * stand über drei Stichproben hinweg unverändert bei rest=24s, str=0,
+       * ohne je getilgt zu werden — eine ewige Rente für den Zeichner und eine
+       * Dauerlast für den Schuldner. */
+      const faellig = (st.bonds || []).find(b => b.issuerId === myId && b.holderId && b.termLeft < 90);
+      const tilgungsReserve = faellig ? faellig.principal : 0;
+      let einkaufsbudget = Math.max(0, Math.min(me.cash - 300 - tilgungsReserve, me.cash * 0.35));
       for (const g of bedarf) {
         if (me.inv[g] >= 25) continue;
         if (st.orders.some(o => o.playerId === myId && o.side === "buy" && o.good === g)) continue;
