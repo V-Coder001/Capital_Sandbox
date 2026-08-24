@@ -302,6 +302,16 @@ const START_CASH = +process.env.START_CASH || 9500, MAP_W = 26, MAP_H = 26;
  * Vergleiche bleiben stimmig, weil beide Seiten dieselbe Form sehen. */
 const sicherText = s => String(s).replace(/[&<>"']/g, c =>
   ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+/* Die Firmenfarbe wurde ungeprüft übernommen und landet im Client in
+ * Stil-Attributen (style="background:${p.color}"). Ein Wert wie
+ * '#fff" onmouseover="…' bricht dort aus dem Attribut aus und hängt einen
+ * Ereignis-Handler an — Maskieren allein hilft nicht, weil eine Farbe
+ * ohnehin nur aus Ziffern und Buchstaben bestehen darf. Deshalb hart
+ * geprüft statt entschärft: Was nicht wie eine Hex-Farbe aussieht, wird
+ * durch die Vorgabe ersetzt. */
+const STANDARDFARBE = "#e8b544";
+const sichereFarbe = c => /^#[0-9a-fA-F]{6}$/.test(String(c || "")) ? String(c) : STANDARDFARBE;
 /* Rundenziel: Default $250k ≈ 1–2 h; der ERSTE Spieler der Runde legt es beim
  * Beitreten fest (Auswahl im Join-Screen). Env-Override: WIN_NW=... npm start */
 let WIN_NW = +process.env.WIN_NW || 250_000;
@@ -1108,7 +1118,7 @@ io.on("connection", socket => {
     }
     const pid = crypto.randomUUID();
     const istErster = Object.keys(G.players).length === 0;
-    G.players[pid] = newPlayer(pid, name, color || "#e8b544", industry, socket.id);
+    G.players[pid] = newPlayer(pid, name, sichereFarbe(color), industry, socket.id);
     G.socketToPid[socket.id] = pid;
     socket.data.registered = true;
     if (istErster) G.hostId = pid;   // Host: darf im Warteraum einstellen und die Runde starten
