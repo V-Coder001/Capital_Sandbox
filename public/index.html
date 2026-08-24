@@ -359,6 +359,41 @@ input,select{background:var(--panel2);border:1px solid var(--line);border-radius
 @media(max-width:700px){ #p-bank{width:94vw} }
 /* Firmenchip in der Kopfleiste: feste Höhe, freie Breite. */
 .plLogo{height:24px;width:auto;flex:none;object-fit:contain;vertical-align:middle}
+/* ---- Stadtbank: Kopfzeile und Handelsseiten ---- */
+.bkopf{border:1px solid var(--line);border-radius:12px;background:rgba(12,18,28,.55);
+  padding:12px 14px 11px;margin-bottom:12px}
+.bkopf-oben{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:10px}
+.bkopf-name{display:flex;align-items:center;min-width:0}
+.bkopf-rating{font-family:var(--mono);font-size:12px;font-weight:700;letter-spacing:.08em;
+  border:1px solid currentColor;border-radius:5px;padding:1px 7px;flex:none}
+.bkopf-zahlen{display:grid;grid-template-columns:repeat(auto-fit,minmax(96px,1fr));gap:8px 14px}
+.bkz{display:flex;flex-direction:column;gap:1px;min-width:0}
+.bkz b{font-family:var(--mono);font-size:16px;line-height:1.25;white-space:nowrap}
+.bkz span{font-size:10.5px;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bkopf-uhr{display:flex;align-items:center;gap:10px;margin-top:11px;font-size:11.5px;color:var(--dim)}
+.bkopf-uhr b{font-family:var(--mono);color:var(--text)}
+.bkopf-balken{flex:1;height:5px;border-radius:3px;background:#0a1018;overflow:hidden;min-width:60px}
+.bkopf-balken i{display:block;height:100%;background:linear-gradient(to right,var(--accent),var(--accent2));
+  border-radius:3px;transition:width .4s linear}
+/* Kaufen und Verkaufen tragen dieselbe Farbsprache wie das Orderbuch an der
+ * Börse — vorher sahen beide Formulare identisch aus und man musste die
+ * Überschrift lesen, um zu wissen, was der blaue Knopf gleich auslöst. */
+.bhandel{display:flex;flex-direction:column;gap:10px;margin-bottom:6px}
+.bseite{border:1px solid var(--line);border-radius:11px;padding:10px 12px 11px}
+.bseite.verkauf{border-color:rgba(251,113,133,.3);background:rgba(251,113,133,.05)}
+.bseite.kauf{border-color:rgba(52,211,153,.3);background:rgba(52,211,153,.05)}
+.bseite-kopf{display:flex;align-items:center;gap:7px;font-size:11px;font-weight:700;
+  letter-spacing:.11em;text-transform:uppercase;margin-bottom:9px}
+.bseite.verkauf .bseite-kopf{color:var(--down)} .bseite.kauf .bseite-kopf{color:var(--up)}
+.bseite-kopf .pfeil{font-size:10px}
+.bknopf{width:auto;margin:0;padding:8px 14px;border-radius:9px;border:1px solid;
+  font-family:var(--font);font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap;
+  background:transparent;transition:all .14s}
+.bknopf.verkauf{color:var(--down);border-color:rgba(251,113,133,.5)}
+.bknopf.verkauf:hover{background:rgba(251,113,133,.15)}
+.bknopf.kauf{color:var(--up);border-color:rgba(52,211,153,.5)}
+.bknopf.kauf:hover{background:rgba(52,211,153,.15)}
+.bseite .meta{margin-top:6px}
 /* Aufgeklappte Firma in der Kurstafel */
 .firmdetail{margin:-4px 0 10px;padding:2px 12px 10px;border:1px solid var(--line);border-top:0;
   border-radius:0 0 10px 10px;background:rgba(12,18,28,.45)}
@@ -907,30 +942,36 @@ td:first-child{font-family:var(--font)}
 <div class="panel" id="p-bank">
   <div class="phead"><h2>Stadtbank — Aktienhandel</h2><button class="x" data-close>✕</button></div>
   <div class="pbody">
-    <div class="note">Anteile werden in 25 %-Blöcken gehandelt. Der <b>Marktwert</b> einer Firma ist
-      ihr Firmenwert (Bargeld, Lager, Gebäude, Anleihen abzüglich Schulden) — ein 25 %-Block kostet
-      also ein Viertel davon. Wächst die Firma, wächst der Block mit: früh gekauft, später teurer
-      verkauft. Der <b>Umsatz der letzten 10 Minuten</b> steht daneben und zeigt, wie schnell eine
-      Firma gerade wächst. Dividende alle 10 min (<span id="divCountdown">10:00</span>).</div>
+    <!-- Kopfzeile statt Textwand: die eigene Lage auf einen Blick. Die Erklärung
+         zum Marktwert stand vorher als fünfzeiliger Block ganz oben und drückte
+         alles Handelbare unter den Falz — sie steht jetzt kompakt darunter und
+         vollständig im Lexikon. -->
+    <div class="bkopf" id="bankKopf"></div>
 
-    <div class="sec">Anteile anbieten</div>
-    <div class="formrow">
-      <select id="shCompany" title="Welche Firma"></select>
-      <select id="shCount"><option value="1">25 %</option><option value="2">50 %</option><option value="3">75 %</option><option value="4">100 %</option></select>
-      <input id="shPrice" type="number" min="1" value="1000" title="Preis $">
-      <select id="shTo"><option value="">Offener Markt (alle)</option></select>
-      <button class="issue" id="shList" style="width:auto;margin:0;padding:8px 12px">Anbieten</button>
-    </div>
-    <div class="meta" id="shHint" style="margin-top:4px"></div>
+    <div class="bhandel">
+      <div class="bseite verkauf">
+        <div class="bseite-kopf"><span class="pfeil">▼</span>Anteile abgeben</div>
+        <div class="formrow">
+          <select id="shCompany" title="Welche Firma"></select>
+          <select id="shCount"><option value="1">25 %</option><option value="2">50 %</option><option value="3">75 %</option><option value="4">100 %</option></select>
+          <input id="shPrice" type="number" min="1" value="1000" title="Preis $">
+          <select id="shTo"><option value="">Offener Markt (alle)</option></select>
+          <button class="bknopf verkauf" id="shList">Anbieten</button>
+        </div>
+        <div class="meta" id="shHint"></div>
+      </div>
 
-    <div class="sec">Kaufanfrage an eine Firma</div>
-    <div class="formrow">
-      <select id="bidCompany" title="Welche Firma"></select>
-      <select id="bidCount"><option value="1">25 %</option><option value="2">50 %</option><option value="3">75 %</option><option value="4">100 %</option></select>
-      <input id="bidPrice" type="number" min="1" value="2000" title="Dein Gebot $">
-      <button class="issue" id="bidSend" style="width:auto;margin:0;padding:8px 12px">Anfragen</button>
+      <div class="bseite kauf">
+        <div class="bseite-kopf"><span class="pfeil">▲</span>Anteile übernehmen</div>
+        <div class="formrow">
+          <select id="bidCompany" title="Welche Firma"></select>
+          <select id="bidCount"><option value="1">25 %</option><option value="2">50 %</option><option value="3">75 %</option><option value="4">100 %</option></select>
+          <input id="bidPrice" type="number" min="1" value="2000" title="Dein Gebot $">
+          <button class="bknopf kauf" id="bidSend">Anfragen</button>
+        </div>
+        <div class="meta" id="bidHint"></div>
+      </div>
     </div>
-    <div class="meta" id="bidHint" style="margin-top:4px"></div>
     <div id="bidlist"></div>
 
     <div class="sec">Kurstafel</div>
@@ -1290,6 +1331,10 @@ function bindSocketEvents(s) {
     liste.push(msg);
     if (liste.length > 100) liste.splice(0, liste.length - 100);
     store.set({ chat: c });
+    /* Nur fremde Nachrichten melden — die eigene hat man gerade selbst
+     * abgeschickt, ein Klang darauf wäre reine Bestätigung des Offensichtlichen. */
+    const meinName = store.get().state?.players?.[store.get().myId]?.name;
+    if (msg?.who && msg.who !== meinName) SFX.spiel("hinweis");
   });
   s.on("contractOffer", c =>
     toast(`${c.from} bietet dir ${c.qty}× ${gname(c.good)} für ${fmt(c.price)}/Stk — annehmen im Finanz-Panel? Chat-Panel → Verträge`));
@@ -2714,7 +2759,7 @@ const MUSIC = (() => {
  * gespielt wird erst, wenn der Server bestätigt hat, nie schon beim Klick.
  * Eine fehlgeschlagene Order soll nicht nach Erfolg klingen. */
 const SFX = (() => {
-  const DATEIEN = { klick: "klick", bau: "bau", geld: "geld" };
+  const DATEIEN = { klick: "klick", bau: "bau", geld: "geld", hinweis: "hinweis" };
   /* Je Klang mehrere Audio-Objekte im Wechsel: sonst schneidet ein schneller
    * zweiter Klick den ersten ab, weil dasselbe Element neu gestartet wird. */
   const POOL = 3, pools = {}, zeiger = {};
@@ -2932,9 +2977,30 @@ function refAvg(live) {
   else if (now - calmAt >= CALM_MS) { calmPrev = calmAvg; calmAvg = { ...live }; calmAt = now; }
   return calmAvg;
 }
+/* ---- Hinweis auf neue Angebote am Kapitalmarkt ----
+ * Anleihen und Aktienangebote kommen nicht als eigenes Ereignis herein, sie
+ * tauchen einfach im Zustand auf. Wer gerade auf der Karte baut, übersieht sie
+ * deshalb — und ein Angebot, das niemand bemerkt, ist so gut wie keines.
+ * Gemeldet wird nur, was FREMD und noch zu haben ist: die eigene Emission hat
+ * man selbst ausgelöst, ein bereits gezeichnetes Papier kann man nicht mehr
+ * nehmen. Beim ersten Zustand nach dem Beitritt wird nur der Ausgangsstand
+ * gemerkt, sonst käme eine Salve für alles, was ohnehin schon dalag. */
+let bekannteAngebote = null;
+function kapitalmarktHinweis(state, myId) {
+  const offen = new Set();
+  for (const b of state.bonds || [])
+    if (!b.holderId && b.issuerId !== myId) offen.add("A" + b.id);
+  for (const l of state.shareListings || [])
+    if ((l.sellerId ?? l.companyId) !== myId && (!l.toId || l.toId === myId)) offen.add("S" + l.id);
+  if (bekannteAngebote === null) { bekannteAngebote = offen; return; }
+  for (const k of offen) if (!bekannteAngebote.has(k)) { SFX.spiel("hinweis"); break; }
+  bekannteAngebote = offen;
+}
+
 function render({ state, me, myId, chat, room }) {
   if (!state || !me) return;
   tutCheck(state, myId);
+  kapitalmarktHinweis(state, myId);
   /* Tipp-Schutz: Panel nicht neu rendern, während man in einem seiner Felder tippt */
   const typingIn = el => el && el.contains(document.activeElement) &&
     /INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName);
@@ -3108,8 +3174,32 @@ function render({ state, me, myId, chat, room }) {
   /* Stadtbank: Kurstafel, Angebote und Depot — der gesamte Anteilshandel */
   if (document.getElementById("p-bank").classList.contains("open") &&
       !typingIn(document.getElementById("p-bank"))) {
-    const dm = Math.floor((state.nextDividendIn ?? 600) / 60), ds = (state.nextDividendIn ?? 600) % 60;
-    document.getElementById("divCountdown").textContent = `${dm}:${String(ds).padStart(2,"0")}`;
+    /* Kopfzeile: eigene Lage in vier Zahlen plus Dividendenuhr. Wer Anteile
+     * abgeben will, muss wissen, was ein Block wert ist und wie viel er noch
+     * hält — beides stand vorher nirgends im Panel, man musste es sich aus der
+     * Kurstafel heraussuchen. */
+    const restSek = state.nextDividendIn ?? 600;
+    const dm = Math.floor(restSek / 60), ds = restSek % 60;
+    const takt = store.get().meta?.dividendInterval ?? 600;
+    const fortschritt = Math.max(0, Math.min(1, 1 - restSek / takt));
+    const meinAnteil = me.ownPct ?? 0;
+    const kopfZahl = (wert, label, farbe) =>
+      `<div class="bkz"><b style="color:${farbe || "var(--text)"}">${wert}</b><span>${label}</span></div>`;
+    document.getElementById("bankKopf").innerHTML = `
+      <div class="bkopf-oben">
+        <span class="bkopf-name">${firmenMarke(my?.name || "Deine Firma", my?.color || "var(--text)", 24)}</span>
+        <span class="bkopf-rating" style="color:${RCOL[my?.rating] || "var(--dim)"}">${my?.rating || "—"}</span>
+      </div>
+      <div class="bkopf-zahlen">
+        ${kopfZahl(meinAnteil + " %", "gehörst dir", meinAnteil >= 50 ? "var(--up)" : "var(--down)")}
+        ${kopfZahl(fmt(me.blockPrice ?? 0), "je 25 %-Block", "var(--accent)")}
+        ${kopfZahl(fmt(my?.marketValue ?? 0), "Marktwert")}
+        ${kopfZahl(fmt(my?.rev10 ?? 0), "Umsatz 10 min")}
+      </div>
+      <div class="bkopf-uhr">
+        <div class="bkopf-balken"><i style="width:${(fortschritt * 100).toFixed(1)}%"></i></div>
+        <span>Nächste Dividende in <b id="divCountdown">${dm}:${String(ds).padStart(2,"0")}</b></span>
+      </div>`;
 
     /* Verkaufen kann man eigene Anteile (Emission) und zugekaufte fremde (Weiterverkauf) */
     const sellable = [{ id: myId, name: "Eigene Firma", blocks: Math.round((me.ownPct ?? 0) / 25),
