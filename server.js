@@ -291,6 +291,17 @@ const RECONNECT_GRACE_MS = 5 * 60 * 1000;   // 5 Minuten
  * Versorger Brunnen+Wasserwerk+Ölpumpe=$5.100, Tech 2×Siliziummine+Chipfabrik=$6.000
  * (Zonen-Freischaltung kommt on top, dafür gibt's die Starter-Aufgabe +$1.000). */
 const START_CASH = +process.env.START_CASH || 9500, MAP_W = 26, MAP_H = 26;
+
+/* Spielergesteuerte Texte — Firmenname und Chatnachricht — landen im Client an
+ * rund einem Dutzend Stellen in innerHTML: Kopfleiste, Kurstafel, Orderbuch,
+ * Anleihenliste, Verträge, Chat und jetzt auch im Marktbericht. Eine einzige
+ * dieser Stellen ohne Maskierung genügt, damit ein Mitspieler fremden Code in
+ * den Browsern aller anderen ausführt. Statt jede Ausgabestelle einzeln
+ * abzusichern — und dabei eine zu übersehen — wird hier an der Quelle
+ * maskiert: Was gespeichert wird, ist bereits unschädlich.
+ * Vergleiche bleiben stimmig, weil beide Seiten dieselbe Form sehen. */
+const sicherText = s => String(s).replace(/[&<>"']/g, c =>
+  ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 /* Rundenziel: Default $250k ≈ 1–2 h; der ERSTE Spieler der Runde legt es beim
  * Beitreten fest (Auswahl im Join-Screen). Env-Override: WIN_NW=... npm start */
 let WIN_NW = +process.env.WIN_NW || 250_000;
@@ -1084,7 +1095,7 @@ io.on("connection", socket => {
 
   /* Lobby / Registrierung */
   socket.on("register", ({ name, color, winGoal, industry, bots, botLevel }, ack) => {
-    name = String(name || "").trim().slice(0, 20);
+    name = sicherText(String(name || "").trim().slice(0, 20));
     if (!name) return ack?.({ error: "Name fehlt" });
     if (Object.values(G.players).some(p => p.name === name)) return ack?.({ error: "Name vergeben" });
     if (!INDUSTRIES[industry]) return ack?.({ error: "Bitte eine Industrie wählen" });
@@ -1557,7 +1568,7 @@ io.on("connection", socket => {
   /* --- Chat & Direktverträge --- */
   socket.on("chat", guard((p, { room, text }, ack) => {
     if (!ROOMS.includes(room)) return ack?.({ error: "Raum unbekannt" });
-    text = String(text || "").slice(0, 300);
+    text = sicherText(String(text || "").slice(0, 300));
     /* Auch dieser Fall muss quittiert werden. Ein blankes return ließ die
      * Ack-Funktion des Clients für immer offen: wer darauf wartet, hängt, und
      * socket.io hält den Rückruf bis zum Verbindungsende im Speicher. */

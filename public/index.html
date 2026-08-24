@@ -397,23 +397,40 @@ input,select{background:var(--panel2);border:1px solid var(--line);border-radius
 .tonreg:hover .tonwert,#musicVol:focus-visible + .tonwert,.tonpill.zieht .tonwert{opacity:1}
 @media(max-width:600px){ #musicVol{width:52px} }
 /* ---- Nachrichtenzentrale ----
- * Bewusst als Zeitungsspalte gesetzt: Serifen für die Schlagzeile, ruhiger
- * Fließtext darunter. Eine Tabelle stand hier zuerst — sie war präziser, las
- * sich aber wie ein Datenblatt und niemand liest ein Datenblatt zweimal. */
+ * Als Zeitungsspalte gesetzt: Serifen fuer die Schlagzeile, ruhiger Fliesstext
+ * darunter. Eine Tabelle stand hier zuerst — praeziser, las sich aber wie ein
+ * Datenblatt, und ein Datenblatt liest niemand zweimal.
+ * Die Zahlen tragen den Nachrichtenwert, deshalb stehen sie in Monoschrift und
+ * in Farbe: Im Fliesstext gehen sie sonst unter, gerade weil der Text ruhig
+ * gesetzt ist. */
 .nwlead{font-size:12.5px;color:var(--dim);line-height:1.6;padding-bottom:12px;
   border-bottom:1px solid var(--line);margin-bottom:14px}
 .nwkarte{border:1px solid var(--line);border-radius:12px;background:rgba(12,18,28,.5);
-  padding:14px 17px 15px;margin-bottom:11px}
-.nwkarte.neu{border-color:rgba(251,191,36,.42);background:rgba(251,191,36,.05)}
-.nwkopf{display:flex;align-items:center;gap:9px;margin-bottom:7px}
-.nwzeit{font-family:var(--mono);font-size:10px;letter-spacing:.15em;text-transform:uppercase;color:var(--dim)}
+  padding:15px 18px 16px;margin-bottom:12px}
+.nwkarte.neu{border-color:rgba(251,191,36,.45);background:rgba(251,191,36,.055);
+  box-shadow:0 0 0 1px rgba(251,191,36,.09)}
+.nwkopf{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.nwressort{font-family:var(--mono);font-size:9.5px;font-weight:700;letter-spacing:.16em;
+  text-transform:uppercase;color:#fbbf24}
+.nwkarte:not(.neu) .nwressort{color:var(--dim)}
+.nwzeit{font-family:var(--mono);font-size:9.5px;letter-spacing:.13em;text-transform:uppercase;color:var(--dim)}
+.nwzeit::before{content:"· "}
 .nwmarke{font-family:var(--mono);font-size:9px;letter-spacing:.12em;text-transform:uppercase;
-  color:#fbbf24;border:1px solid rgba(251,191,36,.42);border-radius:4px;padding:1px 6px}
-.nwschlag{font-family:Georgia,"Times New Roman",serif;font-size:18px;font-weight:600;
-  line-height:1.28;color:var(--text);margin:0 0 9px;text-wrap:balance}
-.nwkarte.neu .nwschlag{color:#fde9b8}
-.nwtext{font-size:13.5px;line-height:1.68;color:#bccadb;margin:0 0 8px;max-width:62ch}
+  color:#0d131c;background:#fbbf24;border-radius:4px;padding:2px 6px;font-weight:700}
+.nwschlag{font-family:Georgia,"Times New Roman",serif;font-size:20.5px;font-weight:700;
+  line-height:1.24;color:var(--text);margin:0 0 11px;text-wrap:balance;letter-spacing:-.01em}
+.nwkarte.neu .nwschlag{color:#fdefc9}
+.nwtext{font-size:13.5px;line-height:1.72;color:#b3c2d6;margin:0 0 9px;max-width:64ch}
 .nwtext:last-child{margin-bottom:0}
+/* Aufmacher etwas kraeftiger — er traegt die Nachricht. */
+.nwtext.lead{font-size:14.5px;line-height:1.66;color:#cbd7e6}
+.nwtext.lead::first-letter{font-family:Georgia,"Times New Roman",serif;font-size:31px;
+  font-weight:700;color:#fbbf24;float:left;line-height:.9;padding:3px 7px 0 0}
+.nwproz{font-family:var(--mono);font-size:12.5px;font-weight:600;white-space:nowrap}
+.nwproz.auf{color:var(--up)} .nwproz.ab{color:var(--down)}
+.nwgeld{font-family:var(--mono);font-size:12.5px;font-weight:600;color:var(--text);white-space:nowrap}
+.nwmenge{font-family:var(--mono);font-size:12.5px;font-weight:600;color:#fbbf24;white-space:nowrap}
+.nwfirma{font-weight:600}
 /* ---- Stadtbank: Kopfzeile und Handelsseiten ---- */
 .bkopf{border:1px solid var(--line);border-radius:12px;background:rgba(12,18,28,.55);
   padding:12px 14px 11px;margin-bottom:12px}
@@ -3269,12 +3286,34 @@ function render({ state, me, myId, chat, room }) {
   /* Nachrichtenzentrale: Marktberichte, neuester zuoberst */
   if (document.getElementById("p-news").classList.contains("open")) {
     const berichte = state.news || [];
+    /* Zahlen und Namen aus dem Fliesstext hervorheben. Der Server liefert
+     * fertige Saetze — die Auszeichnung passiert hier, weil nur der Client die
+     * Firmenfarben kennt. Reihenfolge ist wichtig: erst Prozente und Betraege,
+     * dann Namen, sonst zerschneidet eine Ersetzung die andere. */
+    const firmenFarben = Object.values(state.players)
+      .map(p => ({ name: p.name, farbe: p.color }))
+      .sort((a, b) => b.name.length - a.name.length);   // laengste zuerst, sonst trifft ein Teilname
+    const hervor = txt => {
+      let h = txt
+        .replace(/([+−-]\d+(?:,\d+)? Prozent)/g, m =>
+          `<b class="nwproz ${m.startsWith("+") ? "auf" : "ab"}">${m}</b>`)
+        .replace(/(\d[\d.]*(?:,\d+)? \$)/g, '<b class="nwgeld">$1</b>')
+        .replace(/(\d+ (?:gesucht|Einheiten))/g, '<b class="nwmenge">$1</b>');
+      for (const f of firmenFarben) {
+        if (!f.name) continue;
+        /* Nur ausserhalb bereits erzeugter Auszeichnungen ersetzen — ein
+         * Firmenname kann sonst mitten in einem eingefuegten Attribut landen. */
+        h = h.split(/(<[^>]*>)/).map(teil => teil.startsWith("<") ? teil
+          : teil.split(f.name).join(`<span class="nwfirma" style="color:${f.farbe}">${f.name}</span>`)).join("");
+      }
+      return h;
+    };
     document.getElementById("newsliste").innerHTML = berichte.length
       ? berichte.map((b, i) => `
         <article class="nwkarte${i === 0 ? " neu" : ""}">
-          <div class="nwkopf"><span class="nwzeit">Minute ${b.min}</span>${i === 0 ? `<span class="nwmarke">neu</span>` : ""}</div>
-          <h3 class="nwschlag">${b.schlagzeile}</h3>
-          ${b.absaetze.map(t => `<p class="nwtext">${t}</p>`).join("")}
+          <div class="nwkopf"><span class="nwressort">Marktbericht</span><span class="nwzeit">Minute ${b.min}</span>${i === 0 ? `<span class="nwmarke">neu</span>` : ""}</div>
+          <h3 class="nwschlag">${hervor(b.schlagzeile)}</h3>
+          ${b.absaetze.map((t, j) => `<p class="nwtext${j === 0 ? " lead" : ""}">${hervor(t)}</p>`).join("")}
         </article>`).join("")
       : `<div class="meta" style="margin-top:10px">Die erste Ausgabe erscheint nach zwei Minuten Spielzeit.</div>`;
   }
