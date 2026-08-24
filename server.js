@@ -655,48 +655,105 @@ function veraenderung(reihe, fenster) {
   return (bis / von - 1) * 100;
 }
 
+/* Aufzählung in Fließtext: „A, B und C". Verben werden im Text immer auf die
+ * LÄNGE der Liste bezogen formuliert, nie auf das Geschlecht der Ware — sonst
+ * müsste jedes Gut einen Genus-Eintrag bekommen, nur damit „Erze klettert"
+ * nicht falsch dasteht. */
+function liste(teile) {
+  if (teile.length <= 1) return teile[0] || "";
+  return teile.slice(0, -1).join(", ") + " und " + teile[teile.length - 1];
+}
+const proz = v => (v > 0 ? "+" : "−") + Math.abs(v).toFixed(0) + " Prozent";
+const geld = v => v.toFixed(2).replace(".", ",") + " $";
+const wucht = v => Math.abs(v) >= 25 ? "sprunghaft" : Math.abs(v) >= 12 ? "deutlich" : "leicht";
+
 function marktbericht() {
-  const proz = v => (v > 0 ? "+" : "") + v.toFixed(0) + " %";
-  const teile = [];
-  /* Waren nach Kursbewegung der letzten zwei Minuten. Sehr kleine Ausschläge
-   * bleiben draußen — sonst meldet der Bericht Rauschen als Nachricht. */
+  const wandel = k => veraenderung(G.priceHist[k], NEWS_FENSTER);
   const waren = Object.keys(GOODS)
-    .map(k => ({ k, v: veraenderung(G.priceHist[k], NEWS_FENSTER) }))
+    .map(k => ({ k, name: GOODS[k].name, v: wandel(k), kurs: MM[k].price }))
     .filter(x => x.v != null && Math.abs(x.v) >= 2)
     .sort((a, b) => b.v - a.v);
-  const zeile = x => ({ name: GOODS[x.k].name, wert: proz(x.v), kurs: MM[x.k].price.toFixed(2) + " $" });
-
   const hoch = waren.filter(x => x.v > 0).slice(0, 3);
-  if (hoch.length) teile.push({ art: "auf", titel: "Im Aufwind", zeilen: hoch.map(zeile) });
   const tief = waren.filter(x => x.v < 0).slice(-3).reverse();
-  if (tief.length) teile.push({ art: "ab", titel: "Unter Druck", zeilen: tief.map(zeile) });
 
-  /* Knappheit ist die Nachricht, die im Spiel am meisten wehtut: eine Ware mit
-   * Nachfrage und ohne Angebot legt ganze Produktionslinien still. */
   const knapp = Object.keys(GOODS).map(k => {
     const angebot = G.orders.filter(o => o.good === k && o.side === "sell").reduce((a, o) => a + o.qty, 0);
     const nachfrage = G.orders.filter(o => o.good === k && o.side === "buy").reduce((a, o) => a + o.qty, 0);
-    return { k, nachfrage, knapp: angebot === 0 && nachfrage >= 10 };
-  }).filter(x => x.knapp).sort((a, b) => b.nachfrage - a.nachfrage).slice(0, 4);
-  if (knapp.length) teile.push({ art: "knapp", titel: "Nicht lieferbar",
-    zeilen: knapp.map(x => ({ name: GOODS[x.k].name, wert: x.nachfrage + " gesucht", kurs: MM[x.k].price.toFixed(2) + " $" })) });
+    return { k, name: GOODS[k].name, nachfrage, leer: angebot === 0 && nachfrage >= 10 };
+  }).filter(x => x.leer).sort((a, b) => b.nachfrage - a.nachfrage);
 
-  /* Firmen nach Wertzuwachs im selben Fenster — wer zieht gerade davon? */
   const firmen = Object.values(G.players)
     .map(p => ({ p, v: veraenderung(G.firmHist[p.id], NEWS_FENSTER) }))
-    .filter(x => x.v != null && x.v >= 1)
-    .sort((a, b) => b.v - a.v).slice(0, 3);
-  if (firmen.length) teile.push({ art: "firma", titel: "Stärkste Firmen",
-    zeilen: firmen.map(x => ({ name: x.p.name, farbe: x.p.color, wert: proz(x.v),
-      kurs: "Block " + blockPrice(x.p).toLocaleString("de-DE") + " $" })) });
+    .filter(x => x.v != null && x.v >= 1).sort((a, b) => b.v - a.v);
+  const rang = Object.values(G.players).sort((a, b) => netWorth(b) - netWorth(a));
 
-  const rang = Object.values(G.players).sort((a, b) => netWorth(b) - netWorth(a)).slice(0, 3);
-  if (rang.length) teile.push({ art: "rang", titel: "An der Spitze",
-    zeilen: rang.map((p, i) => ({ name: `${i + 1}. ${p.name}`, farbe: p.color,
-      /* rating ist eine Funktion, kein Feld am Spieler — p.rating lieferte undefined. */
-      wert: Math.round(netWorth(p)).toLocaleString("de-DE") + " $", kurs: rating(p) })) });
+  /* ---- Schlagzeile: die auffälligste Entwicklung zuerst ---- */
+  let schlagzeile;
+  if (knapp.length && knapp[0].nachfrage >= 40)
+    schlagzeile = `${knapp[0].name} ausverkauft — ${knapp[0].nachfrage} Einheiten gesucht, keine im Angebot`;
+  else if (hoch.length && hoch[0].v >= 20)
+    schlagzeile = `${hoch[0].name} zieht kräftig an: ${proz(hoch[0].v)} auf ${geld(hoch[0].kurs)}`;
+  else if (tief.length && tief[0].v <= -15)
+    schlagzeile = `${tief[0].name} bricht ein: ${proz(tief[0].v)} auf ${geld(tief[0].kurs)}`;
+  else if (firmen.length && firmen[0].v >= 10)
+    schlagzeile = `${firmen[0].p.name} zieht davon — Firmenwert ${proz(firmen[0].v)}`;
+  else if (knapp.length)
+    schlagzeile = `${knapp[0].name} bleibt Mangelware`;
+  else
+    schlagzeile = "Ruhiger Handel, keine großen Ausschläge";
 
-  return teile.length ? { teile } : null;
+  /* ---- Absätze ---- */
+  const absaetze = [];
+  if (hoch.length || tief.length) {
+    const teile = [];
+    if (hoch.length) teile.push(
+      `Am kräftigsten ${hoch.length > 1 ? "legten" : "legte"} ` +
+      liste(hoch.map(x => `${x.name} (${proz(x.v)} auf ${geld(x.kurs)})`)) + " zu");
+    if (tief.length) {
+      /* Einleitung getrennt bilden: verschachtelt in der Zeichenkette stand die
+       * innere Ersetzung als roher Text im Bericht. */
+      const auftakt = hoch.length
+        ? "Nach unten ging es dagegen für "
+        : (tief.length > 1 ? "Nachgegeben haben " : "Nachgegeben hat ");
+      teile.push(auftakt + liste(tief.map(x => `${x.name} (${proz(x.v)} auf ${geld(x.kurs)})`)));
+    }
+    absaetze.push(teile.join(". ") + ".");
+  }
+
+  if (knapp.length) {
+    const erste = knapp[0];
+    let t = `Nicht lieferbar ${knapp.length > 1 ? "sind derzeit" : "ist derzeit"} ` +
+      liste(knapp.slice(0, 4).map(x => `${x.name} (${x.nachfrage} gesucht)`)) + ". ";
+    t += erste.nachfrage >= 60
+      ? `Vor allem bei ${erste.name} klafft eine große Lücke — wer jetzt produziert, kann seinen Preis selbst bestimmen.`
+      : `Wer diese Waren herstellt, findet gerade mühelos Abnehmer.`;
+    absaetze.push(t);
+  } else if (waren.length) {
+    absaetze.push("Lieferengpässe gibt es derzeit keine — alle nachgefragten Waren sind am Markt zu haben.");
+  }
+
+  if (firmen.length) {
+    const spitze = firmen.slice(0, 3);
+    absaetze.push(
+      `An der Börse ${spitze.length > 1 ? "gewannen" : "gewann"} ` +
+      liste(spitze.map(x => `${x.p.name} ${proz(x.v)}`)) +
+      ` an Wert. Ein 25-Prozent-Block an ${spitze[0].p.name} kostet inzwischen ` +
+      `${blockPrice(spitze[0].p).toLocaleString("de-DE")} $.`);
+  }
+
+  if (rang.length) {
+    const f = rang[0], zweiter = rang[1];
+    let t = `An der Spitze steht ${f.name} mit ${Math.round(netWorth(f)).toLocaleString("de-DE")} $ Nettovermögen`;
+    if (zweiter) {
+      const abstand = Math.round(netWorth(f) - netWorth(zweiter));
+      t += abstand < netWorth(f) * 0.05
+        ? `, dicht gefolgt von ${zweiter.name} — nur ${abstand.toLocaleString("de-DE")} $ trennen die beiden.`
+        : `, mit ${abstand.toLocaleString("de-DE")} $ Vorsprung auf ${zweiter.name}.`;
+    } else t += ".";
+    absaetze.push(t);
+  }
+
+  return absaetze.length ? { schlagzeile, absaetze } : null;
 }
 
 function sendeMarktbericht() {
