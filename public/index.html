@@ -328,6 +328,28 @@ input,select{background:var(--panel2);border:1px solid var(--line);border-radius
   padding:0 12px;border-right:1px solid rgba(36,48,68,.6);border-bottom:1px solid rgba(36,48,68,.6)}
 #ticker.auf .tk .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .tk{color:var(--dim)} .tk b{color:var(--text);margin:0 4px}
+/* Depot: Kennzahlen einer Beteiligung nebeneinander, umbrechend statt gekürzt */
+.depotzahlen{display:flex;flex-wrap:wrap;gap:3px 12px;font-size:11.5px;color:var(--dim);margin-top:2px}
+.depotzahlen b{font-family:var(--mono);color:var(--text)}
+.depotsumme{display:flex;justify-content:space-between;align-items:baseline;gap:10px;
+  margin-top:8px;padding:9px 12px;border:1px solid var(--accent);border-radius:10px;
+  background:rgba(56,189,248,.07);font-size:12.5px}
+.depotsumme b{font-family:var(--mono)}
+/* Kurstafel-Kopfzeile: Seit die Sparkline dazwischensteht, ist rechts weniger
+ * Platz — ohne diese Regeln brach "$4.888 /25 %" auf zwei Zeilen um und die
+ * Kennzahlen darunter rutschten mit. Der Name darf stattdessen kuerzen. */
+.firmrow{gap:10px}
+.firmrow > div:first-child{min-width:0}
+.firmrow > div:first-child .meta{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fpreis{font-family:var(--mono);color:var(--accent);white-space:nowrap}
+/* Aufgeklappte Firma in der Kurstafel */
+.firmdetail{margin:-4px 0 10px;padding:2px 12px 10px;border:1px solid var(--line);border-top:0;
+  border-radius:0 0 10px 10px;background:rgba(12,18,28,.45)}
+.kzrow{display:flex;justify-content:space-between;align-items:baseline;gap:10px;
+  padding:4px 0;border-bottom:1px solid rgba(36,48,68,.4);font-size:12.5px}
+.kzrow:last-of-type{border-bottom:0}
+.kzrow b{font-family:var(--mono);white-space:nowrap}
+.firmrow:hover{border-color:var(--accent)}
 /* Orderbuch-Zeile: Pfeil | Menge×Preis | Firma | Knopf */
 .obrow{display:grid;grid-template-columns:13px auto 1fr auto;align-items:center;gap:9px;
   padding:3px 2px;border-bottom:1px solid rgba(36,48,68,.4)}
@@ -1017,9 +1039,33 @@ const store = (() => {
   };
 })();
 
-/* Kursverlauf je Ware, vom Server alle 10 s geliefert (siehe priceHist in
- * server.js). 60 Punkte = 10 Minuten Rückblick. */
-let priceHist = {};
+/* Kursverlauf je Ware und Wertverlauf je Firma, vom Server alle 10 s im
+ * Ereignis "kurse" geliefert. 60 Punkte = 10 Minuten Rückblick. */
+let priceHist = {}, firmHist = {};
+
+/* Dividende, die ein 25-%-Block je Ausschüttung abwirft. Der Server schüttet
+ * DIVIDEND_RATE des Umsatzes aus, davon bekommt ein Block ein Viertel — die
+ * Sätze kommen aus der Anmeldung mit, damit hier keine fest eingetippte Zahl
+ * steht, die beim nächsten Balancing stillschweigend falsch wird. */
+function blockDividende(p) {
+  const satz = store.get().meta?.dividendRate;
+  return satz == null ? null : (p.rev10 || 0) * satz / 4;
+}
+/* Rendite je Ausschüttungsintervall, gemessen am Preis eines 25-%-Blocks. */
+function blockRendite(p) {
+  const d = blockDividende(p), kurs = p.blockPrice || 0;
+  return d == null || kurs <= 0 ? null : d / kurs * 100;
+}
+/* Einordnung der Rendite. Die Schwellen orientieren sich am Ausschüttungstakt
+ * von 10 Minuten: 8 % je 10 min holt den Kaufpreis in gut zwei Stunden
+ * Spielzeit wieder herein, 1 % praktisch nie. */
+function renditeUrteil(r) {
+  if (r == null) return null;
+  if (r >= 8) return { text: "stark",   farbe: "var(--up)" };
+  if (r >= 4) return { text: "solide",  farbe: "var(--up)" };
+  if (r >= 1) return { text: "schwach", farbe: "var(--dim)" };
+  return { text: "kaum Ertrag", farbe: "var(--down)" };
+}
 
 /* Prozentuale Veränderung über den gesamten vorliegenden Verlauf. */
 function kursTrend(g) {
@@ -1040,33 +1086,38 @@ function trendLabel(g) {
  * ohnehin als Ø-Preis. Skaliert auf das eigene Min/Max, damit auch kleine
  * Ausschläge sichtbar bleiben — bei Waren um 1 $ wäre eine Nulllinien-Skala
  * eine gerade Linie. */
-function sparkline(g, breite = 62, hoehe = 18) {
-  const h = priceHist[g];
+function sparklineVon(h, breite = 62, hoehe = 18) {
   if (!h || h.length < 2) return `<span style="display:inline-block;width:${breite}px"></span>`;
   const min = Math.min(...h), max = Math.max(...h), spanne = (max - min) || 1;
   const pts = h.map((v, i) =>
     `${(1 + i / (h.length - 1) * (breite - 2)).toFixed(1)},${(hoehe - 1 - (v - min) / spanne * (hoehe - 2)).toFixed(1)}`).join(" ");
-  const trend = kursTrend(g);
+  const trend = h[0] ? (h[h.length - 1] / h[0] - 1) * 100 : null;
   const farbe = trend == null || Math.abs(trend) < 0.5 ? "var(--dim)" : trend > 0 ? "var(--up)" : "var(--down)";
   return `<svg width="${breite}" height="${hoehe}" viewBox="0 0 ${breite} ${hoehe}" style="vertical-align:middle;overflow:visible">
     <polyline points="${pts}" fill="none" stroke="${farbe}" stroke-width="1.4" stroke-linejoin="round" stroke-linecap="round"/></svg>`;
 }
-/* Grosser Chart fuer eine einzelne Ware — erscheint, sobald an der Boerse nach
- * ihr gefiltert wird. Mit Hoch/Tief und Nulllinie, damit man Preisspitzen
- * einordnen kann statt nur die Richtung zu sehen. */
-function kursChart(g, breite = 300, hoehe = 90) {
-  const h = priceHist[g];
-  if (!h || h.length < 2) return `<div class="meta" style="padding:10px 0">Kursverlauf wird gesammelt — der erste Punkt kommt nach 10 Sekunden.</div>`;
+const sparkline = (g, breite = 62, hoehe = 18) => sparklineVon(priceHist[g], breite, hoehe);
+/* Welche Firmen in der Kurstafel gerade aufgeklappt sind. Muss ausserhalb des
+ * Renderns leben: die Tafel wird jede Sekunde neu gebaut, ein Zustand im DOM
+ * waere danach jedes Mal weg. */
+const firmenAuf = new Set();
+/* Grosser Verlaufs-Chart. Nimmt bewusst eine nackte Zahlenreihe entgegen statt
+ * eines Warenschluessels — dieselbe Darstellung traegt den Kursverlauf einer
+ * Ware an der Boerse UND den Wertverlauf einer Firma in der Kurstafel. Mit
+ * Hoch/Tief-Linien, damit man Ausschlaege einordnen kann statt nur die
+ * Richtung zu sehen. */
+function verlaufChart(h, titel, geldFormat = fp, breite = 300, hoehe = 90) {
+  if (!h || h.length < 2) return `<div class="meta" style="padding:10px 0">${titel} wird gesammelt — der erste Punkt kommt nach 10 Sekunden.</div>`;
   const min = Math.min(...h), max = Math.max(...h), spanne = (max - min) || 1;
   const X = i => (2 + i / (h.length - 1) * (breite - 4));
   const Y = v => (hoehe - 12 - (v - min) / spanne * (hoehe - 24));
   const pts = h.map((v, i) => `${X(i).toFixed(1)},${Y(v).toFixed(1)}`).join(" ");
-  const trend = kursTrend(g);
+  const trend = h[0] ? (h[h.length - 1] / h[0] - 1) * 100 : null;
   const farbe = trend == null || Math.abs(trend) < 0.5 ? "var(--dim)" : trend > 0 ? "var(--up)" : "var(--down)";
-  const minuten = Math.round(h.length * 10 / 60);
+  const minuten = Math.max(1, Math.round(h.length * 10 / 60));
   return `<div style="background:rgba(12,18,28,.5);border:1px solid rgba(36,48,68,.7);border-radius:8px;padding:8px 10px;margin:6px 0">
     <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:2px">
-      <span class="meta">Kursverlauf · letzte ${minuten} min</span>
+      <span class="meta">${titel} · letzte ${minuten} min</span>
       <span style="font-family:var(--mono);font-size:12px;color:${farbe}">${trend == null ? "" : (trend > 0 ? "+" : "") + trend.toFixed(1) + " %"}</span>
     </div>
     <svg width="100%" height="${hoehe}" viewBox="0 0 ${breite} ${hoehe}" preserveAspectRatio="none">
@@ -1075,14 +1126,23 @@ function kursChart(g, breite = 300, hoehe = 90) {
       <polyline points="${pts}" fill="none" stroke="${farbe}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
     </svg>
     <div style="display:flex;justify-content:space-between;font-family:var(--mono);font-size:11px;color:var(--dim)">
-      <span>Tief ${fp(min)}</span><span>Hoch ${fp(max)}</span></div>
+      <span>Tief ${geldFormat(min)}</span><span>Hoch ${geldFormat(max)}</span></div>
   </div>`;
 }
+const kursChart = g => verlaufChart(priceHist[g], "Kursverlauf");
+
 const fmt = n => "$" + Math.round(n).toLocaleString("de-DE");
 const fp = n => n < 10 ? "$" + (+n).toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : fmt(n);   // Preise: Cents bei billigen Waren
+const TOAST_MAX = 4;   // mehr passen ohne Überdecken der Karte nicht übereinander
 const toast = (msg, err) => { const d = document.createElement("div");
   d.className = "toast" + (err ? " err" : ""); d.textContent = msg;
-  document.getElementById("toasts").append(d); setTimeout(() => d.remove(), 4000); };
+  const box = document.getElementById("toasts");
+  box.append(d);
+  /* Gedeckelt, weil jede Meldung 4 s stehen bleibt: Treffen mehrere Ereignisse
+   * zusammen (Quest, Dividende, Großauftrag), wuchs der Stapel sonst über den
+   * halben Bildschirm. Die ältesten weichen den neuen. */
+  while (box.children.length > TOAST_MAX) box.firstElementChild.remove();
+  setTimeout(() => d.remove(), 4000); };
 /* Jede Aktion läuft über ack — Server-Fehler landen als Toast beim Spieler.
  * Der passende Klang kommt erst mit der Bestätigung: eine abgelehnte Order
  * soll nicht nach gelungenem Geschäft klingen. */
@@ -1160,9 +1220,13 @@ function bindSocketEvents(s) {
   s.on("reconnected", () => reidentify(s));    // über die WebRTC-Bridge gemeldet
   s.on("state", state => store.set({ state: mergeState(state) }));
   s.on("me", me => { letztesMe = Date.now(); store.set({ me }); });
-  s.on("priceHist", h => { priceHist = h || {}; });
+  s.on("kurse", k => { priceHist = k?.waren || {}; firmHist = k?.firmen || {}; });
   s.on("notice", ({ text }) => toast(text));
-  s.on("trade", t => toast(`${t.qty}× ${gname(t.good)} @ ${fmt(t.price)} (${t.seller} → ${t.buyer})`));
+  /* Kein Toast mehr je Handel: Das Ereignis feuert bei JEDEM Abschluss im
+   * Spiel, auch zwischen zwei Bots, an denen man selbst gar nicht beteiligt
+   * ist. Bei sechs handelnden Bots stapelten sich die Meldungen bis in die
+   * Bildschirmmitte und verdeckten die Karte. Eigene Abschlüsse stehen
+   * weiterhin im Kontoauszug unter "Firma". */
   s.on("chat", ({ room, msg }) => {
     /* Wie serverseitig bei 100 gedeckelt: der Chatverlauf wuchs hier sonst über
      * die ganze Spielzeit unbegrenzt weiter, und das Chat-Panel baut bei jedem
@@ -1348,7 +1412,7 @@ function startHosting(retriesLeft = 2) {
           stateTimer = null;
         }, 250);
       });
-      ["me", "notice", "trade", "chat", "contractOffer", "shareOffer", "priceHist"].forEach(ev => relay.on(ev, payload => conn.send({ t: "event", ev, payload })));
+      ["me", "notice", "chat", "contractOffer", "shareOffer", "kurse"].forEach(ev => relay.on(ev, payload => conn.send({ t: "event", ev, payload })));
       conn.on("close", () => { relay.disconnect(); if (stateTimer) clearTimeout(stateTimer); });
     });
   });
@@ -2904,18 +2968,40 @@ function render({ state, me, myId, chat, room }) {
       .filter(p => p.id !== myId).map(p => `<option value="${p.id}">Nur an ${p.name}</option>`).join("");
     shToSel.value = shToPrev;
 
-    /* Kurstafel: alle Firmen mit Marktwert und laufendem Umsatz */
+    /* Kurstafel: jede Firma aufklappbar — Wertverlauf, Dividende je Block und
+     * die daraus gerechnete Rendite. Der Blockpreis allein sagt naemlich nicht,
+     * ob ein Kauf sich lohnt: eine teure Firma ohne Umsatz schuettet nichts
+     * aus, eine billige mit hohem Umsatz holt den Kaufpreis schnell herein. */
     document.getElementById("bankboard").innerHTML = Object.values(state.players)
       .sort((a, b) => (b.marketValue || 0) - (a.marketValue || 0))
       .map(p => {
         const held = p.id === myId ? (me.ownPct ?? 0)
           : ((me.portfolio || []).find(h => h.id === p.id)?.pct || 0);
-        return `<div class="bond">
+        const auf = firmenAuf.has(p.id);
+        const div = blockDividende(p), rend = blockRendite(p), urteil = renditeUrteil(rend);
+        const takt = Math.round((store.get().meta?.dividendInterval ?? 600) / 60);
+        return `<div class="bond firmrow" data-firm="${p.id}" style="cursor:pointer">
           <div><b style="color:${p.color}">${p.name}</b>${p.id === myId ? ` <span class="meta">(du)</span>` : ""}
-            <div class="meta">Marktwert ${fmt(p.marketValue || 0)} · Umsatz 10 min ${fmt(p.rev10 || 0)}${held ? ` · dein Anteil ${held} %` : ""}</div></div>
-          <span style="font-family:var(--mono);color:var(--accent)">${fmt(p.blockPrice || 0)}<span class="meta"> /25 %</span></span>
-        </div>`;
+            <div class="meta">Marktwert ${fmt(p.marketValue || 0)}${held ? ` · <b style="color:var(--accent)">du: ${held} %</b>` : ""}</div></div>
+          <span style="display:flex;align-items:center;gap:8px">
+            ${firmHist[p.id] ? sparklineVon(firmHist[p.id], 52, 16) : ""}
+            <span class="fpreis">${fmt(p.blockPrice || 0)}<span class="meta"> /25 %</span></span>
+            <span class="meta" style="width:9px;text-align:center">${auf ? "⌃" : "⌄"}</span>
+          </span>
+        </div>` + (auf ? `<div class="firmdetail">
+          ${verlaufChart(firmHist[p.id], "Firmenwert", fmt)}
+          <div class="kzrow"><span>Umsatz der letzten 10 min</span><b>${fmt(p.rev10 || 0)}</b></div>
+          <div class="kzrow"><span>Dividende je 25 %-Block</span><b>${div == null ? "—" : fmt(div)} <span class="meta">/${takt} min</span></b></div>
+          <div class="kzrow"><span>Rendite auf den Blockpreis</span><b style="color:${urteil?.farbe || "var(--dim)"}">${rend == null ? "—" : rend.toFixed(1) + " %"}${urteil ? ` <span style="font-weight:400">· ${urteil.text}</span>` : ""}</b></div>
+          <div class="meta" style="padding-top:4px">Ausgeschüttet werden ${Math.round((store.get().meta?.dividendRate ?? 0) * 100)} % des Umsatzes je ${takt} Minuten; ein 25-%-Block erhält davon ein Viertel.</div>
+        </div>` : "");
       }).join("");
+    document.querySelectorAll("[data-firm]").forEach(el => el.addEventListener("click", () => {
+      const id = el.dataset.firm;
+      firmenAuf.has(id) ? firmenAuf.delete(id) : firmenAuf.add(id);
+      SFX.spiel("klick");
+      render(store.get());
+    }));
 
     /* Angebote */
     const mine = state.shareListings.filter(l => l.sellerId === myId);
@@ -2975,10 +3061,33 @@ function render({ state, me, myId, chat, room }) {
                  <button class="buyb" data-merge-yes="${h.id}">Ja, übernehmen</button>
                  <button class="mini" data-merge-no="1">Abbrechen</button>`
               : `<button class="buyb" data-merge="${h.id}">Fusionieren</button>`;
+          /* Gewinn/Verlust gegen den Einstand. Der aktuelle Wert allein sagt
+           * nicht, ob sich die Beteiligung gelohnt hat — genau das ist aber
+           * die Frage beim Verkaufen. */
+          const gv = h.einstand > 0 ? h.value - h.einstand : null;
+          const gvFarbe = gv == null ? "var(--dim)" : gv >= 0 ? "var(--up)" : "var(--down)";
+          const gvProz = h.einstand > 0 ? (h.value / h.einstand - 1) * 100 : null;
           return `<div class="bond">
-            <div><b>${h.company}</b><div class="meta">${h.pct} % · Wert ${fmt(h.value)} · Umsatz 10 min ${fmt(h.rev10)}${h.pct >= 100 ? ` — <b style="color:var(--accent)">bereit zur Fusion</b>` : ""}</div></div>
+            <div style="min-width:0"><b>${h.company}</b>${h.pct >= 100 ? ` <b style="color:var(--accent)">· bereit zur Fusion</b>` : ""}
+              <div class="depotzahlen">
+                <span>${h.pct} %</span>
+                <span>Einstand <b>${h.einstand > 0 ? fmt(h.einstand) : "—"}</b></span>
+                <span>Wert <b>${fmt(h.value)}</b></span>
+                ${gv == null ? "" : `<span style="color:${gvFarbe}">${gv >= 0 ? "+" : "−"}${fmt(Math.abs(gv))} (${gvProz >= 0 ? "+" : ""}${gvProz.toFixed(0)} %)</span>`}
+              </div></div>
             <div style="display:flex;gap:5px">${mergeUi}</div></div>`;
-        }).join("")
+        }).join("") + (() => {
+          /* Depotsumme: Einzelposten sagen nichts darueber, wie das Depot als
+           * Ganzes steht — und das ist die Zahl, die man mit dem Bargeld
+           * vergleicht. */
+          const einst = me.portfolio.reduce((a, h) => a + (h.einstand || 0), 0);
+          const wert  = me.portfolio.reduce((a, h) => a + (h.value || 0), 0);
+          const gv = einst > 0 ? wert - einst : null;
+          return `<div class="depotsumme">
+            <span>Portfoliowert</span>
+            <span><b>${fmt(wert)}</b>${einst > 0 ? ` <span class="meta">Einstand ${fmt(einst)}</span>` : ""}
+              ${gv == null ? "" : `<b style="color:${gv >= 0 ? "var(--up)" : "var(--down)"}">${gv >= 0 ? "+" : "−"}${fmt(Math.abs(gv))}</b>`}</span></div>`;
+        })()
       : `<span class="meta">Du hältst keine fremden Anteile. Kaufe oben einen Block — steigt der Marktwert der Firma, kannst du ihn teurer weiterverkaufen.</span>`;
   }
 

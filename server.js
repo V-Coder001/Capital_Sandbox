@@ -377,6 +377,7 @@ const G = {
   auctions: [],         // {id, tileIdx, btype, minBid, bestBid, bestBidder, tLeft}
   lastTrade: {},        // good -> Preis des letzten echten Trades (Ticker)
   priceHist: {},        // good -> Kursverlauf, alle 10 s ein Punkt (Chart)
+  firmHist: {},         // pid  -> Firmenwert-Verlauf, gleiche Taktung
   chat: Object.fromEntries(ROOMS.map(r => [r, []])),
   contracts: [],        // {id, fromId, toId, good, qty, price, status}
   tick: 0, winner: null, report: null,
@@ -404,6 +405,7 @@ function newPlayer(pid, name, color, industry, socketId) {
   inv.beton = 6;
   return { id: pid, name, color, industry, industries: [industry], cash: START_CASH, xp: 0, lvl: 1,
     inv,
+    equityAvg: {},     // companyId -> Ø-Einstand je 25-%-Block (Durchschnittsmethode)
     quests: {},        // Starter-Aufgaben: {id: {n, done}}
     tx: [],            // Transaktions-Log: {t, cat, text, amt}
     sales: {},         // je Ware: {botQty, botRev, playerQty, playerRev, buyQty, buyCost}
@@ -613,6 +615,24 @@ function finishGroupOrder() {
  * Erlöses wird proportional zu den verkauften 25%-Anteilen an deren Halter
  * ausgezahlt (Eigenbesitz braucht nicht bewegt zu werden — bleibt einfach
  * im Firmen-Cash). Der Rest-Erlös verbleibt vollständig bei der Firma. */
+/* Einstandswert einer Beteiligung mitführen. Ohne ihn zeigt das Depot zwar den
+ * aktuellen Wert, aber nicht, ob die Beteiligung im Plus oder im Minus steht —
+ * und genau das ist die Frage beim Verkaufen.
+ * Durchschnittsmethode: Der Ø-Preis JE BLOCK ändert sich nur beim Zukauf, ein
+ * Verkauf lässt ihn unberührt. Das spart die fehleranfällige Fortschreibung an
+ * jedem Abgang. Bereits zum Verkauf eingestellte Blöcke liegen in Verwahrung
+ * (equity ist dann schon reduziert) und werden mitgezählt — sonst würde ein
+ * Zukauf während eines offenen Angebots den Schnitt verfälschen. */
+function merkeEinstand(kaeufer, company, count, preis) {
+  const verwahrt = G.shareListings
+    .filter(l => l.companyId === company.id && (l.sellerId ?? l.companyId) === kaeufer.id)
+    .reduce((a, l) => a + l.count, 0);
+  const vorher = (company.equity[kaeufer.id] || 0) + verwahrt;   // vor dem Zukauf aufrufen
+  const alt = kaeufer.equityAvg[company.id] || 0;
+  const nachher = vorher + count;
+  if (nachher > 0) kaeufer.equityAvg[company.id] = (alt * vorher + preis) / nachher;
+}
+
 function distributeDividends() {
   for (const p of Object.values(G.players)) {
     const revenue = p.revenue;
@@ -763,6 +783,7 @@ function privateState(p) {
     .map(other => ({ id: other.id, company: other.name, industry: other.industry,
       count: other.equity[p.id], pct: other.equity[p.id] * 25,
       blockPrice: blockPrice(other), value: blockPrice(other) * other.equity[p.id],
+      einstand: Math.round((p.equityAvg[other.id] || 0) * other.equity[p.id]),
       marketValue: Math.round(companyValue(other)), rev10: Math.round(rev10(other)) }));
   return { cash: p.cash, inv: p.inv, xp: p.xp, lvl: p.lvl,
     quests: p.quests,
@@ -906,7 +927,7 @@ if (PERF) setInterval(() => {
 io.on("connection", socket => {
   /* Kursverlauf sofort mitgeben. Er wird sonst nur alle 10 s gesendet — wer
    * mitten im Intervall beitritt, säße bis dahin vor leeren Charts. */
-  socket.emit("priceHist", G.priceHist);
+  socket.emit("kurse", { waren: G.priceHist, firmen: G.firmHist });
   /* Reconnect: Browser hat noch ein Token aus einer früheren Verbindung (Tab zu,
    * WLAN-Aussetzer, versehentlich verlassen) — Spielstand bleibt komplett erhalten. */
   socket.on("rejoin", ({ token }, ack) => {
@@ -919,7 +940,8 @@ io.on("connection", socket => {
     ack?.({ ok: true, goods: GOODS, btypes: BTYPES, rooms: ROOMS, you: token, winGoal: WIN_NW,
       questDefs: QUESTS, industry: p.industry, industries: INDUSTRIES,
       botLevels: Object.fromEntries(Object.entries(BOT_LEVELS).map(([k, v]) => [k, v.name])),
-      retailFlow: Object.fromEntries(Object.keys(GOODS).map(k => [k, +retailFlow(k).toFixed(3)])) });
+      retailFlow: Object.fromEntries(Object.keys(GOODS).map(k => [k, +retailFlow(k).toFixed(3)])),
+      dividendRate: DIVIDEND_RATE, dividendInterval: DIVIDEND_INTERVAL });
     pushState();
   });
 
@@ -945,7 +967,8 @@ io.on("connection", socket => {
     io.emit("notice", { text: `${name} ist der Sitzung beigetreten.` + (Object.keys(G.players).length === 1 ? ` Rundenziel: ${WIN_NW.toLocaleString("de-DE")} $` : "") });
     ack?.({ ok: true, goods: GOODS, btypes: BTYPES, rooms: ROOMS, you: pid, winGoal: WIN_NW, questDefs: QUESTS, industry, industries: INDUSTRIES,
       botLevels: Object.fromEntries(Object.entries(BOT_LEVELS).map(([k, v]) => [k, v.name])),
-      retailFlow: Object.fromEntries(Object.keys(GOODS).map(k => [k, +retailFlow(k).toFixed(3)])) });
+      retailFlow: Object.fromEntries(Object.keys(GOODS).map(k => [k, +retailFlow(k).toFixed(3)])),
+      dividendRate: DIVIDEND_RATE, dividendInterval: DIVIDEND_INTERVAL });
     pushState();
   });
 
@@ -1212,6 +1235,7 @@ io.on("connection", socket => {
     bidder.cash -= bid.price;
     p.cash += bid.price;                    // Verkauf eigener Anteile = frisches Firmenkapital
     p.equity[p.id] -= bid.count;
+    merkeEinstand(bidder, p, bid.count, bid.price);
     p.equity[bidder.id] = (p.equity[bidder.id] || 0) + bid.count;
     G.shareBids.splice(i, 1);
     logTx(p, "Aktien", `${bid.count * 25}% eigene Anteile an ${bidder.name} verkauft`, bid.price);
@@ -1257,6 +1281,7 @@ io.on("connection", socket => {
     if (!company) { G.shareListings.splice(G.shareListings.indexOf(l), 1); return ack?.({ error: "Firma existiert nicht mehr" }); }
     const seller = G.players[sellerId];
     p.cash -= l.price;
+    merkeEinstand(p, company, l.count, l.price);   // vor dem Erhöhen: braucht den alten Stand
     company.equity[p.id] = (company.equity[p.id] || 0) + l.count;
     G.shareListings.splice(G.shareListings.indexOf(l), 1);
     logTx(p, "Aktien", `${l.count * 25}% an ${company.name} gekauft`, -l.price);
@@ -1306,7 +1331,7 @@ io.on("connection", socket => {
     /* Preisanker zurücksetzen — sonst startet die neue Runde mit den
      * verzerrten Kursen der alten (z. B. dauerhaft gedrücktem Ölpreis). */
     for (const k of Object.keys(GOODS)) Object.assign(MM[k], { price: BASEP[k], anchor: BASEP[k], sold: 0 });
-    G.priceHist = {};
+    G.priceHist = {}; G.firmHist = {};
     /* Alle Clients bekommen die Karte danach wieder vollständig */
     lastTileSigs = null;
     for (const sock of io.sockets.sockets.values()) sock.data.gotMap = false;
@@ -1657,7 +1682,18 @@ function runTick() {
       h.push(MM[k].price);
       if (h.length > 60) h.shift();          // 60 Punkte = 10 min Rückblick
     }
-    io.emit("priceHist", G.priceHist);
+    /* Firmenwerte im selben Takt. p.nwHist gibt es zwar schon, das steckt aber
+     * im PRIVATEN Zustand — man sähe damit nur die eigene Kurve, während die
+     * Kurstafel gerade den Vergleich mit den anderen leisten soll. */
+    for (const pl of Object.values(G.players)) {
+      const h = (G.firmHist[pl.id] ??= []);
+      h.push(Math.round(companyValue(pl)));
+      if (h.length > 60) h.shift();
+    }
+    for (const pid of Object.keys(G.firmHist)) if (!G.players[pid]) delete G.firmHist[pid];
+    /* Beides in einem Ereignis: zwei Sendungen im selben Takt wären eine
+     * Rundreise mehr, ohne dass die Daten je getrennt gebraucht würden. */
+    io.emit("kurse", { waren: G.priceHist, firmen: G.firmHist });
   }
   /* Siegbedingung */
   if (!G.winner) for (const p of Object.values(G.players)) {
