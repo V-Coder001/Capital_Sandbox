@@ -1811,10 +1811,18 @@ const BOT_CFGS = [
   { name: "Grünhof & Söhne", industry: "agrar",     color: "#6fae4e",
     plan: ["kontor", "plantage", "werbeagentur", "markt"], needs: ["wasser", "strom"] },
 
+  /* Zweites Stahlwerk gleich nach der Abdeckung. Über eine ganze Runde von
+   * 78 Minuten gab es im Spiel nur EIN Stahlwerk, und Stahl war durchgehend
+   * nicht käuflich: Angebot 0 bei Nachfrage 98, der Kurs stand zehn Minuten
+   * unbewegt auf 137,25 $ — ein Preis, zu dem kein einziger Handel zustande
+   * kam. Das legte gleich zwei Produktlinien still (das fertig ausgebaute
+   * Benzin-Autowerk eines Spielers und die komplette Rüstungskette). Stahl ist
+   * die Zutat mit der breitesten Abhängigkeit im Spiel, sie darf nicht an
+   * einem einzigen Gebäude hängen. */
   { name: "Montan & Bau AG", industry: "rohstoff",  color: "#fbbf24",
-    plan: ["bauhandel", "mine", "werbeagentur", "kontor"], needs: ["strom", "oel", "wasser"] },
+    plan: ["stahlwerk", "bauhandel", "werbeagentur", "kontor"], needs: ["strom", "oel", "wasser"] },
   { name: "Felswerk",        industry: "rohstoff",  color: "#f97316",
-    plan: ["kontor", "mine", "werbeagentur", "bauhandel"], needs: ["strom", "oel", "wasser"] },
+    plan: ["stahlwerk", "kontor", "mine", "werbeagentur", "bauhandel"], needs: ["strom", "oel", "wasser"] },
 
   { name: "Stadtwerke",      industry: "versorger", color: "#38bdf8",
     plan: ["kontor", "wasserwerk", "werbeagentur", "windpark"], needs: [],
@@ -1969,8 +1977,14 @@ async function spawnBot(cfg, lvl = BOT_LEVELS[BOT_LEVEL_DEFAULT]) {
           /* Beteiligung abstoßen — leicht unter Marktwert, damit sie zügig weggeht */
           const h = depot.sort((a, b) => b.value - a.value)[0];
           await em("listShares", { companyId: h.id, count: 1, price: Math.max(200, Math.round(h.blockPrice * 0.95)) });
-        } else if ((st.players[myId]?.ownPct ?? 0) > 0 && meinBlock > 0) {
-          /* Notverkauf eigener Anteile: 10 % Abschlag auf den Marktwert, nicht mehr */
+        } else if ((st.players[myId]?.ownPct ?? 0) > 50 && meinBlock > 0) {
+          /* Notverkauf eigener Anteile: 10 % Abschlag auf den Marktwert, nicht mehr.
+           * Untergrenze 50 %: Vorher stand hier nur "> 0", ein dauerhaft klammer
+           * Bot verkaufte sich damit Block für Block bis auf null herunter.
+           * Gemessen an Stahlfaust am Rundenende: Nettovermögen 0 bei 8.300 $
+           * Umsatz und Bonität D — netWorth summiert ausschliesslich GEHALTENE
+           * Anteile, und er hielt keinen einzigen mehr an sich selbst. Die
+           * Anzeige war korrekt, die Firma hatte sich selbst aufgelöst. */
           await em("listShares", { count: 1, price: Math.max(400, Math.round(meinBlock * 0.9)) });
         }
       } else if (me.cash > 6000) {
@@ -2017,13 +2031,18 @@ async function spawnBot(cfg, lvl = BOT_LEVELS[BOT_LEVEL_DEFAULT]) {
        * überhaupt tragen kann. */
       const meineAnleihen = (st.bonds || []).filter(b => b.issuerId === myId);
       const meinRating = st.players[myId]?.rating || "BBB";
-      const meinNw = st.players[myId]?.netWorth || 0;
       /* Schwelle bewusst tief. Bei 1500 $ emittierte binnen Minuten FAST JEDER
        * Bot — sie pendeln ohnehin dauernd um diesen Wert. In der Messung lagen
        * dadurch fünf Anleihen gleichzeitig unverkauft am Markt, während der
        * reichste Bot nur 3568 $ hatte. Eine Anleihe soll die Ausnahme für einen
        * wirklich festgefahrenen Bot sein, nicht der Normalzustand. */
-      if (me.cash < 1000 && built >= 2 && !meineAnleihen.length && meinNw > 4000) {
+      /* Hürde war zuvor zusätzlich `meinNw > 4000`. Beides zusammen schliesst
+       * sich in der Praxis aus: Bots mit Substanz geht das Bargeld nicht aus,
+       * und dem einen, dem es ausging, fehlte genau diese Substanz. Ergebnis
+       * einer vollen Runde über 78 Minuten: NULL Anleihen, das Feature löste
+       * kein einziges Mal aus. Sicherheit sind jetzt die Gebäude selbst — sie
+       * haften bei Zahlungsverzug ohnehin über das Pfandrecht. */
+      if (me.cash < 1000 && built >= 2 && !meineAnleihen.length) {
         /* Zins nach eigener Bonität — schlechtere Schuldner müssen mehr bieten,
          * sonst zeichnet niemand. Der Satz gilt PRO MINUTE (Kupon je Sekunde =
          * principal * rate / 60), über 300 s Laufzeit sind das also das
@@ -2035,7 +2054,12 @@ async function spawnBot(cfg, lvl = BOT_LEVELS[BOT_LEVEL_DEFAULT]) {
         /* Klein halten: Ein 1800-$-Papier verlangt vom Zeichner rund 2600 $
          * frei — so viel hat in dieser Wirtschaft selten jemand gleichzeitig.
          * 1200 $ sind aus einer Kasse von 2000 $ darstellbar. */
-        const betrag = Math.min(1200, Math.round(meinNw * 0.1 / 100) * 100);
+        /* Höhe an den Gebäuden bemessen statt am Nettovermögen: Der Wert der
+         * Gebäude ist das, was im Ernstfall gepfändet wird, und er bleibt auch
+         * dann stehen, wenn die Firma ihre Anteile abgegeben hat. */
+        const gebaeudeWert = st.map.filter(t => t.owner === myId && t.btype)
+          .reduce((a, t) => a + (BTYPES[t.btype]?.cost || 0), 0);
+        const betrag = Math.min(1200, Math.round(gebaeudeWert * 0.15 / 100) * 100);
         if (betrag >= 500) {
           await em("issueBond", { principal: betrag, rate: zinsNachBonitaet[meinRating] ?? 0.04, term: 300 });
         }
@@ -2238,7 +2262,17 @@ async function spawnBot(cfg, lvl = BOT_LEVELS[BOT_LEVEL_DEFAULT]) {
         await em("placeOrder", { side: "buy", good: "elektronik", qty: 5,
           price: Math.round(st.avg.elektronik * 1.03 * 100) / 100 });
       }
-      const upgradable = lvl.leveln && st.map.find(t => t.owner === myId && t.btype &&
+      /* Aufleveln erst, wenn die Branche vollständig abgedeckt ist. Der Grundsatz
+       * "Abdeckung geht vor Dopplung" galt bisher nur fürs Bauen — Aufleveln lief
+       * daneben ungebremst weiter und war meist billiger als das nächste fehlende
+       * Gebäude. Gemessen an Montan & Bau AG über 24 Minuten: mine St.5,
+       * ziegelei St.3, betonwerk St.1 — und KEIN Stahlwerk, obwohl es das vierte
+       * Produkt der Branche ist. Im ganzen Spiel gab es damit null Stahl bei
+       * einer Nachfrage von 22 Stück. Eine Firma, die ihre Mine zum fünften Mal
+       * ausbaut, während ihr Kernprodukt fehlt, wirtschaftet nicht plausibel. */
+      const abdeckung = INDUSTRY_COVERAGE[cfg.industry] || [];
+      const abdeckungFertig = cfg.planLoop || built >= abdeckung.length;
+      const upgradable = lvl.leveln && abdeckungFertig && st.map.find(t => t.owner === myId && t.btype &&
         (BTYPES[t.btype].out || BTYPES[t.btype].proc) && (t.level || 1) < 5);
       if (upgradable) {
         const ubt = BTYPES[upgradable.btype], ulvl = upgradable.level || 1;

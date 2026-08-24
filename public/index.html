@@ -1090,6 +1090,23 @@ function kursTrend(g) {
   if (!h || h.length < 2 || !h[0]) return null;
   return (h[h.length - 1] / h[0] - 1) * 100;
 }
+/* Angebot gegen Nachfrage je Ware. In einer vollen Runde standen 500 Stueck
+ * Silizium ohne einen einzigen Interessenten im Buch, waehrend Stahl bei
+ * Nachfrage 98 gar nicht lieferbar war — beides sah man nur, wenn man das
+ * Orderbuch Zeile fuer Zeile durchging. Die Zahlen liegen ohnehin vor. */
+function saettigung(g, state) {
+  let angebot = 0, nachfrage = 0;
+  for (const o of state.orders) {
+    if (o.good !== g) continue;
+    if (o.side === "sell") angebot += o.qty; else nachfrage += o.qty;
+  }
+  if (!angebot && !nachfrage) return "";
+  /* Nur faerben, wenn eine Seite die andere klar dominiert — sonst ist es
+   * Rauschen und lenkt vom Kurs ab. */
+  const farbe = angebot > nachfrage * 3 ? "var(--down)"
+              : nachfrage > angebot * 3 ? "var(--up)" : "var(--dim)";
+  return `<span style="color:${farbe};font-size:11px" title="Angebot ${angebot} · Nachfrage ${nachfrage}">${angebot}/${nachfrage}</span>`;
+}
 /* Prozentwert als farbiges Kuerzel. Unter 0,5 % wird nichts angezeigt —
  * das Rauschen der Kursdrift soll nicht als Trend erscheinen. */
 function trendLabel(g) {
@@ -1744,6 +1761,46 @@ async function attemptRejoin() {
   });
 }
 attemptRejoin();
+/* ---- Übungsrunde starten ----
+ * Legt eine eigene Runde an, tritt ihr bei, startet sie sofort und schaltet
+ * die geführten Schritte ein. Bewusst dieselben Wege wie beim normalen
+ * Rundenstart — die Übungsrunde ist keine Attrappe, sondern eine echte Partie
+ * mit Bots und laufendem Markt. */
+async function uebungsrundeStarten() {
+  const btn = document.getElementById("tutBuchAuf");
+  const alterText = btn.textContent;
+  btn.disabled = true; btn.textContent = "Runde wird vorbereitet …";
+  const fehler = (m) => {
+    btn.disabled = false; btn.textContent = alterText;
+    toast(m || "Die Übungsrunde konnte nicht gestartet werden.", true);
+  };
+  try {
+    await multiroomReady;
+    myIndustry = "agrar";               // einfachste Branche für den Einstieg
+    if (MULTIROOM) {
+      const r = await fetch("/api/rooms", { method: "POST" });
+      const data = await r.json();
+      if (!r.ok || data.error) return fehler(data.error);
+      myRoomCode = data.code;
+      connectToRoom(myRoomCode);
+      renderInviteMultiroom();
+    }
+    socket.emit("register", { name: "Übungsfirma", color: myColor, industry: "agrar" }, res => {
+      if (res?.error) return fehler(res.error);
+      myToken = res.you;
+      try { localStorage.setItem(TOKEN_KEY, MULTIROOM ? JSON.stringify({ code: myRoomCode, token: res.you }) : res.you); } catch {}
+      enterGame(res);
+      /* Direkt starten statt über den Warteraum: Hier wartet niemand auf
+       * Mitspieler, und die geführten Schritte brauchen eine laufende Runde. */
+      socket.emit("startRound", {}, r2 => {
+        if (r2?.error) return fehler(r2.error);
+        TUT = TUT_SPIEL;
+        tutShow(0);
+      });
+    });
+  } catch (e) { fehler(e.message); }
+}
+
 document.getElementById("jgo").addEventListener("click", async () => {
   const name = document.getElementById("jname").value.trim();
   document.getElementById("joinErr").textContent = "";
@@ -2770,6 +2827,57 @@ function buildTut(ind) {
       p: `Städte stellen <b>Großaufträge</b> (Ø×2, fixiert!) — alle zahlen gemeinsam ein, im Lager-Panel. Im <b>Finanzen-Panel</b> gibt es Anleihen (Vorsicht: Pfändung bei Verzug). Unter <b>Firma</b> siehst du deinen Rang, im <b>Lexikon</b> alles Wissen. Und nun: Zeig dieser Stadt, was in dir steckt — ich behalte dich im Auge.` },
   ];
 }
+/* ---------- Übungsrunde ----------
+ * Der Knopf "Tutorial spielen" öffnete bisher ein Lesebuch. Wer ein
+ * Wirtschaftsspiel verstehen will, muss aber einmal selbst gebaut, verkauft
+ * und eingekauft haben — also startet er jetzt eine echte, eigene Runde auf
+ * der Karte und führt Schritt für Schritt durch die ersten Handlungen. Jeder
+ * Schritt wartet auf die Handlung selbst, keiner lässt sich wegklicken. */
+const TUT_SPIEL = [
+  { t: "Deine Übungsrunde läuft",
+    p: `Das hier ist eine <b>echte Runde</b>, ganz für dich allein — mit richtigem Markt und Bot-Firmen, die handeln. Du kannst nichts kaputtmachen: Schließe einfach die Seite, wenn du fertig bist.<br><br>Ich führe dich durch die ersten Schritte. Jeder Schritt wartet, bis du ihn wirklich gemacht hast.` },
+
+  { t: "Schritt 1 — Baue eine Farm", build: "farm",
+    p: `Klicke auf eine freie <em>grüne Agrar-Kachel</em> und wähle <b>Farm</b> ($1.200 + 3 Ziegel).<br><br>Sie produziert von allein <b>Obst</b>, Sekunde für Sekunde. Achte oben links auf dein Bargeld — Bauen kostet sofort, verdient wird erst später.` },
+
+  { t: "Schritt 2 — Baue einen Marktstand", build: "markt",
+    p: `Obst im Lager bringt noch kein Geld. Du brauchst einen Laden.<br><br>Baue im <em>blauen Zentrum</em> einen <b>Marktstand</b> ($1.000 + 3 Ziegel). Läden darf jede Branche bauen — nur Produktionsgebäude sind an deine Branche gebunden.` },
+
+  { t: "Schritt 3 — Stelle dein Obst zum Verkauf",
+    warte: (st, me, id) => st.map.some(t => t.owner === id && t.btype === "markt" && (t.shop || []).some(sl => sl && sl.good)),
+    p: `Klicke deinen <b>Marktstand</b> an und belege einen Verkaufsslot mit <b>Obst</b>.<br><br>Den <b>Preis bestimmst du selbst</b>. Und Achtung, das ist die Stelle, an der sich die meisten verrechnen: Billiger ist nicht besser. Das Verkaufstempo ist gedeckelt — unter etwa <b>70 % des Ø-Kurses</b> wirst du nicht mehr schneller, verschenkst aber Geld bei jedem Stück.` },
+
+  { t: "Schritt 4 — Kaufe Wasser und Strom",
+    /* Zwei Fallen umgangen, beide im Test aufgetreten:
+     * 1. Nicht am Lagerbestand messen — der Boost verbraucht Wasser und Strom
+     *    laufend, im Test stand Wasser Sekunden nach dem Kauf wieder auf null.
+     *    Wer nacheinander einkauft, hielte nie beides gleichzeitig.
+     * 2. Eine offene Kauforder zählt genauso wie ein Abschluss. Im Test lag das
+     *    Stromangebot bei 0 — der Lernende hätte am Schritt festgehangen, ohne
+     *    etwas falsch gemacht zu haben. Ob gerade jemand verkauft, liegt nicht
+     *    in seiner Hand; gelernt werden soll die Handlung, nicht das Glück. */
+    warte: (st, me, id) => {
+      const hat = g => (me.sales?.[g]?.buyQty || 0) > 0
+        || st.orders.some(o => o.playerId === id && o.side === "buy" && o.good === g);
+      return hat("wasser") && hat("strom");
+    },
+    p: `Öffne die <b>Börse</b> unten und besorge dir <b>Wasser</b> und <b>Strom</b> — entweder direkt aus einem Angebot oder über eine eigene Kauforder, falls gerade nichts im Buch steht.<br><br>Liegen beide im Lager, läuft deine Farm mit bis zu <b>+150 % Tempo</b> — sie werden dabei verbraucht. Das ist der größte Hebel im frühen Spiel und kostet fast nichts.` },
+
+  { t: "Schritt 5 — Stelle eine eigene Order ein",
+    warte: (st, me, id) => st.orders.some(o => o.playerId === id),
+    p: `Bisher hast du aus dem Buch gekauft. Jetzt umgekehrt: Stelle an der Börse eine <b>eigene Order</b> ein — verkaufe Obst oder suche eine Ware, die du brauchst.<br><br>Deine Order bleibt stehen, bis jemand sie bedient. Ware und Geld liegen so lange treuhänderisch fest, niemand kann dich hängen lassen.` },
+
+  { t: "Schritt 6 — Bring dein Vermögen auf 16.000 $",
+    /* Deutlich über dem Startkapital von 9.500 $. Mit 12.000 war das Ziel im
+     * Test schon nach dem ersten Verkauf erreicht (13.199 $), ohne dass man
+     * dafür etwas verstanden haben musste. */
+    warte: (st, me, id) => (st.players[id]?.netWorth || 0) >= 16000,
+    p: `Jetzt läuft alles zusammen: Produzieren, verkaufen, nachkaufen.<br><br>Dein <b>Nettovermögen</b> steht oben links — Bargeld plus Lager plus Gebäude minus Schulden. Bring es von 9.500 $ auf <b>16.000 $</b>. Baue eine zweite Farm, halte den Boost am Laufen oder setz den Ladenpreis geschickter.` },
+
+  { t: "Das war alles Wesentliche",
+    p: `Du hast gebaut, produziert, verkauft, eingekauft und gehandelt — mehr braucht es im Kern nicht.<br><br>Was jetzt noch dazukommt, findest du im Spiel selbst: <b>Anteile</b> und <b>Anleihen</b> in der Stadtbank, <b>Großaufträge</b> im Lager, <b>Werbung</b> für bessere Preise. Im <b>Lexikon</b> steht alles nach.<br><br>Spiel ruhig weiter — oder lade die Seite neu und starte eine echte Runde mit Freunden.` },
+];
+
 let TUT = buildTut("agrar");
 let tutIdx = -1;
 const tutEl = document.getElementById("tut");
@@ -2782,18 +2890,29 @@ function tutShow(i) {
   document.getElementById("tutTitle").textContent = s.t;
   document.getElementById("tutText").innerHTML = s.p;
   document.getElementById("tutDots").innerHTML = TUT.map((_, j) => `<span class="${j <= i ? "on" : ""}"></span>`).join("");
-  document.getElementById("tutNext").style.display = s.build ? "none" : "";
-  document.getElementById("tutWait").style.display = s.build ? "flex" : "none";
+  const wartet = !!(s.build || s.warte);
+  document.getElementById("tutNext").style.display = wartet ? "none" : "";
+  document.getElementById("tutWait").style.display = wartet ? "flex" : "none";
   if (i === TUT.length - 1) document.getElementById("tutNext").textContent = "Los geht's!";
 }
 function tutDone() { tutIdx = -1; tutEl.style.display = "none"; try { localStorage.setItem("cs_tut_done", "1"); } catch {} }
 document.getElementById("tutNext").addEventListener("click", () => tutIdx >= TUT.length - 1 ? tutDone() : tutShow(tutIdx + 1));
 document.getElementById("tutSkip").addEventListener("click", tutDone);
 document.getElementById("help").addEventListener("click", () => tutShow(0));
-function tutCheck(state, myId) {   // Bau-Schritte automatisch abhaken
-  if (tutIdx < 0) return;
+/* Schritte haken sich selbst ab, sobald die Handlung wirklich passiert ist.
+ * `build` war der einzige Auslöser — damit liess sich nur Bauen üben. `warte`
+ * nimmt eine beliebige Bedingung entgegen, also auch Verkaufen, Einkaufen oder
+ * eine Order an der Börse. Erst damit wird aus dem Tutorial ein Spiel statt
+ * einer Textfolge, durch die man klickt. */
+function tutCheck(state, myId) {
+  if (tutIdx < 0 || !state) return;
   const s = TUT[tutIdx];
-  if (s?.build && state?.map.some(t => t.owner === myId && t.btype === s.build)) tutShow(tutIdx + 1);
+  if (!s) return;
+  const me = store.get().me;
+  let fertig = false;
+  if (s.build) fertig = state.map.some(t => t.owner === myId && t.btype === s.build);
+  else if (s.warte) { try { fertig = !!s.warte(state, me || { inv: {} }, myId); } catch { fertig = false; } }
+  if (fertig) tutShow(tutIdx + 1);
 }
 
 /* ---- Render (auf jede Store-Änderung) ---- */
@@ -2917,7 +3036,7 @@ function render({ state, me, myId, chat, room }) {
         </div>` + Object.entries(byGood).map(([g, { buy, sell }]) => `
         <div class="sec" style="display:flex;justify-content:space-between;align-items:center"><span>${gname(g)}</span>
           <span style="display:flex;align-items:center;gap:7px;font-family:var(--mono);text-transform:none;letter-spacing:0">
-            ${sparkline(g)}${trendLabel(g)}Ø ${fp(avg[g] ?? 0)}</span></div>
+            ${sparkline(g)}${trendLabel(g)}${saettigung(g, state)}Ø ${fp(avg[g] ?? 0)}</span></div>
         ${buy.sort((a, b) => b.price - a.price).map(o => row(o, true)).join("")}
         ${sell.sort((a, b) => a.price - b.price).map(o => row(o, false)).join("")}`).join("")
       : `<div class="meta" style="margin-top:8px">${filt ? "Keine fremden Orders für diese Ware." : "Orderbuch leer — platziere die erste Order."}</div>`);
@@ -3479,7 +3598,12 @@ const TUT_BUCH = [
   const auf = () => { el.classList.add("auf"); el.setAttribute("aria-hidden", "false"); zeichnen(); };
   const zu = () => { el.classList.remove("auf"); el.setAttribute("aria-hidden", "true"); };
 
-  document.getElementById("tutBuchAuf").addEventListener("click", auf);
+  /* "Tutorial spielen" heisst jetzt auch spielen: Der Knopf startet eine echte
+   * eigene Runde und führt darin durch die ersten Handlungen. Das Lesebuch
+   * bleibt als Nachschlagewerk erhalten — es öffnet sich über das Lexikon im
+   * Spiel und über den kleinen Verweis im letzten Schritt. */
+  window.lernbuchOeffnen = auf;
+  document.getElementById("tutBuchAuf").addEventListener("click", () => uebungsrundeStarten());
   document.getElementById("tbZu").addEventListener("click", zu);
   el.addEventListener("click", e => { if (e.target === el) zu(); });   // Klick daneben schließt
   nav.addEventListener("click", e => {
