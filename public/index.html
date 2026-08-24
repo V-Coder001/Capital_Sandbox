@@ -1913,7 +1913,9 @@ const tileSprite = t => {
  * der Zeichencode auf das Handelskontor als Platzhalter zurück. */
 const BANKIMG = new Image(); BANKIMG.src = "assets/bank.png";
 const SPRITE_VARIANTS = { farm:3, plantage:2, mine:3, ewerk:3, wasserwerk:2, oelpumpe:2, buero:3, brunnen:1, markt:1, kontor:1, laden:1, bauhandel:1, saftpresse:1, stahlwerk:1, pharma:1, ziegelei:1, betonwerk:1, imkerei:1, baeckerei:1, windpark:1, raffinerie:1, siliziummine:1, chipfabrik:1,
-  autowerk:1, dieselwerk:1, eautowerk:1, autohaus:1, werbeagentur:1 };
+  autowerk:1, dieselwerk:1, eautowerk:1, autohaus:1, werbeagentur:1,
+  campingplatz:1, strandhotel:1,
+  munitionsfabrik:1, waffenschmiede:1, panzerwerk:1, waffenhandel:1 };
 const SPRITES = {};
 for (const [b, n] of Object.entries(SPRITE_VARIANTS)) {
   SPRITES[b] = [];
