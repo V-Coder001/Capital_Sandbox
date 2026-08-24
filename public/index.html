@@ -338,10 +338,27 @@ input,select{background:var(--panel2);border:1px solid var(--line);border-radius
 /* Kurstafel-Kopfzeile: Seit die Sparkline dazwischensteht, ist rechts weniger
  * Platz — ohne diese Regeln brach "$4.888 /25 %" auf zwei Zeilen um und die
  * Kennzahlen darunter rutschten mit. Der Name darf stattdessen kuerzen. */
-.firmrow{gap:10px}
+.firmrow{gap:12px;padding-top:9px;padding-bottom:9px}
+.firmrow .firmlogo{margin-bottom:3px}
 .firmrow > div:first-child{min-width:0}
 .firmrow > div:first-child .meta{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .fpreis{font-family:var(--mono);color:var(--accent);white-space:nowrap}
+/* Logos liegen als helle Wortmarken auf Transparenz vor — auf dem dunklen
+ * Panel stehen sie ohne weitere Behandlung richtig.
+ * Breite MUSS frei bleiben: Mit max-width:100% wurde jedes Logo auf ein
+ * Quadrat gequetscht, weil der umgebende Flex-Kasten min-width:0 hat und
+ * damit auf nahezu null schrumpfen darf — aus 200x79 wurde 26x26. */
+/* Nicht ".logo" — diese Klasse gibt es im Stylesheet bereits als 26x26-Quadrat
+ * fuer die Branchen-Kachel. Sie steht weiter unten und gewann, wodurch jedes
+ * Firmenlogo auf ein Quadrat gequetscht wurde (aus 200x79 wurde 26x26). */
+.firmlogo{display:block;width:auto;height:auto;max-width:none;flex:none}
+/* Die Stadtbank ist das einzige Panel mit Bildmarken — bei den 440 px der
+ * uebrigen Panels blieben je Zeile nur rund 26 px Hoehe fuer ein Logo, auf
+ * denen von einer Wortmarke nichts zu erkennen war. */
+#p-bank{width:min(640px,94vw)}
+@media(max-width:700px){ #p-bank{width:94vw} }
+/* Firmenchip in der Kopfleiste: feste Höhe, freie Breite. */
+.plLogo{height:24px;width:auto;flex:none;object-fit:contain;vertical-align:middle}
 /* Aufgeklappte Firma in der Kurstafel */
 .firmdetail{margin:-4px 0 10px;padding:2px 12px 10px;border:1px solid var(--line);border-top:0;
   border-radius:0 0 10px 10px;background:rgba(12,18,28,.45)}
@@ -1101,6 +1118,26 @@ const sparkline = (g, breite = 62, hoehe = 18) => sparklineVon(priceHist[g], bre
  * Renderns leben: die Tafel wird jede Sekunde neu gebaut, ein Zustand im DOM
  * waere danach jedes Mal weg. */
 const firmenAuf = new Set();
+
+/* Firmenlogos der Bots. Menschliche Mitspieler haben keins — überall, wo ein
+ * Logo stehen kann, muss der farbige Namenszug weiterhin greifen.
+ * Bewusst NUR dort eingesetzt, wo genug Breite ist: In der Kopfleiste sitzen
+ * bis zu acht Spielerchips à 26 px nebeneinander, und auf dieser Größe ist von
+ * einer Wortmarke nichts mehr zu erkennen — dort bleibt der Buchstabe. */
+const LOGOS = {
+  "AgrarGenossen": "agrargenossen", "Grünhof & Söhne": "gruenhof",
+  "Montan & Bau AG": "montan",      "Felswerk": "felswerk",
+  "Stadtwerke": "stadtwerke",       "Nordsee Öl": "nordseeoel",
+  "ChipWerke": "chipwerke",         "Volt & Silicon": "voltsilicon",
+  "Küstenperle": "kuestenperle",    "Stahlfaust": "stahlfaust",
+};
+const logoUrl = name => LOGOS[name] ? `assets/logos/${LOGOS[name]}.png` : null;
+/* Logo mit Namen darunter — fällt ohne Logo auf den reinen Namenszug zurück. */
+function firmenMarke(name, farbe, hoehe = 30) {
+  const u = logoUrl(name);
+  return u ? `<img class="firmlogo" src="${u}" alt="${name}" title="${name}" style="height:${hoehe}px">`
+           : `<b style="color:${farbe}">${name}</b>`;
+}
 /* Grosser Verlaufs-Chart. Nimmt bewusst eine nackte Zahlenreihe entgegen statt
  * eines Warenschluessels — dieselbe Darstellung traegt den Kursverlauf einer
  * Ware an der Boerse UND den Wertverlauf einer Firma in der Kurstafel. Mit
@@ -2807,7 +2844,14 @@ function render({ state, me, myId, chat, room }) {
     }).join("");
   } else qEl.style.display = "none";
   document.getElementById("players").innerHTML = Object.values(state.players)
-    .map(p => `<span class="pl" style="background:${p.color}" title="${p.name} · ${fmt(p.netWorth)} · ${p.rating}">${p.name[0].toUpperCase()}</span>`).join("");
+    /* Chips oben: Logo statt Buchstabe, wo eines vorliegt. Entscheidend ist das
+     * SEITENVERHÄLTNIS — quadratisch gequetscht war jede Wortmarke unlesbar.
+     * Mit fester Höhe und freier Breite bleiben die Logos schmal (die meisten
+     * sind nahezu quadratisch, nur AgrarGenossen ist breit) und die ganze
+     * Reihe passt weiterhin in die Kopfleiste. */
+    .map(p => { const u = logoUrl(p.name), t = `${p.name} · ${fmt(p.netWorth)} · ${p.rating}`;
+      return u ? `<img class="plLogo" src="${u}" alt="${p.name}" title="${t}">`
+               : `<span class="pl" style="background:${p.color}" title="${t}">${p.name[0].toUpperCase()}</span>`; }).join("");
   if (state.winner) { document.getElementById("win").style.display = "grid";
     document.getElementById("winname").textContent = state.winner;
     zeigeAuswertung(state);
@@ -2981,7 +3025,7 @@ function render({ state, me, myId, chat, room }) {
         const div = blockDividende(p), rend = blockRendite(p), urteil = renditeUrteil(rend);
         const takt = Math.round((store.get().meta?.dividendInterval ?? 600) / 60);
         return `<div class="bond firmrow" data-firm="${p.id}" style="cursor:pointer">
-          <div><b style="color:${p.color}">${p.name}</b>${p.id === myId ? ` <span class="meta">(du)</span>` : ""}
+          <div style="min-width:0;flex:1">${firmenMarke(p.name, p.color, 42)}${p.id === myId ? ` <span class="meta">(du)</span>` : ""}
             <div class="meta">Marktwert ${fmt(p.marketValue || 0)}${held ? ` · <b style="color:var(--accent)">du: ${held} %</b>` : ""}</div></div>
           <span style="display:flex;align-items:center;gap:8px">
             ${firmHist[p.id] ? sparklineVon(firmHist[p.id], 52, 16) : ""}
@@ -3068,7 +3112,7 @@ function render({ state, me, myId, chat, room }) {
           const gvFarbe = gv == null ? "var(--dim)" : gv >= 0 ? "var(--up)" : "var(--down)";
           const gvProz = h.einstand > 0 ? (h.value / h.einstand - 1) * 100 : null;
           return `<div class="bond">
-            <div style="min-width:0"><b>${h.company}</b>${h.pct >= 100 ? ` <b style="color:var(--accent)">· bereit zur Fusion</b>` : ""}
+            <div style="min-width:0">${firmenMarke(h.company, "var(--text)", 38)}${h.pct >= 100 ? ` <b style="color:var(--accent)">· bereit zur Fusion</b>` : ""}
               <div class="depotzahlen">
                 <span>${h.pct} %</span>
                 <span>Einstand <b>${h.einstand > 0 ? fmt(h.einstand) : "—"}</b></span>
