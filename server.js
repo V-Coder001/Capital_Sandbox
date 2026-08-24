@@ -272,6 +272,7 @@ const GROUP_VALUE = +process.env.GROUP_VALUE || 0;   // Testgröße überschreib
  * Reicht das Kapital nicht, können eigene Anteile an der Börse verkauft werden —
  * Käufer bekommen dafür alle 10 min einen Anteil vom laufenden Erlös (Dividende). */
 const BANK_POS = [7, 6];         // feste Position der Stadtbank im Zentrum
+const NEWS_POS = [10, 6];        // Nachrichtenzentrale, ebenfalls im Zentrum
 const SHARE_BID_TTL = 180;       // Kaufanfragen verfallen nach 3 Minuten
 const CONTRACT_TTL = 120;        // Direktangebote verfallen nach 2 Minuten
 const REV_WINDOW_MIN = 10;       // Umsatzfenster der Firmenbewertung: 10 Minuten
@@ -364,6 +365,10 @@ function buildMap() {
   const bank = tiles.find(t => t.x === BANK_POS[0] && t.y === BANK_POS[1] && !t.water)
             || tiles.find(t => t.zone === "zentrum" && !t.water && !t.road && !t.park);
   if (bank) Object.assign(bank, { bank: true, road: false, park: false, field: false, locked: false, unlockCost: 0 });
+  /* Nachrichtenzentrale: gehört wie die Bank der Stadt und ist unbebaubar. */
+  const news = tiles.find(t => t.x === NEWS_POS[0] && t.y === NEWS_POS[1] && !t.water)
+    || tiles.find(t => t.zone === "zentrum" && !t.water && !t.bank && !t.road);
+  if (news) Object.assign(news, { news: true, road: false, park: false, field: false, locked: false, unlockCost: 0 });
   return tiles;
 }
 
@@ -377,6 +382,7 @@ const G = {
   auctions: [],         // {id, tileIdx, btype, minBid, bestBid, bestBidder, tLeft}
   lastTrade: {},        // good -> Preis des letzten echten Trades (Ticker)
   priceHist: {},        // good -> Kursverlauf, alle 10 s ein Punkt (Chart)
+  news: [],             // Marktberichte der Nachrichtenzentrale, neueste zuerst
   firmHist: {},         // pid  -> Firmenwert-Verlauf, gleiche Taktung
   chat: Object.fromEntries(ROOMS.map(r => [r, []])),
   contracts: [],        // {id, fromId, toId, good, qty, price, status}
@@ -633,6 +639,79 @@ function merkeEinstand(kaeufer, company, count, preis) {
   if (nachher > 0) kaeufer.equityAvg[company.id] = (alt * vorher + preis) / nachher;
 }
 
+/* ---------- Nachrichtenzentrale ----------
+ * Alle zwei Minuten ein Marktbericht in den Chat. Die Lage im Spiel ist zwar
+ * vollständig sichtbar, aber über acht Panels verteilt: Wer gerade baut,
+ * bemerkt weder einen einbrechenden Kurs noch einen Konkurrenten, der
+ * davonzieht. Der Bericht fasst genau das zusammen, was sonst niemand
+ * nachschlägt — und nutzt dieselben Verläufe, die auch die Charts speisen. */
+const NEWS_INTERVAL = 120;   // Ticks (1x/s) = 2 min
+const NEWS_FENSTER = 12;     // Verlaufspunkte à 10 s = ebenfalls 2 min
+
+function veraenderung(reihe, fenster) {
+  if (!reihe || reihe.length < 2) return null;
+  const von = reihe[Math.max(0, reihe.length - 1 - fenster)], bis = reihe[reihe.length - 1];
+  if (!von) return null;
+  return (bis / von - 1) * 100;
+}
+
+function marktbericht() {
+  const proz = v => (v > 0 ? "+" : "") + v.toFixed(0) + " %";
+  const teile = [];
+  /* Waren nach Kursbewegung der letzten zwei Minuten. Sehr kleine Ausschläge
+   * bleiben draußen — sonst meldet der Bericht Rauschen als Nachricht. */
+  const waren = Object.keys(GOODS)
+    .map(k => ({ k, v: veraenderung(G.priceHist[k], NEWS_FENSTER) }))
+    .filter(x => x.v != null && Math.abs(x.v) >= 2)
+    .sort((a, b) => b.v - a.v);
+  const zeile = x => ({ name: GOODS[x.k].name, wert: proz(x.v), kurs: MM[x.k].price.toFixed(2) + " $" });
+
+  const hoch = waren.filter(x => x.v > 0).slice(0, 3);
+  if (hoch.length) teile.push({ art: "auf", titel: "Im Aufwind", zeilen: hoch.map(zeile) });
+  const tief = waren.filter(x => x.v < 0).slice(-3).reverse();
+  if (tief.length) teile.push({ art: "ab", titel: "Unter Druck", zeilen: tief.map(zeile) });
+
+  /* Knappheit ist die Nachricht, die im Spiel am meisten wehtut: eine Ware mit
+   * Nachfrage und ohne Angebot legt ganze Produktionslinien still. */
+  const knapp = Object.keys(GOODS).map(k => {
+    const angebot = G.orders.filter(o => o.good === k && o.side === "sell").reduce((a, o) => a + o.qty, 0);
+    const nachfrage = G.orders.filter(o => o.good === k && o.side === "buy").reduce((a, o) => a + o.qty, 0);
+    return { k, nachfrage, knapp: angebot === 0 && nachfrage >= 10 };
+  }).filter(x => x.knapp).sort((a, b) => b.nachfrage - a.nachfrage).slice(0, 4);
+  if (knapp.length) teile.push({ art: "knapp", titel: "Nicht lieferbar",
+    zeilen: knapp.map(x => ({ name: GOODS[x.k].name, wert: x.nachfrage + " gesucht", kurs: MM[x.k].price.toFixed(2) + " $" })) });
+
+  /* Firmen nach Wertzuwachs im selben Fenster — wer zieht gerade davon? */
+  const firmen = Object.values(G.players)
+    .map(p => ({ p, v: veraenderung(G.firmHist[p.id], NEWS_FENSTER) }))
+    .filter(x => x.v != null && x.v >= 1)
+    .sort((a, b) => b.v - a.v).slice(0, 3);
+  if (firmen.length) teile.push({ art: "firma", titel: "Stärkste Firmen",
+    zeilen: firmen.map(x => ({ name: x.p.name, farbe: x.p.color, wert: proz(x.v),
+      kurs: "Block " + blockPrice(x.p).toLocaleString("de-DE") + " $" })) });
+
+  const rang = Object.values(G.players).sort((a, b) => netWorth(b) - netWorth(a)).slice(0, 3);
+  if (rang.length) teile.push({ art: "rang", titel: "An der Spitze",
+    zeilen: rang.map((p, i) => ({ name: `${i + 1}. ${p.name}`, farbe: p.color,
+      /* rating ist eine Funktion, kein Feld am Spieler — p.rating lieferte undefined. */
+      wert: Math.round(netWorth(p)).toLocaleString("de-DE") + " $", kurs: rating(p) })) });
+
+  return teile.length ? { teile } : null;
+}
+
+function sendeMarktbericht() {
+  const bericht = marktbericht();
+  if (!bericht) return;   // in den ersten Minuten gibt es schlicht nichts zu melden
+  /* Die Berichte sammeln sich in der Nachrichtenzentrale, statt im Chat
+   * vorbeizuziehen: Dort geht ein Bericht zwischen den Nachrichten der
+   * Mitspieler unter, und wer später dazukommt, sieht ihn nie. Im Panel steht
+   * die Entwicklung der letzten Viertelstunde am Stück. */
+  G.news.unshift({ ...bericht, min: Math.round(G.tick / 60), ts: Date.now() });
+  if (G.news.length > 8) G.news.pop();
+  io.emit("notice", { text: "Neuer Marktbericht der Nachrichtenzentrale" });
+  pushState();
+}
+
 function distributeDividends() {
   for (const p of Object.values(G.players)) {
     const revenue = p.revenue;
@@ -734,7 +813,7 @@ function snapshot() {
     lobby: G.started ? null : { winGoal: WIN_NW, bots: botAuswahl, botLevel: botLevelKey },
     map: G.map.map(t => ({ x: t.x, y: t.y, zone: t.zone, road: t.road, water: t.water,
       park: t.park, field: t.field, sand: t.sand, deep: t.deep, rock: t.rock,
-      bank: t.bank, locked: t.locked, unlockCost: t.unlockCost, owner: t.owner, btype: t.btype, lien: t.lien, shop: t.shop, paused: t.paused, level: t.level })),
+      bank: t.bank, news: t.news, locked: t.locked, unlockCost: t.unlockCost, owner: t.owner, btype: t.btype, lien: t.lien, shop: t.shop, paused: t.paused, level: t.level })),
     players: Object.fromEntries(Object.entries(G.players).map(([sid, p]) =>
       [sid, { id: sid, name: p.name, color: p.color, lvl: p.lvl, xp: p.xp, industry: p.industry, industries: p.industries,
               netWorth: Math.round(netWorth(p)), rating: rating(p), rank: rankOf[sid],
@@ -759,6 +838,7 @@ function snapshot() {
     nextDividendIn: G.nextDividendIn,
     auctions: G.auctions,
     lastTrade: G.lastTrade,
+    news: G.news,
     avg: Object.fromEntries(Object.keys(GOODS).map(k => [k, MM[k].price])),
     groupOrder: G.groupOrder ? { id: G.groupOrder.id, city: G.groupOrder.city, ttl: G.groupOrder.ttl,
       needs: G.groupOrder.needs,
@@ -1011,6 +1091,7 @@ io.on("connection", socket => {
     if (!t || !bt) return ack?.({ error: "Ungültig" });
     if (t.water || t.road || t.park) return ack?.({ error: "Nicht bebaubar" });
     if (t.bank) return ack?.({ error: "Die Stadtbank gehört der Stadt" });
+    if (t.news) return ack?.({ error: "Die Nachrichtenzentrale gehört der Stadt" });
     if (t.owner) return ack?.({ error: "Kachel bereits belegt" });
     if (bt.zone !== t.zone) return ack?.({ error: `Nur in Zone ${bt.zone} baubar` });
     if (bt.industry && !(p.industries || [p.industry]).includes(bt.industry))
@@ -1331,7 +1412,7 @@ io.on("connection", socket => {
     /* Preisanker zurücksetzen — sonst startet die neue Runde mit den
      * verzerrten Kursen der alten (z. B. dauerhaft gedrücktem Ölpreis). */
     for (const k of Object.keys(GOODS)) Object.assign(MM[k], { price: BASEP[k], anchor: BASEP[k], sold: 0 });
-    G.priceHist = {}; G.firmHist = {};
+    G.priceHist = {}; G.firmHist = {}; G.news = [];
     /* Alle Clients bekommen die Karte danach wieder vollständig */
     lastTileSigs = null;
     for (const sock of io.sockets.sockets.values()) sock.data.gotMap = false;
@@ -1664,6 +1745,9 @@ function runTick() {
       G.shareBids.splice(i, 1);
     }
   }
+  /* Nachrichtenzentrale: Marktbericht alle zwei Minuten. Bewusst versetzt zur
+   * vollen Minute, damit er nicht mit der Dividendenmeldung zusammenfällt. */
+  if (G.tick > 60 && G.tick % NEWS_INTERVAL === 0) sendeMarktbericht();
   /* Aktien: Dividendenausschüttung alle 10 min */
   if (--G.nextDividendIn <= 0) { distributeDividends(); G.nextDividendIn = DIVIDEND_INTERVAL; }
   /* Nettovermögens-Verlauf (alle 10 s ein Punkt, max. 120 Punkte = 20 min) */
@@ -2105,9 +2189,16 @@ async function spawnBot(cfg, lvl = BOT_LEVELS[BOT_LEVEL_DEFAULT]) {
             qty: Math.ceil(missingMat[1] - me.inv[missingMat[0]]) + 4,
             price: Math.round(st.avg[missingMat[0]] * (lvl.kaufAufschlag + 0.03) * 100) / 100 });
         } else if (!missingMat) {
-          let t = st.map.find(t => t.zone === bt.zone && !t.road && !t.water && !t.park && !t.locked && !t.owner);
+          /* Stadtgebäude ausschliessen. Die Suche nimmt die ERSTE passende Kachel,
+           * und Bank wie Nachrichtenzentrale sehen wie freie Zentrumsflächen aus:
+           * kein Besitzer, keine Strasse, nicht gesperrt. Trifft ein Bot eine
+           * davon zuerst, scheitert sein Bau in jedem Zyklus erneut an derselben
+           * Kachel — er käme in der Zone nie voran. Bei der Bank lag das seit
+           * jeher latent vor, mit der zweiten Stadtkachel wird es wahrscheinlicher. */
+          const frei = t => t.zone === bt.zone && !t.road && !t.water && !t.park && !t.bank && !t.news;
+          let t = st.map.find(t => frei(t) && !t.locked && !t.owner);
           if (!t) {   // Zone gesperrt → passende Kachel wird beim Bauen mit-freigeschaltet
-            const lt = st.map.find(t => t.zone === bt.zone && t.locked);
+            const lt = st.map.find(t => frei(t) && t.locked);
             if (lt && me.cash > bt.cost + lt.unlockCost + 800) t = lt;
           }
           /* Die Tilgungsreserve ist auch fürs Bauen tabu — sonst steht das

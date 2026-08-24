@@ -359,6 +359,33 @@ input,select{background:var(--panel2);border:1px solid var(--line);border-radius
 @media(max-width:700px){ #p-bank{width:94vw} }
 /* Firmenchip in der Kopfleiste: feste Höhe, freie Breite. */
 .plLogo{height:24px;width:auto;flex:none;object-fit:contain;vertical-align:middle}
+/* ---- Nachrichtenzentrale ---- */
+.nwlead{font-size:12.5px;color:var(--dim);line-height:1.6;padding-bottom:12px;
+  border-bottom:1px solid var(--line);margin-bottom:12px}
+.nwkarte{border:1px solid var(--line);border-radius:12px;background:rgba(12,18,28,.5);
+  padding:12px 14px;margin-bottom:10px}
+.nwkarte.neu{border-color:rgba(251,191,36,.42);background:rgba(251,191,36,.05)}
+.nwkopf{display:flex;align-items:center;gap:9px;margin-bottom:10px}
+.nwzeit{font-family:var(--mono);font-size:10.5px;letter-spacing:.11em;text-transform:uppercase;color:var(--dim)}
+.nwmarke{font-family:var(--mono);font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;
+  color:#fbbf24;border:1px solid rgba(251,191,36,.42);border-radius:5px;padding:1px 6px}
+.nwblock{margin-bottom:10px}
+.nwblock:last-child{margin-bottom:0}
+.nwtitel{font-size:10.5px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;margin-bottom:4px}
+.nwblock.auf .nwtitel{color:var(--up)}
+.nwblock.ab .nwtitel{color:var(--down)}
+.nwblock.knapp .nwtitel{color:#fbbf24}
+.nwblock.firma .nwtitel,.nwblock.rang .nwtitel{color:var(--accent)}
+.nwzeile{display:grid;grid-template-columns:1fr auto auto;gap:10px;align-items:baseline;
+  padding:2.5px 0;font-size:13px}
+.nwname{color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.nwwert{font-family:var(--mono);font-size:12.5px;white-space:nowrap}
+.nwblock.auf .nwwert{color:var(--up)}
+.nwblock.ab .nwwert{color:var(--down)}
+.nwblock.knapp .nwwert{color:#fbbf24}
+.nwblock.firma .nwwert{color:var(--up)}
+.nwblock.rang .nwwert{color:var(--text)}
+.nwkurs{font-family:var(--mono);font-size:11.5px;color:var(--dim);white-space:nowrap;min-width:66px;text-align:right}
 /* ---- Stadtbank: Kopfzeile und Handelsseiten ---- */
 .bkopf{border:1px solid var(--line);border-radius:12px;background:rgba(12,18,28,.55);
   padding:12px 14px 11px;margin-bottom:12px}
@@ -939,6 +966,16 @@ td:first-child{font-family:var(--font)}
 
 <!-- Stadtbank: fester Ort auf der Karte, an dem alle Spieler Firmenanteile handeln.
      Erreichbar nur über die Bank-Kachel im Zentrum, nicht über die Leiste unten. -->
+<div class="panel" id="p-news">
+  <div class="phead"><h2>Nachrichtenzentrale</h2><button class="x" data-close>✕</button></div>
+  <div class="pbody">
+    <div class="nwlead">Der Marktbericht erscheint alle zwei Minuten und vergleicht mit der Lage
+      von vor zwei Minuten. Er zeigt, was gerade teurer und billiger wird, welche Ware niemand
+      liefern kann und wer an der Börse zulegt.</div>
+    <div id="newsliste"></div>
+  </div>
+</div>
+
 <div class="panel" id="p-bank">
   <div class="phead"><h2>Stadtbank — Aktienhandel</h2><button class="x" data-close>✕</button></div>
   <div class="pbody">
@@ -2226,6 +2263,8 @@ const tileSprite = t => {
 /* Stadtbank — eigenes Sprite unter assets/bank.png. Solange es fehlt, springt
  * der Zeichencode auf das Handelskontor als Platzhalter zurück. */
 const BANKIMG = new Image(); BANKIMG.src = "assets/bank.png";
+/* Nachrichtenzentrale — sendet alle zwei Minuten den Marktbericht in den Chat. */
+const NEWSIMG = new Image(); NEWSIMG.src = "assets/newstower.png";
 const SPRITE_VARIANTS = { farm:3, plantage:2, mine:3, ewerk:3, wasserwerk:2, oelpumpe:2, buero:3, brunnen:1, markt:1, kontor:1, laden:1, bauhandel:1, saftpresse:1, stahlwerk:1, pharma:1, ziegelei:1, betonwerk:1, imkerei:1, baeckerei:1, windpark:1, raffinerie:1, siliziummine:1, chipfabrik:1,
   autowerk:1, dieselwerk:1, eautowerk:1, autohaus:1, werbeagentur:1,
   campingplatz:1, strandhotel:1,
@@ -2437,6 +2476,12 @@ function draw() {
       cx.font = "bold 10px sans-serif"; cx.textAlign = "center"; cx.fillStyle = "#38bdf8";
       cx.fillText("BANK", sx, sy + TH / 2 + 16);
     }
+    if (t.news) {
+      const nimg = (NEWSIMG.complete && NEWSIMG.naturalWidth) ? NEWSIMG : spriteFor("buero", t.x, t.y);
+      if (nimg) cx.drawImage(nimg, sx-36, standY(sy, nimg, 72), 72, 72);
+      cx.font = "bold 10px sans-serif"; cx.textAlign = "center"; cx.fillStyle = "#fbbf24";
+      cx.fillText("NACHRICHTEN", sx, sy + TH / 2 + 16);
+    }
     if (t.btype) {
       const owner = st.players[t.owner];
       const col = owner?.color || "#666";
@@ -2488,6 +2533,7 @@ function clickTile(e) {
   const me = store.get().me, myId = store.get().myId;
   /* Die Stadtbank ist kein Bauplatz, sondern der Handelsplatz für Firmenanteile */
   if (t?.bank && me) { openPanel("bank"); return; }
+  if (t?.news && me) { openPanel("news"); return; }
   if (!t || t.water || t.road || t.park || !me) return;
   tm.style.display = "block";
   tm.style.left = Math.min(innerWidth-275, e.clientX+10)+"px";
@@ -3169,6 +3215,26 @@ function render({ state, me, myId, chat, room }) {
       act("bid", { auctionId:+b.dataset.auc, amount: document.getElementById("bid-"+b.dataset.auc).value })));
     document.querySelectorAll("[data-acc]").forEach(b => b.addEventListener("click", () => act("acceptContract", { contractId:+b.dataset.acc })));
     document.querySelectorAll("[data-dec]").forEach(b => b.addEventListener("click", () => act("declineContract", { contractId:+b.dataset.dec })));
+  }
+
+  /* Nachrichtenzentrale: Marktberichte, neuester zuoberst */
+  if (document.getElementById("p-news").classList.contains("open")) {
+    const berichte = state.news || [];
+    document.getElementById("newsliste").innerHTML = berichte.length
+      ? berichte.map((b, i) => `
+        <div class="nwkarte${i === 0 ? " neu" : ""}">
+          <div class="nwkopf"><span class="nwzeit">Minute ${b.min}</span>${i === 0 ? `<span class="nwmarke">aktuell</span>` : ""}</div>
+          ${b.teile.map(t => `
+            <div class="nwblock ${t.art}">
+              <div class="nwtitel">${t.titel}</div>
+              ${t.zeilen.map(z => `<div class="nwzeile">
+                <span class="nwname"${z.farbe ? ` style="color:${z.farbe}"` : ""}>${z.name}</span>
+                <span class="nwwert">${z.wert}</span>
+                <span class="nwkurs">${z.kurs}</span>
+              </div>`).join("")}
+            </div>`).join("")}
+        </div>`).join("")
+      : `<div class="meta" style="margin-top:10px">Der erste Bericht erscheint nach zwei Minuten Spielzeit.</div>`;
   }
 
   /* Stadtbank: Kurstafel, Angebote und Depot — der gesamte Anteilshandel */
