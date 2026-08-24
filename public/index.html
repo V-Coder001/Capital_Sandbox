@@ -297,9 +297,55 @@ input,select{background:var(--panel2);border:1px solid var(--line);border-radius
 #joinErr{color:var(--down);font-size:12.5px;min-height:0;text-align:center;margin-bottom:6px}
 
 #topbar{position:fixed;top:0;left:0;right:0;height:74px;z-index:20;display:flex;flex-direction:column;pointer-events:none}
-#ticker{height:32px;background:rgba(9,13,20,.92);border-bottom:1px solid var(--line);overflow:hidden;position:relative;pointer-events:auto}
-#tickerTrack{display:flex;gap:34px;white-space:nowrap;position:absolute;left:0;top:0;height:100%;align-items:center;padding:0 10px;font-family:var(--mono);font-size:12.5px;font-variant-numeric:tabular-nums}
+/* Preistafel. Vorher lag der Track absolut in einem overflow:hidden-Kasten —
+ * alles hinter der Bildschirmkante war damit unerreichbar abgeschnitten, bei
+ * 23 Waren rund zwei Drittel.
+ * Jetzt: zugeklappt eine seitlich scrollbare Zeile, aufgeklappt ein Raster mit
+ * allen Waren samt Kursverlauf. Das Raster liegt bewusst als Ausklappmenue
+ * UEBER der Karte statt im Fluss: #ticker steckt in der fest positionierten
+ * #topbar mit 74 px Hoehe — ein wachsender Ticker wuerde dort schlicht
+ * herausquellen, waehrend die ebenfalls fest positionierten Panels stehen
+ * bleiben und sich ueberlagern. */
+#ticker{height:32px;background:rgba(9,13,20,.92);border-bottom:1px solid var(--line);position:relative;pointer-events:auto;z-index:21}
+#tickerScroll{height:32px;overflow-x:auto;overflow-y:hidden;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+#tickerScroll::-webkit-scrollbar{display:none}
+#ticker.auf #tickerScroll{position:absolute;left:0;right:0;top:0;height:auto;max-height:min(46vh,340px);
+  overflow-x:hidden;overflow-y:auto;scrollbar-width:thin;background:#0d131c;
+  border-bottom:1px solid var(--line);box-shadow:0 14px 34px rgba(0,0,0,.62);z-index:1}
+#tickerTrack{display:flex;gap:0;white-space:nowrap;height:32px;align-items:center;padding:0 44px 0 4px;font-family:var(--mono);font-size:12.5px;font-variant-numeric:tabular-nums}
+/* Trennlinien statt blosser Abstaende: Bei 23 Waren dicht nebeneinander
+ * verschwimmen sonst Preis der einen und Name der naechsten zu einer Zeile. */
+#ticker:not(.auf) .tk{padding:0 15px;border-right:1px solid rgba(36,48,68,.75)}
+#ticker:not(.auf) .tk:last-child{border-right:0}
+/* Spaltenbreite nach dem Inhalt bemessen, nicht geschaetzt: Name (~95) +
+ * Preis (~55) + Sparkline (46) + Innenabstand = rund 200 px. Zu schmale
+ * Spalten schneiden die Ellipse am PREIS ab — also genau an der Zahl, wegen
+ * der man die Tafel aufklappt. */
+#ticker.auf #tickerTrack{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));
+  gap:0;height:auto;padding:4px 44px 6px 8px}
+#ticker:not(.auf) .tk svg{display:none}
+#ticker.auf .tk{display:flex;align-items:center;gap:8px;height:27px;overflow:hidden;
+  padding:0 12px;border-right:1px solid rgba(36,48,68,.6);border-bottom:1px solid rgba(36,48,68,.6)}
+#ticker.auf .tk .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .tk{color:var(--dim)} .tk b{color:var(--text);margin:0 4px}
+/* Orderbuch-Zeile: Pfeil | Menge×Preis | Firma | Knopf */
+.obrow{display:grid;grid-template-columns:13px auto 1fr auto;align-items:center;gap:9px;
+  padding:3px 2px;border-bottom:1px solid rgba(36,48,68,.4)}
+.obrow .omono{font-family:var(--mono);font-variant-numeric:tabular-nums;white-space:nowrap}
+.obrow .oname{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11.5px}
+.obrow button{padding:3px 10px;font-size:11.5px;white-space:nowrap}
+/* Legende einmal oben statt zwei Ueberschriften je Ware — sie bleibt beim
+ * Scrollen stehen, damit die Pfeile immer erklaert sind. */
+.oblegend{display:flex;gap:16px;flex-wrap:wrap;font-size:11.5px;color:var(--dim);
+  padding:7px 2px 8px;border-bottom:1px solid var(--line);margin-bottom:2px;
+  position:sticky;top:0;background:rgba(19,26,38,.98);z-index:2}
+/* Aufklapp-Knopf: liegt ueber dem Scrollbereich, nicht darin — sonst wuerde er
+ * beim seitlichen Scrollen mitwandern. */
+#tickerToggle{position:absolute;right:0;top:0;height:32px;width:38px;z-index:3;cursor:pointer;
+  background:linear-gradient(to left,rgba(9,13,20,.98) 62%,transparent);border:0;color:var(--dim);
+  font-size:15px;line-height:32px;padding:0;transition:color .15s}
+#ticker.auf #tickerToggle{background:linear-gradient(to left,#0d131c 62%,transparent)}
+#tickerToggle:hover{color:var(--accent)}
 #status{height:42px;display:flex;align-items:center;justify-content:space-between;padding:0 14px;background:linear-gradient(180deg,rgba(9,13,20,.85),transparent);pointer-events:auto}
 #status .left{display:flex;align-items:center;gap:12px}
 .logo{width:26px;height:26px;border-radius:6px;display:grid;place-items:center;font-weight:800;color:#0a0e15;font-size:14px}
@@ -332,8 +378,11 @@ input,select{background:var(--panel2);border:1px solid var(--line);border-radius
   /* Kopfzeile: Ticker flacher, Rundenziel und Level-Leiste weichen —
    * beides steht ausführlich im Finanzen-Panel. */
   #topbar{height:64px}
-  #ticker{height:26px}
+  #ticker,#tickerScroll,#tickerTrack{height:26px}
   #tickerTrack{font-size:11px;gap:22px}
+  #tickerToggle{height:26px;line-height:26px}
+  #ticker.auf #tickerScroll,#ticker.auf #tickerTrack{height:auto}
+  #ticker.auf #tickerTrack{grid-template-columns:repeat(auto-fill,minmax(158px,1fr))}
   #status{height:38px;padding:0 10px;gap:8px}
   #status .left,#status .right{gap:7px;min-width:0}
   #coname{max-width:96px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -756,7 +805,7 @@ td:first-child{font-family:var(--font)}
 <canvas id="cv"></canvas>
 
 <div id="topbar">
-  <div id="ticker" title="Ø-Kurse als Orientierung — sie werden alle 30 Sekunden aktualisiert, der Pfeil zeigt die Richtung gegenüber den letzten 30 Sekunden."><div id="tickerTrack"><span class="tk">Warte auf erste Trades — der Ticker zeigt nur echte Transaktionspreise.</span></div></div>
+  <div id="ticker" title="Ø-Kurse als Orientierung — der Pfeil zeigt die Richtung gegenüber den letzten 30 Sekunden."><div id="tickerScroll"><div id="tickerTrack"><span class="tk">Warte auf erste Trades — der Ticker zeigt nur echte Transaktionspreise.</span></div></div><button id="tickerToggle" title="Alle Preise anzeigen" aria-label="Alle Preise anzeigen" aria-expanded="false">⌄</button></div>
   <div id="status">
     <div class="left"><div class="logo" id="mylogo">?</div><span id="coname"></span>
       <span id="networth">NW <b id="nwv">$0</b> / <span id="goalv">$250.000</span> · Rating <b id="myrat">—</b></span></div>
@@ -968,6 +1017,67 @@ const store = (() => {
   };
 })();
 
+/* Kursverlauf je Ware, vom Server alle 10 s geliefert (siehe priceHist in
+ * server.js). 60 Punkte = 10 Minuten Rückblick. */
+let priceHist = {};
+
+/* Prozentuale Veränderung über den gesamten vorliegenden Verlauf. */
+function kursTrend(g) {
+  const h = priceHist[g];
+  if (!h || h.length < 2 || !h[0]) return null;
+  return (h[h.length - 1] / h[0] - 1) * 100;
+}
+/* Prozentwert als farbiges Kuerzel. Unter 0,5 % wird nichts angezeigt —
+ * das Rauschen der Kursdrift soll nicht als Trend erscheinen. */
+function trendLabel(g) {
+  const t = kursTrend(g);
+  if (t == null || Math.abs(t) < 0.5) return "";
+  const farbe = t > 0 ? "var(--up)" : "var(--down)";
+  return `<span style="color:${farbe};font-size:11px">${t > 0 ? "+" : ""}${t.toFixed(0)} %</span>`;
+}
+/* Sparkline als Inline-SVG. Bewusst ohne Achsen: Die Linie soll die FORM des
+ * Verlaufs zeigen (steigt, fällt, springt), der genaue Wert steht daneben
+ * ohnehin als Ø-Preis. Skaliert auf das eigene Min/Max, damit auch kleine
+ * Ausschläge sichtbar bleiben — bei Waren um 1 $ wäre eine Nulllinien-Skala
+ * eine gerade Linie. */
+function sparkline(g, breite = 62, hoehe = 18) {
+  const h = priceHist[g];
+  if (!h || h.length < 2) return `<span style="display:inline-block;width:${breite}px"></span>`;
+  const min = Math.min(...h), max = Math.max(...h), spanne = (max - min) || 1;
+  const pts = h.map((v, i) =>
+    `${(1 + i / (h.length - 1) * (breite - 2)).toFixed(1)},${(hoehe - 1 - (v - min) / spanne * (hoehe - 2)).toFixed(1)}`).join(" ");
+  const trend = kursTrend(g);
+  const farbe = trend == null || Math.abs(trend) < 0.5 ? "var(--dim)" : trend > 0 ? "var(--up)" : "var(--down)";
+  return `<svg width="${breite}" height="${hoehe}" viewBox="0 0 ${breite} ${hoehe}" style="vertical-align:middle;overflow:visible">
+    <polyline points="${pts}" fill="none" stroke="${farbe}" stroke-width="1.4" stroke-linejoin="round" stroke-linecap="round"/></svg>`;
+}
+/* Grosser Chart fuer eine einzelne Ware — erscheint, sobald an der Boerse nach
+ * ihr gefiltert wird. Mit Hoch/Tief und Nulllinie, damit man Preisspitzen
+ * einordnen kann statt nur die Richtung zu sehen. */
+function kursChart(g, breite = 300, hoehe = 90) {
+  const h = priceHist[g];
+  if (!h || h.length < 2) return `<div class="meta" style="padding:10px 0">Kursverlauf wird gesammelt — der erste Punkt kommt nach 10 Sekunden.</div>`;
+  const min = Math.min(...h), max = Math.max(...h), spanne = (max - min) || 1;
+  const X = i => (2 + i / (h.length - 1) * (breite - 4));
+  const Y = v => (hoehe - 12 - (v - min) / spanne * (hoehe - 24));
+  const pts = h.map((v, i) => `${X(i).toFixed(1)},${Y(v).toFixed(1)}`).join(" ");
+  const trend = kursTrend(g);
+  const farbe = trend == null || Math.abs(trend) < 0.5 ? "var(--dim)" : trend > 0 ? "var(--up)" : "var(--down)";
+  const minuten = Math.round(h.length * 10 / 60);
+  return `<div style="background:rgba(12,18,28,.5);border:1px solid rgba(36,48,68,.7);border-radius:8px;padding:8px 10px;margin:6px 0">
+    <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:2px">
+      <span class="meta">Kursverlauf · letzte ${minuten} min</span>
+      <span style="font-family:var(--mono);font-size:12px;color:${farbe}">${trend == null ? "" : (trend > 0 ? "+" : "") + trend.toFixed(1) + " %"}</span>
+    </div>
+    <svg width="100%" height="${hoehe}" viewBox="0 0 ${breite} ${hoehe}" preserveAspectRatio="none">
+      <line x1="2" y1="${Y(max).toFixed(1)}" x2="${breite - 2}" y2="${Y(max).toFixed(1)}" stroke="rgba(134,149,171,.25)" stroke-dasharray="3 3"/>
+      <line x1="2" y1="${Y(min).toFixed(1)}" x2="${breite - 2}" y2="${Y(min).toFixed(1)}" stroke="rgba(134,149,171,.25)" stroke-dasharray="3 3"/>
+      <polyline points="${pts}" fill="none" stroke="${farbe}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+    </svg>
+    <div style="display:flex;justify-content:space-between;font-family:var(--mono);font-size:11px;color:var(--dim)">
+      <span>Tief ${fp(min)}</span><span>Hoch ${fp(max)}</span></div>
+  </div>`;
+}
 const fmt = n => "$" + Math.round(n).toLocaleString("de-DE");
 const fp = n => n < 10 ? "$" + (+n).toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : fmt(n);   // Preise: Cents bei billigen Waren
 const toast = (msg, err) => { const d = document.createElement("div");
@@ -1050,6 +1160,7 @@ function bindSocketEvents(s) {
   s.on("reconnected", () => reidentify(s));    // über die WebRTC-Bridge gemeldet
   s.on("state", state => store.set({ state: mergeState(state) }));
   s.on("me", me => { letztesMe = Date.now(); store.set({ me }); });
+  s.on("priceHist", h => { priceHist = h || {}; });
   s.on("notice", ({ text }) => toast(text));
   s.on("trade", t => toast(`${t.qty}× ${gname(t.good)} @ ${fmt(t.price)} (${t.seller} → ${t.buyer})`));
   s.on("chat", ({ room, msg }) => {
@@ -1237,7 +1348,7 @@ function startHosting(retriesLeft = 2) {
           stateTimer = null;
         }, 250);
       });
-      ["me", "notice", "trade", "chat", "contractOffer", "shareOffer"].forEach(ev => relay.on(ev, payload => conn.send({ t: "event", ev, payload })));
+      ["me", "notice", "trade", "chat", "contractOffer", "shareOffer", "priceHist"].forEach(ev => relay.on(ev, payload => conn.send({ t: "event", ev, payload })));
       conn.on("close", () => { relay.disconnect(); if (stateTimer) clearTimeout(stateTimer); });
     });
   });
@@ -2273,6 +2384,24 @@ function clickTile(e) {
 }
 addEventListener("keydown", e => { if (e.key === "Escape") tm.style.display = "none"; });
 
+/* ---- Preistafel auf-/zuklappen ----
+ * Der Zustand wird gemerkt: Wer die Tafel offen haben will, soll sie nicht
+ * nach jedem Neuladen erneut aufziehen müssen. */
+const tickerEl = document.getElementById("ticker");
+const tickerBtn = document.getElementById("tickerToggle");
+function tickerAufklappen(auf) {
+  tickerEl.classList.toggle("auf", auf);
+  tickerBtn.setAttribute("aria-expanded", String(auf));
+  tickerBtn.title = auf ? "Preise einklappen" : "Alle Preise anzeigen";
+  tickerBtn.textContent = auf ? "⌃" : "⌄";
+  try { localStorage.setItem("cs_ticker_auf", auf ? "1" : "0"); } catch {}
+}
+tickerBtn.addEventListener("click", () => {
+  SFX.spiel("klick");
+  tickerAufklappen(!tickerEl.classList.contains("auf"));
+});
+try { if (localStorage.getItem("cs_ticker_auf") === "1") tickerAufklappen(true); } catch {}
+
 /* ---- Dock & Panels ---- */
 const DOCK = [["karte","Karte"],["lager","Lager"],["boerse","Börse"],["bonds","Finanzen"],["firma","Firma"],["lexikon","Lexikon"],["chat","Chat"]];
 const dock = document.getElementById("dock");
@@ -2297,9 +2426,17 @@ openPanel("karte", true);
 
 function initSelects() {
   const goodOpts = Object.entries(GOODS()).map(([k, g]) => `<option value="${k}">${g.name}</option>`).join("");
-  document.getElementById("oGood").innerHTML = goodOpts;
-  document.getElementById("cGood").innerHTML = goodOpts;
-  document.getElementById("exFilter").innerHTML = `<option value="">Alle Waren</option>` + goodOpts;
+  /* Getroffene Auswahl über den Neuaufbau retten. initSelects() läuft nicht nur
+   * beim Beitritt, sondern über enterGame() bei JEDEM Wiederverbinden — ein
+   * kurzer WLAN-Aussetzer setzte den Börsenfilter bisher stillschweigend auf
+   * "Alle Waren" zurück und warf einen damit aus dem Kursverlauf, den man
+   * gerade beobachtet hat. */
+  for (const [id, opts] of [["oGood", goodOpts], ["cGood", goodOpts],
+                            ["exFilter", `<option value="">Alle Waren</option>` + goodOpts]]) {
+    const el = document.getElementById(id), vorher = el.value;
+    el.innerHTML = opts;
+    if ([...el.options].some(o => o.value === vorher)) el.value = vorher;
+  }
   const roomsEl = document.getElementById("rooms");
   roomsEl.innerHTML = "";
   (store.get().meta.rooms).forEach(r => { const b = document.createElement("button");
@@ -2619,8 +2756,12 @@ function render({ state, me, myId, chat, room }) {
     const dir = prev == null || p === prev ? "" : p > prev ? "▲" : "▼";
     const cls = dir === "▲" ? "u" : dir === "▼" ? "d" : "";
     const dec = p < 10 ? 2 : 0;
-    const lt = state.lastTrade[k];
-    return `<span class="tk">${gname(k)} Ø<b>$${p.toLocaleString("de-DE",{minimumFractionDigits:dec,maximumFractionDigits:dec})}</b><span class="${cls}">${dir}</span>${lt ? `<span style="opacity:.55"> · Trade ${fmt(lt)}</span>` : ""}</span>`;
+    /* Die Sparkline steckt in jedem Chip, wird zugeklappt aber per CSS
+     * ausgeblendet — so muss beim Auf- und Zuklappen nichts neu gebaut werden.
+     * Der letzte echte Trade steht bewusst NICHT hier: er kostete die Breite
+     * von zwei weiteren Waren und drueckte den Preis in die Ellipse. Wer ihn
+     * braucht, findet ihn an der Boerse. */
+    return `<span class="tk"><span class="nm">${gname(k)} Ø<b>$${p.toLocaleString("de-DE",{minimumFractionDigits:dec,maximumFractionDigits:dec})}</b><span class="${cls}">${dir}</span></span>${sparkline(k, 46, 14)}</span>`;
   }).join("");
   /* Nur neu schreiben, wenn sich wirklich etwas geändert hat — sonst baut der
    * Ticker sekündlich denselben Inhalt neu auf und flimmert dabei. */
@@ -2638,27 +2779,39 @@ function render({ state, me, myId, chat, room }) {
       if (o.playerId === myId) continue;
       (byGood[o.good] ??= { buy: [], sell: [] })[o.side].push(o);
     }
-    const row = (o, btnCls, btnTxt) => `
-      <div style="display:flex;justify-content:space-between;align-items:center;gap:6px;padding:4px 0;border-bottom:1px solid rgba(36,48,68,.5)">
-        <span style="font-family:var(--mono);font-variant-numeric:tabular-nums">${o.qty}× <b>${fp(o.price)}</b>
-          <span class="meta" style="font-family:var(--font)"> ${o.player}</span></span>
-        <button class="${btnCls}" data-take="${o.id}">${btnTxt}</button>
+    /* Eine Order = eine volle Zeile statt zwei enger Spalten. Vorher standen
+     * "GESUCHE" und "ANGEBOTE" als Ueberschrift ueber JEDER der bis zu 14
+     * Waren — dieselben zwei Zeilen 28-mal — und im 440 px breiten Panel
+     * blieben je Spalte rund 200 px, zu wenig fuer Menge, Preis, Firmenname
+     * und Knopf: der Name rutschte auf eine eigene Zeile. Jetzt traegt ein
+     * Richtungspfeil die Information, die Legende steht einmal oben. */
+    const row = (o, gesuch) => `
+      <div class="obrow">
+        <span style="color:${gesuch ? "var(--up)" : "var(--down)"}">${gesuch ? "▲" : "▼"}</span>
+        <span class="omono">${o.qty}× <b>${fp(o.price)}</b></span>
+        <span class="meta oname">${o.player}</span>
+        <button class="${gesuch ? "sellb" : "buyb"}" data-take="${o.id}">${gesuch ? "Beliefern" : "Kaufen"}</button>
       </div>`;
     document.getElementById("exbook").innerHTML =
+      /* Auf eine Ware gefiltert: grosser Kursverlauf statt nur der Sparkline.
+       * Genau das fehlte bisher — dass Stahl von 115 auf 137 gelaufen war, sah
+       * man am Oe-Preis allein nicht. */
+      (filt ? kursChart(filt) : "") +
       (mine.length ? `<div class="sec">Meine Orders</div>` + mine.map(o => `
-        <div style="display:flex;justify-content:space-between;align-items:center;gap:6px;padding:4px 0;border-bottom:1px solid rgba(36,48,68,.5)">
-          <span><span style="color:${o.side === "sell" ? "var(--down)" : "var(--up)"}">${o.side === "sell" ? "Verkauf" : "Kauf"}</span>
-            <span style="font-family:var(--mono)">${o.qty}× ${gname(o.good)} @ ${fp(o.price)}</span></span>
+        <div class="obrow">
+          <span style="color:${o.side === "sell" ? "var(--down)" : "var(--up)"}">${o.side === "sell" ? "▼" : "▲"}</span>
+          <span class="omono">${o.qty}× <b>${fp(o.price)}</b></span>
+          <span class="meta oname">${gname(o.good)}</span>
           <button class="mini" data-cancel="${o.id}">Storno</button></div>`).join("") : "") +
-      (Object.keys(byGood).length ? Object.entries(byGood).map(([g, { buy, sell }]) => `
-        <div class="sec" style="display:flex;justify-content:space-between"><span>${gname(g)}</span>
-          <span style="font-family:var(--mono);text-transform:none;letter-spacing:0">Ø ${fp(avg[g] ?? 0)}</span></div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-          <div><div class="meta" style="color:var(--up);margin-bottom:2px">GESUCHE — verkaufe an sie</div>
-            ${buy.sort((a, b) => b.price - a.price).map(o => row(o, "sellb", "Beliefern")).join("") || `<span class="meta">keine</span>`}</div>
-          <div><div class="meta" style="color:var(--down);margin-bottom:2px">ANGEBOTE — kaufe direkt</div>
-            ${sell.sort((a, b) => a.price - b.price).map(o => row(o, "buyb", "Kaufen")).join("") || `<span class="meta">keine</span>`}</div>
-        </div>`).join("")
+      (Object.keys(byGood).length ? `<div class="oblegend">
+          <span><b style="color:var(--up)">▲ Gesuch</b> — jemand kauft, du lieferst</span>
+          <span><b style="color:var(--down)">▼ Angebot</b> — jemand verkauft, du kaufst</span>
+        </div>` + Object.entries(byGood).map(([g, { buy, sell }]) => `
+        <div class="sec" style="display:flex;justify-content:space-between;align-items:center"><span>${gname(g)}</span>
+          <span style="display:flex;align-items:center;gap:7px;font-family:var(--mono);text-transform:none;letter-spacing:0">
+            ${sparkline(g)}${trendLabel(g)}Ø ${fp(avg[g] ?? 0)}</span></div>
+        ${buy.sort((a, b) => b.price - a.price).map(o => row(o, true)).join("")}
+        ${sell.sort((a, b) => a.price - b.price).map(o => row(o, false)).join("")}`).join("")
       : `<div class="meta" style="margin-top:8px">${filt ? "Keine fremden Orders für diese Ware." : "Orderbuch leer — platziere die erste Order."}</div>`);
     document.querySelectorAll("[data-take]").forEach(b => b.addEventListener("click", () => act("takeOrder", { orderId:+b.dataset.take })));
     document.querySelectorAll("[data-cancel]").forEach(b => b.addEventListener("click", () => act("cancelOrder", { orderId:+b.dataset.cancel })));

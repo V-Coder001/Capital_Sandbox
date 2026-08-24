@@ -376,6 +376,7 @@ const G = {
   bonds: [],            // {id, issuerId, holderId|null, principal, rate, termLeft, strikes}
   auctions: [],         // {id, tileIdx, btype, minBid, bestBid, bestBidder, tLeft}
   lastTrade: {},        // good -> Preis des letzten echten Trades (Ticker)
+  priceHist: {},        // good -> Kursverlauf, alle 10 s ein Punkt (Chart)
   chat: Object.fromEntries(ROOMS.map(r => [r, []])),
   contracts: [],        // {id, fromId, toId, good, qty, price, status}
   tick: 0, winner: null, report: null,
@@ -903,6 +904,9 @@ if (PERF) setInterval(() => {
 
 /* ---------- Socket-Handling ---------- */
 io.on("connection", socket => {
+  /* Kursverlauf sofort mitgeben. Er wird sonst nur alle 10 s gesendet — wer
+   * mitten im Intervall beitritt, säße bis dahin vor leeren Charts. */
+  socket.emit("priceHist", G.priceHist);
   /* Reconnect: Browser hat noch ein Token aus einer früheren Verbindung (Tab zu,
    * WLAN-Aussetzer, versehentlich verlassen) — Spielstand bleibt komplett erhalten. */
   socket.on("rejoin", ({ token }, ack) => {
@@ -1302,6 +1306,7 @@ io.on("connection", socket => {
     /* Preisanker zurücksetzen — sonst startet die neue Runde mit den
      * verzerrten Kursen der alten (z. B. dauerhaft gedrücktem Ölpreis). */
     for (const k of Object.keys(GOODS)) Object.assign(MM[k], { price: BASEP[k], anchor: BASEP[k], sold: 0 });
+    G.priceHist = {};
     /* Alle Clients bekommen die Karte danach wieder vollständig */
     lastTileSigs = null;
     for (const sock of io.sockets.sockets.values()) sock.data.gotMap = false;
@@ -1640,6 +1645,19 @@ function runTick() {
   if (G.tick % 10 === 0) for (const p of Object.values(G.players)) {
     p.nwHist.push(Math.round(netWorth(p)));
     if (p.nwHist.length > 120) p.nwHist.shift();
+  }
+  /* Kursverlauf je Ware — Grundlage der Sparklines an der Börse.
+   * Bewusst NICHT Teil des Zustands: der geht jede Sekunde an jeden Spieler,
+   * die Historie ändert sich aber nur alle 10 s. Als eigenes Ereignis kostet
+   * sie ein Zehntel der Daten (33 Waren × 60 Punkte wären sonst rund 20 KB
+   * pro Sekunde und Spieler, nur damit sich neunmal von zehn nichts ändert). */
+  if (G.tick % 10 === 0) {
+    for (const k of Object.keys(GOODS)) {
+      const h = (G.priceHist[k] ??= []);
+      h.push(MM[k].price);
+      if (h.length > 60) h.shift();          // 60 Punkte = 10 min Rückblick
+    }
+    io.emit("priceHist", G.priceHist);
   }
   /* Siegbedingung */
   if (!G.winner) for (const p of Object.values(G.players)) {
