@@ -2636,7 +2636,14 @@ function draw() {
      * Textur, ein Farbschleier darüber würde sie nur trüben. Nur das offene
      * Meer bekommt weiterhin einen Dunkel-Ton, damit sich Tiefe abhebt. */
     if (t.water && t.deep) { cx.globalAlpha = 0.35; cx.fillStyle = "#092536"; cx.fill(); cx.globalAlpha = 1; }
-    if (t.locked) { cx.fillStyle="rgba(0,0,0,.45)"; cx.fill();
+    /* Gesperrte Flaechen sind 40 % der Karte (Kueste und Industrieband
+     * zusammen 270 von 676 Kacheln). Mit 45 % Schwarz darueber wirkten sie
+     * wie tote Flaeche statt wie Bauland, das man kaufen kann — und da nur
+     * gut ein Viertel der Karte sofort bebaubar ist, sieht man beim
+     * Herumfahren ueberwiegend genau diese Flaeche. Jetzt so weit
+     * abgedunkelt, dass der Unterschied klar bleibt, die Textur darunter
+     * aber sichtbar ist. */
+    if (t.locked) { cx.fillStyle="rgba(4,10,18,.26)"; cx.fill();
       drawLock(sx, sy + TH / 2 - 1); }
   }
   /* 2. Durchgang: Gebäude & Deko — nach Boden, damit Sprites nicht überdeckt werden */
