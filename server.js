@@ -2483,15 +2483,31 @@ async function spawnBot(cfg, lvl = BOT_LEVELS[BOT_LEVEL_DEFAULT]) {
        * Reserve von 6 wären davon nur 3 je Zyklus in den Markt gegangen, zu
        * wenig, um die Nachfrage je einzuholen. */
       const reserveFuer = g => (g === "ziegel" || g === "beton") ? 12 : 3;
-      const gesucht = st.orders
+      /* Rangfolge nach AUFSCHLAG auf den Ø-Kurs, nicht nach dem Stückpreis.
+       * Vorher stand hier `b.price - a.price` — quer über alle Waren sortiert,
+       * also gewann immer die teuerste Ware. Strom kostet rund 2 $, Stahl 127 $,
+       * ein Panzer 478 $: Ein einzelnes Stahlgebot schlug damit jedes
+       * Stromgebot, auch wenn dort Hunderte Einheiten gesucht wurden. Genau die
+       * billigsten Waren — Strom und Wasser — sind aber die Boost-Zutaten, die
+       * jede Branche dauernd braucht. Gemessen in einer 50-Minuten-Runde:
+       * Nachfrage nach Strom stieg auf 244 Stück bei einem Angebot von null,
+       * während teurere Waren bedient wurden.
+       * Der Aufschlag ist zudem das ehrlichere Signal: Er zeigt, wie dringend
+       * jemand die Ware braucht, unabhängig davon, was sie grundsätzlich kostet. */
+      const aufschlag = o => o.price / Math.max(0.01, st.avg[o.good] || o.price);
+      const gebote = st.orders
         .filter(o => o.side === "buy" && o.playerId !== myId &&
                      (me.inv[o.good] || 0) > reserveFuer(o.good) + 1)
-        .sort((a, b) => b.price - a.price)[0];
-      if (gesucht) {
-        const menge = Math.min(gesucht.qty, Math.floor((me.inv[gesucht.good] || 0) - reserveFuer(gesucht.good)));
-        if (menge >= 1) await em("takeOrder", { orderId: gesucht.id, qty: menge });
+        .sort((a, b) => aufschlag(b) - aufschlag(a));
+      /* Mehrere Gebote je Zyklus bedienen. Bei einem einzigen pro Bot-Takt
+       * (26 s auf "Mittel") holt der Markt eine Nachfrage von 244 Stück nie
+       * ein — ein Bot hätte dafür Stunden gebraucht. */
+      for (const g of gebote.slice(0, 3)) {
+        const menge = Math.min(g.qty, Math.floor((me.inv[g.good] || 0) - reserveFuer(g.good)));
+        if (menge >= 1) await em("takeOrder", { orderId: g.id, qty: menge });
       }
       /* BÖRSE BEFÜLLEN ohne Überschuss: nur wenn das Buch dünn ist */
+      let eingestellt = 0;
       for (const g of Object.keys(me.inv)) {
         if (me.inv[g] < 18) continue;
         const bookQty = st.orders.filter(o => o.side === "sell" && o.good === g).reduce((s, o) => s + o.qty, 0);
@@ -2499,7 +2515,7 @@ async function spawnBot(cfg, lvl = BOT_LEVELS[BOT_LEVEL_DEFAULT]) {
         if (st.orders.some(o => o.playerId === myId && o.side === "sell" && o.good === g)) continue;
         await em("placeOrder", { side: "sell", good: g, qty: Math.min(10, Math.floor(me.inv[g] - 8)),
           price: Math.round(st.avg[g] * (lvl.verkaufKurs + 0.04) * 100) / 100 });
-        break;
+        if (++eingestellt >= 2) break;   // zwei Waren je Zyklus statt einer
       }
     } catch {} finally { laeuft = false; }
   }, lvl.takt + Math.random() * 8000);
