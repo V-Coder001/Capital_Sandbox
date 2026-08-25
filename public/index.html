@@ -2548,11 +2548,16 @@ function drawAmbient(now) {
 
 /* Karten-Symbole als Vektoren (statt Emoji): Schloss für gesperrte Kacheln,
  * Warndreieck bei Pfandrecht, Pausenbalken bei angehaltener Produktion. */
+/* Gesperrte Kacheln sind auf der Startkarte die grosse Mehrheit — bei voller
+ * Akzentfarbe erschlugen dutzende Schloesser alles andere, und die eigenen
+ * Gebaeude gingen darin unter. Sie sind eine Randinformation ("hier muesstest
+ * du erst freischalten"), also treten sie zurueck. */
 function drawLock(cxp, cyp) {
-  cx.fillStyle = "#38bdf8"; cx.strokeStyle = "#38bdf8"; cx.lineWidth = 1.4;
+  cx.globalAlpha = 0.42;
+  cx.fillStyle = "#7d97b5"; cx.strokeStyle = "#7d97b5"; cx.lineWidth = 1.4;
   cx.beginPath(); cx.arc(cxp, cyp - 2.6, 2.4, Math.PI, 0); cx.stroke();
   cx.fillRect(cxp - 3.6, cyp - 2.4, 7.2, 5.4);
-  cx.lineWidth = 1;
+  cx.lineWidth = 1; cx.globalAlpha = 1;
 }
 function drawWarn(cxp, cyp) {
   cx.fillStyle = "#fb7185";
@@ -2674,11 +2679,19 @@ function draw() {
       const owner = st.players[t.owner];
       const col = owner?.color || "#666";
       const spr = spriteFor(t.btype, t.x, t.y);
+      /* Eigene Gebaeude deutlich staerker markieren als fremde. Vorher sahen
+       * alle gleich aus — dieselbe Kachelfaerbung mit 33 % Deckkraft, dieselbe
+       * duenne Linie, nur in anderer Farbe. Auf einer Karte voller Symbole
+       * findet man seine eigenen Betriebe so nicht wieder. */
+      const meins = t.owner === store.get().myId;
       if (spr) {
         // Besitzer-Markierung: eingefärbte Kachel unter dem Sprite
-        cx.fillStyle = col + "55";
+        cx.fillStyle = col + (meins ? "88" : "44");
         cx.beginPath(); cx.moveTo(sx,sy); cx.lineTo(sx+TW/2,sy+TH/2); cx.lineTo(sx,sy+TH); cx.lineTo(sx-TW/2,sy+TH/2); cx.closePath(); cx.fill();
-        cx.strokeStyle = col; cx.lineWidth = 1.5; cx.stroke(); cx.lineWidth = 1;
+        cx.strokeStyle = col; cx.lineWidth = meins ? 2.6 : 1.2;
+        if (meins) { cx.shadowColor = col; cx.shadowBlur = 9; }
+        cx.stroke();
+        cx.shadowBlur = 0; cx.lineWidth = 1;
         // Sprite direkt auf die Kachel — Grundfläche mittig, ohne Bodenschatten
         cx.drawImage(spr, sx-32, standY(sy, spr, 64), 64, 64);
       } else {
