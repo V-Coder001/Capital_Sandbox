@@ -984,6 +984,9 @@ td:first-child{font-family:var(--font)}
           <span class="tonwert" id="tonWert" aria-hidden="true">22 %</span>
         </div>
       </div>
+      <button id="findBtn" title="Zu meinen Gebäuden springen (Taste F)" aria-label="Zu meinen Gebäuden springen" style="background:none;border:1px solid var(--line);border-radius:7px;color:var(--dim);width:24px;height:24px;cursor:pointer;display:grid;place-items:center;padding:0">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="7"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>
+      </button>
       <button id="langBtn" data-lang-toggle title="Sprache / Language" style="background:none;border:1px solid var(--line);border-radius:7px;color:var(--dim);height:24px;cursor:pointer;padding:0 7px;font:600 10px/1 var(--font);letter-spacing:.06em">DE</button>
       <button id="help" title="Tutorial erneut ansehen" style="background:none;border:1px solid var(--line);border-radius:7px;color:var(--dim);width:24px;height:24px;cursor:pointer;font-size:13px">?</button>
     </div>
@@ -1735,6 +1738,8 @@ const EN = {
   "Tutorial erneut ansehen": "Show tutorial again", "Weiter": "Next", "Fertig": "Done",
   "Los geht's!": "Let's go!", "Tutorial überspringen": "Skip tutorial",
   "Starter-Aufgaben": "Starter tasks", "STARTER-AUFGABEN": "STARTER TASKS",
+  "Du hast noch keine Gebäude gebaut.": "You haven't built anything yet.",
+  "Zu meinen Gebäuden springen (Taste F)": "Jump to my buildings (key F)",
   "BANK": "BANK", "NACHRICHTEN": "NEWS",
   "Der Marktbericht erscheint alle zwei Minuten und vergleicht mit der Lage von vor zwei Minuten.":
     "The market report appears every two minutes, comparing against the situation two minutes earlier.",
@@ -2858,6 +2863,31 @@ tickerBtn.addEventListener("click", () => {
   tickerAufklappen(!tickerEl.classList.contains("auf"));
 });
 try { if (localStorage.getItem("cs_ticker_auf") === "1") tickerAufklappen(true); } catch {}
+
+/* ---- Sprung zu den eigenen Gebäuden ----
+ * Die Karte hat 676 Kacheln, davon nur gut ein Viertel sofort bebaubar, und die
+ * eigenen Betriebe liegen verstreut. Wer einmal weggescrollt ist, sucht sie
+ * ohne Hilfe lange — bis hin zu dem Eindruck, sie seien gar nicht da.
+ * Mehrfaches Drücken geht sie der Reihe nach durch. */
+let findIdx = 0;
+function zuMeinenGebaeuden() {
+  const s = store.get(), st = s.state;
+  if (!st || !s.myId) return;
+  const meine = st.map.filter(t => t.owner === s.myId && t.btype);
+  if (!meine.length) { toast(t("Du hast noch keine Gebäude gebaut.")); return; }
+  const ziel = meine[findIdx++ % meine.length];
+  /* Umkehrung von iso(): Bildmitte auf die Kachel legen. */
+  cam.z = Math.max(cam.z, 1.2);
+  cam.x = -(ziel.x - ziel.y) * TW / 2 * cam.z;
+  cam.y = -(ziel.x + ziel.y) * TH / 2 * cam.z + innerHeight / 2 - 120;
+  toast(`${bname(ziel.btype)} — ${findIdx % meine.length || meine.length}/${meine.length}`);
+}
+document.getElementById("findBtn").addEventListener("click", zuMeinenGebaeuden);
+addEventListener("keydown", e => {
+  if (e.key !== "f" && e.key !== "F") return;
+  if (/INPUT|SELECT|TEXTAREA/.test(document.activeElement?.tagName)) return;
+  zuMeinenGebaeuden();
+});
 
 /* ---- Dock & Panels ---- */
 const DOCK = [["karte","Karte"],["lager","Lager"],["boerse","Börse"],["bonds","Finanzen"],["firma","Firma"],["lexikon","Lexikon"],["chat","Chat"]];
