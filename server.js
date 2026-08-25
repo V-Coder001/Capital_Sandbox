@@ -45,29 +45,29 @@ const io = new Server(httpServer);
  *  Vertriebsbüro: Bot-Kaufangebote über Erzeugnisse — farmen oder an der
  *  Börse kaufen, dann erfüllen. */
 export const GOODS = {
-  strom:    { name: "Strom",    cat: "Enabler" },
-  wasser:   { name: "Wasser",   cat: "Enabler" },
-  oel:      { name: "Öl",       cat: "Enabler" },
-  obst:     { name: "Obst",     cat: "Erzeugnisse" },
-  erze:     { name: "Erze",     cat: "Erzeugnisse" },
-  kannabis: { name: "Kannabis", cat: "Erzeugnisse" },
-  honig:    { name: "Honig",    cat: "Erzeugnisse" },
-  silizium: { name: "Silizium", cat: "Erzeugnisse" },
-  saft:     { name: "Saft",        cat: "Verarbeitet" },
-  stahl:    { name: "Stahl",       cat: "Verarbeitet" },
-  medizin:  { name: "Medikamente", cat: "Verarbeitet" },
-  gebaeck:  { name: "Gebäck",      cat: "Verarbeitet" },
-  diesel:   { name: "Diesel",      cat: "Verarbeitet" },
-  uebernachtung: { name: "Übernachtung", cat: "Verarbeitet" },
-  munition: { name: "Munition",  cat: "Verarbeitet" },
-  pistole:  { name: "Pistole",   cat: "Rüstung" },
-  panzer:   { name: "Panzer",    cat: "Rüstung" },
-  ziegel:   { name: "Ziegel",      cat: "Baumaterial" },
-  beton:    { name: "Beton",       cat: "Baumaterial" },
-  elektronik: { name: "Elektronik", cat: "Baumaterial" },
-  benzinauto: { name: "Benzin-Auto",  cat: "Fahrzeuge" },
-  dieselauto: { name: "Diesel-Auto",  cat: "Fahrzeuge" },
-  eauto:      { name: "Elektro-Auto", cat: "Fahrzeuge" },
+  strom:    { name: "Strom", en: "Electricity",    cat: "Enabler", catEn: "Utilities" },
+  wasser:   { name: "Wasser", en: "Water",   cat: "Enabler", catEn: "Utilities" },
+  oel:      { name: "Öl", en: "Oil",       cat: "Enabler", catEn: "Utilities" },
+  obst:     { name: "Obst", en: "Fruit",     cat: "Erzeugnisse", catEn: "Raw goods" },
+  erze:     { name: "Erze", en: "Ore",     cat: "Erzeugnisse", catEn: "Raw goods" },
+  kannabis: { name: "Kannabis", en: "Cannabis", cat: "Erzeugnisse", catEn: "Raw goods" },
+  honig:    { name: "Honig", en: "Honey",    cat: "Erzeugnisse", catEn: "Raw goods" },
+  silizium: { name: "Silizium", en: "Silicon", cat: "Erzeugnisse", catEn: "Raw goods" },
+  saft:     { name: "Saft", en: "Juice",        cat: "Verarbeitet", catEn: "Processed" },
+  stahl:    { name: "Stahl", en: "Steel",       cat: "Verarbeitet", catEn: "Processed" },
+  medizin:  { name: "Medikamente", en: "Medicine", cat: "Verarbeitet", catEn: "Processed" },
+  gebaeck:  { name: "Gebäck", en: "Pastry",      cat: "Verarbeitet", catEn: "Processed" },
+  diesel:   { name: "Diesel", en: "Diesel",      cat: "Verarbeitet", catEn: "Processed" },
+  uebernachtung: { name: "Übernachtung", en: "Lodging", cat: "Verarbeitet", catEn: "Processed" },
+  munition: { name: "Munition", en: "Ammunition",  cat: "Verarbeitet", catEn: "Processed" },
+  pistole:  { name: "Pistole", en: "Pistol",   cat: "Rüstung", catEn: "Armament" },
+  panzer:   { name: "Panzer", en: "Tank",    cat: "Rüstung", catEn: "Armament" },
+  ziegel:   { name: "Ziegel", en: "Bricks",      cat: "Baumaterial", catEn: "Building material" },
+  beton:    { name: "Beton", en: "Concrete",       cat: "Baumaterial", catEn: "Building material" },
+  elektronik: { name: "Elektronik", en: "Electronics", cat: "Baumaterial", catEn: "Building material" },
+  benzinauto: { name: "Benzin-Auto", en: "Petrol car",  cat: "Fahrzeuge", catEn: "Vehicles" },
+  dieselauto: { name: "Diesel-Auto", en: "Diesel car",  cat: "Fahrzeuge", catEn: "Vehicles" },
+  eauto:      { name: "Elektro-Auto", en: "Electric car", cat: "Fahrzeuge", catEn: "Vehicles" },
 };
 /* Fahrzeuge sind Endprodukte: hoher Stückwert, dafür langsame Fertigung und ein
  * eigener Absatzweg (Autohaus). Am Handelskontor wären sie mit dessen hoher
@@ -91,12 +91,12 @@ const BASEP = { strom: 1.8, wasser: 1.4, oel: 8, obst: 7, erze: 16, kannabis: 45
  * den Versorgern, alle brauchen Ziegel/Beton der Bauindustrie, Bau braucht
  * Erze der Rohstoffindustrie usw. */
 const INDUSTRIES = {
-  agrar:     { name: "Agrarwirtschaft" },
-  rohstoff:  { name: "Rohstoff- & Bauindustrie" },
-  versorger: { name: "Grundbedürfnisse (Wasser, Energie, Öl)" },
-  tech:      { name: "Technologie & Elektronik" },
-  touristik: { name: "Touristik" },
-  ruestung:  { name: "Rüstungsindustrie" },
+  agrar:     { name: "Agrarwirtschaft", en: "Agriculture" },
+  rohstoff:  { name: "Rohstoff- & Bauindustrie", en: "Raw materials & construction" },
+  versorger: { name: "Grundbedürfnisse (Wasser, Energie, Öl)", en: "Essentials (water, energy, oil)" },
+  tech:      { name: "Technologie & Elektronik", en: "Technology & electronics" },
+  touristik: { name: "Touristik", en: "Tourism" },
+  ruestung:  { name: "Rüstungsindustrie", en: "Armament industry" },
 };
 /* Baumaterial-Bedarf jedes Gebäudes: Ziegel immer, Beton ab $4.000. Elektronik
  * wird NICHT zum Bauen gebraucht, sondern zum Aufleveln bestehender Gebäude
@@ -133,9 +133,9 @@ const upgradeCost = (bt, level) => ({
 });
 const BTYPES = {
   /* Grundbedürfnisse (Versorger) */
-  ewerk:      { name: "Elektrizitätswerk", cost: 2000, out: "strom",    rate: 5,    zone: "industrie", industry: "versorger" },
-  wasserwerk: { name: "Wasserwerk",        cost: 1800, out: "wasser",   rate: 5,    zone: "industrie", industry: "versorger" },
-  oelpumpe:   { name: "Ölpumpe",           cost: 2500, out: "oel",      rate: 1.2,  zone: "kueste",    industry: "versorger" },
+  ewerk:      { name: "Elektrizitätswerk", en: "Power plant", cost: 2000, out: "strom",    rate: 5,    zone: "industrie", industry: "versorger" },
+  wasserwerk: { name: "Wasserwerk", en: "Waterworks",        cost: 1800, out: "wasser",   rate: 5,    zone: "industrie", industry: "versorger" },
+  oelpumpe:   { name: "Ölpumpe", en: "Oil pump",           cost: 2500, out: "oel",      rate: 1.2,  zone: "kueste",    industry: "versorger" },
   /* ---- Touristik ----
    * Die erste Branche, die vor allem VERBRAUCHT statt zu produzieren. Ein
    * Strandhotel zieht 150 Wasser und 75 Strom pro Minute — zwei davon binden
@@ -150,20 +150,20 @@ const BTYPES = {
    * (gemessen: der Bot verbaute sein ganzes Startkapital in Freischaltungen,
    * konnte danach keinen Strom mehr kaufen, das Hotel stand still und ohne
    * Produktion kam auch kein Geld nach). Die Küste bleibt dem Hotel. */
-  campingplatz: { name: "Campingplatz", cost: 1500, out: "uebernachtung", rate: 10/60, zone: "agrar", industry: "touristik" },
-  strandhotel:  { name: "Strandhotel",  cost: 2400, out: null, rate: 0, zone: "kueste", industry: "touristik",
+  campingplatz: { name: "Campingplatz", en: "Campground", cost: 1500, out: "uebernachtung", rate: 10/60, zone: "agrar", industry: "touristik" },
+  strandhotel:  { name: "Strandhotel", en: "Beach hotel",  cost: 2400, out: null, rate: 0, zone: "kueste", industry: "touristik",
                   proc: { in: { wasser: 2.5, strom: 1.25 }, out: "uebernachtung", rate: 10/30 } },
-  brunnen:    { name: "Brunnen",           cost: 800,  out: "wasser",   rate: 2.5,  zone: "agrar",     industry: "versorger" },
-  windpark:   { name: "Windpark",          cost: 2200, out: "strom",    rate: 5,    zone: "kueste",    industry: "versorger" },
+  brunnen:    { name: "Brunnen", en: "Well",           cost: 800,  out: "wasser",   rate: 2.5,  zone: "agrar",     industry: "versorger" },
+  windpark:   { name: "Windpark", en: "Wind farm",          cost: 2200, out: "strom",    rate: 5,    zone: "kueste",    industry: "versorger" },
   /* Agrarwirtschaft */
-  farm:       { name: "Farm",              cost: 1200, out: "obst",     rate: 0.62, zone: "agrar",     industry: "agrar", boosts: ["strom", "wasser"] },
-  plantage:   { name: "Plantage",          cost: 2200, out: "kannabis", rate: 0.22, zone: "agrar",     industry: "agrar", boosts: ["strom", "wasser"] },
-  imkerei:    { name: "Imkerei",           cost: 1400, out: "honig",    rate: 0.42, zone: "agrar",     industry: "agrar", boosts: ["strom", "wasser"] },
+  farm:       { name: "Farm", en: "Farm",              cost: 1200, out: "obst",     rate: 0.62, zone: "agrar",     industry: "agrar", boosts: ["strom", "wasser"] },
+  plantage:   { name: "Plantage", en: "Plantation",          cost: 2200, out: "kannabis", rate: 0.22, zone: "agrar",     industry: "agrar", boosts: ["strom", "wasser"] },
+  imkerei:    { name: "Imkerei", en: "Apiary",           cost: 1400, out: "honig",    rate: 0.42, zone: "agrar",     industry: "agrar", boosts: ["strom", "wasser"] },
   /* Technologie & Elektronik: liefert Elektronik — ab $5.000 Baukosten für ALLE
    * Industrien Pflicht, analog zu Ziegel/Beton der Bauindustrie. */
-  siliziummine: { name: "Siliziummine",    cost: 1400, out: "silizium", rate: 10/30, zone: "industrie", industry: "tech", boosts: ["strom"] },
+  siliziummine: { name: "Siliziummine", en: "Silicon mine",    cost: 1400, out: "silizium", rate: 10/30, zone: "industrie", industry: "tech", boosts: ["strom"] },
   /* Rohstoff- & Bauindustrie: fördert Erze und macht daraus das Baumaterial für ALLE */
-  mine:       { name: "Mine",              cost: 1400, out: "erze",     rate: 0.383, zone: "industrie", industry: "rohstoff", boosts: ["strom", "oel"] },
+  mine:       { name: "Mine", en: "Ore mine",              cost: 1400, out: "erze",     rate: 0.383, zone: "industrie", industry: "rohstoff", boosts: ["strom", "oel"] },
   /* Ziegel und Elektronik waren die beiden unattraktivsten Waren der Wirtschaft
    * (Wertschöpfung 1,63x bzw. 1,71x) — obwohl JEDES Gebäude Ziegel und JEDES
    * Upgrade Elektronik braucht. Wer sich dagegen selbst versorgen konnte, verdiente
@@ -172,31 +172,31 @@ const BTYPES = {
    * beide auf ~2,2x, also auf Augenhöhe mit Stahl (2,18x). Bewusst über den
    * Materialbedarf statt über den Verkaufspreis: So wird Herstellen lohnender,
    * ohne dass Bauen für alle anderen teurer wird. */
-  ziegelei:   { name: "Ziegelei",          cost: 1500, out: null, rate: 0, zone: "industrie", industry: "rohstoff", proc: { in: { erze: 0.3, wasser: 0.3 }, out: "ziegel", rate: 10/30 } },
-  betonwerk:  { name: "Betonwerk",         cost: 4000, out: null, rate: 0, zone: "industrie", industry: "rohstoff", proc: { in: { erze: 0.8, oel: 0.2 },    out: "beton",  rate: 10/30 } },
+  ziegelei:   { name: "Ziegelei", en: "Brickworks",          cost: 1500, out: null, rate: 0, zone: "industrie", industry: "rohstoff", proc: { in: { erze: 0.3, wasser: 0.3 }, out: "ziegel", rate: 10/30 } },
+  betonwerk:  { name: "Betonwerk", en: "Concrete plant",         cost: 4000, out: null, rate: 0, zone: "industrie", industry: "rohstoff", proc: { in: { erze: 0.8, oel: 0.2 },    out: "beton",  rate: 10/30 } },
   /* Verkaufsgebäude (Shops): Ware + Stückpreis selbst festlegen; verkauft
    * dann passiv. Tempo hängt vom Preis ab: bei Ø-Kurs = volle Rate, teurer
    * = langsamer (Kundschaft überlegt), billiger = schneller (max. ×2). */
   /* Verarbeitung (gehört zur jeweiligen Industrie) */
-  saftpresse: { name: "Saftpresse",  cost: 2600, out: null, rate: 0, zone: "agrar",     industry: "agrar",    proc: { in: { obst: 1.1 },            out: "saft",    rate: 10/30 } },
-  pharma:     { name: "Pharma-Labor",cost: 8000, out: null, rate: 0, zone: "zentrum",   industry: "agrar",    proc: { in: { kannabis: 0.4 },        out: "medizin", rate: 10/30 } },
-  baeckerei:  { name: "Bäckerei",    cost: 3400, out: null, rate: 0, zone: "zentrum",   industry: "agrar",    proc: { in: { obst: 1.1, honig: 0.35 }, out: "gebaeck", rate: 10/30 } },
-  stahlwerk:  { name: "Stahlwerk",   cost: 6000, out: null, rate: 0, zone: "industrie", industry: "rohstoff", proc: { in: { erze: 1.0, oel: 0.2 },  out: "stahl",   rate: 10/30 } },
-  raffinerie: { name: "Raffinerie",  cost: 4200, out: null, rate: 0, zone: "industrie", industry: "versorger", proc: { in: { oel: 0.5 },             out: "diesel",  rate: 10/30 } },
-  chipfabrik: { name: "Chipfabrik",  cost: 3200, out: null, rate: 0, zone: "industrie", industry: "tech",      proc: { in: { silizium: 0.7, strom: 0.5 }, out: "elektronik", rate: 10/30 } },
+  saftpresse: { name: "Saftpresse", en: "Juice press",  cost: 2600, out: null, rate: 0, zone: "agrar",     industry: "agrar",    proc: { in: { obst: 1.1 },            out: "saft",    rate: 10/30 } },
+  pharma:     { name: "Pharma-Labor", en: "Pharma lab",cost: 8000, out: null, rate: 0, zone: "zentrum",   industry: "agrar",    proc: { in: { kannabis: 0.4 },        out: "medizin", rate: 10/30 } },
+  baeckerei:  { name: "Bäckerei", en: "Bakery",    cost: 3400, out: null, rate: 0, zone: "zentrum",   industry: "agrar",    proc: { in: { obst: 1.1, honig: 0.35 }, out: "gebaeck", rate: 10/30 } },
+  stahlwerk:  { name: "Stahlwerk", en: "Steel mill",   cost: 6000, out: null, rate: 0, zone: "industrie", industry: "rohstoff", proc: { in: { erze: 1.0, oel: 0.2 },  out: "stahl",   rate: 10/30 } },
+  raffinerie: { name: "Raffinerie", en: "Refinery",  cost: 4200, out: null, rate: 0, zone: "industrie", industry: "versorger", proc: { in: { oel: 0.5 },             out: "diesel",  rate: 10/30 } },
+  chipfabrik: { name: "Chipfabrik", en: "Chip factory",  cost: 3200, out: null, rate: 0, zone: "industrie", industry: "tech",      proc: { in: { silizium: 0.7, strom: 0.5 }, out: "elektronik", rate: 10/30 } },
   /* Fahrzeugbau der Technologie-Industrie: drei Antriebsarten, die jeweils eine
    * andere Industrie mitversorgen — Benzin zieht Öl, Diesel zieht die Raffinerie,
    * Elektro zieht Strom und viel Elektronik. Stahl braucht jedes davon. */
-  autowerk:   { name: "Autowerk (Benzin)",  cost: 6500, out: null, rate: 0, zone: "industrie", industry: "tech", proc: { in: { elektronik: 0.04, stahl: 0.07, oel: 0.2 },   out: "benzinauto", rate: 10/95 } },
-  dieselwerk: { name: "Autowerk (Diesel)",  cost: 7000, out: null, rate: 0, zone: "industrie", industry: "tech", proc: { in: { elektronik: 0.04, stahl: 0.07, diesel: 0.1 }, out: "dieselauto", rate: 10/95 } },
-  eautowerk:  { name: "Autowerk (Elektro)", cost: 8500, out: null, rate: 0, zone: "industrie", industry: "tech", proc: { in: { elektronik: 0.1, stahl: 0.07, strom: 1.0 },  out: "eauto",      rate: 10/95 } },
+  autowerk:   { name: "Autowerk (Benzin)", en: "Car plant (petrol)",  cost: 6500, out: null, rate: 0, zone: "industrie", industry: "tech", proc: { in: { elektronik: 0.04, stahl: 0.07, oel: 0.2 },   out: "benzinauto", rate: 10/95 } },
+  dieselwerk: { name: "Autowerk (Diesel)", en: "Car plant (diesel)",  cost: 7000, out: null, rate: 0, zone: "industrie", industry: "tech", proc: { in: { elektronik: 0.04, stahl: 0.07, diesel: 0.1 }, out: "dieselauto", rate: 10/95 } },
+  eautowerk:  { name: "Autowerk (Elektro)", en: "Car plant (electric)", cost: 8500, out: null, rate: 0, zone: "industrie", industry: "tech", proc: { in: { elektronik: 0.1, stahl: 0.07, strom: 1.0 },  out: "eauto",      rate: 10/95 } },
   /* (Hinweis: Rohstoff & Bau sind EINE Industrie — Erzförderung und Baumaterial aus einer Hand) */
   /* Verkauf: darf JEDE Industrie bauen (industry: null) */
-  markt:      { name: "Marktstand",        cost: 1000, out: null, rate: 0, zone: "zentrum",   retail: { slots: 1, base: 0.5, goods: ["obst", "saft", "honig", "gebaeck"] } },
-  bauhandel:  { name: "Baustoffhandel",    cost: 2800, out: null, rate: 0, zone: "industrie", retail: { slots: 1, base: 0.8, goods: ["erze", "oel", "stahl", "ziegel", "beton", "diesel", "silizium", "elektronik"] } },
-  laden:      { name: "Grüner Laden",      cost: 4500, out: null, rate: 0, zone: "zentrum",   retail: { slots: 1, base: 0.3, goods: ["kannabis", "medizin"] } },
-  kontor:     { name: "Handelskontor",     cost: 3500, out: null, rate: 0, zone: "zentrum",   retail: { slots: 2, base: 0.7, goods: Object.keys(GOODS).filter(g => !VEHICLES.includes(g) && !WEAPONS.includes(g)) } },
-  autohaus:   { name: "Autohaus",           cost: 5000, out: null, rate: 0, zone: "zentrum",   retail: { slots: 2, base: 0.30, goods: VEHICLES } },
+  markt:      { name: "Marktstand", en: "Market stall",        cost: 1000, out: null, rate: 0, zone: "zentrum",   retail: { slots: 1, base: 0.5, goods: ["obst", "saft", "honig", "gebaeck"] } },
+  bauhandel:  { name: "Baustoffhandel", en: "Builders merchant",    cost: 2800, out: null, rate: 0, zone: "industrie", retail: { slots: 1, base: 0.8, goods: ["erze", "oel", "stahl", "ziegel", "beton", "diesel", "silizium", "elektronik"] } },
+  laden:      { name: "Grüner Laden", en: "Green store",      cost: 4500, out: null, rate: 0, zone: "zentrum",   retail: { slots: 1, base: 0.3, goods: ["kannabis", "medizin"] } },
+  kontor:     { name: "Handelskontor", en: "Trading house",     cost: 3500, out: null, rate: 0, zone: "zentrum",   retail: { slots: 2, base: 0.7, goods: Object.keys(GOODS).filter(g => !VEHICLES.includes(g) && !WEAPONS.includes(g)) } },
+  autohaus:   { name: "Autohaus", en: "Car dealership",           cost: 5000, out: null, rate: 0, zone: "zentrum",   retail: { slots: 2, base: 0.30, goods: VEHICLES } },
   /* ---- Rüstungsindustrie ----
    * Die Branche am Ende der Kette: Sie verarbeitet, was Rohstoff und
    * Technologie liefern, und erzeugt die wertvollsten Güter im Spiel. Ihre
@@ -204,18 +204,18 @@ const BTYPES = {
    * gerechnet, also auf dem Niveau von Stahlwerk und Chipfabrik. Der Einstieg
    * über die Munitionsfabrik ist billig und braucht nur Erze und Öl; wer
    * Panzer bauen will, hängt dagegen an drei fremden Branchen gleichzeitig. */
-  munitionsfabrik: { name: "Munitionsfabrik", cost: 1400, out: null, rate: 0, zone: "industrie", industry: "ruestung",
+  munitionsfabrik: { name: "Munitionsfabrik", en: "Ammunition factory", cost: 1400, out: null, rate: 0, zone: "industrie", industry: "ruestung",
                      proc: { in: { erze: 0.18, oel: 0.13 }, out: "munition", rate: 10/30 } },
-  waffenschmiede:  { name: "Waffenschmiede",  cost: 4000, out: null, rate: 0, zone: "industrie", industry: "ruestung",
+  waffenschmiede:  { name: "Waffenschmiede", en: "Gunsmith",  cost: 4000, out: null, rate: 0, zone: "industrie", industry: "ruestung",
                      proc: { in: { stahl: 0.055, elektronik: 0.030, munition: 0.075 }, out: "pistole", rate: 10/45 } },
-  panzerwerk:      { name: "Panzerwerk",      cost: 8000, out: null, rate: 0, zone: "industrie", industry: "ruestung",
+  panzerwerk:      { name: "Panzerwerk", en: "Tank works",      cost: 8000, out: null, rate: 0, zone: "industrie", industry: "ruestung",
                      proc: { in: { stahl: 0.105, elektronik: 0.055, diesel: 0.070 }, out: "panzer", rate: 10/95 } },
-  waffenhandel:    { name: "Waffenhandel",    cost: 5200, out: null, rate: 0, zone: "zentrum",
+  waffenhandel:    { name: "Waffenhandel", en: "Arms dealer",    cost: 5200, out: null, rate: 0, zone: "zentrum",
                      retail: { slots: 2, base: 0.30, goods: WEAPONS } },
   /* Werbeagentur: produziert nichts und verkauft nichts. Sie schaltet
    * Kampagnen frei, die den Preis anheben, den die Kundschaft in den EIGENEN
    * Läden ohne Tempoverlust akzeptiert. Darf jede Industrie bauen. */
-  werbeagentur: { name: "Werbeagentur",     cost: 3500, out: null, rate: 0, zone: "zentrum",   ad: true },
+  werbeagentur: { name: "Werbeagentur", en: "Ad agency",     cost: 3500, out: null, rate: 0, zone: "zentrum",   ad: true },
 };
 /* Verkaufstempo eines Shops: (Ø-Kurs / eigener Preis)² — gedeckelt bei ×2 */
 /* Verkaufstempo eines Shops: (Ø-Kurs / eigener Preis)² — gedeckelt bei ×2.
@@ -688,19 +688,29 @@ const proz = v => (v > 0 ? "+" : "−") + Math.abs(v).toFixed(0) + " Prozent";
 const geld = v => v.toFixed(2).replace(".", ",") + " $";
 const wucht = v => Math.abs(v) >= 25 ? "sprunghaft" : Math.abs(v) >= 12 ? "deutlich" : "leicht";
 
-function marktbericht() {
+/* Der Bericht entsteht in beiden Sprachen und reist gemeinsam mit — der Client
+ * wählt beim Anzeigen. Eine Übersetzung im Browser ginge nicht: Das hier sind
+ * gebaute Sätze, keine festen Beschriftungen. */
+function marktbericht(sp) {
+  const en = sp === "en";
   const wandel = k => veraenderung(G.priceHist[k], NEWS_FENSTER);
+  const wname = k => (en ? GOODS[k].en : GOODS[k].name) || GOODS[k].name;
+  const proz = v => (v > 0 ? "+" : "−") + Math.abs(v).toFixed(0) + (en ? " percent" : " Prozent");
+  const geld = v => en ? "$" + v.toFixed(2) : v.toFixed(2).replace(".", ",") + " $";
+  const zahl = v => v.toLocaleString(en ? "en-US" : "de-DE");
+  const liste = teile => teile.length <= 1 ? (teile[0] || "")
+    : teile.slice(0, -1).join(", ") + (en ? " and " : " und ") + teile[teile.length - 1];
+
   const waren = Object.keys(GOODS)
-    .map(k => ({ k, name: GOODS[k].name, v: wandel(k), kurs: MM[k].price }))
-    .filter(x => x.v != null && Math.abs(x.v) >= 2)
-    .sort((a, b) => b.v - a.v);
+    .map(k => ({ k, name: wname(k), v: wandel(k), kurs: MM[k].price }))
+    .filter(x => x.v != null && Math.abs(x.v) >= 2).sort((a, b) => b.v - a.v);
   const hoch = waren.filter(x => x.v > 0).slice(0, 3);
   const tief = waren.filter(x => x.v < 0).slice(-3).reverse();
 
   const knapp = Object.keys(GOODS).map(k => {
     const angebot = G.orders.filter(o => o.good === k && o.side === "sell").reduce((a, o) => a + o.qty, 0);
     const nachfrage = G.orders.filter(o => o.good === k && o.side === "buy").reduce((a, o) => a + o.qty, 0);
-    return { k, name: GOODS[k].name, nachfrage, leer: angebot === 0 && nachfrage >= 10 };
+    return { k, name: wname(k), nachfrage, leer: angebot === 0 && nachfrage >= 10 };
   }).filter(x => x.leer).sort((a, b) => b.nachfrage - a.nachfrage);
 
   const firmen = Object.values(G.players)
@@ -708,68 +718,75 @@ function marktbericht() {
     .filter(x => x.v != null && x.v >= 1).sort((a, b) => b.v - a.v);
   const rang = Object.values(G.players).sort((a, b) => netWorth(b) - netWorth(a));
 
-  /* ---- Schlagzeile: die auffälligste Entwicklung zuerst ---- */
   let schlagzeile;
   if (knapp.length && knapp[0].nachfrage >= 40)
-    schlagzeile = `${knapp[0].name} ausverkauft — ${knapp[0].nachfrage} Einheiten gesucht, keine im Angebot`;
+    schlagzeile = en ? `${knapp[0].name} sold out — ${knapp[0].nachfrage} units wanted, none on offer`
+                     : `${knapp[0].name} ausverkauft — ${knapp[0].nachfrage} Einheiten gesucht, keine im Angebot`;
   else if (hoch.length && hoch[0].v >= 20)
-    schlagzeile = `${hoch[0].name} zieht kräftig an: ${proz(hoch[0].v)} auf ${geld(hoch[0].kurs)}`;
+    schlagzeile = en ? `${hoch[0].name} surges: ${proz(hoch[0].v)} to ${geld(hoch[0].kurs)}`
+                     : `${hoch[0].name} zieht kräftig an: ${proz(hoch[0].v)} auf ${geld(hoch[0].kurs)}`;
   else if (tief.length && tief[0].v <= -15)
-    schlagzeile = `${tief[0].name} bricht ein: ${proz(tief[0].v)} auf ${geld(tief[0].kurs)}`;
+    schlagzeile = en ? `${tief[0].name} slumps: ${proz(tief[0].v)} to ${geld(tief[0].kurs)}`
+                     : `${tief[0].name} bricht ein: ${proz(tief[0].v)} auf ${geld(tief[0].kurs)}`;
   else if (firmen.length && firmen[0].v >= 10)
-    schlagzeile = `${firmen[0].p.name} zieht davon — Firmenwert ${proz(firmen[0].v)}`;
+    schlagzeile = en ? `${firmen[0].p.name} pulls ahead — company value ${proz(firmen[0].v)}`
+                     : `${firmen[0].p.name} zieht davon — Firmenwert ${proz(firmen[0].v)}`;
   else if (knapp.length)
-    schlagzeile = `${knapp[0].name} bleibt Mangelware`;
+    schlagzeile = en ? `${knapp[0].name} remains in short supply` : `${knapp[0].name} bleibt Mangelware`;
   else
-    schlagzeile = "Ruhiger Handel, keine großen Ausschläge";
+    schlagzeile = en ? "Quiet trading, no major swings" : "Ruhiger Handel, keine großen Ausschläge";
 
-  /* ---- Absätze ---- */
   const absaetze = [];
   if (hoch.length || tief.length) {
     const teile = [];
-    if (hoch.length) teile.push(
-      `Am kräftigsten ${hoch.length > 1 ? "legten" : "legte"} ` +
-      liste(hoch.map(x => `${x.name} (${proz(x.v)} auf ${geld(x.kurs)})`)) + " zu");
+    const nenn = x => en ? `${x.name} (${proz(x.v)} to ${geld(x.kurs)})` : `${x.name} (${proz(x.v)} auf ${geld(x.kurs)})`;
+    if (hoch.length) teile.push(en
+      ? `The biggest gains went to ${liste(hoch.map(nenn))}`
+      : `Am kräftigsten ${hoch.length > 1 ? "legten" : "legte"} ${liste(hoch.map(nenn))} zu`);
     if (tief.length) {
-      /* Einleitung getrennt bilden: verschachtelt in der Zeichenkette stand die
-       * innere Ersetzung als roher Text im Bericht. */
-      const auftakt = hoch.length
-        ? "Nach unten ging es dagegen für "
-        : (tief.length > 1 ? "Nachgegeben haben " : "Nachgegeben hat ");
-      teile.push(auftakt + liste(tief.map(x => `${x.name} (${proz(x.v)} auf ${geld(x.kurs)})`)));
+      const auftakt = en ? (hoch.length ? "Losing ground: " : "Down this period: ")
+        : (hoch.length ? "Nach unten ging es dagegen für " : (tief.length > 1 ? "Nachgegeben haben " : "Nachgegeben hat "));
+      teile.push(auftakt + liste(tief.map(nenn)));
     }
     absaetze.push(teile.join(". ") + ".");
   }
 
   if (knapp.length) {
     const erste = knapp[0];
-    let t = `Nicht lieferbar ${knapp.length > 1 ? "sind derzeit" : "ist derzeit"} ` +
-      liste(knapp.slice(0, 4).map(x => `${x.name} (${x.nachfrage} gesucht)`)) + ". ";
+    const nenn = x => en ? `${x.name} (${x.nachfrage} wanted)` : `${x.name} (${x.nachfrage} gesucht)`;
+    let t = en
+      ? `Currently unavailable: ${liste(knapp.slice(0, 4).map(nenn))}. `
+      : `Nicht lieferbar ${knapp.length > 1 ? "sind derzeit" : "ist derzeit"} ${liste(knapp.slice(0, 4).map(nenn))}. `;
     t += erste.nachfrage >= 60
-      ? `Vor allem bei ${erste.name} klafft eine große Lücke — wer jetzt produziert, kann seinen Preis selbst bestimmen.`
-      : `Wer diese Waren herstellt, findet gerade mühelos Abnehmer.`;
+      ? (en ? `The gap is widest for ${erste.name} — whoever produces it now sets the price.`
+            : `Vor allem bei ${erste.name} klafft eine große Lücke — wer jetzt produziert, kann seinen Preis selbst bestimmen.`)
+      : (en ? `Anyone making these goods will find buyers without effort.`
+            : `Wer diese Waren herstellt, findet gerade mühelos Abnehmer.`);
     absaetze.push(t);
   } else if (waren.length) {
-    absaetze.push("Lieferengpässe gibt es derzeit keine — alle nachgefragten Waren sind am Markt zu haben.");
+    absaetze.push(en ? "No supply shortages at the moment — every good in demand can be had on the market."
+                     : "Lieferengpässe gibt es derzeit keine — alle nachgefragten Waren sind am Markt zu haben.");
   }
 
   if (firmen.length) {
     const spitze = firmen.slice(0, 3);
-    absaetze.push(
-      `An der Börse ${spitze.length > 1 ? "gewannen" : "gewann"} ` +
-      liste(spitze.map(x => `${x.p.name} ${proz(x.v)}`)) +
-      ` an Wert. Ein 25-Prozent-Block an ${spitze[0].p.name} kostet inzwischen ` +
-      `${blockPrice(spitze[0].p).toLocaleString("de-DE")} $.`);
+    absaetze.push(en
+      ? `On the exchange, ${liste(spitze.map(x => `${x.p.name} ${proz(x.v)}`))} gained in value. A 25 percent block in ${spitze[0].p.name} now costs $${zahl(blockPrice(spitze[0].p))}.`
+      : `An der Börse ${spitze.length > 1 ? "gewannen" : "gewann"} ${liste(spitze.map(x => `${x.p.name} ${proz(x.v)}`))} an Wert. Ein 25-Prozent-Block an ${spitze[0].p.name} kostet inzwischen ${zahl(blockPrice(spitze[0].p))} $.`);
   }
 
   if (rang.length) {
     const f = rang[0], zweiter = rang[1];
-    let t = `An der Spitze steht ${f.name} mit ${Math.round(netWorth(f)).toLocaleString("de-DE")} $ Nettovermögen`;
+    let t = en ? `${f.name} leads with $${zahl(Math.round(netWorth(f)))} in net worth`
+               : `An der Spitze steht ${f.name} mit ${zahl(Math.round(netWorth(f)))} $ Nettovermögen`;
     if (zweiter) {
       const abstand = Math.round(netWorth(f) - netWorth(zweiter));
-      t += abstand < netWorth(f) * 0.05
-        ? `, dicht gefolgt von ${zweiter.name} — nur ${abstand.toLocaleString("de-DE")} $ trennen die beiden.`
-        : `, mit ${abstand.toLocaleString("de-DE")} $ Vorsprung auf ${zweiter.name}.`;
+      const knappDran = abstand < netWorth(f) * 0.05;
+      t += en
+        ? (knappDran ? `, with ${zweiter.name} right behind — just $${zahl(abstand)} between them.`
+                     : `, $${zahl(abstand)} ahead of ${zweiter.name}.`)
+        : (knappDran ? `, dicht gefolgt von ${zweiter.name} — nur ${zahl(abstand)} $ trennen die beiden.`
+                     : `, mit ${zahl(abstand)} $ Vorsprung auf ${zweiter.name}.`);
     } else t += ".";
     absaetze.push(t);
   }
@@ -778,13 +795,13 @@ function marktbericht() {
 }
 
 function sendeMarktbericht() {
-  const bericht = marktbericht();
+  const bericht = marktbericht("de"), berichtEn = marktbericht("en");
   if (!bericht) return;   // in den ersten Minuten gibt es schlicht nichts zu melden
   /* Die Berichte sammeln sich in der Nachrichtenzentrale, statt im Chat
    * vorbeizuziehen: Dort geht ein Bericht zwischen den Nachrichten der
    * Mitspieler unter, und wer später dazukommt, sieht ihn nie. Im Panel steht
    * die Entwicklung der letzten Viertelstunde am Stück. */
-  G.news.unshift({ ...bericht, min: Math.round(G.tick / 60), ts: Date.now() });
+  G.news.unshift({ ...bericht, en: berichtEn, min: Math.round(G.tick / 60), ts: Date.now() });
   if (G.news.length > 8) G.news.pop();
   io.emit("notice", { text: "Neuer Marktbericht der Nachrichtenzentrale" });
   pushState();
@@ -841,13 +858,13 @@ function seizeAndAuction(debtor, bond) {
  * er entsteht, und jeder Schritt führt an ein Spielsystem heran: bauen,
  * verkaufen, handeln, freischalten, aufleveln, Anteile kaufen. */
 const QUESTS = [
-  { id: "build",   text: "Baue dein erstes Produktionsgebäude",           target: 1,    reward: 800 },
-  { id: "shop",    text: "Richte einen Verkaufsslot ein",                 target: 1,    reward: 1000 },
-  { id: "order",   text: "Platziere eine Order an der Börse",             target: 1,    reward: 600 },
-  { id: "revenue", text: "Erwirtschafte 3.000 $ Umsatz",                  target: 3000, reward: 1500 },
-  { id: "unlock",  text: "Schalte eine Kachel in einer Sperrzone frei",   target: 1,    reward:  500 },
-  { id: "upgrade", text: "Level ein Gebäude mit Elektronik auf Stufe 2",  target: 1,    reward: 1500 },
-  { id: "shares",  text: "Kaufe an der Stadtbank Anteile einer Firma",    target: 1,    reward: 1800 },
+  { id: "build",   text: "Baue dein erstes Produktionsgebäude", en: "Build your first production site",           target: 1,    reward: 800 },
+  { id: "shop",    text: "Richte einen Verkaufsslot ein", en: "Set up a sales slot",                 target: 1,    reward: 1000 },
+  { id: "order",   text: "Platziere eine Order an der Börse", en: "Place an order on the exchange",             target: 1,    reward: 600 },
+  { id: "revenue", text: "Erwirtschafte 3.000 $ Umsatz", en: "Earn $3,000 in revenue",                  target: 3000, reward: 1500 },
+  { id: "unlock",  text: "Schalte eine Kachel in einer Sperrzone frei", en: "Unlock a tile in a locked zone",   target: 1,    reward:  500 },
+  { id: "upgrade", text: "Level ein Gebäude mit Elektronik auf Stufe 2", en: "Upgrade a building to level 2 using electronics",  target: 1,    reward: 1500 },
+  { id: "shares",  text: "Kaufe an der Stadtbank Anteile einer Firma", en: "Buy shares in a company at the city bank",    target: 1,    reward: 1800 },
 ];
 function questProg(p, id, n = 1) {
   const def = QUESTS.find(q => q.id === id);
