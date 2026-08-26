@@ -2585,7 +2585,11 @@ for (const [key, pfad, art] of [
 const tileSprite = t => {
   if (t.water) return TILEIMG.meer;
   if (t.road) {
-    const isCol = t.x % 6 === 3, isRow = t.y % 6 === 3;
+    /* Das Straßenraster liegt je nach Spielfläche auf anderen Linien:
+     * Sandbox auf x/y % 6 == 3, Planwirtschaft auf % 6 == 2. Mit dem
+     * falschen Wert kippt die Sprite-Orientierung um 90 Grad. */
+    const rl = store.get()?.state?.mode === "plan" ? 2 : 3;
+    const isCol = t.x % 6 === rl, isRow = t.y % 6 === rl;
     if (isCol && isRow) return TILEIMG.crossroad;
     /* Vorsicht Isometrie: iso() bildet +x auf "rechts-unten" ab und +y auf
      * "links-unten". Eine Spaltenstraße (x fest, y läuft) verläuft auf dem
@@ -3859,6 +3863,9 @@ document.getElementById("help").addEventListener("click", () => tutShow(0));
  * eine Order an der Börse. Erst damit wird aus dem Tutorial ein Spiel statt
  * einer Textfolge, durch die man klickt. */
 function tutCheck(state, myId) {
+  /* Das Tutorial erklärt Börse und Stadtbank — in der Planwirtschaft
+   * führt es in die Irre, dort bleibt es aus. */
+  if (state?.mode === "plan") { document.getElementById("tut").style.display = "none"; return; }
   if (tutIdx < 0 || !state) return;
   const s = TUT[tutIdx];
   if (!s) return;
@@ -3910,9 +3917,16 @@ function kapitalmarktHinweis(state, myId) {
 function planRendern(state, myId) {
   const knopf = document.getElementById("dockPlan");
   if (knopf) knopf.style.display = state.mode === "plan" ? "" : "none";
-  /* Die freie Börse gibt es in der Planwirtschaft nicht. */
+  /* Die freie Börse, der Kapitalmarkt (Finanzen), die privaten Verträge und
+   * die Starter-Aufgaben sind Marktinstrumente — in der Planwirtschaft weg. */
+  const planAktiv = state.mode === "plan";
   const boerseKnopf = document.querySelector('.dockbtn[data-p="boerse"]');
-  if (boerseKnopf) boerseKnopf.style.display = state.mode === "plan" ? "none" : "";
+  if (boerseKnopf) boerseKnopf.style.display = planAktiv ? "none" : "";
+  const bondsKnopf = document.querySelector('.dockbtn[data-p="bonds"]');
+  if (bondsKnopf) bondsKnopf.style.display = planAktiv ? "none" : "";
+  const ctrbar = document.getElementById("ctrbar");
+  if (ctrbar) ctrbar.style.display = planAktiv ? "none" : "";
+  if (planAktiv) document.getElementById("quests").style.display = "none";
   const nw = document.getElementById("networth");
   if (state.mode !== "plan" || !state.plan) {
     if (nw) nw.style.display = "";
@@ -4045,7 +4059,9 @@ function render({ state, me, myId, chat, room }) {
   const qdefs = store.get().meta?.questDefs || [];
   const open = qdefs.filter(d => !me.quests?.[d.id]?.done);
   const qEl = document.getElementById("quests");
-  if (open.length && !state.winner) {
+  /* Die Starter-Aufgaben führen zu Börse und Stadtbank — beides gibt es in
+   * der Planwirtschaft nicht, dort bleibt das Widget aus. */
+  if (open.length && !state.winner && state.mode !== "plan") {
     qEl.style.display = "block";
     document.getElementById("questlist").innerHTML = open.map(d => {
       const n = Math.min(d.target, Math.floor(me.quests?.[d.id]?.n || 0));

@@ -1351,6 +1351,7 @@ io.on("connection", socket => {
        * nach einem Kartentausch muss deshalb jeder Client die Karte einmal
        * wieder vollständig bekommen, sonst behält er das alte Layout. */
       G.map = buildMap("plan");
+      G.groupOrder = null;   // kein Stadt-Großauftrag im Plan-Modus
       lastTileSigs = null;
       for (const sock of io.sockets.sockets.values()) sock.data.gotMap = false;
       G.plan = { phase: 0, rest: 0, spieler: {}, markt: [] };
@@ -1610,6 +1611,7 @@ io.on("connection", socket => {
 
   /* --- Anleihen: nur Spieler emittieren & kaufen --- */
   socket.on("issueBond", guard((p, { principal, rate, term }, ack) => {
+    if (MODE === "plan") return ack?.({ error: "In der Planwirtschaft gibt es keinen Kapitalmarkt" });
     principal = Math.floor(+principal); rate = +rate; term = Math.floor(+term);
     if (!(principal >= 100) || !(rate > 0 && rate <= 0.5) || !(term >= 30))
       return ack?.({ error: "Min. $100, Zins 0–50 %, Laufzeit ≥ 30 s" });
@@ -1894,6 +1896,7 @@ io.on("connection", socket => {
   }));
 
   socket.on("offerContract", guard((p, { toId, good, qty, price }, ack) => {
+    if (MODE === "plan") return ack?.({ error: "Verträge gibt es in der Planwirtschaft nicht — nutze Zuteilung oder Schwarzmarkt" });
     const to = G.players[toId];
     qty = Math.floor(+qty); price = +price;
     if (!to || toId === p.id || !GOODS[good] || !(qty > 0) || !(price > 0)) return ack?.({ error: "Ungültig" });
@@ -2093,7 +2096,9 @@ function runTick() {
     }
   }
   /* Gruppenauftrag: spawnen bzw. Ablauf (Waren zurück an die Einzahler) */
-  if (!G.groupOrder && --G.nextGroupIn <= 0) spawnGroupOrder();
+  /* Großaufträge der Stadt sind ein Marktinstrument — in der Planwirtschaft
+   * übernimmt das Plansoll ihre Rolle. */
+  if (MODE !== "plan" && !G.groupOrder && --G.nextGroupIn <= 0) spawnGroupOrder();
   else if (G.groupOrder && --G.groupOrder.ttl <= 0) {
     for (const [pid, goods] of Object.entries(G.groupOrder.contrib)) {
       const p = G.players[pid];
