@@ -214,11 +214,11 @@ input,select{background:var(--panel2);border:1px solid var(--line);border-radius
 .lwRow>label{flex:none;width:52px;font-size:11px;color:#4a6080;font-weight:600;
   text-transform:uppercase;letter-spacing:.06em}
 #lwGoal{flex:1;min-width:0}
-#lwBotLevel{display:inline-flex;padding:2px;background:#050810;border:1px solid #1a2535;border-radius:9px}
-#lwBotLevel button{padding:4px 12px;border:none;background:none;border-radius:7px;font-size:11px;
+#lwBotLevel,#lwMode{display:inline-flex;padding:2px;background:#050810;border:1px solid #1a2535;border-radius:9px}
+#lwBotLevel button,#lwMode button{padding:4px 12px;border:none;background:none;border-radius:7px;font-size:11px;
   font-weight:600;color:#4a6080;cursor:pointer;font-family:var(--font);transition:all .16s}
-#lwBotLevel button:hover{color:#7e97b8}
-#lwBotLevel button.on{background:linear-gradient(135deg,#1e3a5a 0%,#164060 100%);color:var(--accent);
+#lwBotLevel button:hover,#lwMode button:hover{color:#7e97b8}
+#lwBotLevel button.on,#lwMode button.on{background:linear-gradient(135deg,#1e3a5a 0%,#164060 100%);color:var(--accent);
   box-shadow:0 0 12px rgba(56,189,248,.18), inset 0 1px 0 rgba(56,189,248,.15)}
 #lwBotCounts{display:grid;grid-template-columns:1fr 1fr;gap:7px 14px}
 #lwBotCounts .botrow{justify-content:space-between;gap:9px}
@@ -969,6 +969,17 @@ td:first-child{font-family:var(--font)}
   <div class="joinbox" id="lwSettings">
     <div class="lbl">Einstellungen</div>
     <div class="lwRow">
+      <label>Modus</label>
+      <div id="lwMode">
+        <button type="button" data-mode="sandbox" class="on">Sandbox</button>
+        <button type="button" data-mode="plan">Planwirtschaft (DDR)</button>
+      </div>
+    </div>
+    <p id="lwModeHint" style="display:none;font-size:11.5px;color:#8695ab;margin:2px 0 6px">
+      Planwirtschaft: Kein Vermögensziel — das Planbüro verkündet Plansolls, du lieferst zu festen
+      Ankaufspreisen ab und sammelst Planpunkte. Nach 5 Planphasen (oder bei 1.000 Punkten) gewinnt
+      der „Held der Arbeit".</p>
+    <div class="lwRow" id="lwGoalRow">
       <label for="lwGoal">Ziel</label>
       <select id="lwGoal">
         <option value="100000">$100.000 · etwa 1 Stunde</option>
@@ -1035,6 +1046,25 @@ td:first-child{font-family:var(--font)}
 </div>
 
 <div id="dock"></div>
+
+<!-- Planbüro (nur im Planwirtschafts-Modus): Plansoll, Ablieferung, Punkte -->
+<div class="panel" id="p-plan">
+  <div class="phead"><h2>Planbüro</h2><button class="x" data-close>✕</button></div>
+  <div class="pbody">
+    <div class="joinbox" style="margin-bottom:12px">
+      <div class="lbl">Aktuelle Planphase</div>
+      <div id="planPhase" style="font-size:13px">—</div>
+    </div>
+    <div class="joinbox" style="margin-bottom:12px">
+      <div class="lbl">Dein Plansoll</div>
+      <div id="planSoll"><p class="note">—</p></div>
+    </div>
+    <div class="joinbox">
+      <div class="lbl">Planerfüllung aller Betriebe</div>
+      <div id="planRang">—</div>
+    </div>
+  </div>
+</div>
 
 <div class="panel" id="p-boerse">
   <div class="phead"><h2>Warenbörse (P2P)</h2><button class="x" data-close>✕</button></div>
@@ -1996,6 +2026,7 @@ function lobbyWaitZeichnen() {
     document.getElementById("lwGoal").value = String(state.lobby.winGoal);
     if (state.lobby.botLevel) lwBotLevel = state.lobby.botLevel;
     if (state.lobby.bots) lwBots = { ...lwBots, ...state.lobby.bots };
+    if (state.lobby.mode) { lwMode = state.lobby.mode; lwModeSpiegeln(); }
     lwPickerSpiegeln();
   }
 }
@@ -2022,10 +2053,21 @@ function lwSettingsSenden() {
   lwEigeneAenderung = Date.now();
   socket.emit("lobbySettings", {
     winGoal: +document.getElementById("lwGoal").value,
-    bots: lwBots, botLevel: lwBotLevel,
+    bots: lwBots, botLevel: lwBotLevel, mode: lwMode,
   });
 }
 document.getElementById("lwGoal").addEventListener("change", lwSettingsSenden);
+let lwMode = "sandbox";
+function lwModeSpiegeln() {
+  document.querySelectorAll("#lwMode button").forEach(b => b.classList.toggle("on", b.dataset.mode === lwMode));
+  /* In der Planwirtschaft gibt es kein Vermögensziel — die Zeile ausblenden. */
+  document.getElementById("lwGoalRow").style.display = lwMode === "plan" ? "none" : "";
+  document.getElementById("lwModeHint").style.display = lwMode === "plan" ? "" : "none";
+}
+document.getElementById("lwMode").addEventListener("click", e => {
+  const b = e.target.closest("button[data-mode]"); if (!b) return;
+  lwMode = b.dataset.mode; lwModeSpiegeln(); lwSettingsSenden();
+});
 document.getElementById("lwBotLevel").addEventListener("click", e => {
   const b = e.target.closest("button[data-lvl]"); if (!b) return;
   lwBotLevel = b.dataset.lvl; lwPickerSpiegeln(); lwSettingsSenden();
@@ -3404,10 +3446,12 @@ addEventListener("keydown", e => {
 });
 
 /* ---- Dock & Panels ---- */
-const DOCK = [["karte","Karte"],["lager","Lager"],["boerse","Börse"],["bonds","Finanzen"],["firma","Firma"],["lexikon","Lexikon"],["chat","Chat"]];
+const DOCK = [["karte","Karte"],["plan","Planbüro"],["lager","Lager"],["boerse","Börse"],["bonds","Finanzen"],["firma","Firma"],["lexikon","Lexikon"],["chat","Chat"]];
 const dock = document.getElementById("dock");
 DOCK.forEach(([pid, label]) => { const b = document.createElement("button");
   b.className = "dockbtn"; b.dataset.p = pid; b.textContent = label;
+  /* Das Planbüro gibt es nur im Planwirtschafts-Modus — render() blendet es ein. */
+  if (pid === "plan") { b.id = "dockPlan"; b.style.display = "none"; }
   b.addEventListener("click", () => openPanel(pid)); dock.append(b); });
 /* stumm=true nur für den Aufruf beim Seitenaufbau: dort gibt es weder eine
  * Nutzergeste noch schon ein SFX-Modul (das entsteht erst weiter unten). */
@@ -3809,10 +3853,63 @@ function kapitalmarktHinweis(state, myId) {
   bekannteAngebote = offen;
 }
 
+/* ---------- Planbüro (Planwirtschafts-Modus) ---------- */
+function planRendern(state, myId) {
+  const knopf = document.getElementById("dockPlan");
+  if (knopf) knopf.style.display = state.mode === "plan" ? "" : "none";
+  const nw = document.getElementById("networth");
+  if (state.mode !== "plan" || !state.plan) {
+    if (nw) nw.style.display = "";
+    document.getElementById("planHud")?.remove();
+    return;
+  }
+  const plan = state.plan;
+  /* HUD: statt Nettovermögen zählt hier die Planerfüllung — eigenes Element
+   * daneben, damit die Kinder der Vermögensanzeige (nwv/goalv) intakt bleiben. */
+  if (nw) {
+    nw.style.display = "none";
+    let hud = document.getElementById("planHud");
+    if (!hud) { hud = document.createElement("span"); hud.id = "planHud"; nw.after(hud); }
+    hud.innerHTML = `Planpunkte <b>${plan.spieler?.[myId]?.punkte ?? 0}</b> / 1.000`;
+  }
+  const min = Math.floor((plan.rest || 0) / 60), sek = (plan.rest || 0) % 60;
+  document.getElementById("planPhase").innerHTML =
+    `Phase <b>${plan.phase}/5</b> · Restzeit <b>${min}:${String(sek).padStart(2, "0")}</b> min` +
+    `<div class="note" style="margin-top:4px">Liefere dein Soll ans Planbüro — fester Ankaufspreis, Punkte je Warenwert. 1.000 Punkte oder die beste Bilanz nach 5 Phasen gewinnen.</div>`;
+  const meins = plan.spieler?.[myId];
+  const lager = store.get()?.me?.inv || {};
+  document.getElementById("planSoll").innerHTML = meins?.soll?.length ? meins.soll.map(z => {
+    const voll = z.geliefert >= z.menge;
+    const proz = Math.min(100, z.geliefert / z.menge * 100);
+    return `<div style="display:flex;align-items:center;gap:10px;margin:7px 0">
+      <span style="flex:1">${gname(z.good)}</span>
+      <span class="meta">${Math.round(z.geliefert)}/${z.menge} · Lager ${Math.floor(lager[z.good] || 0)}</span>
+      <div style="width:90px;height:6px;background:#0b1220;border-radius:4px;overflow:hidden">
+        <div style="width:${proz}%;height:100%;background:${voll ? "#34d399" : "#38bdf8"}"></div></div>
+      <button class="buyb" data-plandeliver="${z.good}" ${voll || !(lager[z.good] > 0) ? "disabled" : ""}>Abliefern</button>
+    </div>`;
+  }).join("") : `<p class="note">Kein Soll — die nächste Planphase teilt dir eines zu.</p>`;
+  const rang = Object.entries(plan.spieler || {})
+    .map(([pid, ps]) => ({ name: state.players[pid]?.name || "—", farbe: state.players[pid]?.color || "#666", punkte: ps.punkte }))
+    .sort((a, b) => b.punkte - a.punkte);
+  document.getElementById("planRang").innerHTML = rang.map((r, i) =>
+    `<div style="display:flex;gap:9px;align-items:center;margin:5px 0">
+      <span class="meta">${i + 1}.</span>
+      <span style="width:10px;height:10px;border-radius:3px;background:${r.farbe}"></span>
+      <span style="flex:1">${r.name}${i === 0 && r.punkte > 0 ? " ★" : ""}</span>
+      <b>${r.punkte} P.</b></div>`).join("") || "—";
+}
+document.getElementById("p-plan").addEventListener("click", e => {
+  const b = e.target.closest("button[data-plandeliver]");
+  if (!b) return;
+  act("planDeliver", { good: b.dataset.plandeliver });
+});
+
 function render({ state, me, myId, chat, room }) {
   if (!state || !me) return;
   tutCheck(state, myId);
   kapitalmarktHinweis(state, myId);
+  planRendern(state, myId);
   /* Tipp-Schutz: Panel nicht neu rendern, während man in einem seiner Felder tippt */
   const typingIn = el => el && el.contains(document.activeElement) &&
     /INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName);

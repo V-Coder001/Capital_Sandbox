@@ -379,6 +379,17 @@ const sichereFarbe = c => /^#[0-9a-fA-F]{6}$/.test(String(c || "")) ? String(c) 
  * Beitreten fest (Auswahl im Join-Screen). Env-Override: WIN_NW=... npm start */
 let WIN_NW = +process.env.WIN_NW || 250_000;
 const WIN_CHOICES = [100_000, 250_000, 500_000, 1_000_000, 10_000_000];
+
+/* ---------- Spielmodus ----------
+ * "sandbox": die freie Marktwirtschaft wie bisher.
+ * "plan": Planwirtschaft im DDR-Stil — kein Vermögensziel, sondern Plansolls
+ * vom Planbüro. Spieler liefern Waren zu festen Ankaufspreisen ab und sammeln
+ * Planpunkte; nach fünf Planphasen (oder beim Punkteziel) gewinnt der
+ * "Held der Arbeit". Der Host wählt den Modus im Warteraum. */
+let MODE = "sandbox";
+const PLAN_PHASEN = 5;
+const PLAN_DAUER = 8 * 60;      // Sekunden je Planphase
+const PLAN_ZIEL = 1000;         // Planpunkte für den vorzeitigen Sieg
 /* Freischaltung von Zonen: bewusst als Formalität, nicht als Kapitalgrab.
  * Die Agrarzone ist frei, Industrie und Küste nicht — bei 900/2.500 $ je Kachel
  * steckte ein Versorger 40 % seines Startkapitals in reinen Landzutritt, der
@@ -952,6 +963,54 @@ function gainXp(p, n) {
     emitTo(p.id, "notice", { text: `Level ${p.lvl}! Bonus: +${bonus} $` });
   }
 }
+/* ---------- Planwirtschaft ---------- */
+/* Welche Waren ein Spieler überhaupt herstellen kann — daraus baut das
+ * Planbüro sein Soll, damit niemand Unmögliches gefordert bekommt. */
+function planGueter(p) {
+  const set = new Set();
+  for (const bt of Object.values(BTYPES)) {
+    if (bt.industry && !(p.industries || [p.industry]).includes(bt.industry)) continue;
+    const g = bt.out || bt.proc?.out;
+    if (g && GOODS[g]) set.add(g);
+  }
+  return [...set];
+}
+/* Bis zu drei Waren je Phase. Die Menge orientiert sich am Grundpreis:
+ * billige Massenware in großen Stückzahlen, teure Güter in kleinen —
+ * und jede Phase fordert spürbar mehr als die vorige. */
+function planSollFuer(p, phase) {
+  const gueter = planGueter(p);
+  const anzahl = Math.min(3, gueter.length);
+  const start = (phase * 7 + p.name.length) % Math.max(1, gueter.length);
+  const soll = [];
+  for (let i = 0; i < anzahl; i++) {
+    const g = gueter[(start + i) % gueter.length];
+    const basis = Math.max(6, Math.min(300, Math.round(500 / (BASEP[g] || 10))));
+    soll.push({ good: g, menge: Math.round(basis * (1 + phase * 0.4)), geliefert: 0 });
+  }
+  return soll;
+}
+function planPhaseStarten() {
+  G.plan.phase++;
+  G.plan.rest = PLAN_DAUER;
+  for (const p of Object.values(G.players)) {
+    G.plan.spieler[p.id] ??= { punkte: 0 };
+    G.plan.spieler[p.id].soll = planSollFuer(p, G.plan.phase - 1);
+  }
+  io.emit("notice", { text: `Planphase ${G.plan.phase}/${PLAN_PHASEN}: Das Planbüro hat neue Plansolls verkündet.` });
+}
+function planPhaseAuswerten() {
+  for (const [pid, ps] of Object.entries(G.plan.spieler)) {
+    const p = G.players[pid];
+    if (!p || !ps.soll?.length) continue;
+    const quote = ps.soll.reduce((s, z) => s + Math.min(1, z.geliefert / z.menge), 0) / ps.soll.length;
+    const punkte = Math.round(quote * 200);
+    ps.punkte += punkte;
+    logTx(p, "Plan", `Planphase ${G.plan.phase}: ${(quote * 100).toFixed(0)} % erfüllt (+${punkte} Punkte)`, 0);
+  }
+  io.emit("notice", { text: `Planphase ${G.plan.phase} abgeschlossen — die Erfüllungspunkte sind vergeben.` });
+}
+
 function logTx(p, cat, text, amt) {
   p.tx.unshift({ t: G.tick, cat, text, amt: Math.round(amt * 100) / 100 });
   if (p.tx.length > 60) p.tx.pop();
@@ -968,7 +1027,8 @@ function snapshot() {
   return {
     tick: G.tick, winner: G.winner, winGoal: WIN_NW, report: G.report || null,
     started: G.started, hostId: G.hostId,
-    lobby: G.started ? null : { winGoal: WIN_NW, bots: botAuswahl, botLevel: botLevelKey },
+    mode: MODE, plan: MODE === "plan" ? G.plan : null,
+    lobby: G.started ? null : { winGoal: WIN_NW, bots: botAuswahl, botLevel: botLevelKey, mode: MODE },
     map: G.map.map(t => ({ x: t.x, y: t.y, zone: t.zone, road: t.road, water: t.water,
       park: t.park, field: t.field, sand: t.sand, deep: t.deep, rock: t.rock,
       bank: t.bank, news: t.news, locked: t.locked, unlockCost: t.unlockCost, owner: t.owner, btype: t.btype, lien: t.lien, shop: t.shop, paused: t.paused, level: t.level })),
@@ -1202,6 +1262,9 @@ io.on("connection", socket => {
     G.socketToPid[socket.id] = pid;
     socket.data.registered = true;
     if (istErster) G.hostId = pid;   // Host: darf im Warteraum einstellen und die Runde starten
+    /* Wer mitten in eine laufende Planphase einsteigt, bekommt sofort ein Soll. */
+    if (MODE === "plan" && G.plan && G.started && !G.plan.spieler[pid])
+      G.plan.spieler[pid] = { punkte: 0, soll: planSollFuer(G.players[pid], G.plan.phase - 1) };
     io.emit("notice", { text: `${name} ist der Sitzung beigetreten.` + (Object.keys(G.players).length === 1 ? ` Rundenziel: ${WIN_NW.toLocaleString("de-DE")} $` : "") });
     ack?.({ ok: true, goods: GOODS, btypes: BTYPES, rooms: ROOMS, you: pid, winGoal: WIN_NW, questDefs: QUESTS, industry, industries: INDUSTRIES,
       botLevels: Object.fromEntries(Object.entries(BOT_LEVELS).map(([k, v]) => [k, v.name])),
@@ -1214,10 +1277,11 @@ io.on("connection", socket => {
    * Solange die Runde nicht gestartet ist, darf der Host Ziel und Bots noch
    * ändern — anders als früher, wo beides beim Registrieren festgenagelt war
    * und Mitspieler, die später dazukamen, nichts mehr davon mitbekamen. */
-  socket.on("lobbySettings", ({ winGoal, bots, botLevel }, ack) => {
+  socket.on("lobbySettings", ({ winGoal, bots, botLevel, mode }, ack) => {
     const pid = G.socketToPid[socket.id];
     if (!pid || pid !== G.hostId) return ack?.({ error: "Das darf nur der Host" });
     if (G.started) return ack?.({ error: "Die Runde läuft schon" });
+    if (mode === "sandbox" || mode === "plan") MODE = mode;
     if (WIN_CHOICES.includes(+winGoal)) WIN_NW = +winGoal;
     if (bots && typeof bots === "object") botAuswahl = bots;
     if (BOT_LEVELS[botLevel]) botLevelKey = botLevel;
@@ -1230,7 +1294,13 @@ io.on("connection", socket => {
     if (G.started) return ack?.({ ok: true });
     G.started = true;
     startBots();
-    io.emit("notice", { text: `Die Runde läuft — Ziel: ${WIN_NW.toLocaleString("de-DE")} $` });
+    if (MODE === "plan") {
+      G.plan = { phase: 0, rest: 0, spieler: {} };
+      planPhaseStarten();
+      io.emit("notice", { text: `Planwirtschaft: Der Fünfjahresplan beginnt — ${PLAN_ZIEL} Planpunkte machen dich zum Helden der Arbeit.` });
+    } else {
+      io.emit("notice", { text: `Die Runde läuft — Ziel: ${WIN_NW.toLocaleString("de-DE")} $` });
+    }
     ack?.({ ok: true });
     pushState();
   });
@@ -1242,6 +1312,27 @@ io.on("connection", socket => {
     try { fn(p, payload || {}, ack); } catch (e) { ack?.({ error: e.message }); }
     pushState();
   };
+
+  /* --- Planwirtschaft: Ware ans Planbüro abliefern ---
+   * Liefert so viel wie möglich (Lagerbestand, gedeckelt aufs Restsoll) zum
+   * festen staatlichen Ankaufspreis. Punkte gibt es sofort je Warenwert. */
+  socket.on("planDeliver", guard((p, { good }, ack) => {
+    if (MODE !== "plan" || !G.plan) return ack?.({ error: "Kein Planwirtschafts-Modus" });
+    const ps = G.plan.spieler[p.id];
+    const ziel = ps?.soll?.find(z => z.good === good);
+    if (!ziel) return ack?.({ error: "Diese Ware steht nicht in deinem Plansoll" });
+    const rest = ziel.menge - ziel.geliefert;
+    const qty = Math.min(p.inv[good] || 0, rest);
+    if (qty <= 0) return ack?.({ error: rest <= 0 ? "Soll bereits erfüllt" : "Nichts auf Lager" });
+    p.inv[good] -= qty;
+    ziel.geliefert += qty;
+    const erloes = qty * (BASEP[good] || 1) * 0.9;
+    p.cash += erloes;
+    ps.punkte += Math.round(qty * (BASEP[good] || 1) / 10);
+    gainXp(p, 10);
+    logTx(p, "Plan", `${Math.round(qty)}× ${GOODS[good].name} ans Planbüro geliefert`, erloes);
+    ack?.({ ok: true });
+  }));
 
   /* --- Karte: Bauen (schaltet gesperrte Kacheln atomar mit frei) / Abriss --- */
   socket.on("build", guard((p, { x, y, btype }, ack) => {
@@ -1563,7 +1654,7 @@ io.on("connection", socket => {
     G.shareListings = []; G.shareBids = [];
     G.lastTrade = {};
     G.chat = Object.fromEntries(ROOMS.map(r => [r, []]));
-    G.tick = 0; G.winner = null; G.report = null;
+    G.tick = 0; G.winner = null; G.report = null; G.plan = null;
     G.started = false; G.hostId = null;   // neue Runde beginnt wieder im Warteraum
     G.groupOrder = null; G.nextGroupIn = 20;
     G.nextDividendIn = DIVIDEND_INTERVAL;
@@ -1937,8 +2028,31 @@ function runTick() {
      * Rundreise mehr, ohne dass die Daten je getrennt gebraucht würden. */
     io.emit("kurse", { waren: G.priceHist, firmen: G.firmHist });
   }
-  /* Siegbedingung */
-  if (!G.winner) for (const p of Object.values(G.players)) {
+  /* Planwirtschaft: Phasen-Uhr, Phasenwechsel und Punktesieg */
+  if (MODE === "plan" && G.plan && !G.winner) {
+    if (--G.plan.rest <= 0) {
+      planPhaseAuswerten();
+      if (G.plan.phase >= PLAN_PHASEN) {
+        const best = Object.entries(G.plan.spieler).sort((a, b) => b[1].punkte - a[1].punkte)[0];
+        const p = best && G.players[best[0]];
+        if (p) {
+          G.winner = p.name;
+          G.report = buildReport(best[0]);
+          io.emit("notice", { text: `Der Fünfjahresplan ist abgeschlossen! ${p.name} ist Held der Arbeit (${best[1].punkte} Planpunkte).` });
+        }
+      } else planPhaseStarten();
+    }
+    if (!G.winner) for (const [pid, ps] of Object.entries(G.plan.spieler)) {
+      const p = G.players[pid];
+      if (!p || ps.punkte < PLAN_ZIEL) continue;
+      G.winner = p.name;
+      G.report = buildReport(pid);
+      io.emit("notice", { text: `${p.name} erreicht ${PLAN_ZIEL} Planpunkte und ist Held der Arbeit!` });
+      break;
+    }
+  }
+  /* Siegbedingung (Sandbox: Nettovermögen — in der Planwirtschaft zählen nur Punkte) */
+  if (MODE !== "plan" && !G.winner) for (const p of Object.values(G.players)) {
     if (netWorth(p) >= WIN_NW) {
       G.winner = p.name;
       /* Auswertung genau einmal berechnen und in den Zustand legen — sie geht
