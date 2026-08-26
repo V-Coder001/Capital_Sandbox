@@ -1025,6 +1025,9 @@ function kaderEintrag(p, ps) {
   }
   logTx(p, "Plan", `Beim Schwarzhandel erwischt — Kaderakte (${ps.akte}/3)`, 0);
 }
+/* Volkswirtschaftsziel: EIN gemeinsames Liefersoll je Phase. Wird es
+ * verfehlt, gibt es in der Folgephase Stromabschaltungen für ALLE. */
+const VOLK_GUETER = ["strom", "wasser", "ziegel", "stahl", "elektronik"];
 function planPhaseStarten() {
   G.plan.phase++;
   G.plan.rest = PLAN_DAUER;
@@ -1034,7 +1037,14 @@ function planPhaseStarten() {
     ps.soll = planSollFuer(p, G.plan.phase - 1, ps.faktor);
     ps.budget = planBudgetFuer(ps);
   }
-  io.emit("notice", { text: `Planphase ${G.plan.phase}/${PLAN_PHASEN}: Das Planbüro hat neue Plansolls verkündet und Bezugsscheine ausgegeben.` });
+  const vg = VOLK_GUETER[(G.plan.phase - 1) % VOLK_GUETER.length];
+  const koepfe = Math.max(1, Object.keys(G.players).length);
+  G.plan.volk = {
+    good: vg,
+    menge: Math.round(Math.max(10, Math.min(300, 500 / (BASEP[vg] || 10))) * koepfe * .5 * (1 + (G.plan.phase - 1) * .3)),
+    geliefert: 0
+  };
+  io.emit("notice", { text: `Planphase ${G.plan.phase}/${PLAN_PHASEN}: Neue Plansolls und Bezugsscheine. Volkswirtschaftsziel: ${G.plan.volk.menge}× ${GOODS[vg].name} — sonst drohen Stromabschaltungen.` });
 }
 function planPhaseAuswerten() {
   for (const [pid, ps] of Object.entries(G.plan.spieler)) {
@@ -1053,6 +1063,19 @@ function planPhaseAuswerten() {
       alt * (quote >= 1 ? 1.1 + (quote - 1) * .5 : quote < .6 ? .9 : 1)));
     logTx(p, "Plan", `Planphase ${G.plan.phase}: ${(quote * 100).toFixed(0)} % erfüllt (+${punkte} Punkte)` +
       (ps.faktor > alt ? " — das Soll wird angehoben" : ps.faktor < alt ? " — das Soll wird gesenkt" : ""), 0);
+  }
+  /* Volkswirtschaftsziel auswerten: gemeinsam geschafft = Bonus für alle,
+   * verfehlt = Stromabschaltungen in der ganzen nächsten Phase. */
+  const volk = G.plan.volk;
+  if (volk) {
+    if (volk.geliefert >= volk.menge) {
+      G.plan.stromsperre = false;
+      for (const ps of Object.values(G.plan.spieler)) ps.punkte += 25;
+      io.emit("notice", { text: `Volkswirtschaftsziel erreicht (${Math.round(volk.geliefert)}× ${GOODS[volk.good].name}) — +25 Punkte für alle Betriebe!` });
+    } else {
+      G.plan.stromsperre = true;
+      io.emit("notice", { text: `Volkswirtschaftsziel verfehlt (${Math.round(volk.geliefert)}/${volk.menge}× ${GOODS[volk.good].name}) — STROMABSCHALTUNG: Alle Betriebe laufen nächste Phase nur mit halber Kraft.` });
+    }
   }
   io.emit("notice", { text: `Planphase ${G.plan.phase} abgeschlossen — Punkte vergeben, die Solls werden angepasst (Basiseffekt).` });
 }
@@ -1378,18 +1401,28 @@ io.on("connection", socket => {
   socket.on("planDeliver", guard((p, { good }, ack) => {
     if (MODE !== "plan" || !G.plan) return ack?.({ error: "Kein Planwirtschafts-Modus" });
     const ps = G.plan.spieler[p.id];
+    const volk = G.plan.volk;
     const ziel = ps?.soll?.find(z => z.good === good);
-    if (!ziel) return ack?.({ error: "Diese Ware steht nicht in deinem Plansoll" });
-    /* Übererfüllung bis 150 % ist möglich — bringt Bonuspunkte, hebt aber
-     * über den Basiseffekt das Soll der nächsten Phase an. */
-    const rest = Math.ceil(ziel.menge * 1.5) - ziel.geliefert;
-    const qty = Math.min(p.inv[good] || 0, rest);
-    if (qty <= 0) return ack?.({ error: rest <= 0 ? "Mehr nimmt das Planbüro nicht an (150 %)" : "Nichts auf Lager" });
+    if (!ziel && !(volk && volk.good === good))
+      return ack?.({ error: "Diese Ware steht weder in deinem Plansoll noch im Volkswirtschaftsziel" });
+    let qty;
+    if (ziel) {
+      /* Übererfüllung bis 150 % ist möglich — bringt Bonuspunkte, hebt aber
+       * über den Basiseffekt das Soll der nächsten Phase an. */
+      const rest = Math.ceil(ziel.menge * 1.5) - ziel.geliefert;
+      qty = Math.min(p.inv[good] || 0, rest);
+      if (qty <= 0) return ack?.({ error: rest <= 0 ? "Mehr nimmt das Planbüro nicht an (150 %)" : "Nichts auf Lager" });
+      ziel.geliefert += qty;
+    } else {
+      /* Reine Volksziel-Lieferung: unbegrenzt, aber halber Punktesatz. */
+      qty = Math.min(p.inv[good] || 0, 1000);
+      if (qty <= 0) return ack?.({ error: "Nichts auf Lager" });
+    }
+    if (volk && volk.good === good) volk.geliefert += qty;
     p.inv[good] -= qty;
-    ziel.geliefert += qty;
     const erloes = qty * (BASEP[good] || 1) * 0.9;
     p.cash += erloes;
-    ps.punkte += Math.round(qty * (BASEP[good] || 1) / 10);
+    ps.punkte += Math.round(qty * (BASEP[good] || 1) / (ziel ? 10 : 20));
     gainXp(p, 10);
     logTx(p, "Plan", `${Math.round(qty)}× ${GOODS[good].name} ans Planbüro geliefert`, erloes);
     ack?.({ ok: true });
@@ -1970,6 +2003,9 @@ setInterval(() => {
 function runTick() {
   if (!G.started) return;   // Warteraum: nichts produzieren, keine Fristen laufen lassen
   G.tick++;
+  /* Stromabschaltung (Planwirtschaft): Wurde das Volkswirtschaftsziel der
+   * Vorphase verfehlt, läuft jede Produktion nur mit halber Kraft. */
+  const SPERR = (MODE === "plan" && G.plan?.stromsperre) ? 0.5 : 1;
   /* Produktion: Enabler-Rohstoffe im Lager boosten (und werden verbraucht) */
   for (const t of G.map) {
     if (!t.btype || !t.owner) continue;
@@ -2005,6 +2041,7 @@ function runTick() {
       let frac = 1;
       for (const [g, need] of Object.entries(bt.proc.in)) frac = Math.min(frac, (p.inv[g] || 0) / (need * lvl));
       if (frac > 0) {
+        frac *= SPERR;   // Stromabschaltung drosselt Verbrauch und Ausstoß gleichermaßen
         for (const [g, need] of Object.entries(bt.proc.in)) p.inv[g] -= need * lvl * frac;
         const menge = bt.proc.rate * lvl * frac;
         p.inv[bt.proc.out] += menge;
@@ -2027,7 +2064,7 @@ function runTick() {
       const bedarf = bt.rate * stufe * 0.5;
       if ((p.inv[r] || 0) >= bedarf) { p.inv[r] -= bedarf; mult += BOOST_MULT; }
     }
-    const menge = bt.rate * mult * stufe;   // Elektronik-Upgrade: +30 %/Stufe
+    const menge = bt.rate * mult * stufe * SPERR;   // Elektronik-Upgrade: +30 %/Stufe
     p.inv[bt.out] += menge;
     p.stats.produziert[bt.out] = (p.stats.produziert[bt.out] || 0) + menge;
   }
@@ -2433,6 +2470,40 @@ async function spawnBot(cfg, lvl = BOT_LEVELS[BOT_LEVEL_DEFAULT]) {
     if (laeuft || !me || !st || !myId || st.winner) return;
     laeuft = true;
     try {
+      /* --- Planwirtschaft: Bots bedienen ihr Soll, das Volksziel und den
+       * Schwarzmarkt — die Markt-Routinen weiter unten laufen ins Leere
+       * (Börse/Verträge sind gesperrt) und stören nicht. --- */
+      if (st.mode === "plan" && st.plan) {
+        const meinPlan = st.plan.spieler?.[myId];
+        /* Soll bedienen: Lagerbestand ans Planbüro, bis zur 150-%-Grenze. */
+        for (const z of meinPlan?.soll || []) {
+          if ((me.inv[z.good] || 0) >= 3 && z.geliefert < z.menge * 1.5) await em("planDeliver", { good: z.good });
+        }
+        /* Volkswirtschaftsziel: Überschuss beisteuern, solange es offen ist. */
+        const volk = st.plan.volk;
+        if (volk && volk.geliefert < volk.menge && (me.inv[volk.good] || 0) > 6
+            && !(meinPlan?.soll || []).some(z => z.good === volk.good)) {
+          await em("planDeliver", { good: volk.good });
+        }
+        /* Schwarzmarkt: passende fremde Angebote annehmen … */
+        for (const o of st.plan.markt || []) {
+          if (o.von === myId) continue;
+          if ((me.inv[o.willGood] || 0) >= o.willQty + 8 && Math.random() < 0.3) {
+            await em("planOfferAccept", { offerId: o.id });
+            break;
+          }
+        }
+        /* … und gelegentlich eigenen Überschuss gegen Fehlendes anbieten. */
+        if (Math.random() < 0.08 && (st.plan.markt || []).filter(o => o.von === myId).length < 2) {
+          const surplus = Object.keys(GOODS).find(g => (me.inv[g] || 0) > 15 && !(meinPlan?.soll || []).some(z => z.good === g));
+          const brauch = (meinPlan?.soll || []).find(z => z.geliefert < z.menge && (me.inv[z.good] || 0) < 3);
+          if (surplus && brauch && surplus !== brauch.good) {
+            const gq = Math.min(10, Math.floor(me.inv[surplus] / 2));
+            const wq = Math.max(1, Math.round(gq * (BASEP[surplus] || 1) / (BASEP[brauch.good] || 1)));
+            await em("planOfferCreate", { gebeGood: surplus, gebeQty: gq, willGood: brauch.good, willQty: wq });
+          }
+        }
+      }
       /* Shops konfigurieren: eigene Hauptware zum Ø-Kurs, unbegrenzt */
       for (const t of st.map) {
         if (t.owner !== myId || !t.shop) continue;
@@ -2594,8 +2665,13 @@ async function spawnBot(cfg, lvl = BOT_LEVELS[BOT_LEVEL_DEFAULT]) {
         const mats = matCost(bt);
         const missingMat = Object.entries(mats).find(([g, n]) => me.inv[g] < n);
         if (missingMat && !st.orders.some(o => o.playerId === myId && o.side === "buy" && o.good === missingMat[0])) {
+          /* Planwirtschaft: Baumaterial per Zuteilung statt Börse beziehen. */
+          if (st.mode === "plan") {
+            if (me.cash > 1200) await em("planRequest", { good: missingMat[0],
+              qty: Math.ceil(missingMat[1] - me.inv[missingMat[0]]) + 2 });
+          }
           /* fehlendes Baumaterial an der Börse nachfragen (etwas über Ø) */
-          if (me.cash > 2000) await em("placeOrder", { side: "buy", good: missingMat[0],
+          else if (me.cash > 2000) await em("placeOrder", { side: "buy", good: missingMat[0],
             qty: Math.ceil(missingMat[1] - me.inv[missingMat[0]]) + 4,
             price: Math.round(st.avg[missingMat[0]] * (lvl.kaufAufschlag + 0.03) * 100) / 100 });
         } else if (!missingMat) {

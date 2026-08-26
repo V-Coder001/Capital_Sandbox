@@ -3985,9 +3985,19 @@ function planRendern(state, myId) {
     hud.innerHTML = `Planpunkte <b>${plan.spieler?.[myId]?.punkte ?? 0}</b> / 1.000`;
   }
   const min = Math.floor((plan.rest || 0) / 60), sek = (plan.rest || 0) % 60;
+  const volk = plan.volk;
+  const volkProz = volk ? Math.min(100, volk.geliefert / volk.menge * 100) : 0;
   document.getElementById("planPhase").innerHTML =
     `Phase <b>${plan.phase}/5</b> · Restzeit <b>${min}:${String(sek).padStart(2, "0")}</b> min` +
-    `<div class="note" style="margin-top:4px">Liefere dein Soll ans Planbüro — fester Ankaufspreis, Punkte je Warenwert. 1.000 Punkte oder die beste Bilanz nach 5 Phasen gewinnen.</div>`;
+    (plan.stromsperre ? `<div style="margin-top:6px;padding:6px 9px;border:1px solid rgba(251,113,133,.5);border-radius:8px;color:#fb7185;font-weight:600">⚡ STROMABSCHALTUNG — Volksziel verfehlt, alle Betriebe laufen diese Phase mit halber Kraft.</div>` : "") +
+    (volk ? `<div style="margin-top:8px">
+      <div style="display:flex;justify-content:space-between"><span>Volkswirtschaftsziel: <b>${gname(volk.good)}</b></span>
+        <span class="meta">${Math.round(volk.geliefert)}/${volk.menge}</span></div>
+      <div style="height:6px;background:#0b1220;border-radius:4px;overflow:hidden;margin-top:4px">
+        <div style="width:${volkProz}%;height:100%;background:${volkProz >= 100 ? "#34d399" : "#fbbf24"}"></div></div>
+      <div class="note" style="margin-top:3px">Gemeinsames Soll aller Betriebe — geschafft: +25 Punkte für alle; verfehlt: Stromabschaltung. ${gname(volk.good)} kann jeder abliefern, auch ohne eigenes Soll (halber Punktesatz).</div>
+    </div>` : "") +
+    `<div class="note" style="margin-top:6px">Liefere dein Soll ans Planbüro — fester Ankaufspreis, Punkte je Warenwert. 1.000 Punkte oder die beste Bilanz nach 5 Phasen gewinnen.</div>`;
   const meins = plan.spieler?.[myId];
   const lager = store.get()?.me?.inv || {};
   document.getElementById("planSoll").innerHTML = meins?.soll?.length ? meins.soll.map(z => {
@@ -4001,6 +4011,15 @@ function planRendern(state, myId) {
       <button class="buyb" data-plandeliver="${z.good}" ${voll || !(lager[z.good] > 0) ? "disabled" : ""}>Abliefern</button>
     </div>`;
   }).join("") : `<p class="note">Kein Soll — die nächste Planphase teilt dir eines zu.</p>`;
+  /* Volksziel-Ware ohne eigenes Soll: eigene Abliefer-Zeile anbieten. */
+  if (volk && !(meins?.soll || []).some(z => z.good === volk.good)) {
+    document.getElementById("planSoll").innerHTML +=
+      `<div style="display:flex;align-items:center;gap:10px;margin:7px 0;border-top:1px dashed var(--line);padding-top:7px">
+        <span style="flex:1">${gname(volk.good)} <span class="meta">(Volksziel, halber Punktesatz)</span></span>
+        <span class="meta">Lager ${Math.floor(lager[volk.good] || 0)}</span>
+        <button class="buyb" data-plandeliver="${volk.good}" ${!(lager[volk.good] > 0) ? "disabled" : ""}>Abliefern</button>
+      </div>`;
+  }
   /* Materialzuteilung: Budget & Priorität anzeigen, Warenlisten einmal füllen */
   const warenOpts = () => Object.keys(GOODS()).map(k => `<option value="${k}">${gname(k)}</option>`).join("");
   for (const sid of ["planGood", "smGebeGood", "smWillGood"]) {
