@@ -2652,6 +2652,10 @@ function draw() {
       drawLock(sx, sy + TH / 2 - 1); }
   }
   /* 2. Durchgang: Gebäude & Deko — nach Boden, damit Sprites nicht überdeckt werden */
+  /* Die Kachel-Variable t verdeckt hier die Übersetzungsfunktion t() —
+   * daher vorab eine Referenz sichern, sonst bricht draw() an der Bank ab
+   * und alle danach gezeichneten Kacheln bleiben ohne Gebäude. */
+  const uebers = t;
   for (const t of st.map) {
     const [sx, sy] = iso(t.x, t.y);
     if (t.park && !t.btype) {
@@ -2679,13 +2683,13 @@ function draw() {
       const bimg = (BANKIMG.complete && BANKIMG.naturalWidth) ? BANKIMG : spriteFor("kontor", t.x, t.y);
       if (bimg) cx.drawImage(bimg, sx-36, standY(sy, bimg, 72), 72, 72);
       cx.font = "bold 10px sans-serif"; cx.textAlign = "center"; cx.fillStyle = "#38bdf8";
-      cx.fillText(t("BANK"), sx, sy + TH / 2 + 16);
+      cx.fillText(uebers("BANK"), sx, sy + TH / 2 + 16);
     }
     if (t.news) {
       const nimg = (NEWSIMG.complete && NEWSIMG.naturalWidth) ? NEWSIMG : spriteFor("buero", t.x, t.y);
       if (nimg) cx.drawImage(nimg, sx-36, standY(sy, nimg, 72), 72, 72);
       cx.font = "bold 10px sans-serif"; cx.textAlign = "center"; cx.fillStyle = "#fbbf24";
-      cx.fillText(t("NACHRICHTEN"), sx, sy + TH / 2 + 16);
+      cx.fillText(uebers("NACHRICHTEN"), sx, sy + TH / 2 + 16);
     }
     if (t.btype) {
       const owner = st.players[t.owner];
