@@ -2585,19 +2585,21 @@ function drawAmbient(now) {
    * Startrand ein anderes Modell. Das frühere Hin- und Herpendeln sah aus,
    * als führe das Auto die halbe Zeit rückwärts. Jede zweite Straße fährt
    * in Gegenrichtung, und das Sprite wird zur Fahrtrichtung gespiegelt. */
-  ROUTES.carLines.slice(0, 4).forEach((line, i) => {
+  ROUTES.carLines.slice(0, 8).forEach((line, i) => {
     if (!AMBIENT.cars.length || line.length < 2) return;
     const n = line.length;
-    const speed = 0.35 + i * 0.05;         // Kacheln pro Sekunde
+    const speed = 0.35 + i * 0.04;         // Kacheln pro Sekunde
     const luecke = 5;                       // Abstand zwischen Despawn und neuem Spawn
     const period = n - 1 + luecke;
-    const total = now / 1000 * speed + i * 7;
+    /* Zwei versetzte Autos pro Straßenzug — dichterer Verkehr. */
+    for (let j = 0; j < 2; j++) {
+    const total = now / 1000 * speed + i * 7 + j * period / 2;
     const u = total % period;
-    if (u > n - 1) return;                  // Auto hat den Rand erreicht und ist entfernt
+    if (u > n - 1) continue;                // Auto hat den Rand erreicht und ist entfernt
     /* Pro Durchlauf ein anderes Modell — so wirkt es wie neuer Verkehr. */
     const lap = Math.floor(total / period);
-    const spr = AMBIENT.cars[(i * 3 + lap) % AMBIENT.cars.length];
-    if (!spr) return;
+    const spr = AMBIENT.cars[(i * 3 + j * 2 + lap) % AMBIENT.cars.length];
+    if (!spr) continue;
     /* Die Kenney-Sprites sind Isometrie-Ansichten mit Blick nach unten-links;
      * eine Rückansicht gibt es nicht. Deshalb fahren alle Autos abwärts —
      * oben am Rand gespawnt, unten wieder entfernt. Die Zeilen sind nach
@@ -2614,6 +2616,7 @@ function drawAmbient(now) {
       cx.restore();
     } else {
       cx.drawImage(spr, sx - 14, sy + TH / 2 - 20, 28, 28);
+    }
     }
   });
   /* Fußgänger: kleine Pendelwege auf den Straßenzügen (Bürgersteig-Ersatz) */
@@ -2720,6 +2723,76 @@ function drawAtmosphere() {
   if (nacht > .02) {
     cx.fillStyle = `rgba(9,14,38,${(nacht * .45).toFixed(3)})`;
     cx.fillRect(0, 0, innerWidth, innerHeight);
+  }
+}
+
+/* ---- Liefer-LKWs ----
+ * Rein kosmetischer Wirtschaftsverkehr: Ein LKW spawnt am oberen Kartenrand,
+ * fährt seinen Straßenzug hinunter bis zur Kachel, die einem zufällig
+ * gewählten Gebäude am nächsten liegt, hält dort kurz zum Anliefern (eine
+ * kleine Kiste hüpft), und fährt dann weiter bis zum unteren Rand, wo er
+ * verschwindet. Anders als die Pendler brauchen LKWs echten Zustand
+ * (anhalten und weiterfahren), deshalb keine reine Uhrzeit-Funktion. */
+const TRUCKIMG = new Image(); let TRUCKSPR = null;
+TRUCKIMG.onload = () => TRUCKSPR = spriteHiRes(TRUCKIMG);
+TRUCKIMG.src = "assets/kenney/cars/delivery.png";
+const TRUCKS = [];
+let naechsterTruck = 0;
+function trucksAktualisieren(st, now, dt) {
+  if (!ROUTES || !TRUCKSPR) return;
+  if (TRUCKS.length < 3 && now >= naechsterTruck) {
+    naechsterTruck = now + 8000 + Math.random() * 7000;
+    const gebaeude = st.map.filter(t => t.btype);
+    if (gebaeude.length) {
+      const ziel = gebaeude[Math.floor(Math.random() * gebaeude.length)];
+      /* Straßenzug und Haltepunkt mit dem geringsten Abstand zum Ziel. */
+      let best = null;
+      for (const line of ROUTES.carLines) for (let i = 0; i < line.length; i++) {
+        const d = Math.hypot(line[i].x - ziel.x, line[i].y - ziel.y);
+        if (!best || d < best.d) best = { line, i, d };
+      }
+      if (best && best.d <= 3 && best.i > 0) {
+        TRUCKS.push({ line: best.line, halt: best.i, u: 0, phase: "hin", wartenBis: 0 });
+      }
+    }
+  }
+  for (let i = TRUCKS.length - 1; i >= 0; i--) {
+    const lkw = TRUCKS[i];
+    if (lkw.phase === "laden") {
+      if (now >= lkw.wartenBis) lkw.phase = "weiter";
+      continue;
+    }
+    lkw.u += dt * .5;
+    if (lkw.phase === "hin" && lkw.u >= lkw.halt) {
+      lkw.u = lkw.halt; lkw.phase = "laden"; lkw.wartenBis = now + 3500;
+    }
+    if (lkw.u >= lkw.line.length - 1) TRUCKS.splice(i, 1);
+  }
+}
+function drawTrucks(now) {
+  if (!TRUCKSPR) return;
+  for (const lkw of TRUCKS) {
+    const n = lkw.line.length;
+    const idx = Math.max(0, Math.min(Math.floor(lkw.u), n - 2)), f = lkw.u - idx;
+    const a = lkw.line[idx], b = lkw.line[idx + 1];
+    const [sx, sy] = iso(a.x + (b.x - a.x) * f, a.y + (b.y - a.y) * f);
+    const [ax] = iso(a.x, a.y), [bx] = iso(b.x, b.y);
+    cx.fillStyle = "rgba(0,0,0,.22)";
+    cx.beginPath(); cx.ellipse(sx, sy + TH / 2 + 3, 13, 5, 0, 0, Math.PI * 2); cx.fill();
+    if (bx > ax) {
+      cx.save(); cx.translate(sx, 0); cx.scale(-1, 1);
+      cx.drawImage(TRUCKSPR, -15, sy + TH / 2 - 22, 30, 30);
+      cx.restore();
+    } else {
+      cx.drawImage(TRUCKSPR, sx - 15, sy + TH / 2 - 22, 30, 30);
+    }
+    if (lkw.phase === "laden") {
+      /* Anlieferung: eine kleine Kiste hüpft neben dem LKW. */
+      const hop = Math.abs(Math.sin(now / 220)) * 5;
+      cx.fillStyle = "#b0793f";
+      cx.fillRect(sx + 11, sy + TH / 2 - 12 - hop, 7, 6);
+      cx.strokeStyle = "#7a5228"; cx.strokeRect(sx + 11, sy + TH / 2 - 12 - hop, 7, 6);
+    }
   }
 }
 
@@ -2910,6 +2983,8 @@ function draw() {
   if (!ROUTES) { ROUTES = buildRoutes(st.map); SHORE = buildShore(st.map); }
   lichtBerechnen(now);
   effekteErkennen(st.map, now);
+  const dt = Math.min(.1, (now - (draw.letzt || now)) / 1000); draw.letzt = now;
+  trucksAktualisieren(st, now, dt);
   cx.translate(innerWidth/2 + cam.x, 120 + cam.y); cx.scale(cam.z, cam.z);
   for (const t of st.map) {
     const [sx, sy] = iso(t.x, t.y);
@@ -3045,6 +3120,7 @@ function draw() {
   }
   drawEffekte(now);
   drawAmbient(now);
+  drawTrucks(now);
   drawClouds(now);
   drawAtmosphere();
 }
