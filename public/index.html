@@ -397,6 +397,10 @@ input,select{background:var(--panel2);border:1px solid var(--line);border-radius
 .bugrow button.primary{background:rgba(56,189,248,.16);border-color:rgba(56,189,248,.45);color:var(--accent)}
 .bugrow button:hover{color:var(--text)}
 #bugStatus{font-size:12px;margin:10px 0 0;min-height:14px;color:var(--dim)}
+/* Schwarzmarkt: Zurückziehen-Knopf im Stil der übrigen Bedienelemente */
+#smAngebote button[data-smcancel]{background:none;border:1px solid var(--line);border-radius:8px;
+  color:var(--dim);padding:5px 11px;font:600 11px var(--font);cursor:pointer;transition:all .15s}
+#smAngebote button[data-smcancel]:hover{color:#fb7185;border-color:rgba(251,113,133,.5)}
 /* ---- Tonsteuerung ----
  * Der Regler war ein unformatiertes <input type=range> mit accent-color: 56 px
  * breit, ohne sichtbare Füllstandsanzeige und mit einem Griff, der auf dem
