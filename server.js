@@ -978,7 +978,7 @@ function planGueter(p) {
 /* Bis zu drei Waren je Phase. Die Menge orientiert sich am Grundpreis:
  * billige Massenware in großen Stückzahlen, teure Güter in kleinen —
  * und jede Phase fordert spürbar mehr als die vorige. */
-function planSollFuer(p, phase) {
+function planSollFuer(p, phase, faktor = 1) {
   const gueter = planGueter(p);
   const anzahl = Math.min(3, gueter.length);
   const start = (phase * 7 + p.name.length) % Math.max(1, gueter.length);
@@ -986,29 +986,62 @@ function planSollFuer(p, phase) {
   for (let i = 0; i < anzahl; i++) {
     const g = gueter[(start + i) % gueter.length];
     const basis = Math.max(6, Math.min(300, Math.round(500 / (BASEP[g] || 10))));
-    soll.push({ good: g, menge: Math.round(basis * (1 + phase * 0.4)), geliefert: 0 });
+    soll.push({ good: g, menge: Math.max(4, Math.round(basis * (1 + phase * 0.4) * faktor)), geliefert: 0 });
   }
   return soll;
+}
+/* Bezugsschein-Budget der Phase: Wer zuletzt gut erfüllt hat, bekommt bei der
+ * Materialzuteilung Vorrang — mehr Budget. Wer schlecht lag, weniger. Wer
+ * dreimal beim Schwarzhandel erwischt wurde, bekommt eine Phase lang nur die
+ * Hälfte (die Sperre wird beim Phasenstart verbraucht). */
+function planBudgetFuer(ps) {
+  let budget = Math.round(600 + 600 * (ps.prio ?? 1));
+  if (ps.sperre) { budget = Math.round(budget / 2); ps.sperre = false; ps.akte = 0; }
+  return budget;
+}
+const SCHWARZ_RISIKO = 0.25;   // Entdeckungswahrscheinlichkeit je Tausch
+const AKTE_STRAFE = 40;        // Punktabzug je Eintrag in die Kaderakte
+function kaderEintrag(p, ps) {
+  ps.akte = (ps.akte || 0) + 1;
+  ps.punkte = Math.max(0, ps.punkte - AKTE_STRAFE);
+  if (ps.akte >= 3) {
+    ps.sperre = true;
+    io.emit("notice", { text: `${p.name} wurde zum dritten Mal beim Schwarzhandel erwischt — die nächste Zuteilung wird halbiert.` });
+  } else {
+    io.emit("notice", { text: `Schwarzhandel aufgeflogen! ${p.name} erhält einen Eintrag in die Kaderakte (−${AKTE_STRAFE} Punkte).` });
+  }
+  logTx(p, "Plan", `Beim Schwarzhandel erwischt — Kaderakte (${ps.akte}/3)`, 0);
 }
 function planPhaseStarten() {
   G.plan.phase++;
   G.plan.rest = PLAN_DAUER;
   for (const p of Object.values(G.players)) {
-    G.plan.spieler[p.id] ??= { punkte: 0 };
-    G.plan.spieler[p.id].soll = planSollFuer(p, G.plan.phase - 1);
+    const ps = G.plan.spieler[p.id] ??= { punkte: 0 };
+    ps.faktor ??= 1; ps.prio ??= 1;
+    ps.soll = planSollFuer(p, G.plan.phase - 1, ps.faktor);
+    ps.budget = planBudgetFuer(ps);
   }
-  io.emit("notice", { text: `Planphase ${G.plan.phase}/${PLAN_PHASEN}: Das Planbüro hat neue Plansolls verkündet.` });
+  io.emit("notice", { text: `Planphase ${G.plan.phase}/${PLAN_PHASEN}: Das Planbüro hat neue Plansolls verkündet und Bezugsscheine ausgegeben.` });
 }
 function planPhaseAuswerten() {
   for (const [pid, ps] of Object.entries(G.plan.spieler)) {
     const p = G.players[pid];
     if (!p || !ps.soll?.length) continue;
-    const quote = ps.soll.reduce((s, z) => s + Math.min(1, z.geliefert / z.menge), 0) / ps.soll.length;
-    const punkte = Math.round(quote * 200);
+    /* Erfüllungsquote bis 150 %: Übererfüllung zählt — aber siehe Basiseffekt. */
+    const quote = ps.soll.reduce((s, z) => s + Math.min(1.5, z.geliefert / z.menge), 0) / ps.soll.length;
+    const punkte = Math.round(Math.min(1, quote) * 200 + Math.max(0, quote - 1) * 100);
     ps.punkte += punkte;
-    logTx(p, "Plan", `Planphase ${G.plan.phase}: ${(quote * 100).toFixed(0)} % erfüllt (+${punkte} Punkte)`, 0);
+    /* Priorität für die Zuteilung der nächsten Phase */
+    ps.prio = Math.max(.5, Math.min(1.5, quote));
+    /* BASISEFFEKT — das DDR-Dilemma: Wer erfüllt oder gar glänzt, dessen
+     * nächstes Soll steigt spürbar; wer deutlich scheitert, bekommt Nachsicht. */
+    const alt = ps.faktor ?? 1;
+    ps.faktor = Math.max(.7, Math.min(2.5,
+      alt * (quote >= 1 ? 1.1 + (quote - 1) * .5 : quote < .6 ? .9 : 1)));
+    logTx(p, "Plan", `Planphase ${G.plan.phase}: ${(quote * 100).toFixed(0)} % erfüllt (+${punkte} Punkte)` +
+      (ps.faktor > alt ? " — das Soll wird angehoben" : ps.faktor < alt ? " — das Soll wird gesenkt" : ""), 0);
   }
-  io.emit("notice", { text: `Planphase ${G.plan.phase} abgeschlossen — die Erfüllungspunkte sind vergeben.` });
+  io.emit("notice", { text: `Planphase ${G.plan.phase} abgeschlossen — Punkte vergeben, die Solls werden angepasst (Basiseffekt).` });
 }
 
 function logTx(p, cat, text, amt) {
@@ -1262,9 +1295,13 @@ io.on("connection", socket => {
     G.socketToPid[socket.id] = pid;
     socket.data.registered = true;
     if (istErster) G.hostId = pid;   // Host: darf im Warteraum einstellen und die Runde starten
-    /* Wer mitten in eine laufende Planphase einsteigt, bekommt sofort ein Soll. */
-    if (MODE === "plan" && G.plan && G.started && !G.plan.spieler[pid])
-      G.plan.spieler[pid] = { punkte: 0, soll: planSollFuer(G.players[pid], G.plan.phase - 1) };
+    /* Wer mitten in eine laufende Planphase einsteigt, bekommt sofort ein
+     * Soll und ein volles Bezugsschein-Budget. */
+    if (MODE === "plan" && G.plan && G.started && !G.plan.spieler[pid]) {
+      const ps = G.plan.spieler[pid] = { punkte: 0, prio: 1, faktor: 1 };
+      ps.soll = planSollFuer(G.players[pid], G.plan.phase - 1);
+      ps.budget = planBudgetFuer(ps);
+    }
     io.emit("notice", { text: `${name} ist der Sitzung beigetreten.` + (Object.keys(G.players).length === 1 ? ` Rundenziel: ${WIN_NW.toLocaleString("de-DE")} $` : "") });
     ack?.({ ok: true, goods: GOODS, btypes: BTYPES, rooms: ROOMS, you: pid, winGoal: WIN_NW, questDefs: QUESTS, industry, industries: INDUSTRIES,
       botLevels: Object.fromEntries(Object.entries(BOT_LEVELS).map(([k, v]) => [k, v.name])),
@@ -1295,7 +1332,7 @@ io.on("connection", socket => {
     G.started = true;
     startBots();
     if (MODE === "plan") {
-      G.plan = { phase: 0, rest: 0, spieler: {} };
+      G.plan = { phase: 0, rest: 0, spieler: {}, markt: [] };
       planPhaseStarten();
       io.emit("notice", { text: `Planwirtschaft: Der Fünfjahresplan beginnt — ${PLAN_ZIEL} Planpunkte machen dich zum Helden der Arbeit.` });
     } else {
@@ -1321,9 +1358,11 @@ io.on("connection", socket => {
     const ps = G.plan.spieler[p.id];
     const ziel = ps?.soll?.find(z => z.good === good);
     if (!ziel) return ack?.({ error: "Diese Ware steht nicht in deinem Plansoll" });
-    const rest = ziel.menge - ziel.geliefert;
+    /* Übererfüllung bis 150 % ist möglich — bringt Bonuspunkte, hebt aber
+     * über den Basiseffekt das Soll der nächsten Phase an. */
+    const rest = Math.ceil(ziel.menge * 1.5) - ziel.geliefert;
     const qty = Math.min(p.inv[good] || 0, rest);
-    if (qty <= 0) return ack?.({ error: rest <= 0 ? "Soll bereits erfüllt" : "Nichts auf Lager" });
+    if (qty <= 0) return ack?.({ error: rest <= 0 ? "Mehr nimmt das Planbüro nicht an (150 %)" : "Nichts auf Lager" });
     p.inv[good] -= qty;
     ziel.geliefert += qty;
     const erloes = qty * (BASEP[good] || 1) * 0.9;
@@ -1331,6 +1370,73 @@ io.on("connection", socket => {
     ps.punkte += Math.round(qty * (BASEP[good] || 1) / 10);
     gainXp(p, 10);
     logTx(p, "Plan", `${Math.round(qty)}× ${GOODS[good].name} ans Planbüro geliefert`, erloes);
+    ack?.({ ok: true });
+  }));
+
+  /* --- Planwirtschaft: Materialzuteilung beantragen ---
+   * Statt frei einzukaufen, bezieht man Waren vom Staat: zum festen
+   * Basispreis, begrenzt durch das Bezugsschein-Budget der Phase. */
+  socket.on("planRequest", guard((p, { good, qty }, ack) => {
+    if (MODE !== "plan" || !G.plan) return ack?.({ error: "Kein Planwirtschafts-Modus" });
+    const ps = G.plan.spieler[p.id];
+    if (!ps) return ack?.({ error: "Kein Planeintrag" });
+    if (!GOODS[good]) return ack?.({ error: "Unbekannte Ware" });
+    qty = Math.floor(+qty);
+    if (!(qty > 0) || qty > 1000) return ack?.({ error: "Ungültige Menge" });
+    const kosten = qty * (BASEP[good] || 1);
+    if ((ps.budget || 0) < kosten) return ack?.({ error: `Bezugsschein-Budget reicht nicht (${Math.floor((ps.budget || 0) / (BASEP[good] || 1))}× möglich)` });
+    if (p.cash < kosten) return ack?.({ error: "Zu wenig Geld" });
+    ps.budget -= kosten;
+    p.cash -= kosten;
+    p.inv[good] = (p.inv[good] || 0) + qty;
+    logTx(p, "Plan", `Zuteilung: ${qty}× ${GOODS[good].name} bezogen`, -kosten);
+    ack?.({ ok: true });
+  }));
+
+  /* --- Planwirtschaft: Schwarzmarkt ---
+   * Offiziell gibt es keinen Handel unter Spielern — inoffiziell schon:
+   * Ware gegen Ware, ohne Geld. Die angebotene Ware wandert beim Einstellen
+   * in Verwahrung (kein Zeitfenster für Doppelausgaben). Jeder abgeschlossene
+   * Tausch kann auffliegen: Eintrag in die Kaderakte für BEIDE Seiten. */
+  socket.on("planOfferCreate", guard((p, { gebeGood, gebeQty, willGood, willQty }, ack) => {
+    if (MODE !== "plan" || !G.plan) return ack?.({ error: "Kein Planwirtschafts-Modus" });
+    gebeQty = Math.floor(+gebeQty); willQty = Math.floor(+willQty);
+    if (!GOODS[gebeGood] || !GOODS[willGood] || gebeGood === willGood) return ack?.({ error: "Ungültige Waren" });
+    if (!(gebeQty > 0) || !(willQty > 0) || gebeQty > 1000 || willQty > 1000) return ack?.({ error: "Ungültige Mengen" });
+    if ((p.inv[gebeGood] || 0) < gebeQty) return ack?.({ error: "Nicht genug Ware im Lager" });
+    if (G.plan.markt.filter(o => o.von === p.id).length >= 3) return ack?.({ error: "Höchstens 3 eigene Angebote" });
+    p.inv[gebeGood] -= gebeQty;   // Verwahrung
+    G.plan.markt.push({ id: id(), von: p.id, gebeGood, gebeQty, willGood, willQty });
+    ack?.({ ok: true });
+  }));
+  socket.on("planOfferCancel", guard((p, { offerId }, ack) => {
+    if (MODE !== "plan" || !G.plan) return ack?.({ error: "Kein Planwirtschafts-Modus" });
+    const i = G.plan.markt.findIndex(o => o.id === offerId && o.von === p.id);
+    if (i < 0) return ack?.({ error: "Angebot nicht gefunden" });
+    const o = G.plan.markt.splice(i, 1)[0];
+    p.inv[o.gebeGood] = (p.inv[o.gebeGood] || 0) + o.gebeQty;
+    ack?.({ ok: true });
+  }));
+  socket.on("planOfferAccept", guard((p, { offerId }, ack) => {
+    if (MODE !== "plan" || !G.plan) return ack?.({ error: "Kein Planwirtschafts-Modus" });
+    const i = G.plan.markt.findIndex(o => o.id === offerId);
+    if (i < 0) return ack?.({ error: "Angebot nicht mehr da" });
+    const o = G.plan.markt[i];
+    if (o.von === p.id) return ack?.({ error: "Eigenes Angebot — zurückziehen statt annehmen" });
+    const anbieter = G.players[o.von];
+    if (!anbieter) { G.plan.markt.splice(i, 1); return ack?.({ error: "Anbieter nicht mehr da" }); }
+    if ((p.inv[o.willGood] || 0) < o.willQty) return ack?.({ error: `Dir fehlt ${GOODS[o.willGood].name}` });
+    G.plan.markt.splice(i, 1);
+    p.inv[o.willGood] -= o.willQty;
+    p.inv[o.gebeGood] = (p.inv[o.gebeGood] || 0) + o.gebeQty;         // Verwahrtes an den Käufer
+    anbieter.inv[o.willGood] = (anbieter.inv[o.willGood] || 0) + o.willQty;
+    logTx(p, "Plan", `Schwarzmarkt: ${o.gebeQty}× ${GOODS[o.gebeGood].name} gegen ${o.willQty}× ${GOODS[o.willGood].name} getauscht`, 0);
+    logTx(anbieter, "Plan", `Schwarzmarkt: ${o.gebeQty}× ${GOODS[o.gebeGood].name} gegen ${o.willQty}× ${GOODS[o.willGood].name} getauscht`, 0);
+    /* Ein Würfelwurf pro Tausch: Fliegt er auf, trifft es beide Seiten. */
+    if (Math.random() < SCHWARZ_RISIKO) {
+      kaderEintrag(p, G.plan.spieler[p.id] ??= { punkte: 0 });
+      kaderEintrag(anbieter, G.plan.spieler[anbieter.id] ??= { punkte: 0 });
+    }
     ack?.({ ok: true });
   }));
 
@@ -1393,6 +1499,8 @@ io.on("connection", socket => {
 
   /* --- Börse: reine Spieler-Orders --- */
   socket.on("placeOrder", guard((p, { side, good, qty, price }, ack) => {
+    /* Planwirtschaft: freien Handel gibt es offiziell nicht. */
+    if (MODE === "plan") return ack?.({ error: "In der Planwirtschaft gibt es keine freie Börse — nutze die Zuteilung oder den Schwarzmarkt im Planbüro." });
     qty = Math.floor(+qty); price = Math.round(+price * 100) / 100;
     if (!GOODS[good] || !["sell", "buy"].includes(side)) return ack?.({ error: "Ungültig" });
     if (!(qty > 0) || !(price > 0)) return ack?.({ error: "Menge/Preis > 0 nötig" });

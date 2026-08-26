@@ -1059,6 +1059,35 @@ td:first-child{font-family:var(--font)}
       <div class="lbl">Dein Plansoll</div>
       <div id="planSoll"><p class="note">—</p></div>
     </div>
+    <div class="joinbox" style="margin-bottom:12px">
+      <div class="lbl">Materialzuteilung</div>
+      <p class="note" style="margin:0 0 8px">Bezugsschein-Budget dieser Phase: <b id="planBudget">—</b> ·
+        Priorität <b id="planPrio">—</b>. Gute Planerfüllung bringt nächste Phase mehr Budget —
+        Übererfüllung hebt aber auch dein Soll an (Basiseffekt).</p>
+      <div class="formrow">
+        <select id="planGood"></select>
+        <input id="planQty" type="number" min="1" placeholder="Menge">
+        <button class="buyb" id="planRequestBtn">Zuteilung beantragen</button>
+      </div>
+      <p id="planReqStatus" class="note" style="margin:6px 0 0"></p>
+    </div>
+    <div class="joinbox" style="margin-bottom:12px">
+      <div class="lbl">Schwarzmarkt · Ware gegen Ware</div>
+      <p class="note" style="margin:0 0 8px">Offiziell verboten. Jeder Tausch kann auffliegen (25 %):
+        Eintrag in die Kaderakte für beide Seiten, −40 Punkte — beim dritten Eintrag wird die
+        nächste Zuteilung halbiert. <span id="planAkte"></span></p>
+      <div class="formrow">
+        <span class="meta">Gebe</span>
+        <select id="smGebeGood"></select>
+        <input id="smGebeQty" type="number" min="1" placeholder="Menge" style="width:70px">
+        <span class="meta">für</span>
+        <select id="smWillGood"></select>
+        <input id="smWillQty" type="number" min="1" placeholder="Menge" style="width:70px">
+        <button class="buyb" id="smAnbieten">Anbieten</button>
+      </div>
+      <p id="smStatus" class="note" style="margin:6px 0 0"></p>
+      <div id="smAngebote" style="margin-top:8px"></div>
+    </div>
     <div class="joinbox">
       <div class="lbl">Planerfüllung aller Betriebe</div>
       <div id="planRang">—</div>
@@ -3857,6 +3886,9 @@ function kapitalmarktHinweis(state, myId) {
 function planRendern(state, myId) {
   const knopf = document.getElementById("dockPlan");
   if (knopf) knopf.style.display = state.mode === "plan" ? "" : "none";
+  /* Die freie Börse gibt es in der Planwirtschaft nicht. */
+  const boerseKnopf = document.querySelector('.dockbtn[data-p="boerse"]');
+  if (boerseKnopf) boerseKnopf.style.display = state.mode === "plan" ? "none" : "";
   const nw = document.getElementById("networth");
   if (state.mode !== "plan" || !state.plan) {
     if (nw) nw.style.display = "";
@@ -3889,20 +3921,81 @@ function planRendern(state, myId) {
       <button class="buyb" data-plandeliver="${z.good}" ${voll || !(lager[z.good] > 0) ? "disabled" : ""}>Abliefern</button>
     </div>`;
   }).join("") : `<p class="note">Kein Soll — die nächste Planphase teilt dir eines zu.</p>`;
+  /* Materialzuteilung: Budget & Priorität anzeigen, Warenlisten einmal füllen */
+  const warenOpts = () => Object.keys(GOODS()).map(k => `<option value="${k}">${gname(k)}</option>`).join("");
+  for (const sid of ["planGood", "smGebeGood", "smWillGood"]) {
+    const sel = document.getElementById(sid);
+    if (sel && !sel.options.length) sel.innerHTML = warenOpts();
+  }
+  if (meins) {
+    document.getElementById("planBudget").textContent = fmt(meins.budget ?? 0);
+    const prio = meins.prio ?? 1;
+    document.getElementById("planPrio").textContent =
+      prio >= 1.2 ? "hoch" : prio >= .9 ? "normal" : "niedrig";
+    document.getElementById("planAkte").innerHTML = (meins.akte || 0) > 0
+      ? `Deine Kaderakte: <b style="color:#fb7185">${meins.akte}/3 Einträge</b>.` : "Deine Kaderakte ist sauber.";
+  }
+  /* Schwarzmarkt-Angebote */
+  document.getElementById("smAngebote").innerHTML = (plan.markt || []).map(o => {
+    const von = state.players[o.von];
+    const meins2 = o.von === myId;
+    return `<div style="display:flex;align-items:center;gap:9px;margin:5px 0">
+      <span style="width:10px;height:10px;border-radius:3px;background:${von?.color || "#666"}"></span>
+      <span style="flex:1">${von?.name || "—"}: gibt <b>${o.gebeQty}× ${gname(o.gebeGood)}</b> für <b>${o.willQty}× ${gname(o.willGood)}</b></span>
+      ${meins2
+        ? `<button data-smcancel="${o.id}">Zurückziehen</button>`
+        : `<button class="buyb" data-smaccept="${o.id}">Tauschen</button>`}
+    </div>`;
+  }).join("") || `<p class="note">Keine Angebote — unter der Hand ist gerade Ruhe.</p>`;
   const rang = Object.entries(plan.spieler || {})
-    .map(([pid, ps]) => ({ name: state.players[pid]?.name || "—", farbe: state.players[pid]?.color || "#666", punkte: ps.punkte }))
+    .map(([pid, ps]) => ({ name: state.players[pid]?.name || "—", farbe: state.players[pid]?.color || "#666", punkte: ps.punkte, akte: ps.akte || 0 }))
     .sort((a, b) => b.punkte - a.punkte);
   document.getElementById("planRang").innerHTML = rang.map((r, i) =>
     `<div style="display:flex;gap:9px;align-items:center;margin:5px 0">
       <span class="meta">${i + 1}.</span>
       <span style="width:10px;height:10px;border-radius:3px;background:${r.farbe}"></span>
-      <span style="flex:1">${r.name}${i === 0 && r.punkte > 0 ? " ★" : ""}</span>
+      <span style="flex:1">${r.name}${i === 0 && r.punkte > 0 ? " ★" : ""}${r.akte ? ` <span class="meta" style="color:#fb7185">Akte ${r.akte}/3</span>` : ""}</span>
       <b>${r.punkte} P.</b></div>`).join("") || "—";
 }
 document.getElementById("p-plan").addEventListener("click", e => {
   const b = e.target.closest("button[data-plandeliver]");
   if (!b) return;
   act("planDeliver", { good: b.dataset.plandeliver });
+});
+document.getElementById("p-plan").addEventListener("click", e => {
+  const acceptBtn = e.target.closest("button[data-smaccept]");
+  const cancelBtn = e.target.closest("button[data-smcancel]");
+  const status = document.getElementById("smStatus");
+  if (acceptBtn) socket.emit("planOfferAccept", { offerId: acceptBtn.dataset.smaccept },
+    res => { if (res?.error) status.textContent = res.error; else status.textContent = "Tausch abgewickelt — hoffentlich hat niemand zugesehen."; });
+  if (cancelBtn) socket.emit("planOfferCancel", { offerId: cancelBtn.dataset.smcancel },
+    res => { status.textContent = res?.error || "Angebot zurückgezogen."; });
+});
+document.getElementById("smAnbieten").addEventListener("click", () => {
+  const status = document.getElementById("smStatus");
+  const daten = {
+    gebeGood: document.getElementById("smGebeGood").value,
+    gebeQty: +document.getElementById("smGebeQty").value,
+    willGood: document.getElementById("smWillGood").value,
+    willQty: +document.getElementById("smWillQty").value,
+  };
+  if (!(daten.gebeQty > 0) || !(daten.willQty > 0)) { status.textContent = "Bitte beide Mengen eingeben."; return; }
+  socket.emit("planOfferCreate", daten, res => {
+    if (res?.error) { status.textContent = res.error; return; }
+    status.textContent = "Angebot hängt jetzt am schwarzen Brett.";
+    document.getElementById("smGebeQty").value = ""; document.getElementById("smWillQty").value = "";
+  });
+});
+document.getElementById("planRequestBtn").addEventListener("click", () => {
+  const good = document.getElementById("planGood").value;
+  const qty = +document.getElementById("planQty").value;
+  const status = document.getElementById("planReqStatus");
+  if (!(qty > 0)) { status.textContent = "Bitte eine Menge eingeben."; return; }
+  socket.emit("planRequest", { good, qty }, res => {
+    if (res?.error) { status.textContent = res.error; return; }
+    status.textContent = `Zuteilung erhalten: ${qty}× ${gname(good)}.`;
+    document.getElementById("planQty").value = "";
+  });
 });
 
 function render({ state, me, myId, chat, room }) {
