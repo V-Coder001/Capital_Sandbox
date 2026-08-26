@@ -400,10 +400,15 @@ const UNLOCK = { industrie: 300, kueste: 700 };
 const ROOMS = ["[Game]", "[Sales]", "[DE] Spielthemen", "[DE] Handel", "[DE] Plauderecke"];
 
 /* ---------- Karte (deterministisch, damit alle Clients identisch rendern) ---------- */
-function buildMap() {
+function buildMap(mode = "sandbox") {
+  /* Die Planwirtschaft spielt auf einer eigenen Fläche: andere Küstenlinie
+   * (verschobenes Rauschen), engeres Straßenraster, Industrie links statt
+   * rechts und das Zentrum in der Kartenmitte. Statt Stadtbank steht dort
+   * der Schwarzmarkt; eine Nachrichtenzentrale gibt es nicht. */
+  const plan = mode === "plan";
   /* Deterministisches Pseudo-Rauschen → organische Küste, identisch auf allen Clients */
   const noise = (x, y) => {
-    const n = Math.sin(x * 12.9898 + y * 78.233) * 43758.5453;
+    const n = Math.sin((x + (plan ? 37 : 0)) * 12.9898 + (y + (plan ? 91 : 0)) * 78.233) * 43758.5453;
     return n - Math.floor(n);
   };
   /* Wasserfeld zuerst berechnen, dann 2× Mehrheits-Glättung gegen Sprenkel */
@@ -434,13 +439,13 @@ function buildMap() {
   const tiles = [];
   for (let y = 0; y < MAP_H; y++) for (let x = 0; x < MAP_W; x++) {
     const water = wat[y * MAP_W + x];
-    const road = !water && (x % 6 === 3 || y % 6 === 3);
-    /* Zonen: rundes Zentrum, Industrie-Band rechts, Küstenstreifen am Wasser */
+    const road = !water && (plan ? (x % 6 === 2 || y % 6 === 2) : (x % 6 === 3 || y % 6 === 3));
+    /* Zonen: rundes Zentrum, Industrie-Band rechts (Plan: links, Zentrum mittig) */
     let zone = "agrar";
     if (water) zone = "wasser";
-    else if (Math.hypot(x - 7, y - 6) < 8.5) zone = "zentrum";
+    else if (plan ? Math.hypot(x - MAP_W / 2, y - 8) < 7.5 : Math.hypot(x - 7, y - 6) < 8.5) zone = "zentrum";
     else if (y >= MAP_H - 9) zone = "kueste";
-    else if (x >= MAP_W - 9) zone = "industrie";
+    else if (plan ? x < 9 : x >= MAP_W - 9) zone = "industrie";
     const park = !water && !road && (x * 7 + y * 13) % 17 === 0;   // Parks/Palmen vor Sperrzonen
     const field = !water && !road && !park && zone === "agrar" && (x * 5 + y * 11) % 13 === 0; // Deko-Felder (bebaubar)
     const locked = !water && !road && !park && (zone === "industrie" || zone === "kueste");
@@ -454,6 +459,14 @@ function buildMap() {
     if (!t.water && nb.some(n => n?.water)) t.sand = true;                        // Strandsaum
     if (t.water && !nb.some(n => n && !n.water)) t.deep = true;                   // offenes Meer
     if (t.water && (t.x * 3 + t.y * 17) % 19 === 0) t.rock = true;                // Felsen
+  }
+  if (plan) {
+    /* Planwirtschaft: Wo sonst die Stadtbank steht, sitzt der Schwarzmarkt —
+     * eine Baracke im Zentrum, der einzige Ort für Handel unter der Hand.
+     * Eine Nachrichtenzentrale gibt es auf dieser Fläche nicht. */
+    const schwarz = tiles.find(t => t.zone === "zentrum" && !t.water && !t.road && !t.park);
+    if (schwarz) Object.assign(schwarz, { schwarz: true, road: false, park: false, field: false, locked: false, unlockCost: 0 });
+    return tiles;
   }
   /* Die Stadtbank steht fest im Zentrum und gehört niemandem: hier handeln alle
    * Spieler Firmenanteile. Kein Bauplatz, kein Besitzer, nicht freischaltbar. */
@@ -1064,7 +1077,7 @@ function snapshot() {
     lobby: G.started ? null : { winGoal: WIN_NW, bots: botAuswahl, botLevel: botLevelKey, mode: MODE },
     map: G.map.map(t => ({ x: t.x, y: t.y, zone: t.zone, road: t.road, water: t.water,
       park: t.park, field: t.field, sand: t.sand, deep: t.deep, rock: t.rock,
-      bank: t.bank, news: t.news, locked: t.locked, unlockCost: t.unlockCost, owner: t.owner, btype: t.btype, lien: t.lien, shop: t.shop, paused: t.paused, level: t.level })),
+      bank: t.bank, news: t.news, schwarz: t.schwarz, locked: t.locked, unlockCost: t.unlockCost, owner: t.owner, btype: t.btype, lien: t.lien, shop: t.shop, paused: t.paused, level: t.level })),
     players: Object.fromEntries(Object.entries(G.players).map(([sid, p]) =>
       [sid, { id: sid, name: p.name, color: p.color, lvl: p.lvl, xp: p.xp, industry: p.industry, industries: p.industries,
               netWorth: Math.round(netWorth(p)), rating: rating(p), rank: rankOf[sid],
@@ -1332,6 +1345,14 @@ io.on("connection", socket => {
     G.started = true;
     startBots();
     if (MODE === "plan") {
+      /* Eigene Spielfläche für die Planwirtschaft — Gebäude gibt es zu diesem
+       * Zeitpunkt noch keine, der Tausch ist also verlustfrei. WICHTIG: Der
+       * Kachel-Diff überträgt nur veränderliche Felder (owner, btype, …) —
+       * nach einem Kartentausch muss deshalb jeder Client die Karte einmal
+       * wieder vollständig bekommen, sonst behält er das alte Layout. */
+      G.map = buildMap("plan");
+      lastTileSigs = null;
+      for (const sock of io.sockets.sockets.values()) sock.data.gotMap = false;
       G.plan = { phase: 0, rest: 0, spieler: {}, markt: [] };
       planPhaseStarten();
       io.emit("notice", { text: `Planwirtschaft: Der Fünfjahresplan beginnt — ${PLAN_ZIEL} Planpunkte machen dich zum Helden der Arbeit.` });
@@ -1447,6 +1468,7 @@ io.on("connection", socket => {
     if (t.water || t.road || t.park) return ack?.({ error: "Nicht bebaubar" });
     if (t.bank) return ack?.({ error: "Die Stadtbank gehört der Stadt" });
     if (t.news) return ack?.({ error: "Die Nachrichtenzentrale gehört der Stadt" });
+    if (t.schwarz) return ack?.({ error: "Hier wird nur unter der Hand gehandelt" });
     if (t.owner) return ack?.({ error: "Kachel bereits belegt" });
     if (bt.zone !== t.zone) return ack?.({ error: `Nur in Zone ${bt.zone} baubar` });
     if (bt.industry && !(p.industries || [p.industry]).includes(bt.industry))
@@ -1757,6 +1779,9 @@ io.on("connection", socket => {
     stopBots();
     botAuswahl = null; botLevelKey = BOT_LEVEL_DEFAULT;
     G.map = buildMap();
+    /* Frische Karte → Kachel-Diff zurücksetzen, alle bekommen sie voll. */
+    lastTileSigs = null;
+    for (const sock of io.sockets.sockets.values()) sock.data.gotMap = false;
     G.players = {}; G.socketToPid = {};
     G.orders = []; G.bonds = []; G.auctions = []; G.contracts = [];
     G.shareListings = []; G.shareBids = [];
@@ -2104,7 +2129,7 @@ function runTick() {
   }
   /* Nachrichtenzentrale: Marktbericht alle zwei Minuten. Bewusst versetzt zur
    * vollen Minute, damit er nicht mit der Dividendenmeldung zusammenfällt. */
-  if (G.tick > 60 && G.tick % NEWS_INTERVAL === 0) sendeMarktbericht();
+  if (MODE !== "plan" && G.tick > 60 && G.tick % NEWS_INTERVAL === 0) sendeMarktbericht();
   /* Aktien: Dividendenausschüttung alle 10 min */
   if (--G.nextDividendIn <= 0) { distributeDividends(); G.nextDividendIn = DIVIDEND_INTERVAL; }
   /* Nettovermögens-Verlauf (alle 10 s ein Punkt, max. 120 Punkte = 20 min) */

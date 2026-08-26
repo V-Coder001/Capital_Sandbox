@@ -1071,8 +1071,20 @@ td:first-child{font-family:var(--font)}
       </div>
       <p id="planReqStatus" class="note" style="margin:6px 0 0"></p>
     </div>
-    <div class="joinbox" style="margin-bottom:12px">
-      <div class="lbl">Schwarzmarkt · Ware gegen Ware</div>
+    <div class="joinbox">
+      <div class="lbl">Planerfüllung aller Betriebe</div>
+      <div id="planRang">—</div>
+    </div>
+  </div>
+</div>
+
+<!-- Schwarzmarkt-Baracke (Planwirtschaft): steht auf der Karte, wo sonst die
+     Stadtbank ist — das Panel öffnet sich per Klick aufs Gebäude. -->
+<div class="panel" id="p-schwarz">
+  <div class="phead"><h2>Schwarzmarkt</h2><button class="x" data-close>✕</button></div>
+  <div class="pbody">
+    <div class="joinbox">
+      <div class="lbl">Ware gegen Ware · unter der Hand</div>
       <p class="note" style="margin:0 0 8px">Offiziell verboten. Jeder Tausch kann auffliegen (25 %):
         Eintrag in die Kaderakte für beide Seiten, −40 Punkte — beim dritten Eintrag wird die
         nächste Zuteilung halbiert. <span id="planAkte"></span></p>
@@ -1087,10 +1099,6 @@ td:first-child{font-family:var(--font)}
       </div>
       <p id="smStatus" class="note" style="margin:6px 0 0"></p>
       <div id="smAngebote" style="margin-top:8px"></div>
-    </div>
-    <div class="joinbox">
-      <div class="lbl">Planerfüllung aller Betriebe</div>
-      <div id="planRang">—</div>
     </div>
   </div>
 </div>
@@ -1824,6 +1832,7 @@ const EN = {
   "Screenshot der Karte anhängen": "Attach a screenshot of the map",
   "Eigenes Bild stattdessen:": "Or upload your own image:",
   "Abbrechen": "Cancel", "Melden": "Report",
+  "SCHWARZMARKT": "BLACK MARKET",
   "Runde beitreten": "Join round", "Runde starten": "Start round", "Kopieren": "Copy",
   "Firmenname": "Company name", "Mitspieler einladen": "Invite players",
   "Gleiches Netzwerk": "Same network", "Von woanders": "From elsewhere",
@@ -3120,6 +3129,10 @@ function draw() {
     cx.fillStyle = grad; cx.fillRect(0, 0, innerWidth, innerHeight);
   } else { cx.fillStyle = "#0a0e15"; cx.fillRect(0,0,innerWidth,innerHeight); }
   if (!st) return;
+  /* Moduswechsel bringt eine neue Spielfläche mit — Straßen- und Ufer-Cache
+   * müssen dann neu aufgebaut werden. */
+  const mapKey = st.mode + ":" + st.started;
+  if (draw.mapKey !== mapKey) { draw.mapKey = mapKey; ROUTES = null; SHORE = null; }
   if (!ROUTES) { ROUTES = buildRoutes(st.map); SHORE = buildShore(st.map); }
   lichtBerechnen(now);
   effekteErkennen(st.map, now);
@@ -3215,6 +3228,16 @@ function draw() {
       cx.font = "bold 10px sans-serif"; cx.textAlign = "center"; cx.fillStyle = "#fbbf24";
       cx.fillText(uebers("NACHRICHTEN"), sx, sy + TH / 2 + 16);
     }
+    if (t.schwarz) {
+      /* Schwarzmarkt-Baracke: rot markiert, bewusst unscheinbarer als die Bank. */
+      cx.fillStyle = "rgba(244,63,94,.22)";
+      cx.beginPath(); cx.moveTo(sx,sy); cx.lineTo(sx+TW/2,sy+TH/2); cx.lineTo(sx,sy+TH); cx.lineTo(sx-TW/2,sy+TH/2); cx.closePath(); cx.fill();
+      cx.strokeStyle = "#f43f5e"; cx.lineWidth = 1.6; cx.stroke(); cx.lineWidth = 1;
+      const simg = spriteFor("markt", t.x, t.y) || spriteFor("kontor", t.x, t.y);
+      if (simg) cx.drawImage(simg, sx-36, standY(sy, simg, 72), 72, 72);
+      cx.font = "bold 10px sans-serif"; cx.textAlign = "center"; cx.fillStyle = "#f43f5e";
+      cx.fillText(uebers("SCHWARZMARKT"), sx, sy + TH / 2 + 16);
+    }
     if (t.btype) {
       const owner = st.players[t.owner];
       const col = owner?.color || "#666";
@@ -3286,6 +3309,7 @@ function clickTile(e) {
   const t = pickTile(e.clientX, e.clientY); tm.style.display = "none";
   const me = store.get().me, myId = store.get().myId;
   /* Die Stadtbank ist kein Bauplatz, sondern der Handelsplatz für Firmenanteile */
+  if (t?.schwarz && me) { openPanel("schwarz"); return; }
   if (t?.bank && me) { openPanel("bank"); return; }
   if (t?.news && me) { openPanel("news"); return; }
   if (!t || t.water || t.road || t.park || !me) return;
@@ -3962,7 +3986,7 @@ document.getElementById("p-plan").addEventListener("click", e => {
   if (!b) return;
   act("planDeliver", { good: b.dataset.plandeliver });
 });
-document.getElementById("p-plan").addEventListener("click", e => {
+document.getElementById("p-schwarz").addEventListener("click", e => {
   const acceptBtn = e.target.closest("button[data-smaccept]");
   const cancelBtn = e.target.closest("button[data-smcancel]");
   const status = document.getElementById("smStatus");
