@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Datenschutz — Capital Sandbox</title>
+<style>
+:root{
+  --bg:#0a0e15; --panel:#121824; --panel2:#1a2231; --line:#273144;
+  --text:#e3e9f4; --dim:#8695ab; --accent:#38bdf8; --accent2:#a78bfa;
+  --font:system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font-family:var(--font);
+  line-height:1.6;padding:40px 20px 80px}
+.wrap{max-width:720px;margin:0 auto}
+a{color:var(--accent)}
+h1{font-size:26px;color:var(--accent);margin-bottom:4px}
+.sub{color:var(--dim);font-size:13px;margin-bottom:32px}
+h2{font-size:16px;margin:34px 0 10px;color:var(--text);border-bottom:1px solid var(--line);padding-bottom:8px}
+p,li{font-size:13.5px;color:#c3cede}
+ul{padding-left:20px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px 18px;margin:12px 0}
+.card b{color:var(--text)}
+.mono{font-family:var(--mono);font-size:12px;background:var(--panel2);border-radius:5px;padding:2px 6px}
+.note{background:rgba(56,189,248,.08);border:1px solid rgba(56,189,248,.3);border-radius:10px;
+  padding:12px 14px;font-size:12.5px;color:var(--dim)}
+.warn{background:rgba(251,113,133,.08);border:1px solid rgba(251,113,133,.35);border-radius:10px;
+  padding:12px 14px;font-size:12.5px;margin-bottom:28px}
+.warn b{color:#fb7185}
+table{width:100%;border-collapse:collapse;font-size:12.5px;margin-top:8px}
+th,td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line)}
+th{color:var(--dim);font-weight:600;font-family:var(--mono);font-size:11px;text-transform:uppercase}
+.back{display:inline-block;margin-top:36px;font-size:13px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="note" style="margin-bottom:28px">
+    Diese Seite beschreibt, was der Code von Capital Sandbox tatsächlich tut. Sie wurde sorgfältig
+    erstellt, ersetzt aber keine Rechtsberatung. Die Pflichtangaben zum Anbieter stehen im
+    <a href="impressum.html">Impressum</a>.
+  </div>
+
+  <h1>Datenschutz</h1>
+  <div class="sub">Stand: <span id="datum"></span> · gilt für alle Runden von Capital Sandbox</div>
+
+  <h2>Kurzfassung</h2>
+  <p>Capital Sandbox verlangt kein Benutzerkonto, keine E-Mail-Adresse und keinen echten Namen.
+    Es gibt keine Analyse- oder Tracking-Werkzeuge, keine Werbung und keine Weitergabe von Daten zu
+    Werbezwecken. Der gesamte Spielstand liegt nur im Arbeitsspeicher des Servers, den der Betreiber
+    dieser Runde gestartet hat — nichts wird dauerhaft auf einer Festplatte gespeichert, und mit dem
+    Ende einer Runde ist der Spielstand unwiderruflich weg.</p>
+
+  <h2>Verantwortliche Stelle</h2>
+  <div class="card">
+    <p>Vincent Biesdorf<br>
+      E-Mail: <a href="mailto:vincent.biesdorf@capitalsandbox.io">vincent.biesdorf@capitalsandbox.io</a></p>
+    <p style="margin-bottom:0">Die vollständige Anschrift steht im
+      <a href="impressum.html">Impressum</a>.</p>
+  </div>
+
+  <h2>Was beim Spielen verarbeitet wird</h2>
+  <p>Beim Beitritt legst du selbst einen Firmennamen, eine Farbe und eine Branche fest. Diese
+    Angaben werden für die Dauer der Runde im Arbeitsspeicher des Servers gehalten, an alle
+    Mitspieler derselben Runde übertragen (damit sie dich auf der Karte sehen) und nach Ende der
+    Runde bzw. einem Neustart des Servers vollständig gelöscht. Es gibt keine Datenbank und keine
+    Protokolldatei, in der Spielstände über die laufende Runde hinaus aufbewahrt werden.</p>
+  <p>Der Server selbst führt kein Zugriffsprotokoll über einzelne Anfragen. Wird das Spiel bei
+    einem Hosting-Anbieter betrieben, kann dieser auf seiner eigenen Infrastruktur-Ebene technisch bedingt
+    kurzzeitig Verbindungsdaten (z. B. IP-Adresse) protokollieren — das liegt außerhalb der
+    Kontrolle dieses Codes und richtet sich nach den Datenschutzhinweisen des jeweiligen Anbieters.</p>
+
+  <h2>Lokaler Speicher im Browser (kein Cookie-Banner nötig)</h2>
+  <p>Capital Sandbox setzt keine Cookies im klassischen Sinn. Der Browser speichert stattdessen ein
+    paar rein technische Einstellungen lokal auf deinem Gerät (im sogenannten
+    <span class="mono">localStorage</span>), damit sie beim nächsten Besuch noch da sind. Diese
+    Daten verlassen deinen Browser nie und werden nirgendwo an den Server übertragen — außer beim
+    Wiederverbinden-Token, das dient ausschließlich dazu, dich nach einem Verbindungsabbruch wieder
+    mit deiner eigenen Firma zu verbinden.</p>
+  <table>
+    <tr><th>Schlüssel</th><th>Zweck</th><th>Bleibt bis</th></tr>
+    <tr><td class="mono">capitalSandboxToken</td><td>Erlaubt dir nach einem Verbindungsabbruch, nahtlos zu deiner eigenen Firma zurückzukehren</td><td>Rundenende / manuelles Löschen</td></tr>
+    <tr><td class="mono">cs_vol / cs_muted</td><td>Merkt sich deine Lautstärke-Einstellung für die Hintergrundmusik</td><td>bis du sie änderst</td></tr>
+    <tr><td class="mono">cs_tut_done</td><td>Merkt sich, dass du das Tutorial schon gesehen hast</td><td>dauerhaft, bis du den Browser-Speicher leerst</td></tr>
+    <tr><td class="mono">cs_intro_boot</td><td>Verhindert, dass das Intro-Video bei jedem Neuladen erneut abgespielt wird</td><td>bis zum nächsten Serverneustart</td></tr>
+  </table>
+  <p>Da all diese Einträge rein technisch notwendig sind und nichts davon der Wiedererkennung zu
+    Werbe- oder Analysezwecken dient, ist nach Art. 5 Abs. 3 ePrivacy-Richtlinie / § 25 Abs. 2 TTDSG
+    dafür keine Einwilligung per Cookie-Banner erforderlich. Du kannst diese Daten jederzeit selbst
+    über die Einstellungen deines Browsers löschen.</p>
+
+  <h2>Externe Dienste, die beim Spielen kontaktiert werden</h2>
+  <div class="card">
+    <p><b>Google Fonts</b> — beim Laden der Seite werden die Schriftarten „Inter" und
+      „JetBrains Mono" direkt von den Servern von Google (fonts.googleapis.com,
+      fonts.gstatic.com) geladen. Dabei erfährt Google die IP-Adresse des aufrufenden Geräts.
+      Es werden keine Cookies gesetzt. Mehr dazu in der
+      <a href="https://policies.google.com/privacy" target="_blank" rel="noopener">Datenschutzerklärung von Google</a>.</p>
+  </div>
+  <div class="card">
+    <p><b>PeerJS-Vermittlungsdienst</b> (nur beim direkten Beitreten per Online-Code über die
+      Adresse eines Mitspielers, nicht bei einer zentral gehosteten Runde) — um zwei Browser ohne
+      eigenen Server direkt miteinander zu verbinden (WebRTC), wird kurzzeitig der öffentliche
+      Vermittlungsdienst <span class="mono">0.peerjs.com</span> kontaktiert. Dabei werden IP-Adresse
+      und eine zufällige Verbindungskennung ausgetauscht — der eigentliche Spielverkehr läuft danach
+      direkt zwischen den beteiligten Browsern, nicht mehr über diesen Dienst.</p>
+  </div>
+
+  <h2>Deine Rechte</h2>
+  <p>Da Capital Sandbox keine dauerhaften, personenbezogenen Daten auf einem Server speichert —
+    der Spielstand verschwindet spätestens mit dem Ende der Runde —, gibt es in der Regel nichts,
+    worüber du Auskunft verlangen oder dessen Löschung du fordern müsstest. Für Fragen zu einer
+    konkret betriebenen Runde wende dich an die oben genannte verantwortliche Stelle.</p>
+
+  <a class="back" href="/">← Zurück zum Spiel</a>
+  <a class="back" href="impressum.html" style="margin-left:18px">Impressum</a>
+</div>
+<script>document.getElementById("datum").textContent = new Date().toLocaleDateString("de-DE", { year: "numeric", month: "long", day: "numeric" });</script>
+</body>
+</html>

@@ -1,23 +1,18 @@
 {
-  "name": "game",
-  "private": true,
-  "version": "0.0.0",
+  "name": "capital-sandbox",
+  "version": "0.1.0",
+  "description": "Localhost-Multiplayer-Wirtschaftssimulation (Node.js + Socket.io + Canvas)",
   "type": "module",
+  "main": "server.js",
   "scripts": {
-    "dev": "vite",
-    "build": "tsc && vite build",
-    "preview": "vite preview"
+    "start": "node server.js",
+    "gateway": "node gateway.js"
   },
   "dependencies": {
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1"
-  },
-  "devDependencies": {
-    "@types/node": "^20.14.2",
-    "@types/react": "^18.3.3",
-    "@types/react-dom": "^18.3.0",
-    "@vitejs/plugin-react": "^4.3.1",
-    "typescript": "^5.6.2",
-    "vite": "^5.4.1"
+    "express": "^4.19.0",
+    "http-proxy": "^1.18.1",
+    "peerjs": "^1.5.5",
+    "socket.io": "^4.7.0",
+    "socket.io-client": "^4.8.3"
   }
 }
