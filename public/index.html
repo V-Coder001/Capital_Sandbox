@@ -2711,6 +2711,124 @@ function drawAtmosphere() {
   }
   cx.fillStyle = ATMO.haze; cx.fillRect(0, 0, innerWidth, innerHeight);
   cx.fillStyle = ATMO.vig;  cx.fillRect(0, 0, innerWidth, innerHeight);
+  /* Tageszeit: orangene Dämmerung an den Übergängen, nachts blauer Schleier. */
+  if (DAEMMERUNG > .01) {
+    cx.fillStyle = `rgba(255,138,66,${(DAEMMERUNG * .16).toFixed(3)})`;
+    cx.fillRect(0, 0, innerWidth, innerHeight);
+  }
+  const nacht = 1 - LICHT;
+  if (nacht > .02) {
+    cx.fillStyle = `rgba(9,14,38,${(nacht * .45).toFixed(3)})`;
+    cx.fillRect(0, 0, innerWidth, innerHeight);
+  }
+}
+
+/* ---- Tag-Nacht-Zyklus ----
+ * Ein voller Tag dauert 8 Minuten und hängt nur an der Wanduhrzeit — alle
+ * Clients sehen also ungefähr dieselbe Tageszeit. Nachts legt sich ein
+ * dunkelblauer Schleier übers Bild und die Gebäude bekommen warmes
+ * Fensterlicht; zu Sonnenauf- und -untergang ein kurzer Orangeton. */
+const TAG_ZYKLUS = 480;
+let LICHT = 1, DAEMMERUNG = 0;
+function lichtBerechnen(now) {
+  const p = (now / 1000 % TAG_ZYKLUS) / TAG_ZYKLUS;
+  LICHT = (Math.cos(p * 2 * Math.PI) + 1) / 2;           // 1 = Mittag, 0 = Mitternacht
+  DAEMMERUNG = Math.pow(Math.sin(p * 2 * Math.PI), 6);   // schmale Spitzen an den Übergängen
+}
+/* Warmes Fensterlicht als vorgerenderter Lichtfleck. */
+const GLOW = (() => {
+  const c = document.createElement("canvas"); c.width = c.height = 64;
+  const g = c.getContext("2d");
+  const grad = g.createRadialGradient(32, 32, 3, 32, 32, 30);
+  grad.addColorStop(0, "rgba(255,196,110,.85)"); grad.addColorStop(1, "rgba(255,196,110,0)");
+  g.fillStyle = grad; g.fillRect(0, 0, 64, 64);
+  return c;
+})();
+
+/* ---- Fabrikrauch ----
+ * Aktive Industriegebäude stoßen kleine, aufsteigende Rauchwölkchen aus —
+ * pausierte nicht. So sieht man den Betriebszustand direkt auf der Karte. */
+const RAUCHER = new Set(["mine", "stahlwerk", "raffinerie", "ewerk", "ziegelei", "betonwerk",
+  "chipfabrik", "dieselwerk", "autowerk", "munitionsfabrik", "panzerwerk", "waffenschmiede", "oelpumpe"]);
+function drawRauch(sx, topY, seed, now) {
+  for (let j = 0; j < 3; j++) {
+    const k = ((now / 1000 * .45 + seed * .37 + j / 3) % 1 + 1) % 1;
+    cx.globalAlpha = (1 - k) * .3;
+    cx.fillStyle = "#c3c9d4";
+    cx.beginPath();
+    cx.arc(sx + 8 + Math.sin(seed + j + k * 4) * 3, topY + 8 - k * 30, 2.5 + k * 6, 0, Math.PI * 2);
+    cx.fill();
+  }
+  cx.globalAlpha = 1;
+}
+
+/* ---- Bau-, Abriss- und Freischalt-Effekte ----
+ * Gebäude ploppten bisher kommentarlos auf die Karte. Der Client vergleicht
+ * jede Kachel mit ihrem letzten Zustand: neues/abgerissenes Gebäude gibt eine
+ * Staubwolke, eine freigeschaltete Kachel einen expandierenden Lichtring. */
+const EFFEKTE = [];
+let PREV_TILES = null;
+function effekteErkennen(map, now) {
+  if (!PREV_TILES) {
+    PREV_TILES = new Map(map.map(t => [t.x + "," + t.y, { b: t.btype || null, l: !!t.locked }]));
+    return;
+  }
+  for (const t of map) {
+    const key = t.x + "," + t.y, prev = PREV_TILES.get(key);
+    if (!prev) { PREV_TILES.set(key, { b: t.btype || null, l: !!t.locked }); continue; }
+    const b = t.btype || null;
+    if (b !== prev.b) EFFEKTE.push({ art: "staub", x: t.x, y: t.y, start: now, dauer: 1 });
+    if (prev.l && !t.locked) EFFEKTE.push({ art: "puls", x: t.x, y: t.y, start: now, dauer: .9 });
+    prev.b = b; prev.l = !!t.locked;
+  }
+}
+function drawEffekte(now) {
+  for (let i = EFFEKTE.length - 1; i >= 0; i--) {
+    const e = EFFEKTE[i], k = (now - e.start) / 1000 / e.dauer;
+    if (k >= 1) { EFFEKTE.splice(i, 1); continue; }
+    const [sx, sy] = iso(e.x, e.y);
+    if (e.art === "staub") {
+      cx.fillStyle = "#cfc7b8";
+      for (let j = 0; j < 6; j++) {
+        const w = j / 6 * Math.PI * 2, r = 5 + k * 20;
+        cx.globalAlpha = (1 - k) * .4;
+        cx.beginPath();
+        cx.arc(sx + Math.cos(w) * r, sy + TH / 2 + Math.sin(w) * r * .5 - k * 8, 4 + k * 6, 0, Math.PI * 2);
+        cx.fill();
+      }
+    } else {
+      const s = 1 + k * 1.6;
+      cx.globalAlpha = (1 - k) * .8;
+      cx.strokeStyle = "#7dd3fc"; cx.lineWidth = 2.5;
+      cx.beginPath();
+      cx.moveTo(sx, sy + TH / 2 - TH / 2 * s); cx.lineTo(sx + TW / 2 * s, sy + TH / 2);
+      cx.lineTo(sx, sy + TH / 2 + TH / 2 * s); cx.lineTo(sx - TW / 2 * s, sy + TH / 2);
+      cx.closePath(); cx.stroke();
+    }
+    cx.globalAlpha = 1; cx.lineWidth = 1;
+  }
+}
+
+/* ---- Uferkanten ----
+ * Wasser- und Landkacheln stießen hart aneinander. Einmalig wird ermittelt,
+ * welche Kanten jeder Wasserkachel an Land grenzen; dort schimmert eine
+ * weiche, leicht atmende Gischtlinie. */
+let SHORE = null;
+function buildShore(map) {
+  const wasser = new Set(), alle = new Set();
+  for (const t of map) { alle.add(t.x + "," + t.y); if (t.water) wasser.add(t.x + "," + t.y); }
+  const land = (x, y) => alle.has(x + "," + y) && !wasser.has(x + "," + y);
+  const s = new Map();
+  for (const t of map) {
+    if (!t.water) continue;
+    const dirs = [];
+    if (land(t.x, t.y - 1)) dirs.push(0);   // Kante oben-rechts
+    if (land(t.x + 1, t.y)) dirs.push(1);   // Kante unten-rechts
+    if (land(t.x, t.y + 1)) dirs.push(2);   // Kante unten-links
+    if (land(t.x - 1, t.y)) dirs.push(3);   // Kante oben-links
+    if (dirs.length) s.set(t.x + "," + t.y, dirs);
+  }
+  return s;
 }
 
 /* Karten-Symbole als Vektoren (statt Emoji): Schloss für gesperrte Kacheln,
@@ -2789,7 +2907,9 @@ function draw() {
     cx.fillStyle = grad; cx.fillRect(0, 0, innerWidth, innerHeight);
   } else { cx.fillStyle = "#0a0e15"; cx.fillRect(0,0,innerWidth,innerHeight); }
   if (!st) return;
-  if (!ROUTES) ROUTES = buildRoutes(st.map);
+  if (!ROUTES) { ROUTES = buildRoutes(st.map); SHORE = buildShore(st.map); }
+  lichtBerechnen(now);
+  effekteErkennen(st.map, now);
   cx.translate(innerWidth/2 + cam.x, 120 + cam.y); cx.scale(cam.z, cam.z);
   for (const t of st.map) {
     const [sx, sy] = iso(t.x, t.y);
@@ -2812,6 +2932,33 @@ function draw() {
      * aber sichtbar ist. */
     if (t.locked) { cx.fillStyle="rgba(4,10,18,.26)"; cx.fill();
       drawLock(sx, sy + TH / 2 - 1); }
+  }
+  /* Wasser-Effekte in einem eigenen Durchgang — direkt beim Kachelzeichnen
+   * würden die danach gemalten Nachbarrauten sie sofort wieder übermalen. */
+  for (const t of st.map) {
+    if (!t.water) continue;
+    const [sx, sy] = iso(t.x, t.y);
+    /* Wandernde Lichtglanzpunkte, damit die Fläche lebt. */
+    const h = (t.x * 31 + t.y * 17) % 97;
+    const a = Math.sin(now / 650 + h) * .16 + .12;
+    if (a > 0) {
+      cx.globalAlpha = a; cx.fillStyle = "#e6f7ff";
+      cx.beginPath(); cx.ellipse(sx + (h % 13) - 6, sy + TH / 2 + (h % 7) - 3, 4.5, 1.5, 0, 0, Math.PI * 2); cx.fill();
+      cx.beginPath(); cx.ellipse(sx - (h % 9) + 4, sy + TH / 2 - (h % 5) + 2, 3, 1.1, 0, 0, Math.PI * 2); cx.fill();
+      cx.globalAlpha = 1;
+    }
+    /* Gischtlinie an Kanten, die an Land grenzen. */
+    const kueste = SHORE?.get(t.x + "," + t.y);
+    if (kueste) {
+      const V = [[sx, sy], [sx + TW / 2, sy + TH / 2], [sx, sy + TH], [sx - TW / 2, sy + TH / 2]];
+      cx.globalAlpha = .34 + .18 * Math.sin(now / 900 + t.x * 2 + t.y);
+      cx.strokeStyle = "#e8f6ff"; cx.lineWidth = 2.4; cx.lineCap = "round";
+      for (const d of kueste) {
+        const a1 = V[d], b1 = V[(d + 1) % 4];
+        cx.beginPath(); cx.moveTo(a1[0], a1[1]); cx.lineTo(b1[0], b1[1]); cx.stroke();
+      }
+      cx.globalAlpha = 1; cx.lineWidth = 1; cx.lineCap = "butt";
+    }
   }
   /* 2. Durchgang: Gebäude & Deko — nach Boden, damit Sprites nicht überdeckt werden */
   /* Die Kachel-Variable t verdeckt hier die Übersetzungsfunktion t() —
@@ -2871,7 +3018,16 @@ function draw() {
         cx.stroke();
         cx.shadowBlur = 0; cx.lineWidth = 1;
         // Sprite direkt auf die Kachel — Grundfläche mittig, ohne Bodenschatten
-        cx.drawImage(spr, sx-32, standY(sy, spr, 64), 64, 64);
+        const oben = standY(sy, spr, 64);
+        cx.drawImage(spr, sx-32, oben, 64, 64);
+        /* Aktive Industrie raucht; pausierte nicht. */
+        if (RAUCHER.has(t.btype) && !t.paused) drawRauch(sx, oben, t.x * 5 + t.y, now);
+        /* Nachts warmes Fensterlicht über dem Gebäude. */
+        if (LICHT < .55) {
+          cx.globalAlpha = (.55 - LICHT) * .9;
+          cx.drawImage(GLOW, sx - 24, sy + TH / 2 - 30, 48, 48);
+          cx.globalAlpha = 1;
+        }
       } else {
         const h = 14 + (BTYPES()[t.btype]?.cost || 1000) / 1500;
         cx.fillStyle = col;
@@ -2887,6 +3043,7 @@ function draw() {
         cx.fillText(`★${t.level}`, sx, sy - 48); }
     }
   }
+  drawEffekte(now);
   drawAmbient(now);
   drawClouds(now);
   drawAtmosphere();
