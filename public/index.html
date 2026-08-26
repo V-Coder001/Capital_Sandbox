@@ -2523,6 +2523,9 @@ document.getElementById("hostCodeCopy").addEventListener("click", async () => {
 /* ---- Karte (Canvas, rendert nur den Server-State) ---- */
 const cv = document.getElementById("cv"), cx = cv.getContext("2d");
 const TW = 64, TH = 32; let cam = { x: 0, y: -120, z: 1 }, drag = null;
+/* DDR-Optik: Im Planwirtschafts-Modus bekommt die Karte einen gedeckten,
+ * entsättigten Look — wird pro Frame aus dem Spielzustand gesetzt. */
+let PLAN_LOOK = false;
 function resize(){ cv.width = innerWidth * devicePixelRatio; cv.height = innerHeight * devicePixelRatio;
   cv.style.width = innerWidth + "px"; cv.style.height = innerHeight + "px";
   /* Ein Resize setzt den Kontext zurück — die Glättungsqualität danach neu setzen. */
@@ -2745,7 +2748,8 @@ function drawAmbient(now) {
   ROUTES.carLines.slice(0, 8).forEach((line, i) => {
     if (!AMBIENT.cars.length || line.length < 2) return;
     const n = line.length;
-    const speed = 0.35 + i * 0.04;         // Kacheln pro Sekunde
+    /* DDR-Optik: der Verkehr zuckelt — Trabi-Tempo statt Berufsverkehr. */
+    const speed = (0.35 + i * 0.04) * (PLAN_LOOK ? .55 : 1);
     const luecke = 5;                       // Abstand zwischen Despawn und neuem Spawn
     const period = n - 1 + luecke;
     /* Zwei versetzte Autos pro Straßenzug — dichterer Verkehr. */
@@ -2767,6 +2771,19 @@ function drawAmbient(now) {
     const [sx, sy] = iso(a.x + (b.x - a.x) * f, a.y + (b.y - a.y) * f);
     const [ax] = iso(a.x, a.y), [bx] = iso(b.x, b.y);
     shadow(sx, sy + TH / 2 + 3, 12, 5);
+    /* DDR-Optik: Blechfarben statt Buntlack, dazu eine Zweitakt-Abgasfahne. */
+    if (PLAN_LOOK) {
+      cx.filter = "saturate(.35) sepia(.25) brightness(.92)";
+      cx.fillStyle = "#8d919b";
+      for (let a2 = 0; a2 < 2; a2++) {
+        const k2 = ((now / 400 + a2 * .5 + i) % 1 + 1) % 1;
+        cx.globalAlpha = (1 - k2) * .3;
+        cx.beginPath();
+        cx.arc(sx + (bx > ax ? -13 : 13) - (bx > ax ? 1 : -1) * k2 * 9, sy + TH / 2 - 6 - k2 * 5, 2 + k2 * 3, 0, Math.PI * 2);
+        cx.fill();
+      }
+      cx.globalAlpha = 1;
+    }
     if (bx > ax) {                          // Fahrt nach unten-rechts → spiegeln
       cx.save(); cx.translate(sx, 0); cx.scale(-1, 1);
       cx.drawImage(spr, -14, sy + TH / 2 - 20, 28, 28);
@@ -2774,6 +2791,7 @@ function drawAmbient(now) {
     } else {
       cx.drawImage(spr, sx - 14, sy + TH / 2 - 20, 28, 28);
     }
+    cx.filter = "none";
     }
   });
   /* Fußgänger: kleine Pendelwege auf den Straßenzügen (Bürgersteig-Ersatz) */
@@ -2847,8 +2865,11 @@ function drawClouds(now) {
     /* Parallax: näher an der Kamera als der Boden — wandert beim Schwenken mit. */
     const pxo = cam.x * .22 / cam.z, pyo = cam.y * .22 / cam.z;
     const h = cl.w / 2;
-    cx.globalAlpha = cl.alpha;
+    /* DDR-Optik: graue, tiefer hängende Wolkendecke statt Schäfchenwolken. */
+    if (PLAN_LOOK) cx.filter = "brightness(.7) saturate(.4)";
+    cx.globalAlpha = PLAN_LOOK ? Math.min(1, cl.alpha + .18) : cl.alpha;
     cx.drawImage(cl.puff, wx - cl.w / 2 + pxo, wy - h / 2 + pyo, cl.w, h);
+    cx.filter = "none";
     cx.globalAlpha = 1;
   }
 }
@@ -2868,6 +2889,18 @@ function drawAtmosphere() {
     vig.addColorStop(0, "rgba(4,8,16,0)");
     vig.addColorStop(1, "rgba(4,8,16,.32)");
     ATMO = { haze, vig }; ATMO_KEY = key;
+  }
+  /* DDR-Optik: kräftig entsättigen (Saturation-Blend erhält die Helligkeit)
+   * plus ein graubrauner Schleier — Ostberliner November statt Südsee. */
+  if (PLAN_LOOK) {
+    cx.globalCompositeOperation = "saturation";
+    cx.globalAlpha = .55;
+    cx.fillStyle = "hsl(220,10%,60%)";
+    cx.fillRect(0, 0, innerWidth, innerHeight);
+    cx.globalCompositeOperation = "source-over";
+    cx.globalAlpha = 1;
+    cx.fillStyle = "rgba(122,116,102,.10)";
+    cx.fillRect(0, 0, innerWidth, innerHeight);
   }
   cx.fillStyle = ATMO.haze; cx.fillRect(0, 0, innerWidth, innerHeight);
   cx.fillStyle = ATMO.vig;  cx.fillRect(0, 0, innerWidth, innerHeight);
@@ -2936,6 +2969,7 @@ function drawTrucks(now) {
     const [ax] = iso(a.x, a.y), [bx] = iso(b.x, b.y);
     cx.fillStyle = "rgba(0,0,0,.22)";
     cx.beginPath(); cx.ellipse(sx, sy + TH / 2 + 3, 13, 5, 0, 0, Math.PI * 2); cx.fill();
+    if (PLAN_LOOK) cx.filter = "saturate(.35) sepia(.25) brightness(.92)";
     if (bx > ax) {
       cx.save(); cx.translate(sx, 0); cx.scale(-1, 1);
       cx.drawImage(TRUCKSPR, -15, sy + TH / 2 - 22, 30, 30);
@@ -2943,6 +2977,7 @@ function drawTrucks(now) {
     } else {
       cx.drawImage(TRUCKSPR, sx - 15, sy + TH / 2 - 22, 30, 30);
     }
+    cx.filter = "none";
     if (lkw.phase === "laden") {
       /* Anlieferung: eine kleine Kiste hüpft neben dem LKW. */
       const hop = Math.abs(Math.sin(now / 220)) * 5;
@@ -2981,12 +3016,14 @@ const GLOW = (() => {
 const RAUCHER = new Set(["mine", "stahlwerk", "raffinerie", "ewerk", "ziegelei", "betonwerk",
   "chipfabrik", "dieselwerk", "autowerk", "munitionsfabrik", "panzerwerk", "waffenschmiede", "oelpumpe"]);
 function drawRauch(sx, topY, seed, now) {
-  for (let j = 0; j < 3; j++) {
-    const k = ((now / 1000 * .45 + seed * .37 + j / 3) % 1 + 1) % 1;
-    cx.globalAlpha = (1 - k) * .3;
-    cx.fillStyle = "#c3c9d4";
+  /* DDR-Optik: dichterer, dunklerer Qualm — Braunkohle statt Fernwärme. */
+  const n = PLAN_LOOK ? 5 : 3, deck = PLAN_LOOK ? .45 : .3;
+  cx.fillStyle = PLAN_LOOK ? "#6f747d" : "#c3c9d4";
+  for (let j = 0; j < n; j++) {
+    const k = ((now / 1000 * .45 + seed * .37 + j / n) % 1 + 1) % 1;
+    cx.globalAlpha = (1 - k) * deck;
     cx.beginPath();
-    cx.arc(sx + 8 + Math.sin(seed + j + k * 4) * 3, topY + 8 - k * 30, 2.5 + k * 6, 0, Math.PI * 2);
+    cx.arc(sx + 8 + Math.sin(seed + j + k * 4) * 3, topY + 8 - k * (PLAN_LOOK ? 38 : 30), 2.5 + k * (PLAN_LOOK ? 8 : 6), 0, Math.PI * 2);
     cx.fill();
   }
   cx.globalAlpha = 1;
@@ -3139,6 +3176,7 @@ function draw() {
   if (!st) return;
   /* Moduswechsel bringt eine neue Spielfläche mit — Straßen- und Ufer-Cache
    * müssen dann neu aufgebaut werden. */
+  PLAN_LOOK = st.mode === "plan";
   const mapKey = st.mode + ":" + st.started;
   if (draw.mapKey !== mapKey) { draw.mapKey = mapKey; ROUTES = null; SHORE = null; }
   if (!ROUTES) { ROUTES = buildRoutes(st.map); SHORE = buildShore(st.map); }
