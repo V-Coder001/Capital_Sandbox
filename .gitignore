@@ -148,3 +148,6 @@ vite.config.ts.timestamp-*
 # Alter, gepackter Deployment-Schnappschuss — die Quelldateien liegen ohnehin
 # direkt im Repo, das hier ist nur eine 21-MB-Dopplung
 deploy-bundle.tar.gz
+
+# Eingegangene Bugreports (Nutzerdaten + Admin-Schluessel) — bleiben lokal
+bugreports/

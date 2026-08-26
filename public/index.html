@@ -380,6 +380,23 @@ input,select{background:var(--panel2);border:1px solid var(--line);border-radius
   transform:translateX(-100%);animation:teaserGlanz 6s ease-in-out infinite}
 @keyframes teaserGlanz{0%,55%{transform:translateX(-100%)}100%{transform:translateX(100%)}}
 @media(max-width:560px){#kartellTeaser img{height:88px}}
+/* Bugreport-Dialog */
+#bugDialog{position:fixed;inset:0;z-index:220;background:rgba(4,8,16,.62);display:grid;place-items:center}
+#bugDialog[hidden]{display:none}
+.bugcard{width:min(440px,92vw);background:#0f1728;border:1px solid var(--line);border-radius:14px;
+  padding:20px;box-shadow:0 18px 50px rgba(0,0,0,.5)}
+.bugcard h3{margin:0 0 4px;font-size:16px}
+.bugsub{color:var(--dim);font-size:12px;margin:0 0 12px}
+#bugText{width:100%;box-sizing:border-box;background:#0b1220;border:1px solid var(--line);border-radius:9px;
+  color:var(--text);font-family:var(--font);font-size:13px;padding:10px;resize:vertical}
+.bugopt{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--dim);margin-top:10px;cursor:pointer}
+.bugfile input{font-size:11px}
+.bugrow{display:flex;gap:10px;justify-content:flex-end;margin-top:14px}
+.bugrow button{border-radius:9px;border:1px solid var(--line);background:none;color:var(--dim);
+  padding:8px 14px;font-family:var(--font);font-size:12px;font-weight:600;cursor:pointer}
+.bugrow button.primary{background:rgba(56,189,248,.16);border-color:rgba(56,189,248,.45);color:var(--accent)}
+.bugrow button:hover{color:var(--text)}
+#bugStatus{font-size:12px;margin:10px 0 0;min-height:14px;color:var(--dim)}
 /* ---- Tonsteuerung ----
  * Der Regler war ein unformatiertes <input type=range> mit accent-color: 56 px
  * breit, ohne sichtbare Füllstandsanzeige und mit einem Griff, der auf dem
@@ -1009,6 +1026,9 @@ td:first-child{font-family:var(--font)}
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="7"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>
       </button>
       <button id="langBtn" data-lang-toggle title="Sprache / Language" style="background:none;border:1px solid var(--line);border-radius:7px;color:var(--dim);height:24px;cursor:pointer;padding:0 7px;font:600 10px/1 var(--font);letter-spacing:.06em">DE</button>
+      <button id="bugBtn" title="Fehler melden" aria-label="Fehler melden" style="background:none;border:1px solid var(--line);border-radius:7px;color:var(--dim);width:24px;height:24px;cursor:pointer;display:grid;place-items:center;padding:0">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="8" y="6" width="8" height="12" rx="4"/><path d="M12 6V3M8 10H4M8 15H5M16 10h4M16 15h3M9 6l-2-2M15 6l2-2"/></svg>
+      </button>
       <button id="help" title="Tutorial erneut ansehen" style="background:none;border:1px solid var(--line);border-radius:7px;color:var(--dim);width:24px;height:24px;cursor:pointer;font-size:13px">?</button>
     </div>
   </div>
@@ -1185,6 +1205,25 @@ td:first-child{font-family:var(--font)}
 </div>
 
 <div id="tilemenu"></div>
+
+<!-- Bugreport: Beschreibung plus optionaler Screenshot (automatisch von der
+     Karte oder eigene Datei). Landet per POST /api/bugreport beim Server. -->
+<div id="bugDialog" hidden>
+  <div class="bugcard">
+    <h3>Fehler melden</h3>
+    <p class="bugsub">Beschreibe kurz, was schiefgelaufen ist — je genauer, desto schneller lässt es sich beheben.</p>
+    <textarea id="bugText" maxlength="4000" rows="5" placeholder="Was ist passiert? Was hättest du erwartet?"></textarea>
+    <label class="bugopt"><input type="checkbox" id="bugShot" checked> Screenshot der Karte anhängen</label>
+    <label class="bugopt bugfile">Eigenes Bild stattdessen:
+      <input type="file" id="bugFile" accept="image/png,image/jpeg,image/webp"></label>
+    <div class="bugrow">
+      <button type="button" id="bugAbbr">Abbrechen</button>
+      <button type="button" id="bugSend" class="primary">Melden</button>
+    </div>
+    <p id="bugStatus"></p>
+  </div>
+</div>
+
 <div id="toasts"></div>
 <div id="win"><div class="wincard">
   <div class="winhead">
@@ -1718,6 +1757,14 @@ const EN = {
   "Neue Runde starten": "Start a new round", "Einer Runde beitreten": "Join a round",
   "Tutorial spielen": "Play the tutorial", "Runde erstellen": "Create round",
   "Neuer Spielmodus": "New game mode",
+  /* Bugreport */
+  "Fehler melden": "Report a bug",
+  "Beschreibe kurz, was schiefgelaufen ist — je genauer, desto schneller lässt es sich beheben.":
+    "Briefly describe what went wrong — the more precise, the faster it can be fixed.",
+  "Was ist passiert? Was hättest du erwartet?": "What happened? What did you expect?",
+  "Screenshot der Karte anhängen": "Attach a screenshot of the map",
+  "Eigenes Bild stattdessen:": "Or upload your own image:",
+  "Abbrechen": "Cancel", "Melden": "Report",
   "Runde beitreten": "Join round", "Runde starten": "Start round", "Kopieren": "Copy",
   "Firmenname": "Company name", "Mitspieler einladen": "Invite players",
   "Gleiches Netzwerk": "Same network", "Von woanders": "From elsewhere",
@@ -3306,6 +3353,50 @@ function zuMeinenGebaeuden() {
   toast(`${bname(ziel.btype)} — ${findIdx % meine.length || meine.length}/${meine.length}`);
 }
 document.getElementById("findBtn").addEventListener("click", zuMeinenGebaeuden);
+
+/* ---------- Bugreport ---------- */
+const bugDialog = document.getElementById("bugDialog");
+const bugStatus = document.getElementById("bugStatus");
+document.getElementById("bugBtn").addEventListener("click", () => {
+  bugDialog.hidden = false;
+  bugStatus.textContent = "";
+  document.getElementById("bugText").focus();
+});
+document.getElementById("bugAbbr").addEventListener("click", () => bugDialog.hidden = true);
+bugDialog.addEventListener("click", e => { if (e.target === bugDialog) bugDialog.hidden = true; });
+document.getElementById("bugSend").addEventListener("click", async () => {
+  const text = document.getElementById("bugText").value.trim();
+  if (!text) { bugStatus.textContent = "Bitte beschreibe den Fehler kurz."; return; }
+  const knopf = document.getElementById("bugSend");
+  knopf.disabled = true; bugStatus.textContent = "Sende …";
+  let image = null;
+  try {
+    const datei = document.getElementById("bugFile").files[0];
+    if (datei && datei.size < 6_000_000) {
+      image = await new Promise((res, rej) => {
+        const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(datei);
+      });
+    } else if (document.getElementById("bugShot").checked) {
+      /* Screenshot der Spielkarte direkt vom Canvas — kein Browser-Dialog nötig. */
+      image = cv.toDataURL("image/jpeg", .7);
+    }
+  } catch { image = null; }
+  try {
+    const name = store.get()?.state?.players?.[store.get()?.myId]?.name || "";
+    const antwort = await fetch("/api/bugreport", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text, image, name })
+    });
+    if (!antwort.ok) throw new Error();
+    bugDialog.hidden = true;
+    document.getElementById("bugText").value = "";
+    document.getElementById("bugFile").value = "";
+    toast("Danke! Dein Fehlerbericht wurde übermittelt.");
+  } catch {
+    bugStatus.textContent = "Senden fehlgeschlagen — bitte später erneut versuchen.";
+  }
+  knopf.disabled = false;
+});
 addEventListener("keydown", e => {
   if (e.key !== "f" && e.key !== "F") return;
   if (/INPUT|SELECT|TEXTAREA/.test(document.activeElement?.tagName)) return;

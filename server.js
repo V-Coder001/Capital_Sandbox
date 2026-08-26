@@ -6,6 +6,7 @@
 import express from "express";
 import http from "http";
 import os from "os";
+import fs from "fs";
 import crypto from "crypto";
 import { Server } from "socket.io";
 import path from "path";
@@ -34,6 +35,68 @@ const BOOT_ID = crypto.randomUUID();
 app.get("/api/invite", (_req, res) => {
   res.json({ urls: [ ...(publicUrl ? [publicUrl] : []), ...lanUrls(PORT) ], bootId: BOOT_ID });
 });
+/* ---------- Bugreports ----------
+ * Spieler melden Fehler mit Beschreibung und optionalem Screenshot; die
+ * Meldungen landen als JSON-Zeilen plus Bilddateien im Ordner bugreports/.
+ * Die Admin-Ansicht unter /bugs ist mit einem Schlüssel geschützt, der beim
+ * ersten Start erzeugt und in bugreports/.key abgelegt wird (überschreibbar
+ * per Umgebungsvariable BUGS_KEY). Der fertige Link steht im Server-Log. */
+const BUGDIR = path.join(__dirname, "bugreports");
+fs.mkdirSync(BUGDIR, { recursive: true });
+let BUGKEY = process.env.BUGS_KEY || "";
+if (!BUGKEY) {
+  try { BUGKEY = fs.readFileSync(path.join(BUGDIR, ".key"), "utf8").trim(); } catch {}
+  if (!BUGKEY) { BUGKEY = crypto.randomBytes(6).toString("hex"); fs.writeFileSync(path.join(BUGDIR, ".key"), BUGKEY); }
+}
+app.post("/api/bugreport", express.json({ limit: "8mb" }), (req, res) => {
+  const text = String(req.body?.text || "").slice(0, 4000).trim();
+  if (!text) return res.status(400).json({ error: "Beschreibung fehlt" });
+  const id = Date.now() + "-" + crypto.randomBytes(3).toString("hex");
+  let hatBild = false;
+  const bild = req.body?.image;
+  if (typeof bild === "string") {
+    const m = bild.match(/^data:image\/(png|jpeg|webp);base64,([A-Za-z0-9+/=]+)$/);
+    if (m && m[2].length < 8_000_000) {
+      fs.writeFileSync(path.join(BUGDIR, id + "." + (m[1] === "jpeg" ? "jpg" : m[1])), Buffer.from(m[2], "base64"));
+      hatBild = true;
+    }
+  }
+  const eintrag = { id, ts: new Date().toISOString(), name: String(req.body?.name || "").slice(0, 40), text, bild: hatBild };
+  fs.appendFileSync(path.join(BUGDIR, "reports.jsonl"), JSON.stringify(eintrag) + "\n");
+  res.json({ ok: true });
+});
+const bugAuth = (req, res) => {
+  if (req.query.key !== BUGKEY) { res.status(403).send("Zugriff verweigert — ?key=… fehlt oder ist falsch."); return false; }
+  return true;
+};
+app.get("/bugs", (req, res) => {
+  if (!bugAuth(req, res)) return;
+  let zeilen = [];
+  try {
+    zeilen = fs.readFileSync(path.join(BUGDIR, "reports.jsonl"), "utf8").trim().split("\n").filter(Boolean).map(z => JSON.parse(z));
+  } catch {}
+  const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+  res.send(`<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Bugreports — Capital Sandbox</title>
+<style>body{font-family:system-ui;background:#0b1220;color:#e3e9f4;margin:0;padding:28px;max-width:900px}
+h1{font-size:20px}.r{background:#111a2c;border:1px solid #22304a;border-radius:12px;padding:16px;margin:14px 0}
+.meta{color:#8ea0bd;font-size:12px;margin-bottom:8px}img{max-width:100%;border-radius:8px;margin-top:10px;border:1px solid #22304a}
+p{white-space:pre-wrap;margin:0;line-height:1.5}</style>
+<h1>Bugreports (${zeilen.length})</h1>` +
+    (zeilen.reverse().map(r =>
+      `<div class="r"><div class="meta">${esc(r.ts)} · ${esc(r.name || "anonym")}</div><p>${esc(r.text)}</p>` +
+      (r.bild ? `<img src="/bugs/img/${esc(r.id)}?key=${encodeURIComponent(BUGKEY)}" loading="lazy">` : "") + `</div>`
+    ).join("") || "<p>Noch keine Meldungen.</p>"));
+});
+app.get("/bugs/img/:id", (req, res) => {
+  if (!bugAuth(req, res)) return;
+  const id = String(req.params.id).replace(/[^0-9a-f-]/g, "");
+  for (const ext of ["png", "jpg", "webp"]) {
+    const f = path.join(BUGDIR, id + "." + ext);
+    if (fs.existsSync(f)) return res.sendFile(f);
+  }
+  res.status(404).end();
+});
+
 const httpServer = http.createServer(app);
 const io = new Server(httpServer);
 
@@ -2531,6 +2594,7 @@ const PORT = process.env.PORT || 3000;
 httpServer.listen(PORT, async () => {
   console.log(`Capital Sandbox Server → http://localhost:${PORT}`);
   for (const u of lanUrls(PORT)) console.log(`  Einladungslink (LAN): ${u}`);
+  console.log(`  Bugreports (Admin): http://localhost:${PORT}/bugs?key=${BUGKEY}`);
   /* Früher spannte "--share" hier einen localtunnel auf. Das Paket ist raus:
    * es schleppte zwei hochbewertete Sicherheitslücken (axios) mit und wurde
    * überflüssig, seit es eine eigene öffentliche Adresse gibt. */
