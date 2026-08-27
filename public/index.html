@@ -401,6 +401,42 @@ input,select{background:var(--panel2);border:1px solid var(--line);border-radius
 #smAngebote button[data-smcancel]{background:none;border:1px solid var(--line);border-radius:8px;
   color:var(--dim);padding:5px 11px;font:600 11px var(--font);cursor:pointer;transition:all .15s}
 #smAngebote button[data-smcancel]:hover{color:#fb7185;border-color:rgba(251,113,133,.5)}
+/* ---- Renntag-Overlay ---- */
+#rennOverlay{position:fixed;inset:0;z-index:210;background:rgba(3,6,12,.72);display:grid;place-items:center;backdrop-filter:blur(3px)}
+#rennOverlay[hidden]{display:none}
+.renncard{width:min(780px,95vw);max-height:92vh;overflow:auto;background:linear-gradient(180deg,#101a2c,#0b1220);
+  border:1px solid rgba(56,189,248,.35);border-radius:16px;padding:18px 20px;box-shadow:0 24px 70px rgba(0,0,0,.6)}
+.rennhead{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+.rennhead h2{margin:0;font-size:18px;letter-spacing:.03em}
+.rennuhr{font-family:var(--mono,ui-monospace);font-size:15px;font-weight:700;color:#fbbf24;
+  background:#0b1220;border:1px solid var(--line);border-radius:8px;padding:4px 10px}
+#rennMini{background:none;border:1px solid var(--line);border-radius:7px;color:var(--dim);width:26px;height:26px;cursor:pointer}
+#rennMini:hover{color:var(--text)}
+#rennChip{position:fixed;right:16px;bottom:64px;z-index:205;background:linear-gradient(135deg,#1e3a5a,#164060);
+  border:1px solid rgba(56,189,248,.5);border-radius:20px;color:var(--accent);font:600 12px var(--font);
+  padding:8px 14px;cursor:pointer;box-shadow:0 6px 20px rgba(0,0,0,.4);animation:rennPuls 2s infinite}
+@keyframes rennPuls{0%,100%{box-shadow:0 6px 20px rgba(0,0,0,.4)}50%{box-shadow:0 6px 24px rgba(56,189,248,.35)}}
+.renngrid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media(max-width:640px){.renngrid{grid-template-columns:1fr}}
+.rennbox{background:#0d1524;border:1px solid var(--line);border-radius:11px;padding:11px}
+.rennbox .lbl{font-size:10.5px;font-weight:700;letter-spacing:.09em;color:#5f7292;text-transform:uppercase;margin-bottom:7px}
+.rennteil{display:flex;align-items:center;gap:8px;padding:4px 0;font-size:12.5px}
+.rennteil .quote{margin-left:auto;font-family:var(--mono,ui-monospace);font-weight:700;color:#fbbf24}
+.rennfarb{width:10px;height:10px;border-radius:3px;flex:none}
+#rennStrecke{display:block;width:100%;border-radius:11px;border:1px solid var(--line);background:#0a1120}
+.rennstand{display:flex;align-items:center;gap:8px;padding:3px 0;font-size:12.5px}
+.rennstand .dist{margin-left:auto;font-family:var(--mono,ui-monospace);color:var(--dim)}
+.rennpodium{display:flex;gap:12px;justify-content:center;align-items:flex-end;margin:14px 0 8px}
+.rennpodium .stufe{text-align:center;flex:1;max-width:180px}
+.rennpodium .sockel{background:linear-gradient(180deg,#1e3a5a,#122540);border:1px solid var(--line);border-radius:10px 10px 0 0;
+  display:flex;flex-direction:column;justify-content:flex-start;padding:8px 6px}
+.rennform{display:flex;gap:7px;flex-wrap:wrap;align-items:center;margin-top:8px}
+.rennform select,.rennform input{background:#0b1220;border:1px solid var(--line);border-radius:8px;color:var(--text);
+  font-family:var(--font);font-size:12px;padding:7px 8px}
+.rennform input{width:90px}
+.rennform button{border-radius:8px;border:1px solid rgba(56,189,248,.45);background:rgba(56,189,248,.14);color:var(--accent);
+  font:600 12px var(--font);padding:7px 13px;cursor:pointer}
+.rennform button:hover{background:rgba(56,189,248,.24)}
 /* ---- Tonsteuerung ----
  * Der Regler war ein unformatiertes <input type=range> mit accent-color: 56 px
  * breit, ohne sichtbare Füllstandsanzeige und mit einem Griff, der auf dem
@@ -1396,6 +1432,22 @@ td:first-child{font-family:var(--font)}
     <p id="bugStatus"></p>
   </div>
 </div>
+
+<!-- Renntag-Overlay: Anmeldung/Wetten, Live-Rennen mit Strecke, Siegerehrung.
+     Für alle Spieler sichtbar; minimierbar auf einen Chip unten rechts. -->
+<div id="rennOverlay" hidden>
+  <div class="renncard">
+    <div class="rennhead">
+      <h2 id="rennTitel">🏁 Renntag</h2>
+      <div style="display:flex;gap:10px;align-items:center">
+        <span id="rennUhr" class="rennuhr">—</span>
+        <button id="rennMini" type="button" title="Minimieren">▁</button>
+      </div>
+    </div>
+    <div id="rennBody"></div>
+  </div>
+</div>
+<button id="rennChip" type="button" hidden>🏁 <span id="rennChipText">Rennen</span></button>
 
 <div id="toasts"></div>
 <div id="win"><div class="wincard">
@@ -3443,6 +3495,7 @@ function draw() {
   drawTrucks(now);
   drawClouds(now);
   drawAtmosphere();
+  rennStreckeZeichnen();
 }
 requestAnimationFrame(draw);
 
@@ -4223,6 +4276,8 @@ function motorsportRendern(state, me, myId) {
   if (!staelle.length) { box.innerHTML = `<div class="note">Du betreibst keinen Rennstall.</div>`; return; }
 
   const farbe = state.players[myId]?.color || "#7ad";
+  /* Aufgeklappte Fahrzeugakten über den Sekunden-Rerender retten. */
+  const akteOffen = new Set([...box.querySelectorAll("details[data-akte][open]")].map(d => d.dataset.akte));
   const TUN = meta.tuning || {}, TMAX = meta.tuningMax || 3;
   const RAW = meta.raceStats || {};
   const fahrer = state.fahrer || [];
@@ -4296,6 +4351,26 @@ function motorsportRendern(state, me, myId) {
           </div>
         </div>
         <div class="sec" style="margin-top:8px">Entwicklung</div>${tuningKnoepfe}
+        <div class="sec" style="margin-top:8px">Fahrzeugakte</div>
+        <div style="font-size:11.5px;opacity:.85;display:flex;gap:14px;flex-wrap:wrap">
+          <span><b>${(a.km || 0).toLocaleString("de-DE")}</b> km</span>
+          <span>Kauf: <b>${fmt(a.kaufpreis || 0)}</b></span>
+          <span>Tuning: <b>${fmt(a.tuningAusgaben || 0)}</b></span>
+          <span>Investiert: <b>${fmt((a.kaufpreis || 0) + (a.tuningAusgaben || 0))}</b></span>
+        </div>
+        <details data-akte="${a.id}" ${akteOffen.has(String(a.id)) ? "open" : ""} style="margin-top:5px">
+          <summary class="note" style="cursor:pointer">Verlauf (${(a.historie || []).length})</summary>
+          ${(a.historie || []).slice().reverse().map(h =>
+            `<div style="display:flex;justify-content:space-between;font-size:11px;opacity:.8;padding:2px 0">
+               <span>${h.text}</span><span>${h.amt ? fmt(h.amt) : ""}</span></div>`).join("")}
+        </details>
+        ${state.rennen?.phase === "anmeldung" ? (() => {
+          const gemeldet = state.rennen.teilnehmer.some(x2 => x2.autoId === a.id);
+          const startklar = a.fahrerId && a.zustand >= 25;
+          return `<button class="buyb" style="margin-top:8px;width:100%" data-anmelden="${a.id}" data-x="${a.x}" data-y="${a.y}"
+            ${gemeldet || !startklar ? "disabled" : ""}>
+            ${gemeldet ? "✓ Zum Rennen gemeldet" : startklar ? `Zum Rennen melden (${fmt(state.rennen.nenngeld || 1500)} Nenngeld)` : "Nicht startklar (Fahrer + Zustand ≥ 25 % nötig)"}</button>`;
+        })() : ""}
       </div>`;
   };
 
@@ -4366,6 +4441,8 @@ function motorsportRendern(state, me, myId) {
 
   box.querySelectorAll("[data-tune]").forEach(b => b.addEventListener("click", () =>
     act("stallTunen", { x: +b.dataset.x, y: +b.dataset.y, autoId: +b.dataset.auto, bereich: b.dataset.tune })));
+  box.querySelectorAll("[data-anmelden]").forEach(b => b.addEventListener("click", () =>
+    act("rennenAnmelden", { x: +b.dataset.x, y: +b.dataset.y, autoId: +b.dataset.anmelden })));
   box.querySelectorAll("[data-heuer]").forEach(b => b.addEventListener("click", () =>
     act("fahrerAnheuern", { fahrerId: +b.dataset.heuer })));
   box.querySelectorAll("[data-feuer]").forEach(b => b.addEventListener("click", () =>
@@ -4379,6 +4456,198 @@ function motorsportRendern(state, me, myId) {
     if (bisher) act("fahrerZuweisen", { fahrerId: bisher.id, autoId: null });
   }));
 }
+
+/* ---------- Renntag ----------
+ * Ein Overlay für alle: Anmeldung/Wetten/Sponsoring, dann das Live-Rennen
+ * mit animierter Strecke, dann die Siegerehrung. Der Server schickt jede
+ * Sekunde neue Distanzen; die Streckengrafik interpoliert dazwischen, damit
+ * die Wagen flüssig fahren statt zu springen. */
+let rennMinimiert = false;
+const RENN_ANIM = new Map();     // autoId -> { shown, ziel }
+function rennenRendern(state, myId) {
+  const ov = document.getElementById("rennOverlay"), chip = document.getElementById("rennChip");
+  const r = state.rennen;
+  if (!r) {
+    if (!ov.hidden) ov.hidden = true;
+    chip.hidden = true; rennMinimiert = false; RENN_ANIM.clear();
+    rennenRendern.phase = null;
+    return;
+  }
+  /* Bei jedem Phasenwechsel wieder aufklappen — den Start will niemand verpassen. */
+  if (rennenRendern.phase !== r.phase) { rennenRendern.phase = r.phase; rennMinimiert = false; rennenRendern.sig = ""; }
+  ov.hidden = rennMinimiert;
+  chip.hidden = !rennMinimiert;
+  document.getElementById("rennChipText").textContent =
+    r.phase === "anmeldung" ? `Anmeldung ${r.rest}s` : r.phase === "laeuft" ? "RENNEN LÄUFT" : "Siegerehrung";
+  if (rennMinimiert) return;
+  document.getElementById("rennTitel").textContent =
+    r.phase === "anmeldung" ? "🏁 Renntag — Anmeldung & Wetten" :
+    r.phase === "laeuft" ? "🏁 Das Rennen läuft" : "🏁 Siegerehrung";
+  document.getElementById("rennUhr").textContent =
+    r.phase === "ergebnis" ? "ZIEL" : `${Math.floor(r.rest / 60)}:${String(r.rest % 60).padStart(2, "0")}`;
+  const body = document.getElementById("rennBody");
+
+  if (r.phase === "anmeldung") {
+    /* Nur neu bauen, wenn sich strukturell etwas ändert und niemand tippt —
+     * sonst frisst der Sekunden-Rerender die Eingaben. */
+    const sig = "a" + r.teilnehmer.length + ":" + r.pool + ":" + r.sponsoren.length + ":" + JSON.stringify(r.quoten);
+    const tippt = body.contains(document.activeElement) && /INPUT|SELECT/.test(document.activeElement?.tagName);
+    if (rennenRendern.sig !== sig && !tippt) {
+      rennenRendern.sig = sig;
+      const teilOpts = r.teilnehmer.filter(t2 => t2.ownerId !== myId)
+        .map(t2 => `<option value="${t2.autoId}">${t2.name} (${t2.team})</option>`).join("");
+      const teamIds = [...new Set(r.teilnehmer.map(t2 => t2.ownerId))].filter(id2 => id2 !== myId);
+      const teamOpts = teamIds.map(id2 => `<option value="${id2}">${state.players[id2]?.name || "?"}</option>`).join("");
+      body.innerHTML = `
+        <div class="renngrid">
+          <div class="rennbox">
+            <div class="lbl">Startfeld (${r.teilnehmer.length}/8) · Quoten live</div>
+            ${r.teilnehmer.map(t2 => `<div class="rennteil">
+                <span class="rennfarb" style="background:${t2.farbe}"></span>
+                <span><b>${t2.name}</b> · ${t2.team}<br><span class="meta">Fahrer: ${t2.fahrer}</span></span>
+                <span class="quote">${r.quoten[t2.autoId] ? r.quoten[t2.autoId].toFixed(2) : "—"}</span>
+              </div>`).join("") || `<p class="note">Noch kein Wagen gemeldet. Rennställe melden über das Motorsport-Panel.</p>`}
+            <p class="note" style="margin:8px 0 0">Preistopf aktuell: <b>${fmt(r.topf)}</b> · Wettpool: <b>${fmt(r.pool)}</b></p>
+          </div>
+          <div class="rennbox">
+            <div class="lbl">Wettschein · Quoten nach Pool (Totalisator)</div>
+            ${teilOpts ? `<div class="rennform">
+              <select id="wettAuto">${teilOpts}</select>
+              <input id="wettBetrag" type="number" min="100" max="20000" placeholder="Einsatz $">
+              <button id="wettSenden">Wetten</button>
+            </div>
+            <p class="note" style="margin-top:6px">Der ganze Pool (−10 % für den Preistopf) geht an die Siegerwetten — die Quote steht erst mit dem Start fest.</p>`
+            : `<p class="note">Keine fremden Wagen zum Wetten gemeldet.</p>`}
+            <div class="lbl" style="margin-top:12px">Sponsoring</div>
+            ${teamOpts ? `<div class="rennform">
+              <select id="sponsTeam">${teamOpts}</select>
+              <input id="sponsBetrag" type="number" min="500" max="50000" placeholder="Summe $">
+              <button id="sponsSenden">Sponsern</button>
+            </div>
+            <p class="note" style="margin-top:6px">Das Geld geht sofort an den Rennstall — dafür bekommst du bis zu 50 % seines Preisgeldes (pro rata mit anderen Sponsoren).</p>`
+            : `<p class="note">Kein fremdes Team gemeldet.</p>`}
+            ${r.sponsoren.length ? `<div class="lbl" style="margin-top:12px">Sponsoren</div>` +
+              r.sponsoren.map(s => `<div class="rennteil"><span>${s.name} → <b>${s.team}</b></span><span class="quote">${fmt(s.betrag)}</span></div>`).join("") : ""}
+          </div>
+        </div>
+        <p id="rennStatus" class="note" style="margin:10px 0 0;min-height:14px"></p>`;
+      document.getElementById("wettSenden")?.addEventListener("click", () => {
+        socket.emit("wetteSetzen", { autoId: +document.getElementById("wettAuto").value, betrag: +document.getElementById("wettBetrag").value },
+          res => { document.getElementById("rennStatus").textContent = res?.error || "Wette platziert — viel Glück!"; });
+      });
+      document.getElementById("sponsSenden")?.addEventListener("click", () => {
+        socket.emit("sponsern", { teamId: document.getElementById("sponsTeam").value, betrag: +document.getElementById("sponsBetrag").value },
+          res => { document.getElementById("rennStatus").textContent = res?.error || "Sponsorvertrag steht!"; });
+      });
+    }
+  } else if (r.phase === "laeuft") {
+    if (rennenRendern.sig !== "live") {
+      rennenRendern.sig = "live";
+      body.innerHTML = `
+        <canvas id="rennStrecke" width="740" height="320"></canvas>
+        <div class="rennbox" style="margin-top:10px">
+          <div class="lbl">Zwischenstand</div>
+          <div id="rennStand"></div>
+          <p class="note" style="margin:8px 0 0">Preistopf: <b>${fmt(r.topf)}</b> · Wettpool: <b>${fmt(r.pool)}</b> — Auszahlung nach Zieldurchfahrt.</p>
+        </div>`;
+    }
+    for (const t2 of r.teilnehmer) {
+      const anim = RENN_ANIM.get(t2.autoId) || { shown: t2.dist, ziel: t2.dist };
+      anim.ziel = t2.dist;
+      RENN_ANIM.set(t2.autoId, anim);
+    }
+    const stand = [...r.teilnehmer].sort((a2, b2) => (a2.ausgefallen - b2.ausgefallen) || (b2.dist - a2.dist));
+    document.getElementById("rennStand").innerHTML = stand.map((t2, i) => `
+      <div class="rennstand" style="${t2.ausgefallen ? "opacity:.45" : ""}">
+        <b style="width:20px">${i + 1}.</b>
+        <span class="rennfarb" style="background:${t2.farbe}"></span>
+        <span>${t2.name} · <span class="meta">${t2.team} / ${t2.fahrer}</span>${t2.ausgefallen ? " 💥" : ""}</span>
+        <span class="dist">Runde ${Math.floor(t2.dist / r.runde) + 1} · ${t2.dist} m</span>
+      </div>`).join("");
+  } else if (r.phase === "ergebnis" && r.ergebnis) {
+    if (rennenRendern.sig !== "ende") {
+      rennenRendern.sig = "ende";
+      const medaille = ["🥇", "🥈", "🥉"];
+      const podium = r.ergebnis.slice(0, 3);
+      const reihenfolge = podium.length >= 3 ? [1, 0, 2] : podium.map((_, i) => i);
+      body.innerHTML = `
+        <div class="rennpodium">${reihenfolge.map(i => { const e = podium[i]; if (!e) return "";
+          const hoehe = [96, 128, 78][i] || 80;
+          return `<div class="stufe">
+            <div style="font-size:26px">${medaille[e.platz - 1] || ""}</div>
+            <div style="font-size:13px;margin:4px 0"><b>${e.name}</b><br><span class="meta">${e.team} · ${e.fahrer}</span></div>
+            <div class="sockel" style="height:${hoehe}px"><b style="font-size:18px">${e.platz}</b></div>
+          </div>`; }).join("")}</div>
+        <div class="rennbox">
+          <div class="lbl">Endstand · Preistopf ${fmt(r.topf)}</div>
+          ${r.ergebnis.map(e => `<div class="rennstand" style="${e.ausgefallen ? "opacity:.5" : ""}">
+            <b style="width:20px">${e.platz}.</b>
+            <span class="rennfarb" style="background:${e.farbe}"></span>
+            <span>${e.name} · <span class="meta">${e.team} / ${e.fahrer}</span>${e.ausgefallen ? " 💥 ausgefallen" : ""}</span>
+            <span class="dist">${e.dist} m</span>
+          </div>`).join("")}
+          <p class="note" style="margin:8px 0 0">Preisgelder, Sponsoranteile und Wettgewinne sind ausgezahlt — Details im Finanzlog.</p>
+        </div>`;
+    }
+  }
+}
+/* Streckengrafik: Oval mit Start-Ziel-Linie; läuft im Haupt-rAF-Loop und
+ * interpoliert die Distanzen zwischen zwei Server-Updates. */
+function rennStreckeZeichnen() {
+  const cvR = document.getElementById("rennStrecke");
+  if (!cvR || document.getElementById("rennOverlay").hidden) return;
+  const st = store.get()?.state, r = st?.rennen;
+  if (!r || r.phase !== "laeuft") return;
+  const g = cvR.getContext("2d");
+  const W = cvR.width, H = cvR.height, cxm = W / 2, cym = H / 2;
+  const rx = W * .40, ry = H * .34;
+  g.clearRect(0, 0, W, H);
+  /* Rasen, Bahn, Randsteine, Mittellinie */
+  g.fillStyle = "#0f2417"; g.fillRect(0, 0, W, H);
+  g.strokeStyle = "#2a2f36"; g.lineWidth = 46; g.beginPath(); g.ellipse(cxm, cym, rx, ry, 0, 0, Math.PI * 2); g.stroke();
+  g.strokeStyle = "#20242b"; g.lineWidth = 40; g.beginPath(); g.ellipse(cxm, cym, rx, ry, 0, 0, Math.PI * 2); g.stroke();
+  g.setLineDash([9, 11]); g.strokeStyle = "rgba(255,255,255,.35)"; g.lineWidth = 2;
+  g.beginPath(); g.ellipse(cxm, cym, rx, ry, 0, 0, Math.PI * 2); g.stroke(); g.setLineDash([]);
+  /* Start-Ziel: Zielflaggen-Muster rechts */
+  const sx0 = cxm + rx;
+  for (let i = 0; i < 5; i++) for (let j = 0; j < 2; j++) {
+    g.fillStyle = (i + j) % 2 ? "#e8ecf3" : "#12151a";
+    g.fillRect(sx0 - 20 + j * 10, cym - 25 + i * 10, 10, 10);
+  }
+  /* Wagen: pro Frame ein Stück Richtung Serverstand, seitlich leicht versetzt
+   * je Startnummer, damit sie nicht ineinander stehen. */
+  const teil = r.teilnehmer;
+  teil.forEach((t2, i) => {
+    const anim = RENN_ANIM.get(t2.autoId) || { shown: t2.dist, ziel: t2.dist };
+    anim.shown += (anim.ziel - anim.shown) * .08;
+    RENN_ANIM.set(t2.autoId, anim);
+    const u = (anim.shown % r.runde) / r.runde;
+    const wink = u * Math.PI * 2;
+    const spur = (i - (teil.length - 1) / 2) * 7;
+    const px2 = cxm + (rx + spur) * Math.cos(wink);
+    const py2 = cym + (ry + spur * ry / rx) * Math.sin(wink);
+    g.save();
+    g.translate(px2, py2);
+    g.rotate(wink + Math.PI / 2);
+    if (t2.ausgefallen) g.globalAlpha = .35;
+    g.fillStyle = "rgba(0,0,0,.4)"; g.fillRect(-5, -9, 10, 18);
+    g.fillStyle = t2.farbe; g.fillRect(-4, -8, 8, 16);
+    g.fillStyle = "rgba(255,255,255,.75)"; g.fillRect(-4, -8, 8, 3);
+    g.restore();
+    g.globalAlpha = 1;
+    g.font = "600 10px sans-serif"; g.textAlign = "center";
+    g.fillStyle = "rgba(230,238,250,.85)";
+    g.fillText(t2.name.replace(/^\S+ /, "#"), px2, py2 - 14);
+  });
+  /* Rundenanzeige des Führenden */
+  const erster = [...teil].sort((a2, b2) => b2.dist - a2.dist)[0];
+  if (erster) {
+    g.font = "700 13px sans-serif"; g.textAlign = "left"; g.fillStyle = "#fbbf24";
+    g.fillText(`Runde ${Math.floor(erster.dist / r.runde) + 1}`, 14, 22);
+  }
+}
+document.getElementById("rennMini").addEventListener("click", () => { rennMinimiert = true; render(store.get()); });
+document.getElementById("rennChip").addEventListener("click", () => { rennMinimiert = false; rennenRendern.sig = ""; render(store.get()); });
 
 /* ---------- Planbüro (Planwirtschafts-Modus) ---------- */
 function planRendern(state, myId) {
@@ -4527,6 +4796,7 @@ function render({ state, me, myId, chat, room }) {
   tutCheck(state, myId);
   kapitalmarktHinweis(state, myId);
   planRendern(state, myId);
+  rennenRendern(state, myId);
   motorsportRendern(state, me, myId);
   /* Tipp-Schutz: Panel nicht neu rendern, während man in einem seiner Felder tippt */
   const typingIn = el => el && el.contains(document.activeElement) &&
