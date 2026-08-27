@@ -4697,7 +4697,11 @@ function rennStreckeZeichnen() {
     RENN_ANIM.set(t2.autoId, anim);
     const u = (anim.shown % r.runde) / r.runde;
     const wink = u * Math.PI * 2;
-    const spur = (i - (teil.length - 1) / 2) * 8;
+    /* Spurabstand möglichst eine Wagenbreite — sonst verschmelzen zwei
+     * gleichauf liegende Wagen zu einem Klumpen; bei vollem Startfeld
+     * enger, damit niemand neben der Bahn fährt. */
+    const abstand = Math.min(14, 42 / Math.max(2, teil.length));
+    const spur = (i - (teil.length - 1) / 2) * abstand;
     const px2 = cxm + (rx + spur) * Math.cos(wink);
     const py2 = cym + (ry + spur * ry / rx) * Math.sin(wink);
     /* Fahrtrichtung: Tangente an die Ellipse */

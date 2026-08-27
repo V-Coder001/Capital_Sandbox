@@ -438,7 +438,7 @@ function rennBeenden() {
   }
   r.phase = "ergebnis"; r.rest = 25;
   r.topf = topf;
-  r.ergebnis = reihen.map(t2 => ({ platz: t2.platz, name: t2.name, team: t2.team, farbe: t2.farbe,
+  r.ergebnis = reihen.map(t2 => ({ platz: t2.platz, name: t2.name, team: t2.team, farbe: t2.livree || t2.farbe,
     fahrer: t2.fahrer, ausgefallen: t2.ausgefallen, dist: Math.round(t2.dist) }));
   io.emit("notice", { text: `🏁 ${sieger.name} (${sieger.team}) gewinnt — ${topf.toLocaleString("de-DE")} $ im Topf${quote ? `, Siegquote ${quote.toFixed(2)}` : ""}!` });
 }
@@ -1433,7 +1433,7 @@ function snapshot() {
         nenngeld: RENN_NENNGELD,
         topf: G.rennen.topf ?? (RENN_GRUNDPREIS + G.rennen.teilnehmer.length * RENN_NENNGELD * 2 + Math.round(pool * WETT_RAKE)),
         teilnehmer: G.rennen.teilnehmer.map(t2 => ({ autoId: t2.autoId, name: t2.name, team: t2.team,
-          farbe: t2.farbe, fahrer: t2.fahrer, ownerId: t2.ownerId, dist: Math.round(t2.dist), ausgefallen: t2.ausgefallen })),
+          farbe: t2.livree || t2.farbe, fahrer: t2.fahrer, ownerId: t2.ownerId, dist: Math.round(t2.dist), ausgefallen: t2.ausgefallen })),
         sponsoren: G.rennen.sponsoren.map(s => ({ name: s.name, team: G.players[s.teamId]?.name, betrag: s.betrag })),
         ergebnis: G.rennen.ergebnis || null,
       };
@@ -1973,7 +1973,11 @@ io.on("connection", socket => {
     if (p.cash < RENN_NENNGELD) return ack?.({ error: `Nenngeld fehlt (${RENN_NENNGELD.toLocaleString("de-DE")} $)` });
     p.cash -= RENN_NENNGELD;
     const f = G.fahrer.find(x2 => x2.id === a.fahrerId);
-    r.teilnehmer.push({ autoId: a.id, fahrerId: a.fahrerId, ownerId: p.id, team: p.name, farbe: p.color,
+    /* Jede Startnummer bekommt eine eindeutige Lackierung — Teamfarben
+     * kollidieren sonst (zwei blaue Teams = zwei ununterscheidbare Wagen). */
+    const LIVREEN = ["#e74c3c", "#f5c542", "#2ecc71", "#3b9cf6", "#e67e22", "#b07cf7", "#1abc9c", "#eef2f7"];
+    const livree = LIVREEN.find(c => !r.teilnehmer.some(x2 => x2.livree === c)) || p.color;
+    r.teilnehmer.push({ autoId: a.id, fahrerId: a.fahrerId, ownerId: p.id, team: p.name, farbe: p.color, livree,
       name: `${GOODS[a.good].name} #${a.nr}`, fahrer: f?.name || "?", dist: 0, ausgefallen: false });
     logTx(p, "Motorsport", `Zum Rennen gemeldet: ${GOODS[a.good].name} #${a.nr}`, -RENN_NENNGELD);
     io.emit("notice", { text: `${p.name} meldet ${GOODS[a.good].name} #${a.nr} (Fahrer: ${f?.name || "?"}) zum Rennen.` });
