@@ -4552,8 +4552,13 @@ function rennenRendern(state, myId) {
         </div>`;
     }
     for (const t2 of r.teilnehmer) {
-      const anim = RENN_ANIM.get(t2.autoId) || { shown: t2.dist, ziel: t2.dist };
+      /* Dead-Reckoning-Daten: Aus zwei Server-Ständen die Geschwindigkeit
+       * schätzen — die Grafik fährt damit gleichmäßig weiter, statt jede
+       * Sekunde zu springen. */
+      const anim = RENN_ANIM.get(t2.autoId) || { shown: t2.dist, ziel: t2.dist, speed: 0, seit: performance.now() };
+      anim.speed = Math.max(0, t2.dist - anim.ziel);   // Distanz je Sekunde
       anim.ziel = t2.dist;
+      anim.seit = performance.now();
       RENN_ANIM.set(t2.autoId, anim);
     }
     const stand = [...r.teilnehmer].sort((a2, b2) => (a2.ausgefallen - b2.ausgefallen) || (b2.dist - a2.dist));
@@ -4593,51 +4598,131 @@ function rennenRendern(state, myId) {
 }
 /* Streckengrafik: Oval mit Start-Ziel-Linie; läuft im Haupt-rAF-Loop und
  * interpoliert die Distanzen zwischen zwei Server-Updates. */
+/* Draufsicht-Rennwagen: Karosserie mit Nase, Cockpit, vier Rädern und
+ * Heckflügel — gezeichnet in Fahrtrichtung (+y = vorwärts vor der Rotation). */
+function rennwagenZeichnen(g, farbe, kaputt) {
+  if (kaputt) g.globalAlpha = .35;
+  /* Schatten */
+  g.fillStyle = "rgba(0,0,0,.45)";
+  g.beginPath(); g.ellipse(1.5, 2, 8, 14, 0, 0, Math.PI * 2); g.fill();
+  /* Räder */
+  g.fillStyle = "#0c0f14";
+  for (const [wx2, wy2] of [[-7, -7], [7, -7], [-7, 7], [7, 7]]) {
+    g.beginPath(); g.roundRect(wx2 - 2.2, wy2 - 3.6, 4.4, 7.2, 1.6); g.fill();
+  }
+  /* Karosserie: vorn spitz zulaufend */
+  g.beginPath();
+  g.moveTo(0, -14);
+  g.bezierCurveTo(5.5, -13, 6.5, -6, 6.5, 0);
+  g.bezierCurveTo(6.5, 7, 5.5, 11, 4, 12);
+  g.lineTo(-4, 12);
+  g.bezierCurveTo(-5.5, 11, -6.5, 7, -6.5, 0);
+  g.bezierCurveTo(-6.5, -6, -5.5, -13, 0, -14);
+  g.closePath();
+  g.fillStyle = farbe; g.fill();
+  g.strokeStyle = "rgba(0,0,0,.35)"; g.lineWidth = 1; g.stroke();
+  /* Lichtkante auf der Haube */
+  const glanz = g.createLinearGradient(-6, 0, 6, 0);
+  glanz.addColorStop(0, "rgba(255,255,255,.28)"); glanz.addColorStop(.5, "rgba(255,255,255,0)"); glanz.addColorStop(1, "rgba(0,0,0,.18)");
+  g.fillStyle = glanz; g.fill();
+  /* Cockpit */
+  g.fillStyle = "#0e1420";
+  g.beginPath(); g.ellipse(0, 1, 3.4, 5.2, 0, 0, Math.PI * 2); g.fill();
+  g.fillStyle = "rgba(140,190,240,.35)";
+  g.beginPath(); g.ellipse(0, -.8, 2.6, 2.6, 0, 0, Math.PI * 2); g.fill();
+  /* Heckflügel */
+  g.fillStyle = "#12161d";
+  g.beginPath(); g.roundRect(-7.5, 11, 15, 3, 1.4); g.fill();
+  g.globalAlpha = 1;
+}
 function rennStreckeZeichnen() {
   const cvR = document.getElementById("rennStrecke");
   if (!cvR || document.getElementById("rennOverlay").hidden) return;
   const st = store.get()?.state, r = st?.rennen;
   if (!r || r.phase !== "laeuft") return;
-  const g = cvR.getContext("2d");
-  const W = cvR.width, H = cvR.height, cxm = W / 2, cym = H / 2;
-  const rx = W * .40, ry = H * .34;
-  g.clearRect(0, 0, W, H);
-  /* Rasen, Bahn, Randsteine, Mittellinie */
-  g.fillStyle = "#0f2417"; g.fillRect(0, 0, W, H);
-  g.strokeStyle = "#2a2f36"; g.lineWidth = 46; g.beginPath(); g.ellipse(cxm, cym, rx, ry, 0, 0, Math.PI * 2); g.stroke();
-  g.strokeStyle = "#20242b"; g.lineWidth = 40; g.beginPath(); g.ellipse(cxm, cym, rx, ry, 0, 0, Math.PI * 2); g.stroke();
-  g.setLineDash([9, 11]); g.strokeStyle = "rgba(255,255,255,.35)"; g.lineWidth = 2;
-  g.beginPath(); g.ellipse(cxm, cym, rx, ry, 0, 0, Math.PI * 2); g.stroke(); g.setLineDash([]);
-  /* Start-Ziel: Zielflaggen-Muster rechts */
-  const sx0 = cxm + rx;
-  for (let i = 0; i < 5; i++) for (let j = 0; j < 2; j++) {
-    g.fillStyle = (i + j) % 2 ? "#e8ecf3" : "#12151a";
-    g.fillRect(sx0 - 20 + j * 10, cym - 25 + i * 10, 10, 10);
+  /* Scharf auf Retina: intern in Geräteauflösung zeichnen, per CSS skalieren. */
+  const dpr = Math.min(2, devicePixelRatio || 1);
+  if (+cvR.dataset.dpr !== dpr) {
+    cvR.dataset.dpr = dpr;
+    cvR.width = 740 * dpr; cvR.height = 320 * dpr;
+    cvR.style.width = "100%"; cvR.style.aspectRatio = "740/320";
   }
-  /* Wagen: pro Frame ein Stück Richtung Serverstand, seitlich leicht versetzt
-   * je Startnummer, damit sie nicht ineinander stehen. */
+  const g = cvR.getContext("2d");
+  g.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const W = 740, H = 320, cxm = W / 2, cym = H / 2;
+  const rx = W * .40, ry = H * .335;
+  const jetzt = performance.now();
+  /* Nachthimmel-Rasen mit Vignette */
+  const gras = g.createRadialGradient(cxm, cym, 40, cxm, cym, W * .62);
+  gras.addColorStop(0, "#14301d"); gras.addColorStop(1, "#0a1a10");
+  g.fillStyle = gras; g.fillRect(0, 0, W, H);
+  /* Randsteine: rot-weiß gestrichelt (zwei versetzte Strichellinien) */
+  g.lineWidth = 52;
+  g.setLineDash([12, 12]); g.lineDashOffset = 0;
+  g.strokeStyle = "#b8362f";
+  g.beginPath(); g.ellipse(cxm, cym, rx, ry, 0, 0, Math.PI * 2); g.stroke();
+  g.lineDashOffset = 12; g.strokeStyle = "#dfe5ee";
+  g.beginPath(); g.ellipse(cxm, cym, rx, ry, 0, 0, Math.PI * 2); g.stroke();
+  g.setLineDash([]);
+  /* Asphalt mit leichtem Verlauf */
+  const asphalt = g.createLinearGradient(0, cym - ry, 0, cym + ry);
+  asphalt.addColorStop(0, "#2c313a"); asphalt.addColorStop(.5, "#23272f"); asphalt.addColorStop(1, "#1d2128");
+  g.strokeStyle = asphalt; g.lineWidth = 46;
+  g.beginPath(); g.ellipse(cxm, cym, rx, ry, 0, 0, Math.PI * 2); g.stroke();
+  /* weiße Begrenzungslinien */
+  g.strokeStyle = "rgba(235,240,248,.5)"; g.lineWidth = 1.5;
+  for (const d of [-22, 22]) {
+    g.beginPath(); g.ellipse(cxm, cym, rx + d, ry + d * ry / rx, 0, 0, Math.PI * 2); g.stroke();
+  }
+  /* Mittellinie wandert mit — verkauft Tempo auch ohne Bezugspunkt */
+  g.setLineDash([10, 14]); g.lineDashOffset = -(jetzt / 40) % 24;
+  g.strokeStyle = "rgba(255,255,255,.30)"; g.lineWidth = 2;
+  g.beginPath(); g.ellipse(cxm, cym, rx, ry, 0, 0, Math.PI * 2); g.stroke();
+  g.setLineDash([]); g.lineDashOffset = 0;
+  /* Start-Ziel: Zielflaggen-Band quer über die Bahn rechts */
+  g.save();
+  g.translate(cxm + rx, cym); g.rotate(Math.PI / 2);
+  for (let i = 0; i < 6; i++) for (let j = 0; j < 3; j++) {
+    g.fillStyle = (i + j) % 2 ? "#e8ecf3" : "#14171d";
+    g.fillRect(-24 + i * 8, -12 + j * 8, 8, 8);
+  }
+  g.restore();
+  /* Wagen: Dead Reckoning — mit der geschätzten Geschwindigkeit weiterfahren
+   * und sanft auf den echten Serverstand einschwenken. */
   const teil = r.teilnehmer;
   teil.forEach((t2, i) => {
-    const anim = RENN_ANIM.get(t2.autoId) || { shown: t2.dist, ziel: t2.dist };
-    anim.shown += (anim.ziel - anim.shown) * .08;
+    const anim = RENN_ANIM.get(t2.autoId) || { shown: t2.dist, ziel: t2.dist, speed: 0, seit: jetzt };
+    const zielJetzt = t2.ausgefallen ? anim.ziel : anim.ziel + anim.speed * Math.min(1.2, (jetzt - anim.seit) / 1000);
+    anim.shown += (zielJetzt - anim.shown) * .12;
     RENN_ANIM.set(t2.autoId, anim);
     const u = (anim.shown % r.runde) / r.runde;
     const wink = u * Math.PI * 2;
-    const spur = (i - (teil.length - 1) / 2) * 7;
+    const spur = (i - (teil.length - 1) / 2) * 8;
     const px2 = cxm + (rx + spur) * Math.cos(wink);
     const py2 = cym + (ry + spur * ry / rx) * Math.sin(wink);
+    /* Fahrtrichtung: Tangente an die Ellipse */
+    const heading = Math.atan2(ry * Math.cos(wink), -rx * Math.sin(wink));
     g.save();
     g.translate(px2, py2);
-    g.rotate(wink + Math.PI / 2);
-    if (t2.ausgefallen) g.globalAlpha = .35;
-    g.fillStyle = "rgba(0,0,0,.4)"; g.fillRect(-5, -9, 10, 18);
-    g.fillStyle = t2.farbe; g.fillRect(-4, -8, 8, 16);
-    g.fillStyle = "rgba(255,255,255,.75)"; g.fillRect(-4, -8, 8, 3);
+    g.rotate(heading + Math.PI / 2);
+    rennwagenZeichnen(g, t2.farbe, t2.ausgefallen);
     g.restore();
-    g.globalAlpha = 1;
-    g.font = "600 10px sans-serif"; g.textAlign = "center";
-    g.fillStyle = "rgba(230,238,250,.85)";
-    g.fillText(t2.name.replace(/^\S+ /, "#"), px2, py2 - 14);
+    /* Rauch beim Ausfall */
+    if (t2.ausgefallen) {
+      g.fillStyle = "rgba(160,165,175,.35)";
+      for (let s2 = 0; s2 < 3; s2++) {
+        const k2 = ((jetzt / 900 + s2 / 3) % 1);
+        g.globalAlpha = (1 - k2) * .35;
+        g.beginPath(); g.arc(px2 + s2 * 2 - 2, py2 - 8 - k2 * 14, 3 + k2 * 5, 0, Math.PI * 2); g.fill();
+      }
+      g.globalAlpha = 1;
+    }
+    g.font = "700 10px sans-serif"; g.textAlign = "center";
+    g.fillStyle = "rgba(10,14,20,.65)";
+    const label = "#" + (t2.name.match(/#(\d+)/)?.[1] || i + 1);
+    g.fillText(label, px2 + 1, py2 - 17);
+    g.fillStyle = "rgba(235,242,252,.95)";
+    g.fillText(label, px2, py2 - 18);
   });
   /* Rundenanzeige des Führenden */
   const erster = [...teil].sort((a2, b2) => b2.dist - a2.dist)[0];
