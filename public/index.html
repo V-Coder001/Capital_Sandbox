@@ -774,6 +774,22 @@ td:first-child{font-family:var(--font)}
   padding:20px 24px 14px;border-bottom:1px solid var(--line)}
 .tbHead h2{font-size:19px;color:var(--text)}
 #tbFortschritt{margin-top:3px;font-size:11.5px;color:var(--dim);font-family:var(--mono)}
+/* Vorlesen: die Anleitung ist lang, und nicht jeder liest gern vom Bildschirm.
+ * Der Knopf liest ab dem aktuellen Kapitel weiter bis zum Ende. */
+.tbLaut{display:inline-flex;align-items:center;gap:7px;margin-left:auto;margin-right:8px;
+  background:transparent;border:1px solid var(--line);border-radius:8px;color:var(--dim);
+  padding:7px 13px;font-size:12px;font-weight:600;cursor:pointer;font-family:var(--font);
+  transition:color .15s,border-color .15s,background .15s}
+.tbLaut:hover{color:var(--accent);border-color:rgba(56,189,248,.45)}
+.tbLaut.an{color:var(--accent);border-color:var(--accent);background:rgba(56,189,248,.1)}
+.tbLaut.an svg{animation:tbPuls 1.4s ease-in-out infinite}
+@keyframes tbPuls{0%,100%{opacity:.55}50%{opacity:1}}
+.tbStimme{margin-right:8px;max-width:150px;font-size:11.5px;padding:6px 8px}
+@media(max-width:640px){.tbStimme{display:none}}
+.tbUeben{margin-right:auto;background:transparent;border:1px solid var(--line);border-radius:8px;
+  color:var(--dim);padding:8px 14px;font-size:12px;font-weight:600;cursor:pointer;font-family:var(--font)}
+.tbUeben:hover{color:var(--accent2);border-color:rgba(167,139,250,.45)}
+@media(prefers-reduced-motion:reduce){.tbLaut.an svg{animation:none}}
 .tbZu{background:none;border:1px solid var(--line);border-radius:9px;width:30px;height:30px;
   color:var(--dim);cursor:pointer;font-size:13px;flex:none}
 .tbZu:hover{color:var(--text);border-color:#33415c}
@@ -874,7 +890,7 @@ td:first-child{font-family:var(--font)}
            stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
         <path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/>
       </svg>
-      Tutorial spielen
+      Spielanleitung lesen
     </button>
     <!-- Sprachumschalter. Die Oberfläche ist deutsch gewachsen; ohne sichtbaren
          Schalter probiert ein internationaler Besucher das Spiel gar nicht erst. -->
@@ -1338,6 +1354,14 @@ td:first-child{font-family:var(--font)}
         <h2>Spielanleitung</h2>
         <p id="tbFortschritt">Kapitel 1 von 1</p>
       </div>
+      <button type="button" class="tbLaut" id="tbVorlesen" aria-pressed="false"
+              title="Kapitel vorlesen lassen — liest danach weiter bis zum Ende">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+             stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M11 5 6 9H2v6h4l5 4V5z"/><path d="M15.5 8.5a5 5 0 010 7"/><path d="M18.5 5.5a9 9 0 010 13"/>
+        </svg><span>Vorlesen</span>
+      </button>
+      <select id="tbStimme" class="tbStimme" aria-label="Stimme wählen" title="Stimme wählen"></select>
       <button class="tbZu" id="tbZu" aria-label="Schließen">&#10005;</button>
     </div>
     <div class="tbBody">
@@ -1345,6 +1369,7 @@ td:first-child{font-family:var(--font)}
       <article class="tbInhalt" id="tbInhalt"></article>
     </div>
     <div class="tbFuss">
+      <button type="button" id="tbUeben" class="tbUeben">Lieber ausprobieren</button>
       <button type="button" id="tbZurueck">Zurück</button>
       <div class="tbPunkte" id="tbPunkte"></div>
       <button type="button" id="tbWeiter">Weiter</button>
@@ -1904,6 +1929,8 @@ const EN = {
   /* Startbildschirm */
   "Neue Runde starten": "Start a new round", "Einer Runde beitreten": "Join a round",
   "Tutorial spielen": "Play the tutorial", "Runde erstellen": "Create round",
+  "Spielanleitung lesen": "Read the manual", "Lieber ausprobieren": "Rather try it out",
+  "Vorlesen": "Read aloud", "Stopp": "Stop", "Spielanleitung": "Manual",
   "Neuer Spielmodus": "New game mode",
   /* Bugreport */
   "Fehler melden": "Report a bug",
@@ -5025,6 +5052,25 @@ const TUT_BUCH = [
       Börse — die Bauindustrie stellt sie dort ein.</p>
       <p>Ein Abriss erstattet dir <b>die Hälfte</b> des Baupreises zurück.</p>` },
 
+  { t: "Freischalten &amp; Ausbauen", lead: "Mehr Fläche, mehr Ausstoß",
+    html: `
+      <p>Nicht jede Kachel ist von Anfang an bebaubar. Gesperrte Flächen liegen dunkler
+      auf der Karte und kosten eine einmalige <b>Freischaltgebühr</b>, die dir beim Bauen
+      gleich mitberechnet wird — du zahlst also Gebäude und Freischaltung in einem Zug.</p>
+      <p>Jedes Produktionsgebäude lässt sich mit <b>Elektronik</b> auf bis zu
+      <b>Stufe 5</b> ausbauen. Jede Stufe bringt <b>+30 % Ausstoß</b> — und verbraucht
+      entsprechend mehr Zutaten, denn auch der Verbrauch steigt mit.</p>
+      <div class="kasten"><div class="t">Was ein Ausbau kostet</div>
+      Elektronik und Bargeld, beides steigt mit der erreichten Stufe. Ein billiges
+      Gebäude auf Stufe 2 ist schnell bezahlt, Stufe 5 an einem teuren Werk ist eine
+      Investition wie ein zweites Gebäude.</div>
+      <p>Elektronik stellst du nicht selbst her, wenn du nicht in der Technologiebranche
+      bist. Sie kommt über die Börse — und weil jeder sie zum Ausbauen braucht, ist sie
+      eine der zuverlässigsten Einnahmequellen für Techniker.</p>
+      <div class="merk">Faustregel: Erst jedes Produkt deiner Branche einmal abdecken,
+      dann ausbauen. Ein fünffach ausgebautes Gebäude nützt wenig, wenn die Zutat dafür
+      im Spiel gar nicht hergestellt wird.</div>` },
+
   { t: "Produktion &amp; Boost", lead: "Wie deine Betriebe arbeiten",
     html: `
       <p>Betriebe produzieren automatisch, jede Sekunde ein Stück weit. Du musst nichts
@@ -5107,6 +5153,39 @@ const TUT_BUCH = [
       <p>Der Ticker oben zeigt nur <b>echte Abschlüsse</b>. Steigt dort ein Preis, hat
       wirklich jemand so viel bezahlt.</p>` },
 
+  { t: "Preise &amp; Ankerkurs", lead: "Warum dein Angebot den Kurs bewegt",
+    html: `
+      <p>Es gibt keinen Händler, der zu Festpreisen abnimmt. <b>Jeder Preis im Spiel
+      entsteht aus Geschäften zwischen Firmen</b> — auch der Ø-Kurs, den du oben in der
+      Leiste siehst.</p>
+      <div class="kasten"><div class="t">Verkaufsdruck senkt den Anker</div>
+      Jede Ware hat einen Grundwert. Je mehr davon verkauft wird, desto weiter sinkt ihr
+      <b>Ankerpreis</b> — bis auf die Hälfte des Grundwerts. Wer als Einziger produziert,
+      kann bis auf das <b>1,3-fache</b> steigen.</div>
+      <p>Daraus folgt das Wichtigste an diesem Spiel: <b>Monokultur ruiniert den eigenen
+      Markt.</b> Fünf Farmen sind nicht fünfmal so gut wie eine — sie drücken den Obstpreis,
+      bis sich das Bauen nicht mehr lohnt. Breite schlägt Tiefe, solange die Nachfrage nicht
+      mitwächst.</p>
+      <p>Umgekehrt gilt: Eine Ware, die niemand herstellt, driftet nach oben. Wer als Erster
+      eine Lücke im Markt füllt, verkauft zum besten Kurs, den es für dieses Gut gibt.</p>
+      <div class="merk">Wenn ein Kurs über Minuten unbewegt steht, heißt das nicht, dass er
+      stabil ist — meist heißt es, dass zu diesem Preis niemand kauft.</div>` },
+
+  { t: "Direkthandel &amp; Chat", lead: "Geschäfte von Firma zu Firma",
+    html: `
+      <p>Neben der offenen Börse gibt es den <b>Direktvertrag</b>: Du bietest einer
+      bestimmten Firma eine bestimmte Menge zu einem ausgehandelten Preis an. Sie nimmt an
+      oder lehnt ab. Angebote verfallen nach zwei Minuten.</p>
+      <div class="kasten"><div class="t">Treuhand statt Vertrauen</div>
+      Ware und Geld liegen bis zum Abschluss fest. Niemand kann verkaufen, was er nicht hat,
+      und niemand kann annehmen, was er nicht bezahlen kann — auch nicht in einem
+      Direktvertrag. Betrug ist damit technisch ausgeschlossen.</div>
+      <p>Der <b>Chat</b> hat mehrere Räume und ist der Ort, an dem Preise wirklich gemacht
+      werden: Wer Stahl sucht, fragt danach, statt zu hoffen, dass zufällig eine Order im
+      Buch steht.</p>
+      <div class="merk">Direktverträge sind das Mittel gegen die Börse, wenn ein Dritter dir
+      sonst die Ware vor der Nase wegkauft.</div>` },
+
   { t: "Großaufträge", lead: "Die Stadt zahlt Festpreise",
     html: `
       <p>Von Zeit zu Zeit schreibt eine Stadt einen <b>Großauftrag</b> aus: Sie braucht
@@ -5163,6 +5242,97 @@ const TUT_BUCH = [
       <div class="merk">Auf der anderen Seite: Fremde Anleihen zu kaufen ist eine ruhige
       Einnahmequelle — vorausgesetzt, der Schuldner bleibt zahlungsfähig.</div>` },
 
+  { t: "Zwangsversteigerung", lead: "Wenn Schulden fällig werden",
+    html: `
+      <p>Zahlt eine Firma ihre Zinsen nicht, sammelt sie Verwarnungen. Nach der dritten
+      wird ein <b>Pfandrecht</b> auf eines ihrer Gebäude eingetragen — verkaufen und
+      abreißen sind ab da gesperrt.</p>
+      <p>Bleibt sie weiter säumig, wird das Gebäude <b>enteignet und versteigert</b>. Die
+      Auktion läuft <b>30 Sekunden</b>, das Mindestgebot liegt bei rund einem Drittel der
+      Baukosten. Wer den Zuschlag bekommt, übernimmt die Kachel samt Gebäude — und samt
+      allem, was darin steht.</p>
+      <div class="kasten"><div class="t">Auch für dich eine Gelegenheit</div>
+      Ein fertig ausgebautes Werk für ein Drittel des Neupreises ist der günstigste Weg an
+      Produktionskapazität. Bots bieten ab der mittleren Schwierigkeit mit — auf ein gutes
+      Los bleibst du selten allein.</div>
+      <p>Der Erlös geht an den Gläubiger, nicht an die Stadt. Wer Anleihen zeichnet, ist
+      also nicht schutzlos, wenn der Schuldner zusammenbricht.</p>` },
+
+  { t: "Motorsport", lead: "Ein Kreislauf für das späte Spiel",
+    html: `
+      <p>Ab <b>200.000 $ Nettovermögen</b> darf jede Firma einen <b>Rennstall</b> bauen —
+      unabhängig von der Branche, wie die Verkaufsgebäude. Genau einen, für 30.000 $.</p>
+      <p>Der Rennstall stellt nichts her. Er ist reiner <b>Abnehmer</b>: Du kaufst ein
+      fertiges Auto bei der Firma, die Autos baut, und stellst es ein. Die Stellplätze
+      hängen an der Ausbaustufe — Stufe 1 ein Wagen, Stufe 5 fünf.</p>
+      <div class="kasten"><div class="t">Ein eingestelltes Auto ist keine Ware mehr</div>
+      Es verlässt dein Lager endgültig und gehört ab da zum Gebäude. Zu Geld machen lässt
+      es sich nur noch, indem der <b>ganze Rennstall</b> über die Stadtbank versteigert wird
+      — samt Fahrzeugen, deren Wert im Mindestgebot steckt. Abreißen ist gesperrt, solange
+      Autos darin stehen.</div>
+      <p>Im Motorsport-Panel entwickelst du den Wagen in sechs Bereichen weiter: Antrieb,
+      Batterie, Reifen, Fahrwerk, Aerodynamik und Rennsoftware, je drei Stufen. <b>Jeder
+      Bereich hebt zwei Werte und senkt andere</b> — es gibt bewusst kein Setup, das alles
+      verbessert. Die Teile dafür (<b>Rennreifen</b> und <b>Rennsoftware</b>) stellen andere
+      Firmen her; du kaufst sie an der Börse.</p>
+      <p><b>Fahrer</b> stehen in einem Pool, den alle sehen — wer zuerst zugreift, hat ihn.
+      Ein Fahrer kostet Handgeld und danach <b>Gehalt pro Minute</b>. Wer nicht zahlt,
+      verliert ihn zurück an den Pool.</p>
+      <div class="merk">Rennen, Preisgelder und der Wettpool sind noch nicht im Spiel — der
+      Kreislauf bis zum fertig entwickelten Rennwagen steht, der Rest kommt als Nächstes.</div>` },
+
+  { t: "Planwirtschaft", lead: "Der zweite Spielmodus",
+    html: `
+      <p>Statt eines Vermögensziels gibt hier das <b>Planbüro</b> die Richtung vor. Es gibt
+      keine freie Börse — wer trotzdem handelt, tut das unter der Hand.</p>
+      <p>Die Runde läuft in <b>fünf Planphasen zu je acht Minuten</b>. Zu Beginn jeder Phase
+      verkündet das Planbüro dein <b>Plansoll</b>: bestimmte Waren in bestimmter Menge, die
+      du zu festen staatlichen Preisen ablieferst. Dafür gibt es <b>Planpunkte</b>. Wer
+      1.000 Punkte erreicht, gewinnt vorzeitig.</p>
+      <div class="kasten"><div class="t">Zuteilung statt Einkauf</div>
+      Material bekommst du nicht am Markt, sondern über <b>Bezugsscheine</b>. Wer sein Soll
+      übererfüllt hat, bekommt beim nächsten Mal mehr — wer zurückliegt, weniger. Das Soll
+      selbst wächst mit dem Erfolg mit: Gute Leistung wird mit höheren Forderungen belohnt.</div>
+      <p>Was offiziell nicht zu bekommen ist, gibt es am <b>Schwarzmarkt</b> — dort, wo sonst
+      die Stadtbank steht. Das ist schnell, aber riskant: Wer erwischt wird, bekommt einen
+      Eintrag in die <b>Kaderakte</b> und <b>40 Planpunkte</b> Abzug. Beim dritten Eintrag
+      wird die nächste Zuteilung halbiert.</p>
+      <div class="merk">Derselbe Produktionsapparat, völlig andere Frage: nicht „was bringt
+      am meisten ein", sondern „was verlangt der Plan".</div>` },
+
+  { t: "Mitspieler &amp; Bots", lead: "Allein, zu zweit oder zu acht",
+    html: `
+      <p>Bis zu <b>acht Firmen</b> spielen eine Runde. Mitspieler im selben WLAN bekommen
+      einfach den Link; von außerhalb funktioniert der fünfstellige Code im Warteraum.</p>
+      <p>Dazu kommen bis zu zehn <b>Bot-Firmen</b>, zwei je Branche. Sie spielen über
+      dieselbe Schnittstelle wie du: <b>kein Extrakapital, keine höhere Produktion, keine
+      verborgenen Preise</b>. Sie bauen, kaufen Vorprodukte, verkaufen, nehmen Kredite auf
+      und bieten bei Versteigerungen mit.</p>
+      <div class="kasten"><div class="t">Drei Schwierigkeitsstufen</div>
+      <ul style="margin:0 0 0 16px">
+        <li><b>Einfach</b> — bauen langsam, höchstens drei Gebäude, keine Ausbauten, keine Auktionen</li>
+        <li><b>Mittel</b> — bauen zügiger, leveln ihre Betriebe, bieten mit</li>
+        <li><b>Schwer</b> — bis zu acht Gebäude, boosten ihre Produktion, greifen überall zu</li>
+      </ul></div>
+      <p>Auch allein ist der Markt dadurch lebendig: Die Bots sind deine Lieferanten und
+      deine Konkurrenz zugleich.</p>` },
+
+  { t: "Aufgaben &amp; Fortschritt", lead: "Wobei dich das Spiel begleitet",
+    html: `
+      <p>Links oben stehen die <b>Starter-Aufgaben</b>. Sie führen einmal durch jedes System
+      — bauen, einen Verkaufsslot einrichten, eine Order platzieren, ein Gebäude ausbauen,
+      Anteile kaufen — und zahlen dafür Prämien. Erledigte Aufgaben verschwinden.</p>
+      <p>Jede Handlung bringt <b>Erfahrung</b>. Mit steigendem Level wächst nichts an deiner
+      Produktion, es ist ein Fortschrittsmaß, kein Vorteil — die Wirtschaft soll durch
+      Entscheidungen gewonnen werden, nicht durch Spielzeit.</p>
+      <div class="kasten"><div class="t">Die Nachrichtenzentrale</div>
+      Sie steht im Zentrum der Karte und schickt regelmäßig einen <b>Marktbericht</b> in den
+      Chat: welche Ware knapp ist, welche im Überfluss liegt. Wer nicht ständig auf die
+      Kursleiste schaut, erfährt hier, wo gerade etwas zu holen ist.</div>
+      <p>Fällt dir etwas auf, das nicht stimmt, gibt es unten den Knopf <b>Fehler melden</b>
+      — die Meldung landet direkt beim Server, mitsamt dem, was gerade auf dem Bildschirm
+      war.</p>` },
+
   { t: "Gewinnen", lead: "Die letzte Runde zählt",
     html: `
       <p>Sobald jemand das Rundenziel beim Nettovermögen erreicht, endet die Partie und
@@ -5208,14 +5378,140 @@ const TUT_BUCH = [
     nav.querySelectorAll("button")[i]?.scrollIntoView({ block: "nearest", inline: "nearest" });
   }
   const auf = () => { el.classList.add("auf"); el.setAttribute("aria-hidden", "false"); zeichnen(); };
-  const zu = () => { el.classList.remove("auf"); el.setAttribute("aria-hidden", "true"); };
+  const zu = () => { el.classList.remove("auf"); el.setAttribute("aria-hidden", "true");
+    if (typeof lesenStoppen === "function") lesenStoppen(); };
 
   /* "Tutorial spielen" heisst jetzt auch spielen: Der Knopf startet eine echte
    * eigene Runde und führt darin durch die ersten Handlungen. Das Lesebuch
    * bleibt als Nachschlagewerk erhalten — es öffnet sich über das Lexikon im
    * Spiel und über den kleinen Verweis im letzten Schritt. */
   window.lernbuchOeffnen = auf;
-  document.getElementById("tutBuchAuf").addEventListener("click", () => uebungsrundeStarten());
+  /* Der Knopf im Warteraum öffnet wieder die geschriebene Anleitung. Die
+   * geführte Übungsrunde bleibt erhalten und ist aus dem Buch heraus zu
+   * starten — wer lesen will, liest; wer lieber macht, klickt unten links. */
+  document.getElementById("tutBuchAuf").addEventListener("click", auf);
+  document.getElementById("tbUeben").addEventListener("click", () => { lesenStoppen(); zu(); uebungsrundeStarten(); });
+
+  /* ---------- Vorlesen ----------
+   * Web Speech API. Sie ist nicht überall vorhanden, deshalb verschwindet der
+   * Knopf ersatzlos, statt eine Fehlermeldung zu erzeugen. */
+  const laut = document.getElementById("tbVorlesen");
+  const wahl = document.getElementById("tbStimme");
+  const stimme = window.speechSynthesis;
+  let liest = false, leseTeile = [], leseIdx = 0;
+  if (!stimme || typeof SpeechSynthesisUtterance === "undefined") { laut.style.display = "none"; wahl.style.display = "none"; }
+
+  /* ---- Stimmenwahl ----
+   * Voreinstellung ist die Systemstimme — auf einem deutschen Mac also "Anna".
+   * Bewusst KEINE eigene Rangfolge: Welche Stimme angenehm ist, entscheidet
+   * der Geschmack, nicht das Programm. Wer eine andere will, nimmt sie aus
+   * der Liste daneben; die Wahl wird gemerkt. */
+  const stimmenFuer = () => {
+    const praefix = SPRACHE === "en" ? "en" : "de";
+    const alle = stimme.getVoices();
+    const passend = alle.filter(v => v.lang.toLowerCase().startsWith(praefix));
+    return passend.length ? passend : alle;
+  };
+  function stimmeBestimmen() {
+    const liste = stimmenFuer();
+    if (!liste.length) return null;
+    const gemerkt = (() => { try { return localStorage.getItem("cs_tts_stimme"); } catch { return null; } })();
+    return liste.find(v => v.name === gemerkt) || liste.find(v => v.default) || liste[0];
+  }
+  function stimmenlisteFuellen() {
+    const liste = stimmenFuer();
+    if (!liste.length) { wahl.style.display = "none"; return; }
+    wahl.style.display = "";
+    const gewaehlt = stimmeBestimmen();
+    /* Systemstimme oben, der Rest alphabetisch. */
+    const sortiert = [...liste].sort((a, b) =>
+      (b.default ? 1 : 0) - (a.default ? 1 : 0) || a.name.localeCompare(b.name, "de"));
+    wahl.innerHTML = sortiert.map(v => `<option value="${v.name.replace(/"/g, "&quot;")}"${
+        v.name === gewaehlt?.name ? " selected" : ""}>${v.name.replace(/\s*\(.*?\)\s*$/, "")}</option>`).join("");
+  }
+  wahl.addEventListener("change", () => {
+    try { localStorage.setItem("cs_tts_stimme", wahl.value); } catch {}
+    if (liest) { lesenStoppen(); setTimeout(lesenStarten, 120); }
+  });
+  stimmenlisteFuellen();
+  /* Die Stimmenliste steht auf manchen Systemen erst nach einem Rundlauf
+   * bereit — dann kommt dieses Ereignis. */
+  stimme?.addEventListener?.("voiceschanged", stimmenlisteFuellen);
+
+  /* Aus dem Kapitel-HTML wird gesprochener Text: Blöcke bekommen eine Pause,
+   * Aufzählungspunkte einen Satzschluss — sonst laufen die Stichworte
+   * atemlos ineinander. */
+  function kapitelText(k) {
+    const d = document.createElement("div");
+    d.innerHTML = `<p>${k.t}.</p><p>${k.lead}.</p>` + k.html;
+    d.querySelectorAll("li").forEach(li => {
+      if (!/[.!?:]\s*$/.test(li.textContent)) li.append(".");
+    });
+    d.querySelectorAll("p, li, div, h3, h4").forEach(e => e.append(" "));
+    return d.textContent.replace(/\s+/g, " ").replace(/\s+([.,;:!?])/g, "$1").trim();
+  }
+  /* Lange Äußerungen brechen auf manchen Systemen mitten im Satz ab. Deshalb
+   * an Satzgrenzen in Häppchen von rund 200 Zeichen zerlegen. */
+  function haeppchen(text) {
+    const saetze = text.match(/[^.!?]+[.!?]*\s*/g) || [text];
+    const raus = []; let puffer = "";
+    for (const satz of saetze) {
+      if (puffer && (puffer + satz).length > 220) { raus.push(puffer.trim()); puffer = ""; }
+      puffer += satz;
+    }
+    if (puffer.trim()) raus.push(puffer.trim());
+    return raus;
+  }
+  function lautBeschriften() {
+    laut.querySelector("span").textContent = liest
+      ? (SPRACHE === "en" ? "Stop" : "Stopp")
+      : (SPRACHE === "en" ? "Read aloud" : "Vorlesen");
+    laut.classList.toggle("an", liest);
+    laut.setAttribute("aria-pressed", liest ? "true" : "false");
+  }
+  function lesenStoppen() {
+    if (!stimme) return;
+    liest = false; leseTeile = []; leseIdx = 0;
+    try { stimme.cancel(); } catch {}
+    lautBeschriften();
+  }
+  function lesenWeiter() {
+    if (!liest) return;
+    if (leseIdx >= leseTeile.length) {
+      /* Kapitelende: automatisch weiterblättern, bis das Buch durch ist. */
+      if (i + 1 >= TUT_BUCH.length) return lesenStoppen();
+      i++; zeichnen();
+      leseTeile = haeppchen(kapitelText(TUT_BUCH[i])); leseIdx = 0;
+      if (!leseTeile.length) return lesenStoppen();
+    }
+    const u = new SpeechSynthesisUtterance(leseTeile[leseIdx++]);
+    const v = stimmeBestimmen();
+    if (v) { u.voice = v; u.lang = v.lang; }
+    else u.lang = SPRACHE === "en" ? "en-US" : "de-DE";
+    u.rate = 1; u.pitch = 1;
+    u.onend = lesenWeiter;
+    /* "interrupted" und "canceled" sind KEINE Fehler: Sie entstehen jedes Mal,
+     * wenn wir selbst abbrechen oder die Stimme wechseln. Wer darauf stoppt,
+     * beendet das Vorlesen direkt nach dem ersten Häppchen — genau das ist
+     * beim ersten Versuch passiert. */
+    u.onerror = e => { if (!["interrupted", "canceled"].includes(e?.error)) lesenStoppen(); };
+    stimme.speak(u);
+  }
+  function lesenStarten() {
+    if (!stimme) return;
+    liest = true; leseTeile = haeppchen(kapitelText(TUT_BUCH[i])); leseIdx = 0;
+    lautBeschriften();
+    /* cancel() wirkt asynchron. Ein unmittelbar folgendes speak() wird davon
+     * noch mitgerissen, deshalb nur abbrechen, wenn wirklich etwas läuft —
+     * und dann kurz warten. */
+    if (stimme.speaking || stimme.pending) { try { stimme.cancel(); } catch {} setTimeout(lesenWeiter, 140); }
+    else lesenWeiter();
+  }
+  laut.addEventListener("click", () => liest ? lesenStoppen() : lesenStarten());
+  lautBeschriften();
+  /* Wer die Seite verlässt oder das Buch schließt, soll nicht weiter beschallt
+   * werden — die Sprachausgabe lebt sonst ausserhalb der Seite weiter. */
+  addEventListener("beforeunload", lesenStoppen);
   /* Sprachumschalter verdrahten — Startbildschirm und Kopfleiste. */
   document.querySelectorAll("[data-lang]").forEach(b =>
     b.addEventListener("click", () => spracheSetzen(b.dataset.lang)));
@@ -5230,19 +5526,23 @@ const TUT_BUCH = [
   seiteUebersetzen();
   document.getElementById("tbZu").addEventListener("click", zu);
   el.addEventListener("click", e => { if (e.target === el) zu(); });   // Klick daneben schließt
+  /* Wer selbst blättert, will nicht, dass die Stimme im alten Kapitel
+   * weiterredet. Das automatische Weiterblättern beim Vorlesen ruft zeichnen()
+   * direkt auf und ist davon nicht betroffen. */
+  const blaettern = ziel => { lesenStoppen(); i = ziel; zeichnen(); };
   nav.addEventListener("click", e => {
     const b = e.target.closest("button[data-k]");
-    if (b) { i = +b.dataset.k; zeichnen(); }
+    if (b) blaettern(+b.dataset.k);
   });
-  zurueck.addEventListener("click", () => { if (i > 0) { i--; zeichnen(); } });
+  zurueck.addEventListener("click", () => { if (i > 0) blaettern(i - 1); });
   weiter.addEventListener("click", () => {
-    if (i < TUT_BUCH.length - 1) { i++; zeichnen(); } else zu();
+    if (i < TUT_BUCH.length - 1) blaettern(i + 1); else zu();
   });
   document.addEventListener("keydown", e => {
     if (!el.classList.contains("auf")) return;
     if (e.key === "Escape") zu();
-    else if (e.key === "ArrowRight" && i < TUT_BUCH.length - 1) { i++; zeichnen(); }
-    else if (e.key === "ArrowLeft" && i > 0) { i--; zeichnen(); }
+    else if (e.key === "ArrowRight" && i < TUT_BUCH.length - 1) blaettern(i + 1);
+    else if (e.key === "ArrowLeft" && i > 0) blaettern(i - 1);
   });
 })();
 </script>
