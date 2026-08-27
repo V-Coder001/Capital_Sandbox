@@ -277,6 +277,40 @@ function autoWerte(a) {
   for (const k of STATS) w[k] = Math.max(STAT_MIN, Math.min(STAT_MAX, Math.round(w[k])));
   return w;
 }
+/* ---- Instandsetzung ----
+ * Ohne Reparatur ist Verschleiss eine Einbahnstrasse: Der Zustand faellt je
+ * Rennen um 8 bis 18 Punkte, unter 25 % ist der Wagen nicht mehr startklar —
+ * und da ein eingestelltes Auto weder verkauft noch ausgemustert werden kann,
+ * blockiert es danach dauerhaft einen Stellplatz. Nach rund sechs Rennen waere
+ * jeder Wagen ein Totalschaden, den man nicht loswird.
+ *
+ * Die Kosten haengen am WERT des Wagens, nicht an einer festen Summe: Einen
+ * durchentwickelten Rennwagen instand zu setzen muss mehr kosten als ein
+ * Serienauto, sonst waere Verschleiss ausgerechnet fuer die teuren Fahrzeuge
+ * folgenlos. Ersatzteile kommen wie beim Tuning aus der Wirtschaft. */
+/* 15 %, nicht 50 %. Die erste Kalibrierung haengte die Reparatur zu stark am
+ * Fahrzeugwert und drehte damit den Anreiz um: Ein voll entwickelter Wagen
+ * kostete nach EINEM Rennen 8.833 $ Instandsetzung, waehrend Platz drei nur
+ * 6.400 $ einbringt — wer am meisten investiert hatte, fuhr ausser bei einem
+ * Sieg Verlust. Entwickeln machte den Rennsport also unrentabler. Der
+ * Verschleiss ist aber derselbe, egal wie teuer der Wagen ist; der Wert darf
+ * die Kosten nur daempfen, nicht bestimmen. */
+const REPARATUR_ANTEIL = 0.15;    // Anteil des Fahrzeugwerts bei Totalschaden
+const REPARATUR_MIN = 600;
+function reparaturKosten(a) {
+  const fehlend = Math.max(0, 100 - (a.zustand ?? 100));
+  if (!fehlend) return { fehlend: 0, cash: 0, teile: {} };
+  /* Der Wert ist bereits um den Zustand gemindert — fuer die Rechnung wieder
+   * auf den Neuzustand hochziehen, sonst wird die Reparatur umso billiger, je
+   * kaputter der Wagen ist. */
+  const neuwert = autoWert(a) + MM[a.good].price * (fehlend / 100);
+  return {
+    fehlend,
+    cash: Math.max(REPARATUR_MIN, Math.round(neuwert * REPARATUR_ANTEIL * fehlend / 100)),
+    teile: { rennreifen: Math.max(1, Math.ceil(fehlend / 25)) },
+  };
+}
+
 const tuningKosten = (bereich, stufe) => ({
   cash: Math.round(TUNING[bereich].cash * stufe),
   teile: Object.fromEntries(Object.entries(TUNING[bereich].teile).map(([g, n]) => [g, n * stufe])),
@@ -1522,7 +1556,8 @@ const DYNAMIC_TILE_KEYS = ["locked", "owner", "btype", "lien", "shop", "paused",
  * aufgebaut sein, sonst meldet der Vergleich bei jedem Tick eine Änderung —
  * oder schlimmer: das Tuning ändert die Werte und die Kachel gilt als
  * unverändert, weil die Rohdaten gleich aussehen. */
-const autosDyn = t => t.autos ? t.autos.map(a => ({ ...a, werte: autoWerte(a), wert: Math.round(autoWert(a)) })) : null;
+const autosDyn = t => t.autos ? t.autos.map(a => ({ ...a, werte: autoWerte(a),
+  wert: Math.round(autoWert(a)), reparatur: reparaturKosten(a) })) : null;
 const tileDyn = t => { const d = {}; for (const k of DYNAMIC_TILE_KEYS) d[k] = k === "autos" ? autosDyn(t) : (t[k] ?? null); return d; };
 let lastTileSigs = null;
 function tileDelta() {
@@ -1956,6 +1991,36 @@ io.on("connection", socket => {
     gainXp(p, 20);
     logTx(p, "Motorsport", `${GOODS[a.good].name} #${a.nr}: ${T.name} auf Stufe ${stufe}`, -k.cash);
     ack?.({ ok: true, stufe, werte: autoWerte(a) });
+  }));
+
+  /* --- Fahrzeug instand setzen --- */
+  socket.on("stallReparieren", guard((p, { x, y, autoId }, ack) => {
+    const t = tileAt(x, y);
+    if (!t || t.owner !== p.id || !BTYPES[t.btype]?.racing) return ack?.({ error: "Kein eigener Rennstall" });
+    const a = (t.autos || []).find(a2 => a2.id === autoId);
+    if (!a) return ack?.({ error: "Fahrzeug nicht gefunden" });
+    if (a.zustand >= 100) return ack?.({ error: "Der Wagen ist in einwandfreiem Zustand" });
+    /* Nicht schrauben, solange der Wagen gemeldet ist oder faehrt: Sein
+     * Zustand geht in Tempo und Ausfallrisiko ein. In der Ergebnisphase ist
+     * das Rennen dagegen vorbei — genau dann will man reparieren. */
+    if (G.rennen && ["anmeldung", "laeuft"].includes(G.rennen.phase)
+        && (G.rennen.teilnehmer || []).some(x2 => x2.autoId === a.id))
+      return ack?.({ error: "Der Wagen ist zum Rennen gemeldet" });
+    const k = reparaturKosten(a);
+    if (p.cash < k.cash) return ack?.({ error: `Zu wenig Kapital (${k.cash.toLocaleString("de-DE")} $ nötig)` });
+    const fehlt = Object.entries(k.teile).filter(([g, n]) => (p.inv[g] || 0) < n);
+    if (fehlt.length) return ack?.({ error: "Teile fehlen: " +
+      fehlt.map(([g, n]) => `${Math.ceil(n - (p.inv[g] || 0))}× ${GOODS[g].name}`).join(", ") + " — an der Börse kaufen" });
+    p.cash -= k.cash;
+    for (const [g, n] of Object.entries(k.teile)) p.inv[g] -= n;
+    const teileWert = Object.entries(k.teile).reduce((s2, [g, n]) => s2 + Math.round(MM[g].price * n), 0);
+    const vorher = a.zustand;
+    a.zustand = 100;
+    p.stats.ausgaben += k.cash;
+    gainXp(p, 12);
+    (a.historie ??= []).push({ t: G.tick, text: `Instandsetzung ${vorher} % → 100 %`, amt: -(k.cash + teileWert) });
+    logTx(p, "Motorsport", `${GOODS[a.good].name} #${a.nr} instand gesetzt (${vorher} % → 100 %)`, -k.cash);
+    ack?.({ ok: true, zustand: 100 });
   }));
 
   /* --- Rennen: Anmeldung, Wetten, Sponsoring --- */
@@ -3094,6 +3159,22 @@ async function spawnBot(cfg, lvl = BOT_LEVELS[BOT_LEVEL_DEFAULT]) {
             if (frei && me.cash > frei.gehalt * 4) {
               await em("fahrerAnheuern", { fahrerId: frei.id });
               await em("fahrerZuweisen", { fahrerId: frei.id, autoId: ohneFahrer.id });
+            }
+          }
+          /* Instandsetzung geht dem Tuning VOR. Ein Bot, der nur ausbaut,
+           * faehrt seinen Wagen in sechs Rennen unter die Startgrenze und
+           * meldet danach nie wieder — das Startfeld liefe leer, und ohne
+           * Feld gibt es weder Rennen noch Wetten. */
+          const kaputt = meineAutos.filter(a2 => (a2.zustand ?? 100) < 70)
+            .sort((a2, b2) => a2.zustand - b2.zustand)[0];
+          if (kaputt) {
+            const rep = kaputt.reparatur;
+            const fehltTeil = rep && Object.entries(rep.teile || {}).find(([g2, n2]) => (me.inv[g2] || 0) < n2);
+            if (fehltTeil && !st.orders.some(o => o.playerId === myId && o.side === "buy" && o.good === fehltTeil[0])) {
+              await em("placeOrder", { side: "buy", good: fehltTeil[0], qty: fehltTeil[1] + 2,
+                price: Math.round((st.avg[fehltTeil[0]] || 150) * 1.15 * 100) / 100 });
+            } else if (rep && !fehltTeil && me.cash > rep.cash + 4000) {
+              await em("stallReparieren", { x: meinStall.x, y: meinStall.y, autoId: kaputt.id });
             }
           }
           /* Tunen, wenn die Kasse dick genug ist: fehlende Teile an der Börse

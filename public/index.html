@@ -4358,7 +4358,11 @@ function motorsportRendern(state, me, myId) {
     return `<div style="background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:10px;margin-bottom:10px">
         <div style="display:flex;gap:12px">
           <div style="flex:none;text-align:center">${rennwagenSvg(a, farbe)}
-            <div style="font-size:11px;opacity:.7;margin-top:2px">Zustand ${a.zustand} %</div></div>
+            <div style="font-size:11px;margin-top:3px;color:${
+              a.zustand < 25 ? "var(--down)" : a.zustand < 55 ? "#fbbf24" : "var(--dim)"}">Zustand ${a.zustand} %</div>
+            <div style="height:4px;border-radius:2px;background:var(--line);overflow:hidden;margin-top:3px">
+              <i style="display:block;height:100%;width:${a.zustand}%;background:${
+                a.zustand < 25 ? "var(--down)" : a.zustand < 55 ? "#fbbf24" : "var(--up)"}"></i></div></div>
           <div style="flex:1;min-width:0">
             <div style="display:flex;justify-content:space-between;align-items:baseline">
               <b>${gname(a.good)} #${a.nr}</b>
@@ -4383,6 +4387,28 @@ function motorsportRendern(state, me, myId) {
             `<div style="display:flex;justify-content:space-between;font-size:11px;opacity:.8;padding:2px 0">
                <span>${h.text}</span><span>${h.amt ? fmt(h.amt) : ""}</span></div>`).join("")}
         </details>
+        ${(() => {
+          /* Instandsetzung. Ohne sie ist Verschleiss eine Einbahnstrasse: Unter
+           * 25 % ist der Wagen nicht mehr startklar, und ausmustern oder
+           * verkaufen kann man ihn nicht — er blockiert dann für immer einen
+           * Stellplatz. */
+          const rep = a.reparatur;
+          if (!rep || !rep.fehlend) return "";
+          const teile = Object.entries(rep.teile || {});
+          const fehltTeil = teile.some(([g, n]) => (me.inv[g] || 0) < n);
+          const fehltGeld = me.cash < rep.cash;
+          const gemeldet2 = state.rennen && state.rennen.phase !== "vorbei"
+            && (state.rennen.teilnehmer || []).some(x2 => x2.autoId === a.id);
+          const grund = gemeldet2 ? "Wagen ist zum Rennen gemeldet"
+            : fehltGeld ? "Kapital fehlt"
+            : fehltTeil ? "Teile fehlen — an der Börse kaufen" : "";
+          return `<button class="fbtn" style="margin-top:8px;width:100%;${
+              a.zustand < 25 ? "background:var(--down);color:#fff" : ""}"
+              data-reparieren="${a.id}" data-x="${a.x}" data-y="${a.y}"
+              ${grund ? "disabled" : ""}>
+              Instand setzen auf 100 % · ${fmt(rep.cash)} + ${teile.map(([g, n]) =>
+                `${me.inv[g] >= n ? "" : "⚠ "}${n}× ${gname(g)}`).join(" + ")}${grund ? ` — ${grund}` : ""}</button>`;
+        })()}
         ${state.rennen?.phase === "anmeldung" ? (() => {
           const gemeldet = state.rennen.teilnehmer.some(x2 => x2.autoId === a.id);
           const startklar = a.fahrerId && a.zustand >= 25;
@@ -4458,6 +4484,8 @@ function motorsportRendern(state, me, myId) {
            + block("Bei anderen Teams", andere);
     })();
 
+  box.querySelectorAll("[data-reparieren]").forEach(b => b.addEventListener("click", () =>
+    act("stallReparieren", { x: +b.dataset.x, y: +b.dataset.y, autoId: +b.dataset.reparieren })));
   box.querySelectorAll("[data-tune]").forEach(b => b.addEventListener("click", () =>
     act("stallTunen", { x: +b.dataset.x, y: +b.dataset.y, autoId: +b.dataset.auto, bereich: b.dataset.tune })));
   box.querySelectorAll("[data-anmelden]").forEach(b => b.addEventListener("click", () =>
