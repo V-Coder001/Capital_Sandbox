@@ -602,6 +602,78 @@ td:first-child{font-family:var(--font)}
 .formrow{display:flex;gap:7px;margin:10px 0;flex-wrap:wrap;align-items:center}
 .formrow input{width:82px} .formrow select{max-width:150px}
 .sec{font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--dim);margin:12px 0 6px}
+
+/* ---- Fahrzeugentwicklung ----
+ * Die sechs Tuningbereiche als Karten statt als Knopfliste. Wichtig ist der
+ * Zielkonflikt: Was ein Bereich hebt und was er senkt, steht als farbiges
+ * Kürzel nebeneinander (--up / --down) — vorher lief beides als ein einziger
+ * Fließtext durch und war nicht auf einen Blick zu unterscheiden. */
+.tunegrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(228px,1fr));gap:8px}
+.tunecard{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:10px 11px;
+  text-align:left;color:var(--text);font-family:var(--font);cursor:pointer;width:100%;
+  display:flex;flex-direction:column;gap:8px;transition:border-color .15s,background .15s,transform .08s}
+.tunecard:hover:not(:disabled){border-color:var(--accent);background:#1e2839}
+.tunecard:active:not(:disabled){transform:translateY(1px)}
+.tunecard:disabled{cursor:default;opacity:.66}
+.tunecard.fertig{border-color:var(--up);opacity:1}
+.tunecard.fertig:disabled{opacity:1}
+.tunehead{display:flex;align-items:center;gap:8px}
+.tunehead svg{flex:none;opacity:.85}
+.tunehead b{font-size:12.5px;font-weight:650;flex:1;letter-spacing:.01em}
+.pips{display:flex;gap:3px;flex:none}
+.pip{width:7px;height:7px;border-radius:50%;background:var(--line)}
+.pip.on{background:var(--accent)}
+.tunecard.fertig .pip.on{background:var(--up)}
+.chips{display:flex;flex-wrap:wrap;gap:4px}
+.chip{font-size:10.5px;font-weight:600;padding:2px 6px;border-radius:6px;font-family:var(--mono);white-space:nowrap}
+.chip.up{color:var(--up);background:rgba(52,211,153,.13)}
+.chip.dn{color:var(--down);background:rgba(251,113,133,.13)}
+.tunecost{display:flex;flex-wrap:wrap;align-items:center;gap:6px;font-size:11px;color:var(--dim);
+  border-top:1px solid var(--line);padding-top:7px;margin-top:auto}
+.tunecost .geld{font-family:var(--mono);color:var(--text);font-weight:650}
+.teil{font-family:var(--mono);font-size:10.5px;padding:2px 6px;border-radius:6px;background:rgba(255,255,255,.05);color:var(--dim)}
+.teil.fehlt{color:var(--down);background:rgba(251,113,133,.13)}
+.tunehint{font-size:10.5px;color:var(--down);font-weight:600}
+.tunefertig{font-size:10.5px;color:var(--up);font-weight:600}
+.tunestand{display:flex;align-items:center;gap:9px;margin:2px 0 9px;font-size:11px;color:var(--dim)}
+.tunestand .bar{flex:1;height:5px;border-radius:3px;background:var(--line);overflow:hidden}
+.tunestand .bar>i{display:block;height:100%;background:linear-gradient(90deg,var(--accent),var(--accent2));transition:width .3s}
+
+/* ---- Fahrerkarten ----
+ * Vorher lief alles als Fließtext: sechs "Name Wert"-Paare hintereinander,
+ * ein Gesamteindruck war daraus nicht zu gewinnen und zwei Fahrer waren nicht
+ * vergleichbar. Jetzt: Helm in Teamfarbe, eine Gesamtnote zum Vergleichen und
+ * die Einzelwerte als Balken — dieselbe Sprache wie bei den Fahrzeugwerten. */
+.fgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(236px,1fr));gap:8px}
+.fcard{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:10px 11px;
+  display:flex;flex-direction:column;gap:9px}
+.fcard.mein{border-color:var(--accent)}
+.fcard.fremd{opacity:.62}
+.fhead{display:flex;gap:10px;align-items:center}
+.fhead svg{flex:none}
+.fname{flex:1;min-width:0}
+.fname b{display:block;font-size:13px;font-weight:650;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fname span{font-size:10.5px;color:var(--dim);font-family:var(--mono)}
+.fovr{flex:none;text-align:center;min-width:34px}
+.fovr b{display:block;font-family:var(--mono);font-size:17px;font-weight:700;line-height:1;color:var(--text)}
+.fovr span{font-size:9px;color:var(--dim);letter-spacing:.07em;text-transform:uppercase}
+.fstats{display:grid;grid-template-columns:1fr 1fr;gap:4px 11px}
+.fstat{display:grid;grid-template-columns:52px 1fr 22px;gap:6px;align-items:center;font-size:10px;color:var(--dim)}
+.fstat i{height:4px;border-radius:2px;background:var(--line);overflow:hidden;font-style:normal}
+.fstat i>b{display:block;height:100%;background:var(--accent);border-radius:2px}
+.fcard.fremd .fstat i>b{background:var(--dim)}
+.fstat u{text-decoration:none;font-family:var(--mono);color:var(--text);font-weight:650;text-align:right}
+.fsitz{font-size:10.5px;font-weight:600;color:var(--accent)}
+.fsitz.leer{color:var(--dim);font-weight:400}
+.ffoot{display:flex;align-items:center;gap:8px;border-top:1px solid var(--line);padding-top:8px;margin-top:auto}
+.fgehalt{font-size:11px;color:var(--dim);flex:1}
+.fgehalt b{font-family:var(--mono);color:var(--text);font-weight:650}
+.fbtn{background:var(--accent);color:#04121b;border:0;border-radius:8px;padding:6px 12px;
+  font-size:11.5px;font-weight:650;cursor:pointer;font-family:var(--font);white-space:nowrap;transition:filter .15s}
+.fbtn:hover:not(:disabled){filter:brightness(1.12)}
+.fbtn:disabled{background:var(--line);color:var(--dim);cursor:default}
+.fbtn.weg{background:transparent;border:1px solid var(--line);color:var(--dim)}
+.fbtn.weg:hover{border-color:var(--down);color:var(--down)}
 .invgrid{display:grid;grid-template-columns:1fr 1fr;gap:9px}
 .invtile{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:10px}
 .invtile h4{font-size:12.5px;margin-bottom:4px}
@@ -702,6 +774,22 @@ td:first-child{font-family:var(--font)}
   padding:20px 24px 14px;border-bottom:1px solid var(--line)}
 .tbHead h2{font-size:19px;color:var(--text)}
 #tbFortschritt{margin-top:3px;font-size:11.5px;color:var(--dim);font-family:var(--mono)}
+/* Vorlesen: die Anleitung ist lang, und nicht jeder liest gern vom Bildschirm.
+ * Der Knopf liest ab dem aktuellen Kapitel weiter bis zum Ende. */
+.tbLaut{display:inline-flex;align-items:center;gap:7px;margin-left:auto;margin-right:8px;
+  background:transparent;border:1px solid var(--line);border-radius:8px;color:var(--dim);
+  padding:7px 13px;font-size:12px;font-weight:600;cursor:pointer;font-family:var(--font);
+  transition:color .15s,border-color .15s,background .15s}
+.tbLaut:hover{color:var(--accent);border-color:rgba(56,189,248,.45)}
+.tbLaut.an{color:var(--accent);border-color:var(--accent);background:rgba(56,189,248,.1)}
+.tbLaut.an svg{animation:tbPuls 1.4s ease-in-out infinite}
+@keyframes tbPuls{0%,100%{opacity:.55}50%{opacity:1}}
+.tbStimme{margin-right:8px;max-width:150px;font-size:11.5px;padding:6px 8px}
+@media(max-width:640px){.tbStimme{display:none}}
+.tbUeben{margin-right:auto;background:transparent;border:1px solid var(--line);border-radius:8px;
+  color:var(--dim);padding:8px 14px;font-size:12px;font-weight:600;cursor:pointer;font-family:var(--font)}
+.tbUeben:hover{color:var(--accent2);border-color:rgba(167,139,250,.45)}
+@media(prefers-reduced-motion:reduce){.tbLaut.an svg{animation:none}}
 .tbZu{background:none;border:1px solid var(--line);border-radius:9px;width:30px;height:30px;
   color:var(--dim);cursor:pointer;font-size:13px;flex:none}
 .tbZu:hover{color:var(--text);border-color:#33415c}
@@ -802,7 +890,7 @@ td:first-child{font-family:var(--font)}
            stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
         <path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/>
       </svg>
-      Tutorial spielen
+      Spielanleitung lesen
     </button>
     <!-- Sprachumschalter. Die Oberfläche ist deutsch gewachsen; ohne sichtbaren
          Schalter probiert ein internationaler Besucher das Spiel gar nicht erst. -->
@@ -1208,6 +1296,11 @@ td:first-child{font-family:var(--font)}
   <div class="pbody" id="firmabody"></div>
 </div>
 
+<div class="panel" id="p-motorsport">
+  <div class="phead"><h2>Motorsport</h2><button class="x" data-close>✕</button></div>
+  <div class="pbody" id="motorbody"></div>
+</div>
+
 <div class="panel" id="p-lexikon">
   <div class="phead"><h2>Lexikon</h2><button class="x" data-close>✕</button></div>
   <div class="pbody" id="lexbody"></div>
@@ -1261,6 +1354,14 @@ td:first-child{font-family:var(--font)}
         <h2>Spielanleitung</h2>
         <p id="tbFortschritt">Kapitel 1 von 1</p>
       </div>
+      <button type="button" class="tbLaut" id="tbVorlesen" aria-pressed="false"
+              title="Kapitel vorlesen lassen — liest danach weiter bis zum Ende">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+             stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M11 5 6 9H2v6h4l5 4V5z"/><path d="M15.5 8.5a5 5 0 010 7"/><path d="M18.5 5.5a9 9 0 010 13"/>
+        </svg><span>Vorlesen</span>
+      </button>
+      <select id="tbStimme" class="tbStimme" aria-label="Stimme wählen" title="Stimme wählen"></select>
       <button class="tbZu" id="tbZu" aria-label="Schließen">&#10005;</button>
     </div>
     <div class="tbBody">
@@ -1268,6 +1369,7 @@ td:first-child{font-family:var(--font)}
       <article class="tbInhalt" id="tbInhalt"></article>
     </div>
     <div class="tbFuss">
+      <button type="button" id="tbUeben" class="tbUeben">Lieber ausprobieren</button>
       <button type="button" id="tbZurueck">Zurück</button>
       <div class="tbPunkte" id="tbPunkte"></div>
       <button type="button" id="tbWeiter">Weiter</button>
@@ -1827,6 +1929,8 @@ const EN = {
   /* Startbildschirm */
   "Neue Runde starten": "Start a new round", "Einer Runde beitreten": "Join a round",
   "Tutorial spielen": "Play the tutorial", "Runde erstellen": "Create round",
+  "Spielanleitung lesen": "Read the manual", "Lieber ausprobieren": "Rather try it out",
+  "Vorlesen": "Read aloud", "Stopp": "Stop", "Spielanleitung": "Manual",
   "Neuer Spielmodus": "New game mode",
   /* Bugreport */
   "Fehler melden": "Report a bug",
@@ -2660,14 +2764,20 @@ NEWSIMG.src = "assets/newstower.png";
 const SPRITE_VARIANTS = { farm:3, plantage:2, mine:3, ewerk:3, wasserwerk:2, oelpumpe:2, buero:3, brunnen:1, markt:1, kontor:1, laden:1, bauhandel:1, saftpresse:1, stahlwerk:1, pharma:1, ziegelei:1, betonwerk:1, imkerei:1, baeckerei:1, windpark:1, raffinerie:1, siliziummine:1, chipfabrik:1,
   autowerk:1, dieselwerk:1, eautowerk:1, autohaus:1, werbeagentur:1,
   campingplatz:1, strandhotel:1,
-  munitionsfabrik:1, waffenschmiede:1, panzerwerk:1, waffenhandel:1 };
+  munitionsfabrik:1, waffenschmiede:1, panzerwerk:1, waffenhandel:1,
+  reifenwerk:1, rennlabor:1, rennstall:1 };
+/* Fuer die drei Motorsport-Gebaeude gibt es noch keine eigene Grafik. Ohne
+ * Sprite liefert spriteFor() null, und der Zeichenzweig haengt an "if (spr)" —
+ * das Gebaeude waere auf der Karte unsichtbar, samt Besitzerfaerbung. Bis
+ * eigene Sprites da sind, leihen sie sich deshalb vorhandene aus. */
+const SPRITE_ALIAS = { reifenwerk: "betonwerk", rennlabor: "chipfabrik", rennstall: "autohaus" };
 const SPRITES = {};
 for (const [b, n] of Object.entries(SPRITE_VARIANTS)) {
   SPRITES[b] = [];
   for (let i = 0; i < n; i++) {
     const img = new Image();
     img.onload = () => SPRITES[b][i] = spriteHiRes(img);
-    img.src = `assets/${b}-${i}.png`;
+    img.src = `assets/${SPRITE_ALIAS[b] || b}-${i}.png`;
   }
 }
 const spriteFor = (btype, x, y) => {
@@ -3014,7 +3124,8 @@ const GLOW = (() => {
  * Aktive Industriegebäude stoßen kleine, aufsteigende Rauchwölkchen aus —
  * pausierte nicht. So sieht man den Betriebszustand direkt auf der Karte. */
 const RAUCHER = new Set(["mine", "stahlwerk", "raffinerie", "ewerk", "ziegelei", "betonwerk",
-  "chipfabrik", "dieselwerk", "autowerk", "munitionsfabrik", "panzerwerk", "waffenschmiede", "oelpumpe"]);
+  "chipfabrik", "dieselwerk", "autowerk", "munitionsfabrik", "panzerwerk", "waffenschmiede", "oelpumpe",
+  "reifenwerk"]);
 function drawRauch(sx, topY, seed, now) {
   /* DDR-Optik: dichterer, dunklerer Qualm — Braunkohle statt Fernwärme. */
   const n = PLAN_LOOK ? 5 : 3, deck = PLAN_LOOK ? .45 : .3;
@@ -3391,7 +3502,7 @@ function clickTile(e) {
       }).join("");
     }
     const lvl = t.level || 1;
-    const canLevel = !!(bt.out || bt.proc);
+    const canLevel = !!(bt.out || bt.proc || bt.racing);
     const lvlMult = 1 + 0.3 * (lvl - 1);
     let upgradeHtml = "";
     if (canLevel && mine) {
@@ -3400,8 +3511,37 @@ function clickTile(e) {
       } else {
         const ec = Math.ceil(bt.cost / 2500 * lvl), cc = Math.round(bt.cost * 0.35 * lvl);
         const afford = me.inv.elektronik >= ec && me.cash >= cc;
-        upgradeHtml = `<button class="opt" id="upgrade" ${afford ? "" : "disabled"}>Auflevel auf Stufe ${lvl + 1} <small>${ec} Elektronik + ${fmt(cc)} · +30 % Ausstoß</small></button>`;
+        const nutzen = bt.racing ? `${lvl + 1} Stellplätze statt ${lvl}` : "+30 % Ausstoß";
+        upgradeHtml = `<button class="opt" id="upgrade" ${afford ? "" : "disabled"}>Auflevel auf Stufe ${lvl + 1} <small>${ec} Elektronik + ${fmt(cc)} · ${nutzen}</small></button>`;
       }
+    }
+    /* Rennstall: die Garage. Ein Fahrzeug, das hier steht, ist keine Ware mehr —
+     * deshalb steht die Warnung direkt am Knopf und nicht im Kleingedruckten. */
+    let stallHtml = "";
+    if (bt.racing) {
+      const autos = t.autos || [], kap = lvl;
+      const karte = a => `<div style="background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:8px;margin-bottom:6px">
+          <b>${gname(a.good)} #${a.nr}</b>
+          <div class="note" style="margin:4px 0 0">
+            Speed <b>${a.werte?.speed ?? "—"}</b> · Beschleunigung <b>${a.werte?.beschl ?? "—"}</b> · Handling <b>${a.werte?.handling ?? "—"}</b>
+            · Effizienz <b>${a.werte?.effizienz ?? "—"}</b> · Standfestigkeit <b>${a.werte?.standfest ?? "—"}</b>
+            <br>Zustand ${a.zustand} % · ${a.rennen} Rennen · ${a.siege} Siege
+          </div></div>`;
+      const liste = autos.length ? autos.map(karte).join("")
+        : `<div class="note" style="margin:0 0 6px">Noch kein Fahrzeug eingestellt.</div>`;
+      let aktion = "";
+      if (mine) {
+        const imLager = ["eauto", "dieselauto", "benzinauto"].filter(g => (me.inv[g] || 0) >= 1);
+        aktion = autos.length >= kap
+          ? `<div class="note" style="margin:0">Alle ${kap} Stellplätze belegt — ein Ausbau schafft einen weiteren.</div>`
+          : imLager.length
+            ? imLager.map(g => `<button class="opt" data-auto="${g}">${gname(g)} einstellen
+                <small>${me.inv[g]} im Lager · verlässt das Lager endgültig</small></button>`).join("")
+            : `<div class="note" style="margin:0">Kein Fahrzeug im Lager — an der Börse kaufen.</div>`;
+      }
+      stallHtml = `<div class="note" style="margin-top:6px"><b>Garage ${autos.length}/${kap} Stellplätze</b>
+        <br>Eingestellte Fahrzeuge sind keine handelbare Ware mehr. Zu Geld machen lässt sich
+        danach nur der ganze Stall — über die Versteigerung an der Stadtbank.</div>` + liste + aktion;
     }
     /* Werbeagentur: Kampagnen buchen. Reichweite zerfällt laufend, deshalb steht
      * daneben, was der Aufschlag gerade wert ist und wie lange er noch trägt. */
@@ -3420,7 +3560,7 @@ function clickTile(e) {
         </div>` + pakete;
     }
     tm.innerHTML = `<h3>${bname(t.btype)}${canLevel ? ` <span style="color:var(--accent);font-size:12px">★${lvl}</span>` : ""}</h3><div class="note">Besitzer: ${mine ? "Du" : ownerName}${t.lien ? "<br>Pfandrecht aktiv" : ""}${t.paused ? "<br>Pausiert" : ""}${bt.out ? `<br>Produziert ${gname(bt.out)} (${(bt.rate*lvlMult).toFixed(2)}/s${lvl>1 ? ` · Basis ${bt.rate} ×${lvlMult.toFixed(1)}` : ""})` : ""}${bt.boosts ? `<br>Boost durch ${bt.boosts.map(r => gname(r)).join(" + ")} im Lager (+75 % je Rohstoff, wird verbraucht)` : ""}${bt.proc ? `<br>Verarbeitet ${Object.entries(bt.proc.in).map(([g,n]) => `${(n*lvlMult).toFixed(2)} ${gname(g)}`).join(" + ")}/s → <b>${(bt.proc.rate*lvlMult).toFixed(2)} ${gname(bt.proc.out)}/s</b>` : ""}${bt.retail ? `<br>Dein Preis bestimmt das Tempo: Ø-Kurs = volle Rate, teurer = langsamer, billiger = schneller (max. ×2)${(me.ad?.boost || 1) > 1.001 ? `<br><b style="color:var(--accent2)">Werbung aktiv: bis ${Math.round(((me.ad.boost)-1)*100)} % über Ø-Kurs ohne Tempoverlust</b>` : ""}` : ""}</div>`
-      + shopHtml + adHtml
+      + shopHtml + stallHtml + adHtml
       + ((bt.retail || bt.proc) && mine ? `<button class="opt" id="pause">${t.paused ? "Fortsetzen" : "Pausieren"} <small>${bt.retail ? "Verkauf" : "Weiterverarbeitung"}</small></button>` : "")
       + upgradeHtml
       + (mine && !t.lien ? `<button class="opt" id="dem">Abreißen &amp; verkaufen <small>${fmt(bt.cost*.5)}</small></button>` : "");
@@ -3437,6 +3577,9 @@ function clickTile(e) {
         price: document.getElementById("sp-" + i).value });
       tm.style.display = "none";
     }));
+    tm.querySelectorAll("[data-auto]").forEach(b => b.addEventListener("click", () => {
+      act("stallEinstellen", { x: t.x, y: t.y, good: b.dataset.auto }); tm.style.display = "none";
+    }));
     tm.querySelector("#dem")?.addEventListener("click", () => { act("demolish", { x:t.x, y:t.y }); tm.style.display="none"; });
     return;
   }
@@ -3448,10 +3591,18 @@ function clickTile(e) {
   const matName = { ziegel: "Ziegel", beton: "Beton" };
   const matTxt = b => Object.entries(mats(b)).map(([g, n]) => `${n} ${matName[g] || g}`).join(" + ");
   const totalCost = b => b.cost + (t.locked ? t.unlockCost : 0);
-  const canAfford = b => me.cash >= totalCost(b) && Object.entries(mats(b)).every(([g, n]) => me.inv[g] >= n);
+  /* Motorsport ist Spätspiel-Inhalt. Der Rennstall bleibt im Menü sichtbar,
+   * aber gesperrt — sonst sucht man ihn im Lexikon und findet ihn im Bau-Dialog
+   * nirgends, ohne je zu erfahren, woran es liegt. */
+  const nwSchwelle = store.get().meta?.racingUnlock ?? 200000;
+  const meinNW = store.get().state?.players?.[store.get().myId]?.netWorth ?? 0;
+  const gesperrt = b => !!b.racing && meinNW < nwSchwelle;
+  const canAfford = b => !gesperrt(b) && me.cash >= totalCost(b) && Object.entries(mats(b)).every(([g, n]) => me.inv[g] >= n);
   const lockNote = t.locked ? ` (inkl. ${fmt(t.unlockCost)} Freischaltung)` : "";
   tm.innerHTML = `<h3>${t.locked ? "Gesperrt · " : ""}Bauen — ${t.zone}</h3>` + (opts.length ? `<div class="note">Baumaterial: Ziegel und Beton — Nachschub über die Börse. Später mit Elektronik auflevelbar.${lockNote}</div>` : `<div class="note">Deine Industrie kann hier nichts bauen — handle stattdessen an der Börse.</div>`)
-    + opts.map(([bid, b]) => `<button class="opt" data-b="${bid}" ${canAfford(b) ? "" : "disabled"}>${b.name}<small>${fmt(totalCost(b))} · ${matTxt(b)}</small></button>`).join("");
+    + opts.map(([bid, b]) => `<button class="opt" data-b="${bid}" ${canAfford(b) ? "" : "disabled"}>${b.name}<small>${
+        gesperrt(b) ? `Motorsport ab ${fmt(nwSchwelle)} Nettovermögen — dir fehlen ${fmt(nwSchwelle - meinNW)}`
+                    : `${fmt(totalCost(b))} · ${matTxt(b)}`}</small></button>`).join("");
   tm.querySelectorAll(".opt").forEach(btn => btn.addEventListener("click", () => {
     act("build", { x:t.x, y:t.y, btype: btn.dataset.b }); tm.style.display = "none"; }));
 }
@@ -3545,12 +3696,15 @@ addEventListener("keydown", e => {
 });
 
 /* ---- Dock & Panels ---- */
-const DOCK = [["karte","Karte"],["plan","Planbüro"],["lager","Lager"],["boerse","Börse"],["bonds","Finanzen"],["firma","Firma"],["lexikon","Lexikon"],["chat","Chat"]];
+const DOCK = [["karte","Karte"],["plan","Planbüro"],["lager","Lager"],["boerse","Börse"],["bonds","Finanzen"],["firma","Firma"],["motorsport","Motorsport"],["lexikon","Lexikon"],["chat","Chat"]];
 const dock = document.getElementById("dock");
 DOCK.forEach(([pid, label]) => { const b = document.createElement("button");
   b.className = "dockbtn"; b.dataset.p = pid; b.textContent = label;
   /* Das Planbüro gibt es nur im Planwirtschafts-Modus — render() blendet es ein. */
   if (pid === "plan") { b.id = "dockPlan"; b.style.display = "none"; }
+  /* Motorsport erscheint erst mit dem ersten eigenen Rennstall — vorher wäre
+   * es ein Knopf, hinter dem nichts steht. */
+  if (pid === "motorsport") { b.id = "dockMotor"; b.style.display = "none"; }
   b.addEventListener("click", () => openPanel(pid)); dock.append(b); });
 /* stumm=true nur für den Aufruf beim Seitenaufbau: dort gibt es weder eine
  * Nutzergeste noch schon ein SFX-Modul (das entsteht erst weiter unten). */
@@ -3746,7 +3900,7 @@ const SFX = (() => {
 /* Welche Aktion wie klingt. Alles, was nicht aufgeführt ist, bleibt still —
  * ein Klang auf wirklich jeden Handgriff würde schnell nerven. */
 const SFX_AKTION = {
-  build: "bau", upgradeBuilding: "bau", demolish: "bau", unlockTile: "bau",
+  build: "bau", upgradeBuilding: "bau", demolish: "bau", unlockTile: "bau", stallEinstellen: "bau",
   placeOrder: "geld", takeOrder: "geld", buyShares: "geld", bidShares: "geld",
   acceptShareBid: "geld", listShares: "geld", buyBond: "geld", issueBond: "geld",
   bid: "geld", acceptContract: "geld", contribute: "geld", mergeCompany: "geld",
@@ -3955,6 +4109,277 @@ function kapitalmarktHinweis(state, myId) {
   bekannteAngebote = offen;
 }
 
+
+/* ---------- Motorsport ----------
+ * Garage, Fahrzeugentwicklung und Fahrer in einem Panel. Der Wagen wird als
+ * Draufsicht gezeichnet und verändert sich mit dem Tuning: Der Heckflügel
+ * wächst mit der Aerodynamik, die Reifen mit dem Reifentuning, ein Streifen
+ * markiert den Antrieb. So sieht man die Investition, statt sie nur zu lesen. */
+const STAT_LABEL = { speed: "Speed", beschl: "Beschleunigung", handling: "Handling",
+                     effizienz: "Effizienz", standfest: "Standfestigkeit" };
+/* Kurzformen fuer die Wirkungs-Kuerzel — ausgeschrieben passen sechs Werte
+ * nicht nebeneinander, ohne dass die Karte umbricht. */
+const STAT_KURZ = { speed: "Speed", beschl: "Beschl.", handling: "Handling",
+                    effizienz: "Effizienz", standfest: "Standfest." };
+/* Ein Piktogramm je Bereich: Man erkennt die Karte, bevor man den Namen liest. */
+const TUNE_ICON = {
+  antrieb:     `<path d="M2 8h3M11 8h3M8 2v3M8 11v3" /><circle cx="8" cy="8" r="3"/>`,
+  batterie:    `<rect x="2" y="5" width="10" height="6" rx="1.5"/><path d="M14 7v2"/><path d="M5 8h4"/>`,
+  reifen:      `<circle cx="8" cy="8" r="6"/><circle cx="8" cy="8" r="2.2"/><path d="M8 2v2M8 12v2M2 8h2M12 8h2"/>`,
+  fahrwerk:    `<path d="M4 3v2M4 11v2M4 5l4 1-4 1 4 1-4 1"/><circle cx="12" cy="8" r="2.5"/><path d="M12 3v2.5M12 10.5V13"/>`,
+  aerodynamik: `<path d="M2 6h12M3.5 9.5h9"/><path d="M2 12h5"/><path d="M11 3.5l3 2.5-3 2.5"/>`,
+  software:    `<rect x="4" y="4" width="8" height="8" rx="1.5"/><path d="M6.5 1.5v2.5M9.5 1.5v2.5M6.5 12v2.5M9.5 12v2.5M1.5 6.5h2.5M1.5 9.5h2.5M12 6.5h2.5M12 9.5h2.5"/>`,
+};
+const tuneIcon = k => `<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor"
+  stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${TUNE_ICON[k] || ""}</svg>`;
+const STAT_MAXW = 130;
+
+function rennwagenSvg(a, farbe) {
+  const t = a.tuning || {}, id = a.id;
+  /* Jede Ausbaustufe ist am Wagen abzulesen: Flügel wachsen mit der
+   * Aerodynamik, die Walzen mit dem Reifentuning, die Querlenker treten mit
+   * dem Fahrwerk hervor, ein Mittelstreifen kommt mit dem Antrieb, der Lack
+   * wird mit der Rennsoftware glänzender und die Batterie legt einen Schimmer
+   * unter das Auto. So sieht man die Investition, statt sie nur zu lesen. */
+  const aero = t.aerodynamik || 0, reif = t.reifen || 0, fahr = t.fahrwerk || 0;
+  const fw = 30 + aero * 4.5;            // halbe Frontflügelbreite
+  const rw = 24 + aero * 4.5;            // halbe Heckflügelbreite
+  const rad = 9 + reif * 1.7;            // Reifenbreite
+  const arm = 1 + fahr * 0.7;            // Stärke der Querlenker
+  const armFarbe = fahr ? farbe : "#4a5a6a";
+  const glanz = (t.software || 0) > 0 ? 0.5 : 0;
+  const akku = (t.batterie || 0) > 0;
+  const streifen = (t.antrieb || 0) > 0;
+  return `<svg viewBox="0 0 100 172" width="84" height="145" aria-hidden="true">
+    <defs>
+      <linearGradient id="lk${id}" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0" stop-color="${farbe}" stop-opacity=".95"/>
+        <stop offset=".55" stop-color="${farbe}" stop-opacity=".62"/>
+        <stop offset="1" stop-color="${farbe}" stop-opacity=".42"/>
+      </linearGradient>
+      <radialGradient id="gl${id}" cx=".5" cy=".5" r=".5">
+        <stop offset="0" stop-color="${farbe}" stop-opacity=".55"/>
+        <stop offset="1" stop-color="${farbe}" stop-opacity="0"/>
+      </radialGradient>
+    </defs>
+    ${akku ? `<ellipse cx="50" cy="96" rx="34" ry="52" fill="url(#gl${id})"/>` : ""}
+
+    <g stroke="${armFarbe}" stroke-width="${arm}" stroke-linecap="round" opacity=".9">
+      <path d="M44 52 L26 50 M44 60 L26 62 M56 52 L74 50 M56 60 L74 62"/>
+      <path d="M40 110 L24 108 M40 119 L24 121 M60 110 L76 108 M60 119 L76 121"/>
+    </g>
+
+    <g fill="#0d1219">
+      <rect x="${20 - rad / 2}" y="45" width="${rad}" height="24" rx="3.5"/>
+      <rect x="${80 - rad / 2}" y="45" width="${rad}" height="24" rx="3.5"/>
+      <rect x="${18 - rad / 2}" y="103" width="${rad + 3}" height="29" rx="4"/>
+      <rect x="${82 - rad / 2 - 3}" y="103" width="${rad + 3}" height="29" rx="4"/>
+    </g>
+    <g stroke="#2b3646" stroke-width="1" opacity=".8">
+      <path d="M20 49v16 M80 49v16 M${19.5} 108v19 M${80.5} 108v19"/>
+    </g>
+
+    <rect x="${50 - fw}" y="8" width="${fw * 2}" height="9" rx="2.5" fill="${farbe}" opacity=".9"/>
+    <rect x="${50 - fw}" y="6" width="4" height="15" rx="1.5" fill="#0d1219"/>
+    <rect x="${50 + fw - 4}" y="6" width="4" height="15" rx="1.5" fill="#0d1219"/>
+
+    <path d="M50 16 L55 42 L59 64 L63 84 L63 108 L58 124 L57 140 L43 140 L42 124 L37 108 L37 84 L41 64 L45 42 Z"
+          fill="url(#lk${id})" stroke="${farbe}" stroke-width="1.6" stroke-linejoin="round"/>
+    ${streifen ? `<path d="M50 18 L50 138" stroke="#fff" stroke-width="3.5" opacity=".5" stroke-linecap="round"/>` : ""}
+    ${glanz ? `<path d="M45 24 L41 66 L45 66 L49 24 Z" fill="#fff" opacity="${glanz}"/>` : ""}
+
+    <path d="M43 74 q7 -5 14 0 l1 14 q-8 5 -16 0 Z" fill="#0b0f14" opacity=".85"/>
+    <circle cx="50" cy="80" r="5.4" fill="#0d1219" stroke="${farbe}" stroke-width="1.1"/>
+    <path d="M41 78 q9 -11 18 0" fill="none" stroke="#e3e9f4" stroke-width="1.6" opacity=".55"/>
+    <path d="M44 96 q6 -4 12 0 l2 20 q-8 4 -16 0 Z" fill="#0b0f14" opacity=".45"/>
+
+    <rect x="${50 - rw}" y="142" width="${rw * 2}" height="10" rx="2.5" fill="${farbe}" opacity=".92"/>
+    <rect x="${50 - rw}" y="139" width="4" height="17" rx="1.5" fill="#0d1219"/>
+    <rect x="${50 + rw - 4}" y="139" width="4" height="17" rx="1.5" fill="#0d1219"/>
+    <rect x="${50 - rw + 6}" y="152" width="${rw * 2 - 12}" height="4" rx="1.5" fill="${farbe}" opacity=".55"/>
+
+    <text x="50" y="124" text-anchor="middle" font-size="14" font-weight="800"
+          fill="#fff" opacity=".9" font-family="var(--font)">${a.nr}</text>
+  </svg>`;
+}
+
+function statBalken(basis, jetzt) {
+  const b = Math.max(0, Math.min(100, basis / STAT_MAXW * 100));
+  const j = Math.max(0, Math.min(100, jetzt / STAT_MAXW * 100));
+  const runter = jetzt < basis;
+  return `<div style="position:relative;height:7px;background:var(--panel2);border-radius:4px;overflow:hidden">
+      <div style="position:absolute;inset:0 auto 0 0;width:${Math.min(b, j)}%;background:var(--line2,#4a5a6a)"></div>
+      <div style="position:absolute;inset:0 auto 0 ${Math.min(b, j)}%;width:${Math.abs(j - b)}%;background:${runter ? "var(--bad,#e05a5a)" : "var(--accent)"}"></div>
+    </div>`;
+}
+
+function motorsportRendern(state, me, myId) {
+  const knopf = document.getElementById("dockMotor");
+  const meta = store.get().meta || {};
+  const staelle = (state.map || []).filter(t => t.owner === myId && (BTYPES()[t.btype] || {}).racing);
+  if (knopf) knopf.style.display = staelle.length ? "" : "none";
+  const box = document.getElementById("motorbody");
+  if (!box || !document.getElementById("p-motorsport").classList.contains("open")) return;
+  if (!staelle.length) { box.innerHTML = `<div class="note">Du betreibst keinen Rennstall.</div>`; return; }
+
+  const farbe = state.players[myId]?.color || "#7ad";
+  const TUN = meta.tuning || {}, TMAX = meta.tuningMax || 3;
+  const RAW = meta.raceStats || {};
+  const fahrer = state.fahrer || [];
+  const meine = fahrer.filter(f => f.teamId === myId);
+  const alleAutos = staelle.flatMap(t => (t.autos || []).map(a => ({ ...a, x: t.x, y: t.y })));
+
+  const autoKarte = a => {
+    const w = a.werte || {}, basis = RAW[a.good] || {};
+    const f = fahrer.find(f => f.id === a.fahrerId);
+    const balken = Object.keys(STAT_LABEL).map(k => `
+      <div style="margin-bottom:5px">
+        <div style="display:flex;justify-content:space-between;font-size:11px;opacity:.75">
+          <span>${STAT_LABEL[k]}</span>
+          <span><b style="color:var(--text)">${w[k]}</b>${w[k] !== basis[k] ? ` <span style="opacity:.6">(${basis[k]})</span>` : ""}</span>
+        </div>${statBalken(basis[k] ?? 0, w[k] ?? 0)}
+      </div>`).join("");
+    const stufenGesamt = Object.values(a.tuning || {}).reduce((x, y) => x + y, 0);
+    const stufenMax = Object.keys(TUN).length * TMAX;
+    const tuningKnoepfe = `<div class="tunestand">
+        <span>Entwicklungsstand</span>
+        <span class="bar"><i style="width:${Math.round(stufenGesamt / stufenMax * 100)}%"></i></span>
+        <span><b style="color:var(--text)">${stufenGesamt}</b>/${stufenMax}</span>
+      </div><div class="tunegrid">` +
+      Object.entries(TUN).map(([key, T]) => {
+        const stufe = (a.tuning || {})[key] || 0;
+        const naechste = stufe + 1;
+        const voll = naechste > TMAX;
+        const cash = Math.round(T.cash * naechste);
+        /* Teile mit Bestand: "2/3 Rennreifen" sagt sofort, woran es hakt —
+         * vorher stand dort nur die geforderte Menge und man musste im Lager
+         * nachsehen, warum der Knopf grau ist. */
+        const teile = Object.entries(T.teile).map(([g, n]) => {
+          const brauch = n * naechste, habe = Math.floor(me.inv[g] || 0);
+          return { g, brauch, habe, fehlt: habe < brauch };
+        });
+        const geldFehlt = me.cash < cash;
+        const reicht = !voll && !geldFehlt && teile.every(t => !t.fehlt);
+        const pips = Array.from({ length: TMAX }, (_, i) => `<span class="pip${i < stufe ? " on" : ""}"></span>`).join("");
+        const chips = [...Object.entries(T.plus).map(([k, v]) => `<span class="chip up">+${v} ${STAT_KURZ[k]}</span>`),
+                       ...Object.entries(T.minus).map(([k, v]) => `<span class="chip dn">−${v} ${STAT_KURZ[k]}</span>`)].join("");
+        const fuss = voll
+          ? `<span class="tunefertig">✓ Höchststufe erreicht</span>`
+          : `<span class="geld${geldFehlt ? " tunehint" : ""}">${fmt(cash)}</span>` +
+            teile.map(t => `<span class="teil${t.fehlt ? " fehlt" : ""}">${t.habe}/${t.brauch} ${gname(t.g)}</span>`).join("");
+        return `<button class="tunecard${voll ? " fertig" : ""}" data-tune="${key}" data-auto="${a.id}"
+            data-x="${a.x}" data-y="${a.y}" ${reicht ? "" : "disabled"}
+            title="${voll ? "Höchststufe" : `Stufe ${naechste} von ${TMAX}`}">
+            <span class="tunehead">${tuneIcon(key)}<b>${T.name}</b><span class="pips">${pips}</span></span>
+            <span class="chips">${chips}</span>
+            <span class="tunecost">${fuss}</span>
+          </button>`;
+      }).join("") + `</div>`;
+    const fahrerWahl = meine.length
+      ? `<select data-setfahrer="${a.id}" style="width:100%;margin-top:4px">
+           <option value="">— kein Fahrer —</option>
+           ${meine.map(x => `<option value="${x.id}" ${x.autoId === a.id ? "selected" : ""}>${x.name} (${x.speed}/${x.handling}/${x.reaktion})</option>`).join("")}
+         </select>`
+      : `<div class="note" style="margin:4px 0 0">Noch kein Fahrer unter Vertrag.</div>`;
+    return `<div style="background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:10px;margin-bottom:10px">
+        <div style="display:flex;gap:12px">
+          <div style="flex:none;text-align:center">${rennwagenSvg(a, farbe)}
+            <div style="font-size:11px;opacity:.7;margin-top:2px">Zustand ${a.zustand} %</div></div>
+          <div style="flex:1;min-width:0">
+            <div style="display:flex;justify-content:space-between;align-items:baseline">
+              <b>${gname(a.good)} #${a.nr}</b>
+              <span style="font-size:11px;opacity:.7">Wert ${fmt(a.wert || 0)}</span>
+            </div>
+            <div style="font-size:11px;opacity:.7;margin-bottom:6px">
+              ${a.rennen} Rennen · ${a.siege} Siege${f ? ` · am Steuer: <b style="color:var(--accent)">${f.name}</b>` : ""}</div>
+            ${balken}${fahrerWahl}
+          </div>
+        </div>
+        <div class="sec" style="margin-top:8px">Entwicklung</div>${tuningKnoepfe}
+      </div>`;
+  };
+
+  /* Gesamtnote aus den fünf Rennwerten. Erfahrung bleibt draußen: Sie läuft
+   * von 0 bis 40 und würde jeden Fahrer künstlich nach unten ziehen — sie
+   * steht deshalb als eigener Wert daneben. */
+  const fGesamt = f => Math.round((f.speed + f.handling + f.reaktion + f.strategie + f.konstanz) / 5);
+  const helmSvg = (f, farbe) => `<svg width="34" height="34" viewBox="0 0 34 34" aria-hidden="true">
+      <path d="M17 4c7 0 11 4.6 11 11v6c0 4-3 6-6.5 6h-9C8 27 5 24.4 5 20v-5C5 8.6 9.6 4 17 4Z"
+            fill="${farbe}" opacity=".9"/>
+      <path d="M8.5 14.5c1.8-3.4 5-5 8.5-5s6.7 1.6 8.5 5c.6 1.1.2 2.2-1 2.4-5 .9-10.5.9-15 0-1.2-.2-1.6-1.3-1-2.4Z"
+            fill="#0b0f14" opacity=".85"/>
+      <path d="M17 27h5c2.2 0 3.6-1 4.4-2.6" fill="none" stroke="#0b0f14" stroke-width="1.4" opacity=".5"/>
+      <text x="17" y="25" text-anchor="middle" font-size="9" font-weight="800" fill="#fff" opacity=".85">${f.nr}</text>
+    </svg>`;
+  const fStat = (name, wert, max) => `<span class="fstat"><span>${name}</span>
+      <i><b style="width:${Math.round(Math.min(100, wert / max * 100))}%"></b></i><u>${wert}</u></span>`;
+
+  const fahrerKarte = f => {
+    const meiner = f.teamId === myId, fremd = f.teamId && !meiner;
+    const auto = meiner && f.autoId ? alleAutos.find(a => a.id === f.autoId) : null;
+    const helmFarbe = meiner ? farbe : fremd ? (state.players[f.teamId]?.color || "#6b7a8d") : "#59687c";
+    const platzFrei = alleAutos.length > 0;
+    return `<div class="fcard${meiner ? " mein" : fremd ? " fremd" : ""}">
+        <div class="fhead">
+          ${helmSvg(f, helmFarbe)}
+          <span class="fname"><b>${f.name}</b><span>${f.land} · Startnummer ${f.nr}</span></span>
+          <span class="fovr"><b>${fGesamt(f)}</b><span>Gesamt</span></span>
+        </div>
+        <div class="fstats">
+          ${fStat("Speed", f.speed, 100)}${fStat("Strategie", f.strategie, 100)}
+          ${fStat("Handling", f.handling, 100)}${fStat("Konstanz", f.konstanz, 100)}
+          ${fStat("Reaktion", f.reaktion, 100)}${fStat("Erfahrung", f.erfahrung, 40)}
+        </div>
+        ${meiner ? `<div class="fsitz${auto ? "" : " leer"}">${auto
+            ? `Am Steuer: ${gname(auto.good)} #${auto.nr}`
+            : platzFrei ? "Ohne Cockpit — unten am Fahrzeug zuweisen" : "Ohne Cockpit — noch kein Fahrzeug im Stall"}</div>` : ""}
+        <div class="ffoot">
+          <span class="fgehalt">${fremd
+            ? `Unter Vertrag bei <b>${state.players[f.teamId]?.name ?? "einem anderen Team"}</b>`
+            : `<b>${fmt(f.gehalt)}</b> je Minute`}</span>
+          ${meiner ? `<button class="fbtn weg" data-feuer="${f.id}">Vertrag lösen</button>`
+            : fremd ? `<button class="fbtn" disabled>Vergeben</button>`
+            : `<button class="fbtn" data-heuer="${f.id}" ${me.cash >= f.gehalt * 2 ? "" : "disabled"}
+                 title="${fmt(f.gehalt)} Handgeld sofort, danach ${fmt(f.gehalt)} je Minute">Verpflichten</button>`}
+        </div>
+      </div>`;
+  };
+
+  box.innerHTML =
+    `<div class="note">Fahrzeuge im Rennstall sind keine handelbare Ware mehr. Teile fürs Tuning
+       kaufst du an der Börse — Rennreifen und Rennsoftware stellen andere Firmen her.</div>
+     <div class="sec">Garage (${alleAutos.length})</div>` +
+    (alleAutos.length ? alleAutos.map(autoKarte).join("")
+      : `<div class="note">Noch kein Fahrzeug eingestellt. Kaufe ein Auto an der Börse und stelle es am Rennstall ein.</div>`) +
+    /* Nach Zugehörigkeit gruppiert und innerhalb der freien nach Gesamtnote:
+     * Wer einen Fahrer sucht, will die besten zuerst sehen, nicht die
+     * Reihenfolge, in der der Server sie gewürfelt hat. */
+    (() => {
+      const frei = fahrer.filter(f => !f.teamId).sort((a, b) => fGesamt(b) - fGesamt(a));
+      const andere = fahrer.filter(f => f.teamId && f.teamId !== myId);
+      const block = (titel, liste) => liste.length
+        ? `<div class="sec">${titel}</div><div class="fgrid">${liste.map(fahrerKarte).join("")}</div>` : "";
+      return block(`Dein Team — ${meine.length} unter Vertrag`, meine)
+           + block(`Frei verfügbar — ${frei.length}`, frei)
+           + block("Bei anderen Teams", andere);
+    })();
+
+  box.querySelectorAll("[data-tune]").forEach(b => b.addEventListener("click", () =>
+    act("stallTunen", { x: +b.dataset.x, y: +b.dataset.y, autoId: +b.dataset.auto, bereich: b.dataset.tune })));
+  box.querySelectorAll("[data-heuer]").forEach(b => b.addEventListener("click", () =>
+    act("fahrerAnheuern", { fahrerId: +b.dataset.heuer })));
+  box.querySelectorAll("[data-feuer]").forEach(b => b.addEventListener("click", () =>
+    act("fahrerEntlassen", { fahrerId: +b.dataset.feuer })));
+  box.querySelectorAll("[data-setfahrer]").forEach(sel => sel.addEventListener("change", () => {
+    const autoId = +sel.dataset.setfahrer;
+    if (sel.value) return act("fahrerZuweisen", { fahrerId: +sel.value, autoId });
+    /* "kein Fahrer": Der Server kennt keinen Fahrer 0 — also den bisher
+     * zugewiesenen suchen und DESSEN Zuweisung lösen. */
+    const bisher = meine.find(f => f.autoId === autoId);
+    if (bisher) act("fahrerZuweisen", { fahrerId: bisher.id, autoId: null });
+  }));
+}
+
 /* ---------- Planbüro (Planwirtschafts-Modus) ---------- */
 function planRendern(state, myId) {
   const knopf = document.getElementById("dockPlan");
@@ -4102,6 +4527,7 @@ function render({ state, me, myId, chat, room }) {
   tutCheck(state, myId);
   kapitalmarktHinweis(state, myId);
   planRendern(state, myId);
+  motorsportRendern(state, me, myId);
   /* Tipp-Schutz: Panel nicht neu rendern, während man in einem seiner Felder tippt */
   const typingIn = el => el && el.contains(document.activeElement) &&
     /INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName);
@@ -4554,12 +4980,13 @@ function render({ state, me, myId, chat, room }) {
     };
     document.getElementById("lexbody").innerHTML = `
       <div class="sec">Agrarwirtschaft</div>${["farm","plantage","imkerei","saftpresse","pharma","baeckerei"].map(bcard).join("")}
-      <div class="sec">Rohstoff- &amp; Bauindustrie</div>${["mine","ziegelei","stahlwerk","betonwerk"].map(bcard).join("")}
+      <div class="sec">Rohstoff- &amp; Bauindustrie</div>${["mine","ziegelei","stahlwerk","betonwerk","reifenwerk"].map(bcard).join("")}
       <div class="sec">Grundbedürfnisse (Versorger)</div>${["brunnen","wasserwerk","ewerk","windpark","oelpumpe","raffinerie"].map(bcard).join("")}
-      <div class="sec">Technologie &amp; Elektronik</div>${["siliziummine","chipfabrik","autowerk","dieselwerk","eautowerk"].map(bcard).join("")}
+      <div class="sec">Technologie &amp; Elektronik</div>${["siliziummine","chipfabrik","autowerk","dieselwerk","eautowerk","rennlabor"].map(bcard).join("")}
       <div class="sec">Touristik</div>${["campingplatz","strandhotel"].map(bcard).join("")}
       <div class="sec">Rüstungsindustrie</div>${["munitionsfabrik","waffenschmiede","panzerwerk"].map(bcard).join("")}
       <div class="sec">Verkauf (jede Industrie)</div>${["markt","bauhandel","kontor","laden","autohaus","waffenhandel","werbeagentur"].map(bcard).join("")}
+      <div class="sec">Motorsport (jede Industrie)</div>${["rennstall"].map(bcard).join("")}
       <div class="sec">Waren &amp; aktuelle Ø-Kurse</div>
       <table><tr><th>Ware</th><th>Kategorie</th><th>Ø-Kurs</th></tr>
       ${Object.entries(GOODS()).map(([k]) => `<tr><td>${gname(k)}</td><td>${catname(k)}</td><td>${fmt(avg[k] ?? 0)}</td></tr>`).join("")}</table>
@@ -4644,6 +5071,25 @@ const TUT_BUCH = [
       Börse — die Bauindustrie stellt sie dort ein.</p>
       <p>Ein Abriss erstattet dir <b>die Hälfte</b> des Baupreises zurück.</p>` },
 
+  { t: "Freischalten &amp; Ausbauen", lead: "Mehr Fläche, mehr Ausstoß",
+    html: `
+      <p>Nicht jede Kachel ist von Anfang an bebaubar. Gesperrte Flächen liegen dunkler
+      auf der Karte und kosten eine einmalige <b>Freischaltgebühr</b>, die dir beim Bauen
+      gleich mitberechnet wird — du zahlst also Gebäude und Freischaltung in einem Zug.</p>
+      <p>Jedes Produktionsgebäude lässt sich mit <b>Elektronik</b> auf bis zu
+      <b>Stufe 5</b> ausbauen. Jede Stufe bringt <b>+30 % Ausstoß</b> — und verbraucht
+      entsprechend mehr Zutaten, denn auch der Verbrauch steigt mit.</p>
+      <div class="kasten"><div class="t">Was ein Ausbau kostet</div>
+      Elektronik und Bargeld, beides steigt mit der erreichten Stufe. Ein billiges
+      Gebäude auf Stufe 2 ist schnell bezahlt, Stufe 5 an einem teuren Werk ist eine
+      Investition wie ein zweites Gebäude.</div>
+      <p>Elektronik stellst du nicht selbst her, wenn du nicht in der Technologiebranche
+      bist. Sie kommt über die Börse — und weil jeder sie zum Ausbauen braucht, ist sie
+      eine der zuverlässigsten Einnahmequellen für Techniker.</p>
+      <div class="merk">Faustregel: Erst jedes Produkt deiner Branche einmal abdecken,
+      dann ausbauen. Ein fünffach ausgebautes Gebäude nützt wenig, wenn die Zutat dafür
+      im Spiel gar nicht hergestellt wird.</div>` },
+
   { t: "Produktion &amp; Boost", lead: "Wie deine Betriebe arbeiten",
     html: `
       <p>Betriebe produzieren automatisch, jede Sekunde ein Stück weit. Du musst nichts
@@ -4726,6 +5172,39 @@ const TUT_BUCH = [
       <p>Der Ticker oben zeigt nur <b>echte Abschlüsse</b>. Steigt dort ein Preis, hat
       wirklich jemand so viel bezahlt.</p>` },
 
+  { t: "Preise &amp; Ankerkurs", lead: "Warum dein Angebot den Kurs bewegt",
+    html: `
+      <p>Es gibt keinen Händler, der zu Festpreisen abnimmt. <b>Jeder Preis im Spiel
+      entsteht aus Geschäften zwischen Firmen</b> — auch der Ø-Kurs, den du oben in der
+      Leiste siehst.</p>
+      <div class="kasten"><div class="t">Verkaufsdruck senkt den Anker</div>
+      Jede Ware hat einen Grundwert. Je mehr davon verkauft wird, desto weiter sinkt ihr
+      <b>Ankerpreis</b> — bis auf die Hälfte des Grundwerts. Wer als Einziger produziert,
+      kann bis auf das <b>1,3-fache</b> steigen.</div>
+      <p>Daraus folgt das Wichtigste an diesem Spiel: <b>Monokultur ruiniert den eigenen
+      Markt.</b> Fünf Farmen sind nicht fünfmal so gut wie eine — sie drücken den Obstpreis,
+      bis sich das Bauen nicht mehr lohnt. Breite schlägt Tiefe, solange die Nachfrage nicht
+      mitwächst.</p>
+      <p>Umgekehrt gilt: Eine Ware, die niemand herstellt, driftet nach oben. Wer als Erster
+      eine Lücke im Markt füllt, verkauft zum besten Kurs, den es für dieses Gut gibt.</p>
+      <div class="merk">Wenn ein Kurs über Minuten unbewegt steht, heißt das nicht, dass er
+      stabil ist — meist heißt es, dass zu diesem Preis niemand kauft.</div>` },
+
+  { t: "Direkthandel &amp; Chat", lead: "Geschäfte von Firma zu Firma",
+    html: `
+      <p>Neben der offenen Börse gibt es den <b>Direktvertrag</b>: Du bietest einer
+      bestimmten Firma eine bestimmte Menge zu einem ausgehandelten Preis an. Sie nimmt an
+      oder lehnt ab. Angebote verfallen nach zwei Minuten.</p>
+      <div class="kasten"><div class="t">Treuhand statt Vertrauen</div>
+      Ware und Geld liegen bis zum Abschluss fest. Niemand kann verkaufen, was er nicht hat,
+      und niemand kann annehmen, was er nicht bezahlen kann — auch nicht in einem
+      Direktvertrag. Betrug ist damit technisch ausgeschlossen.</div>
+      <p>Der <b>Chat</b> hat mehrere Räume und ist der Ort, an dem Preise wirklich gemacht
+      werden: Wer Stahl sucht, fragt danach, statt zu hoffen, dass zufällig eine Order im
+      Buch steht.</p>
+      <div class="merk">Direktverträge sind das Mittel gegen die Börse, wenn ein Dritter dir
+      sonst die Ware vor der Nase wegkauft.</div>` },
+
   { t: "Großaufträge", lead: "Die Stadt zahlt Festpreise",
     html: `
       <p>Von Zeit zu Zeit schreibt eine Stadt einen <b>Großauftrag</b> aus: Sie braucht
@@ -4782,6 +5261,97 @@ const TUT_BUCH = [
       <div class="merk">Auf der anderen Seite: Fremde Anleihen zu kaufen ist eine ruhige
       Einnahmequelle — vorausgesetzt, der Schuldner bleibt zahlungsfähig.</div>` },
 
+  { t: "Zwangsversteigerung", lead: "Wenn Schulden fällig werden",
+    html: `
+      <p>Zahlt eine Firma ihre Zinsen nicht, sammelt sie Verwarnungen. Nach der dritten
+      wird ein <b>Pfandrecht</b> auf eines ihrer Gebäude eingetragen — verkaufen und
+      abreißen sind ab da gesperrt.</p>
+      <p>Bleibt sie weiter säumig, wird das Gebäude <b>enteignet und versteigert</b>. Die
+      Auktion läuft <b>30 Sekunden</b>, das Mindestgebot liegt bei rund einem Drittel der
+      Baukosten. Wer den Zuschlag bekommt, übernimmt die Kachel samt Gebäude — und samt
+      allem, was darin steht.</p>
+      <div class="kasten"><div class="t">Auch für dich eine Gelegenheit</div>
+      Ein fertig ausgebautes Werk für ein Drittel des Neupreises ist der günstigste Weg an
+      Produktionskapazität. Bots bieten ab der mittleren Schwierigkeit mit — auf ein gutes
+      Los bleibst du selten allein.</div>
+      <p>Der Erlös geht an den Gläubiger, nicht an die Stadt. Wer Anleihen zeichnet, ist
+      also nicht schutzlos, wenn der Schuldner zusammenbricht.</p>` },
+
+  { t: "Motorsport", lead: "Ein Kreislauf für das späte Spiel",
+    html: `
+      <p>Ab <b>200.000 $ Nettovermögen</b> darf jede Firma einen <b>Rennstall</b> bauen —
+      unabhängig von der Branche, wie die Verkaufsgebäude. Genau einen, für 30.000 $.</p>
+      <p>Der Rennstall stellt nichts her. Er ist reiner <b>Abnehmer</b>: Du kaufst ein
+      fertiges Auto bei der Firma, die Autos baut, und stellst es ein. Die Stellplätze
+      hängen an der Ausbaustufe — Stufe 1 ein Wagen, Stufe 5 fünf.</p>
+      <div class="kasten"><div class="t">Ein eingestelltes Auto ist keine Ware mehr</div>
+      Es verlässt dein Lager endgültig und gehört ab da zum Gebäude. Zu Geld machen lässt
+      es sich nur noch, indem der <b>ganze Rennstall</b> über die Stadtbank versteigert wird
+      — samt Fahrzeugen, deren Wert im Mindestgebot steckt. Abreißen ist gesperrt, solange
+      Autos darin stehen.</div>
+      <p>Im Motorsport-Panel entwickelst du den Wagen in sechs Bereichen weiter: Antrieb,
+      Batterie, Reifen, Fahrwerk, Aerodynamik und Rennsoftware, je drei Stufen. <b>Jeder
+      Bereich hebt zwei Werte und senkt andere</b> — es gibt bewusst kein Setup, das alles
+      verbessert. Die Teile dafür (<b>Rennreifen</b> und <b>Rennsoftware</b>) stellen andere
+      Firmen her; du kaufst sie an der Börse.</p>
+      <p><b>Fahrer</b> stehen in einem Pool, den alle sehen — wer zuerst zugreift, hat ihn.
+      Ein Fahrer kostet Handgeld und danach <b>Gehalt pro Minute</b>. Wer nicht zahlt,
+      verliert ihn zurück an den Pool.</p>
+      <div class="merk">Rennen, Preisgelder und der Wettpool sind noch nicht im Spiel — der
+      Kreislauf bis zum fertig entwickelten Rennwagen steht, der Rest kommt als Nächstes.</div>` },
+
+  { t: "Planwirtschaft", lead: "Der zweite Spielmodus",
+    html: `
+      <p>Statt eines Vermögensziels gibt hier das <b>Planbüro</b> die Richtung vor. Es gibt
+      keine freie Börse — wer trotzdem handelt, tut das unter der Hand.</p>
+      <p>Die Runde läuft in <b>fünf Planphasen zu je acht Minuten</b>. Zu Beginn jeder Phase
+      verkündet das Planbüro dein <b>Plansoll</b>: bestimmte Waren in bestimmter Menge, die
+      du zu festen staatlichen Preisen ablieferst. Dafür gibt es <b>Planpunkte</b>. Wer
+      1.000 Punkte erreicht, gewinnt vorzeitig.</p>
+      <div class="kasten"><div class="t">Zuteilung statt Einkauf</div>
+      Material bekommst du nicht am Markt, sondern über <b>Bezugsscheine</b>. Wer sein Soll
+      übererfüllt hat, bekommt beim nächsten Mal mehr — wer zurückliegt, weniger. Das Soll
+      selbst wächst mit dem Erfolg mit: Gute Leistung wird mit höheren Forderungen belohnt.</div>
+      <p>Was offiziell nicht zu bekommen ist, gibt es am <b>Schwarzmarkt</b> — dort, wo sonst
+      die Stadtbank steht. Das ist schnell, aber riskant: Wer erwischt wird, bekommt einen
+      Eintrag in die <b>Kaderakte</b> und <b>40 Planpunkte</b> Abzug. Beim dritten Eintrag
+      wird die nächste Zuteilung halbiert.</p>
+      <div class="merk">Derselbe Produktionsapparat, völlig andere Frage: nicht „was bringt
+      am meisten ein", sondern „was verlangt der Plan".</div>` },
+
+  { t: "Mitspieler &amp; Bots", lead: "Allein, zu zweit oder zu acht",
+    html: `
+      <p>Bis zu <b>acht Firmen</b> spielen eine Runde. Mitspieler im selben WLAN bekommen
+      einfach den Link; von außerhalb funktioniert der fünfstellige Code im Warteraum.</p>
+      <p>Dazu kommen bis zu zehn <b>Bot-Firmen</b>, zwei je Branche. Sie spielen über
+      dieselbe Schnittstelle wie du: <b>kein Extrakapital, keine höhere Produktion, keine
+      verborgenen Preise</b>. Sie bauen, kaufen Vorprodukte, verkaufen, nehmen Kredite auf
+      und bieten bei Versteigerungen mit.</p>
+      <div class="kasten"><div class="t">Drei Schwierigkeitsstufen</div>
+      <ul style="margin:0 0 0 16px">
+        <li><b>Einfach</b> — bauen langsam, höchstens drei Gebäude, keine Ausbauten, keine Auktionen</li>
+        <li><b>Mittel</b> — bauen zügiger, leveln ihre Betriebe, bieten mit</li>
+        <li><b>Schwer</b> — bis zu acht Gebäude, boosten ihre Produktion, greifen überall zu</li>
+      </ul></div>
+      <p>Auch allein ist der Markt dadurch lebendig: Die Bots sind deine Lieferanten und
+      deine Konkurrenz zugleich.</p>` },
+
+  { t: "Aufgaben &amp; Fortschritt", lead: "Wobei dich das Spiel begleitet",
+    html: `
+      <p>Links oben stehen die <b>Starter-Aufgaben</b>. Sie führen einmal durch jedes System
+      — bauen, einen Verkaufsslot einrichten, eine Order platzieren, ein Gebäude ausbauen,
+      Anteile kaufen — und zahlen dafür Prämien. Erledigte Aufgaben verschwinden.</p>
+      <p>Jede Handlung bringt <b>Erfahrung</b>. Mit steigendem Level wächst nichts an deiner
+      Produktion, es ist ein Fortschrittsmaß, kein Vorteil — die Wirtschaft soll durch
+      Entscheidungen gewonnen werden, nicht durch Spielzeit.</p>
+      <div class="kasten"><div class="t">Die Nachrichtenzentrale</div>
+      Sie steht im Zentrum der Karte und schickt regelmäßig einen <b>Marktbericht</b> in den
+      Chat: welche Ware knapp ist, welche im Überfluss liegt. Wer nicht ständig auf die
+      Kursleiste schaut, erfährt hier, wo gerade etwas zu holen ist.</div>
+      <p>Fällt dir etwas auf, das nicht stimmt, gibt es unten den Knopf <b>Fehler melden</b>
+      — die Meldung landet direkt beim Server, mitsamt dem, was gerade auf dem Bildschirm
+      war.</p>` },
+
   { t: "Gewinnen", lead: "Die letzte Runde zählt",
     html: `
       <p>Sobald jemand das Rundenziel beim Nettovermögen erreicht, endet die Partie und
@@ -4827,14 +5397,140 @@ const TUT_BUCH = [
     nav.querySelectorAll("button")[i]?.scrollIntoView({ block: "nearest", inline: "nearest" });
   }
   const auf = () => { el.classList.add("auf"); el.setAttribute("aria-hidden", "false"); zeichnen(); };
-  const zu = () => { el.classList.remove("auf"); el.setAttribute("aria-hidden", "true"); };
+  const zu = () => { el.classList.remove("auf"); el.setAttribute("aria-hidden", "true");
+    if (typeof lesenStoppen === "function") lesenStoppen(); };
 
   /* "Tutorial spielen" heisst jetzt auch spielen: Der Knopf startet eine echte
    * eigene Runde und führt darin durch die ersten Handlungen. Das Lesebuch
    * bleibt als Nachschlagewerk erhalten — es öffnet sich über das Lexikon im
    * Spiel und über den kleinen Verweis im letzten Schritt. */
   window.lernbuchOeffnen = auf;
-  document.getElementById("tutBuchAuf").addEventListener("click", () => uebungsrundeStarten());
+  /* Der Knopf im Warteraum öffnet wieder die geschriebene Anleitung. Die
+   * geführte Übungsrunde bleibt erhalten und ist aus dem Buch heraus zu
+   * starten — wer lesen will, liest; wer lieber macht, klickt unten links. */
+  document.getElementById("tutBuchAuf").addEventListener("click", auf);
+  document.getElementById("tbUeben").addEventListener("click", () => { lesenStoppen(); zu(); uebungsrundeStarten(); });
+
+  /* ---------- Vorlesen ----------
+   * Web Speech API. Sie ist nicht überall vorhanden, deshalb verschwindet der
+   * Knopf ersatzlos, statt eine Fehlermeldung zu erzeugen. */
+  const laut = document.getElementById("tbVorlesen");
+  const wahl = document.getElementById("tbStimme");
+  const stimme = window.speechSynthesis;
+  let liest = false, leseTeile = [], leseIdx = 0;
+  if (!stimme || typeof SpeechSynthesisUtterance === "undefined") { laut.style.display = "none"; wahl.style.display = "none"; }
+
+  /* ---- Stimmenwahl ----
+   * Voreinstellung ist die Systemstimme — auf einem deutschen Mac also "Anna".
+   * Bewusst KEINE eigene Rangfolge: Welche Stimme angenehm ist, entscheidet
+   * der Geschmack, nicht das Programm. Wer eine andere will, nimmt sie aus
+   * der Liste daneben; die Wahl wird gemerkt. */
+  const stimmenFuer = () => {
+    const praefix = SPRACHE === "en" ? "en" : "de";
+    const alle = stimme.getVoices();
+    const passend = alle.filter(v => v.lang.toLowerCase().startsWith(praefix));
+    return passend.length ? passend : alle;
+  };
+  function stimmeBestimmen() {
+    const liste = stimmenFuer();
+    if (!liste.length) return null;
+    const gemerkt = (() => { try { return localStorage.getItem("cs_tts_stimme"); } catch { return null; } })();
+    return liste.find(v => v.name === gemerkt) || liste.find(v => v.default) || liste[0];
+  }
+  function stimmenlisteFuellen() {
+    const liste = stimmenFuer();
+    if (!liste.length) { wahl.style.display = "none"; return; }
+    wahl.style.display = "";
+    const gewaehlt = stimmeBestimmen();
+    /* Systemstimme oben, der Rest alphabetisch. */
+    const sortiert = [...liste].sort((a, b) =>
+      (b.default ? 1 : 0) - (a.default ? 1 : 0) || a.name.localeCompare(b.name, "de"));
+    wahl.innerHTML = sortiert.map(v => `<option value="${v.name.replace(/"/g, "&quot;")}"${
+        v.name === gewaehlt?.name ? " selected" : ""}>${v.name.replace(/\s*\(.*?\)\s*$/, "")}</option>`).join("");
+  }
+  wahl.addEventListener("change", () => {
+    try { localStorage.setItem("cs_tts_stimme", wahl.value); } catch {}
+    if (liest) { lesenStoppen(); setTimeout(lesenStarten, 120); }
+  });
+  stimmenlisteFuellen();
+  /* Die Stimmenliste steht auf manchen Systemen erst nach einem Rundlauf
+   * bereit — dann kommt dieses Ereignis. */
+  stimme?.addEventListener?.("voiceschanged", stimmenlisteFuellen);
+
+  /* Aus dem Kapitel-HTML wird gesprochener Text: Blöcke bekommen eine Pause,
+   * Aufzählungspunkte einen Satzschluss — sonst laufen die Stichworte
+   * atemlos ineinander. */
+  function kapitelText(k) {
+    const d = document.createElement("div");
+    d.innerHTML = `<p>${k.t}.</p><p>${k.lead}.</p>` + k.html;
+    d.querySelectorAll("li").forEach(li => {
+      if (!/[.!?:]\s*$/.test(li.textContent)) li.append(".");
+    });
+    d.querySelectorAll("p, li, div, h3, h4").forEach(e => e.append(" "));
+    return d.textContent.replace(/\s+/g, " ").replace(/\s+([.,;:!?])/g, "$1").trim();
+  }
+  /* Lange Äußerungen brechen auf manchen Systemen mitten im Satz ab. Deshalb
+   * an Satzgrenzen in Häppchen von rund 200 Zeichen zerlegen. */
+  function haeppchen(text) {
+    const saetze = text.match(/[^.!?]+[.!?]*\s*/g) || [text];
+    const raus = []; let puffer = "";
+    for (const satz of saetze) {
+      if (puffer && (puffer + satz).length > 220) { raus.push(puffer.trim()); puffer = ""; }
+      puffer += satz;
+    }
+    if (puffer.trim()) raus.push(puffer.trim());
+    return raus;
+  }
+  function lautBeschriften() {
+    laut.querySelector("span").textContent = liest
+      ? (SPRACHE === "en" ? "Stop" : "Stopp")
+      : (SPRACHE === "en" ? "Read aloud" : "Vorlesen");
+    laut.classList.toggle("an", liest);
+    laut.setAttribute("aria-pressed", liest ? "true" : "false");
+  }
+  function lesenStoppen() {
+    if (!stimme) return;
+    liest = false; leseTeile = []; leseIdx = 0;
+    try { stimme.cancel(); } catch {}
+    lautBeschriften();
+  }
+  function lesenWeiter() {
+    if (!liest) return;
+    if (leseIdx >= leseTeile.length) {
+      /* Kapitelende: automatisch weiterblättern, bis das Buch durch ist. */
+      if (i + 1 >= TUT_BUCH.length) return lesenStoppen();
+      i++; zeichnen();
+      leseTeile = haeppchen(kapitelText(TUT_BUCH[i])); leseIdx = 0;
+      if (!leseTeile.length) return lesenStoppen();
+    }
+    const u = new SpeechSynthesisUtterance(leseTeile[leseIdx++]);
+    const v = stimmeBestimmen();
+    if (v) { u.voice = v; u.lang = v.lang; }
+    else u.lang = SPRACHE === "en" ? "en-US" : "de-DE";
+    u.rate = 1; u.pitch = 1;
+    u.onend = lesenWeiter;
+    /* "interrupted" und "canceled" sind KEINE Fehler: Sie entstehen jedes Mal,
+     * wenn wir selbst abbrechen oder die Stimme wechseln. Wer darauf stoppt,
+     * beendet das Vorlesen direkt nach dem ersten Häppchen — genau das ist
+     * beim ersten Versuch passiert. */
+    u.onerror = e => { if (!["interrupted", "canceled"].includes(e?.error)) lesenStoppen(); };
+    stimme.speak(u);
+  }
+  function lesenStarten() {
+    if (!stimme) return;
+    liest = true; leseTeile = haeppchen(kapitelText(TUT_BUCH[i])); leseIdx = 0;
+    lautBeschriften();
+    /* cancel() wirkt asynchron. Ein unmittelbar folgendes speak() wird davon
+     * noch mitgerissen, deshalb nur abbrechen, wenn wirklich etwas läuft —
+     * und dann kurz warten. */
+    if (stimme.speaking || stimme.pending) { try { stimme.cancel(); } catch {} setTimeout(lesenWeiter, 140); }
+    else lesenWeiter();
+  }
+  laut.addEventListener("click", () => liest ? lesenStoppen() : lesenStarten());
+  lautBeschriften();
+  /* Wer die Seite verlässt oder das Buch schließt, soll nicht weiter beschallt
+   * werden — die Sprachausgabe lebt sonst ausserhalb der Seite weiter. */
+  addEventListener("beforeunload", lesenStoppen);
   /* Sprachumschalter verdrahten — Startbildschirm und Kopfleiste. */
   document.querySelectorAll("[data-lang]").forEach(b =>
     b.addEventListener("click", () => spracheSetzen(b.dataset.lang)));
@@ -4849,19 +5545,23 @@ const TUT_BUCH = [
   seiteUebersetzen();
   document.getElementById("tbZu").addEventListener("click", zu);
   el.addEventListener("click", e => { if (e.target === el) zu(); });   // Klick daneben schließt
+  /* Wer selbst blättert, will nicht, dass die Stimme im alten Kapitel
+   * weiterredet. Das automatische Weiterblättern beim Vorlesen ruft zeichnen()
+   * direkt auf und ist davon nicht betroffen. */
+  const blaettern = ziel => { lesenStoppen(); i = ziel; zeichnen(); };
   nav.addEventListener("click", e => {
     const b = e.target.closest("button[data-k]");
-    if (b) { i = +b.dataset.k; zeichnen(); }
+    if (b) blaettern(+b.dataset.k);
   });
-  zurueck.addEventListener("click", () => { if (i > 0) { i--; zeichnen(); } });
+  zurueck.addEventListener("click", () => { if (i > 0) blaettern(i - 1); });
   weiter.addEventListener("click", () => {
-    if (i < TUT_BUCH.length - 1) { i++; zeichnen(); } else zu();
+    if (i < TUT_BUCH.length - 1) blaettern(i + 1); else zu();
   });
   document.addEventListener("keydown", e => {
     if (!el.classList.contains("auf")) return;
     if (e.key === "Escape") zu();
-    else if (e.key === "ArrowRight" && i < TUT_BUCH.length - 1) { i++; zeichnen(); }
-    else if (e.key === "ArrowLeft" && i > 0) { i--; zeichnen(); }
+    else if (e.key === "ArrowRight" && i < TUT_BUCH.length - 1) blaettern(i + 1);
+    else if (e.key === "ArrowLeft" && i > 0) blaettern(i - 1);
   });
 })();
 </script>

@@ -131,6 +131,8 @@ export const GOODS = {
   benzinauto: { name: "Benzin-Auto", en: "Petrol car",  cat: "Fahrzeuge", catEn: "Vehicles" },
   dieselauto: { name: "Diesel-Auto", en: "Diesel car",  cat: "Fahrzeuge", catEn: "Vehicles" },
   eauto:      { name: "Elektro-Auto", en: "Electric car", cat: "Fahrzeuge", catEn: "Vehicles" },
+  rennreifen:   { name: "Rennreifen", en: "Racing tyres",      cat: "Motorsport", catEn: "Motorsport" },
+  rennsoftware: { name: "Rennsoftware", en: "Racing software", cat: "Motorsport", catEn: "Motorsport" },
 };
 /* Fahrzeuge sind Endprodukte: hoher Stückwert, dafür langsame Fertigung und ein
  * eigener Absatzweg (Autohaus). Am Handelskontor wären sie mit dessen hoher
@@ -147,7 +149,13 @@ const WEAPONS = ["pistole", "panzer"];
 const BASEP = { strom: 1.8, wasser: 1.4, oel: 8, obst: 7, erze: 16, kannabis: 45, honig: 14, silizium: 20,
                 saft: 46, stahl: 115, medizin: 140, gebaeck: 70, diesel: 42, uebernachtung: 38, ziegel: 34, beton: 82, elektronik: 98,
                 benzinauto: 300, dieselauto: 360, eauto: 440,
-                munition: 26, pistole: 110, panzer: 420 };
+                munition: 26, pistole: 110, panzer: 420,
+                /* Motorsport-Zulieferung: Vorleistungen für den Rennstall. Anders als
+                 * Fahrzeuge und Rüstung bleiben sie am Handelskontor zugelassen — in den
+                 * ersten Minuten einer Runde steht noch kein Rennstall, ohne Absatzweg
+                 * wäre die Linie so lange tot. Ihr Stückwert liegt ohnehin in derselben
+                 * Liga wie Stahl (115) und Medikamente (140), die dort seit jeher laufen. */
+                rennreifen: 165, rennsoftware: 210 };
 
 /* Industrien: jeder Spieler wählt beim Beitritt EINE — nur deren Gebäude sind
  * baubar (Shops kann jeder). Erzwingt Handel: Agrar braucht Wasser/Strom von
@@ -188,6 +196,110 @@ const BOOST_MULT = 0.75;   // je verfügbarem Boost-Rohstoff: +75 % Produktion
  * Produktions-/Verarbeitungsgebäude auf (nicht Shops) — jede Stufe +30 %
  * Ausstoß. Kosten steigen mit Stufe UND Gebäudepreis, damit teure Gebäude
  * (und hohe Stufen) spürbar mehr Elektronik verschlingen. */
+/* ---- Motorsport: Rennwerte ----
+ * Bewusst KEINE zweite Fahrzeugdatenbank: Schlüssel ist die vorhandene Ware.
+ * Die Werte des Elektro-Autos sind die aus der Vorlage; Benziner und Diesel
+ * sind so gesetzt, dass keine Motorisierung auf allen fünf Achsen führt —
+ * der Benziner ist schnell und durstig, der Diesel zäh und sparsam. */
+const RACE_STATS = {
+  benzinauto: { speed: 78, beschl: 71, handling: 66, effizienz: 41, standfest: 74 },
+  dieselauto: { speed: 69, beschl: 58, handling: 63, effizienz: 66, standfest: 88 },
+  eauto:      { speed: 72, beschl: 68, handling: 61, effizienz: 79, standfest: 84 },
+};
+/* Stellplätze = Ausbaustufe. Bewusst das vorhandene 5-Stufen-System statt der
+ * vier Stufen aus der Vorlage — ein zweites Stufenschema neben `level` wäre
+ * genau die Doppelung, die vermieden werden soll. */
+const stallKapazitaet = level => level || 1;
+let autoNr = 0;
+/* Motorsport ist bewusst Spätspiel: Er geht erst ab diesem Nettovermögen auf.
+ * Der Grund ist nicht Balancing um seiner selbst willen, sondern der Wettpool —
+ * er trägt nur, wenn die Mitspieler Kapital zum Setzen haben. Vorher wäre der
+ * Rennstall ein Klotz, den sich eine junge Firma vom Mund abspart.
+ * ACHTUNG: In kurzen Runden (Rundenziel 100.000 $) geht er damit NIE auf, und
+ * beim Ziel 250.000 $ erst kurz vor Schluss. Als Spätspiel-Inhalt gedacht ab
+ * dem Ziel 500.000 $ aufwärts. */
+const RACING_UNLOCK_NW = +process.env.RACING_UNLOCK || 200_000;
+
+/* ---- Tuning ----
+ * Datengetrieben, damit neue Bereiche später nur ein Eintrag sind. Jeder
+ * Bereich hebt zwei Werte und senkt andere: Es gibt bewusst KEINE Ausbaustufe,
+ * die alles verbessert — sonst gäbe es genau ein bestes Setup und die ganze
+ * Entscheidung wäre keine. Die Teile kommen aus der Wirtschaft (Rennreifen und
+ * Rennsoftware von fremden Betrieben), nicht aus dem Nichts. */
+const TUNING = {
+  antrieb:     { name: "Antrieb",      en: "Drivetrain",
+                 plus: { speed: 7, beschl: 6 },      minus: { effizienz: 5, standfest: 3 },
+                 teile: { rennsoftware: 1, rennreifen: 1 }, cash: 6000 },
+  batterie:    { name: "Batterie",     en: "Battery",
+                 plus: { effizienz: 9 },             minus: { beschl: 3 },
+                 teile: { rennsoftware: 2 },               cash: 5000 },
+  reifen:      { name: "Reifen",       en: "Tyres",
+                 plus: { handling: 8 },              minus: { standfest: 2 },
+                 teile: { rennreifen: 3 },                 cash: 4000 },
+  fahrwerk:    { name: "Fahrwerk",     en: "Chassis",
+                 plus: { handling: 6, standfest: 3 }, minus: { speed: 2 },
+                 teile: { rennreifen: 2 },                 cash: 5000 },
+  aerodynamik: { name: "Aerodynamik",  en: "Aerodynamics",
+                 plus: { speed: 6, handling: 4 },    minus: { effizienz: 6 },
+                 teile: { rennreifen: 1, rennsoftware: 1 }, cash: 7000 },
+  software:    { name: "Rennsoftware", en: "Race software",
+                 plus: { beschl: 5, effizienz: 4 },  minus: { standfest: 4 },
+                 teile: { rennsoftware: 3 },               cash: 8000 },
+};
+const TUNING_MAX = 3;            // Stufen je Bereich
+const STAT_MIN = 15, STAT_MAX = 130;
+const STATS = ["speed", "beschl", "handling", "effizienz", "standfest"];
+/* Werte eines Wagens = Grundwerte der Motorisierung plus alle Tuningstufen.
+ * Absichtlich JEDES MAL neu gerechnet statt fortgeschrieben: So kann eine
+ * spätere Balancing-Änderung an TUNING rückwirkend greifen, und ein Rundungs-
+ * fehler kann sich nicht über Dutzende Stufen aufaddieren. */
+/* Was ein Wagen wert ist: Grundfahrzeug plus alles, was investiert wurde.
+ * Ohne den Tuninganteil wäre ein durchentwickelter Rennwagen in der Bilanz
+ * genauso viel wert wie ein Serienauto vom Hof — und die Versteigerung eines
+ * Rennstalls, der einzige Verkaufsweg, wäre ein Verlustgeschäft. */
+function autoWert(a) {
+  let v = MM[a.good].price * (a.zustand / 100);
+  for (const [b, stufe] of Object.entries(a.tuning || {}))
+    for (let st = 1; st <= stufe; st++) {
+      const k = tuningKosten(b, st);
+      v += k.cash * 0.6;
+      for (const [g, n] of Object.entries(k.teile)) v += MM[g].price * n * 0.6;
+    }
+  return v;
+}
+function autoWerte(a) {
+  const w = { ...RACE_STATS[a.good] };
+  for (const [b, stufe] of Object.entries(a.tuning || {})) {
+    const T = TUNING[b]; if (!T) continue;
+    for (const [k, v] of Object.entries(T.plus))  w[k] += v * stufe;
+    for (const [k, v] of Object.entries(T.minus)) w[k] -= v * stufe;
+  }
+  for (const k of STATS) w[k] = Math.max(STAT_MIN, Math.min(STAT_MAX, Math.round(w[k])));
+  return w;
+}
+const tuningKosten = (bereich, stufe) => ({
+  cash: Math.round(TUNING[bereich].cash * stufe),
+  teile: Object.fromEntries(Object.entries(TUNING[bereich].teile).map(([g, n]) => [g, n * stufe])),
+});
+
+/* ---- Fahrer ----
+ * Ein Pool je Runde, aus dem alle schöpfen — wer zuerst zugreift, hat ihn.
+ * Das Gehalt läuft pro Minute weiter, ein Fahrer ist also eine Verpflichtung
+ * und kein Einmalkauf. */
+const FAHRER_NAMEN = ["Alexander Vogt", "Lena Neumann", "Daichi Sato", "Mira Kowalski",
+  "Tomas Bauer", "Yara Okonkwo", "Finn Larsen", "Elif Demir", "Marco Ferrari", "Nora Lindqvist"];
+const FAHRER_LAND = ["DE", "DE", "JP", "PL", "AT", "NG", "DK", "TR", "IT", "SE"];
+const FAHRER_GEHALT_TAKT = 60;   // Ticks (1/s) — Gehalt jede Minute
+function fahrerBauen(i) {
+  const r = (min, max) => min + Math.floor(Math.random() * (max - min + 1));
+  const koennen = r(58, 92);
+  return { id: id(), name: FAHRER_NAMEN[i], land: FAHRER_LAND[i], nr: i + 1,
+    speed: koennen + r(-8, 8), handling: koennen + r(-8, 8), reaktion: koennen + r(-8, 8),
+    strategie: r(50, 90), konstanz: r(50, 90), erfahrung: r(0, 40),
+    gehalt: Math.round((koennen * koennen) / 9 / 50) * 50,   // 58 -> 750 $, 92 -> 1900 $ je Minute
+    ruf: 0, rennen: 0, siege: 0, teamId: null, autoId: null };
+}
+
 const LEVEL_MAX = 5;
 const levelMult = level => 1 + 0.3 * ((level || 1) - 1);
 const upgradeCost = (bt, level) => ({
@@ -275,6 +387,31 @@ const BTYPES = {
                      proc: { in: { stahl: 0.105, elektronik: 0.055, diesel: 0.070 }, out: "panzer", rate: 10/95 } },
   waffenhandel:    { name: "Waffenhandel", en: "Arms dealer",    cost: 5200, out: null, rate: 0, zone: "zentrum",
                      retail: { slots: 2, base: 0.30, goods: WEAPONS } },
+  /* ---- Motorsport ----
+   * Zulieferung und Rennstall. Die beiden Werke gehören bestehenden Branchen
+   * und sind wie deren übrige Gebäude auf rund 2x Wertschöpfung und etwa fünf
+   * Minuten Amortisation gerechnet: Rennreifen kosten 82,50 $ an Zutaten bei
+   * 165 $ Verkaufswert, Rennsoftware 105 $ bei 210 $.
+   * Der Rennstall selbst produziert nichts. Er ist reiner Abnehmer und darf
+   * deshalb — wie die Verkaufsgebäude — von JEDER Industrie gebaut werden
+   * (industry weggelassen). Genau EINER je Firma, geprüft im "build"-Handler. */
+  reifenwerk: { name: "Rennreifenwerk", en: "Racing tyre plant", cost: 5500, out: null, rate: 0, zone: "industrie", industry: "rohstoff",
+                proc: { in: { oel: 1.333, stahl: 0.0667 }, out: "rennreifen", rate: 10/45 } },
+  rennlabor:  { name: "Renn-Softwarelabor", en: "Racing software lab", cost: 6500, out: null, rate: 0, zone: "zentrum", industry: "tech",
+                proc: { in: { elektronik: 0.2, silizium: 0.07 }, out: "rennsoftware", rate: 10/50 } },
+  /* Ein Auto, das hier einzieht, verlässt das Warenlager endgültig: Es ist
+   * danach keine handelbare Ware mehr, sondern Inventar dieser Kachel. Zu Geld
+   * machen lässt sich nur noch der ganze Stall samt Fahrzeugen, über die
+   * Versteigerung an der Stadtbank. Deshalb sperrt der "demolish"-Handler den
+   * Abriss, solange Autos darin stehen — sonst wäre der Abriss ein
+   * Schlupfloch, das genau diese Regel umgeht. */
+  /* 30.000 $ statt der ursprünglichen 7.500: Bei einer Freischaltung ab
+   * 200.000 $ Nettovermögen wäre der alte Preis Kleingeld gewesen. So sind es
+   * rund 15 % des Vermögens, das man zum Einstieg braucht — eine spürbare
+   * Entscheidung, und der Ausbau (er rechnet mit bt.cost) staffelt sich
+   * entsprechend: Stufe 2 kostet 12 Elektronik und 10.500 $, Stufe 5 dann
+   * 60 Elektronik und 52.500 $. */
+  rennstall:  { name: "Rennstall", en: "Racing stable", cost: 30000, out: null, rate: 0, zone: "industrie", racing: true },
   /* Werbeagentur: produziert nichts und verkauft nichts. Sie schaltet
    * Kampagnen frei, die den Preis anheben, den die Kundschaft in den EIGENEN
    * Läden ohne Tempoverlust akzeptiert. Darf jede Industrie bauen. */
@@ -502,6 +639,8 @@ const G = {
   shareListings: [],     // {id, companyId, sellerId, count(1-4 = 25%-Schritte), price, ts, toId}
   shareBids: [],         // Kaufanfragen an eine Firma: {id, companyId, bidderId, count, price, ttl}
   nextDividendIn: DIVIDEND_INTERVAL,
+  fahrer: [],            // Fahrerpool der Runde: {id, name, land, Werte…, teamId, autoId}
+  fahrerGehaltIn: FAHRER_GEHALT_TAKT,
 };
 let nextId = 1;
 const id = () => nextId++;
@@ -565,7 +704,14 @@ function buildingValueOf(pid) {
    * und läuft dabei jedes Mal über alle 676 Kacheln. */
   if (bldCache.tick !== G.tick) {
     const by = {};
-    for (const t of G.map) if (t.owner && t.btype) by[t.owner] = (by[t.owner] || 0) + BTYPES[t.btype].cost * 0.7;
+    for (const t of G.map) if (t.owner && t.btype) {
+      by[t.owner] = (by[t.owner] || 0) + BTYPES[t.btype].cost * 0.7;
+      /* Fahrzeuge im Rennstall sind Vermögen, auch wenn sie das Warenlager
+       * verlassen haben. Ohne diese Zeile würde ein Einzug das Nettovermögen
+       * senken — der Wagen wäre aus `inv` verschwunden und nirgends wieder
+       * aufgetaucht. Bewertet zum Marktkurs, gemindert um den Zustand. */
+      if (t.autos) for (const a of t.autos) by[t.owner] += autoWert(a);
+    }
     bldCache = { tick: G.tick, byOwner: by };
   }
   return bldCache.byOwner[pid] || 0;
@@ -931,8 +1077,14 @@ function seizeAndAuction(debtor, bond) {
   }
   const btype = target.btype;
   target.owner = null; target.btype = null; target.lien = false;
+  /* Ein gepfändeter Rennstall wird MIT seinen Fahrzeugen versteigert — sie
+   * bleiben auf der Kachel liegen und wechseln mit ihr den Besitzer. Der Wert
+   * des Inhalts steht am Los, sonst bietet niemand (Mensch wie Bot) auf das,
+   * was er nicht sieht, und das Mindestgebot wäre grotesk niedrig. */
+  const inhalt = (target.autos || []).reduce((sum, a) => sum + autoWert(a), 0);
   G.auctions.push({ id: id(), tileIdx: G.map.indexOf(target), btype,
-    minBid: Math.round(BTYPES[btype].cost * 0.3), bestBid: 0, bestBidder: null,
+    autos: (target.autos || []).length, inhalt: Math.round(inhalt),
+    minBid: Math.round(BTYPES[btype].cost * 0.3 + inhalt * 0.3), bestBid: 0, bestBidder: null,
     creditorId: bond.holderId, tLeft: 30 });
   G.bonds.splice(G.bonds.indexOf(bond), 1);
   io.emit("notice", { text: `${BTYPES[btype].name} von ${debtor.name} gepfändet — Versteigerung läuft (30 s)!` });
@@ -1100,7 +1252,7 @@ function snapshot() {
     lobby: G.started ? null : { winGoal: WIN_NW, bots: botAuswahl, botLevel: botLevelKey, mode: MODE },
     map: G.map.map(t => ({ x: t.x, y: t.y, zone: t.zone, road: t.road, water: t.water,
       park: t.park, field: t.field, sand: t.sand, deep: t.deep, rock: t.rock,
-      bank: t.bank, news: t.news, schwarz: t.schwarz, locked: t.locked, unlockCost: t.unlockCost, owner: t.owner, btype: t.btype, lien: t.lien, shop: t.shop, paused: t.paused, level: t.level })),
+      bank: t.bank, news: t.news, schwarz: t.schwarz, locked: t.locked, unlockCost: t.unlockCost, owner: t.owner, btype: t.btype, lien: t.lien, shop: t.shop, paused: t.paused, level: t.level, autos: autosDyn(t) })),
     players: Object.fromEntries(Object.entries(G.players).map(([sid, p]) =>
       [sid, { id: sid, name: p.name, color: p.color, lvl: p.lvl, xp: p.xp, industry: p.industry, industries: p.industries,
               netWorth: Math.round(netWorth(p)), rating: rating(p), rank: rankOf[sid],
@@ -1124,6 +1276,7 @@ function snapshot() {
       toName: l.toId ? (G.players[l.toId]?.name ?? "—") : null })),
     nextDividendIn: G.nextDividendIn,
     auctions: G.auctions,
+    fahrer: G.fahrer,
     lastTrade: G.lastTrade,
     news: G.news,
     avg: Object.fromEntries(Object.keys(GOODS).map(k => [k, MM[k].price])),
@@ -1137,7 +1290,15 @@ function snapshot() {
 function privateState(p) {
   /* Vermögensaufstellung wie im Dashboard: Bargeld, Inventar, Gebäude, Anleihen, Schulden */
   let invVal = 0; for (const k in p.inv) invVal += p.inv[k] * MM[k].price;
-  let bldVal = 0; for (const t of G.map) if (t.owner === p.id && t.btype) bldVal += BTYPES[t.btype].cost * 0.7;
+  /* Fahrzeuge im Rennstall gehören zum Gebäudewert. Sie sind aus `inv`
+   * verschwunden und tauchen sonst in der eigenen Bilanz nirgends mehr auf —
+   * der Spieler säehe sein Vermögen beim Einzug schrumpfen, obwohl sich nichts
+   * geändert hat. Dieselbe Rechnung wie in buildingValueOf(). */
+  let bldVal = 0;
+  for (const t of G.map) if (t.owner === p.id && t.btype) {
+    bldVal += BTYPES[t.btype].cost * 0.7;
+    if (t.autos) for (const a of t.autos) bldVal += autoWert(a);
+  }
   let bondVal = 0, debtVal = 0;
   for (const b of G.bonds) {
     if (b.holderId === p.id) bondVal += b.principal;
@@ -1188,10 +1349,20 @@ function dropContract(c) {
  * ein Tab nach längerer Spielzeit zäh und blieb schließlich stehen.
  * Jetzt geht die volle Karte einmal je Verbindung raus, danach nur noch die
  * Kacheln, an denen sich wirklich etwas geändert hat. */
-const DYNAMIC_TILE_KEYS = ["locked", "owner", "btype", "lien", "shop", "paused", "level"];
+/* `autos` gehört dazu, sonst sieht der Client den Einzug eines Fahrzeugs nie:
+ * Nach dem ersten Snapshot reist die Karte nur noch als Differenz über diese
+ * Liste. Der Vergleich läuft über JSON, verschachtelte Arrays sind also
+ * abgedeckt (derselbe Grund, aus dem `shop` hier steht). */
+const DYNAMIC_TILE_KEYS = ["locked", "owner", "btype", "lien", "shop", "paused", "level", "autos"];
 /* undefined wird zu null normalisiert, damit auch "Feld gelöscht" (z. B. der
  * Abriss räumt t.shop weg) beim Empfänger sicher ankommt. */
-const tileDyn = t => { const d = {}; for (const k of DYNAMIC_TILE_KEYS) d[k] = t[k] ?? null; return d; };
+/* Fahrzeuge gehen MIT ihren gerechneten Werten über die Leitung. Sie hier
+ * zentral zu bilden ist wichtig: Snapshot und Differenz müssen byte-gleich
+ * aufgebaut sein, sonst meldet der Vergleich bei jedem Tick eine Änderung —
+ * oder schlimmer: das Tuning ändert die Werte und die Kachel gilt als
+ * unverändert, weil die Rohdaten gleich aussehen. */
+const autosDyn = t => t.autos ? t.autos.map(a => ({ ...a, werte: autoWerte(a), wert: Math.round(autoWert(a)) })) : null;
+const tileDyn = t => { const d = {}; for (const k of DYNAMIC_TILE_KEYS) d[k] = k === "autos" ? autosDyn(t) : (t[k] ?? null); return d; };
 let lastTileSigs = null;
 function tileDelta() {
   const sigs = new Array(G.map.length);
@@ -1305,7 +1476,8 @@ io.on("connection", socket => {
     socket.data.registered = true;
     io.emit("notice", { text: `${p.name} ist wieder da.` });
     ack?.({ ok: true, goods: GOODS, btypes: BTYPES, rooms: ROOMS, you: token, winGoal: WIN_NW,
-      questDefs: QUESTS, industry: p.industry, industries: INDUSTRIES,
+      questDefs: QUESTS, industry: p.industry, industries: INDUSTRIES, racingUnlock: RACING_UNLOCK_NW,
+      tuning: TUNING, tuningMax: TUNING_MAX, raceStats: RACE_STATS, stats: STATS,
       botLevels: Object.fromEntries(Object.entries(BOT_LEVELS).map(([k, v]) => [k, v.name])),
       retailFlow: Object.fromEntries(Object.keys(GOODS).map(k => [k, +retailFlow(k).toFixed(3)])),
       dividendRate: DIVIDEND_RATE, dividendInterval: DIVIDEND_INTERVAL });
@@ -1340,6 +1512,10 @@ io.on("connection", socket => {
     }
     io.emit("notice", { text: `${name} ist der Sitzung beigetreten.` + (Object.keys(G.players).length === 1 ? ` Rundenziel: ${WIN_NW.toLocaleString("de-DE")} $` : "") });
     ack?.({ ok: true, goods: GOODS, btypes: BTYPES, rooms: ROOMS, you: pid, winGoal: WIN_NW, questDefs: QUESTS, industry, industries: INDUSTRIES,
+      /* Dieselben Motorsport-Daten wie beim Wiederverbinden weiter oben. Fehlten
+       * sie hier, stünde beim frisch beigetretenen Spieler im Panel überall
+       * "undefined" — genau das war beim ersten Blick auf die Oberfläche zu sehen. */
+      racingUnlock: RACING_UNLOCK_NW, tuning: TUNING, tuningMax: TUNING_MAX, raceStats: RACE_STATS, stats: STATS,
       botLevels: Object.fromEntries(Object.entries(BOT_LEVELS).map(([k, v]) => [k, v.name])),
       retailFlow: Object.fromEntries(Object.keys(GOODS).map(k => [k, +retailFlow(k).toFixed(3)])),
       dividendRate: DIVIDEND_RATE, dividendInterval: DIVIDEND_INTERVAL });
@@ -1366,6 +1542,9 @@ io.on("connection", socket => {
     if (!pid || pid !== G.hostId) return ack?.({ error: "Nur der Host startet die Runde" });
     if (G.started) return ack?.({ ok: true });
     G.started = true;
+    /* Fahrerpool einmal je Runde würfeln — alle sehen dieselben Leute, wer
+     * zuerst zugreift, hat sie. */
+    if (!G.fahrer.length) G.fahrer = FAHRER_NAMEN.map((_, i) => fahrerBauen(i));
     startBots();
     if (MODE === "plan") {
       /* Eigene Spielfläche für die Planwirtschaft — Gebäude gibt es zu diesem
@@ -1507,6 +1686,16 @@ io.on("connection", socket => {
     if (bt.zone !== t.zone) return ack?.({ error: `Nur in Zone ${bt.zone} baubar` });
     if (bt.industry && !(p.industries || [p.industry]).includes(bt.industry))
       return ack?.({ error: `Nur ${INDUSTRIES[bt.industry].name} kann das bauen` });
+    /* Der Rennstall ist branchenfrei, aber auf einen je Firma begrenzt: Ohne
+     * diese Grenze wäre "mehr Ställe" die beste Strategie, und der Wettpool
+     * gehörte am Ende dem, der am meisten Kacheln hält. */
+    if (bt.racing) {
+      const nw = netWorth(p);
+      if (nw < RACING_UNLOCK_NW)
+        return ack?.({ error: `Motorsport öffnet ab ${RACING_UNLOCK_NW.toLocaleString("de-DE")} $ Nettovermögen — dir fehlen noch ${Math.round(RACING_UNLOCK_NW - nw).toLocaleString("de-DE")} $` });
+      if (G.map.some(o => o.owner === p.id && BTYPES[o.btype]?.racing))
+        return ack?.({ error: "Du betreibst bereits einen Rennstall — mehr als einer ist nicht erlaubt" });
+    }
     /* Freischalten + Bauen in einem atomaren Schritt (kein Zeitfenster,
      * in dem eine gesperrte Kachel für andere sichtbar frei würde). */
     const unlockCost = t.locked ? t.unlockCost : 0;
@@ -1529,7 +1718,10 @@ io.on("connection", socket => {
   /* --- Gebäude mit Elektronik aufleveln: +30 % Produktion je Stufe (max. Stufe 5) --- */
   socket.on("upgradeBuilding", guard((p, { x, y }, ack) => {
     const t = tileAt(x, y), bt = t?.btype ? BTYPES[t.btype] : null;
-    if (!t || t.owner !== p.id || !(bt?.out || bt?.proc)) return ack?.({ error: "Kein eigenes Produktionsgebäude" });
+    /* Der Rennstall produziert nichts, wird aber ausgebaut — jede Stufe ist
+     * ein zusätzlicher Stellplatz statt +30 % Ausstoß. */
+    if (!t || t.owner !== p.id || !(bt?.out || bt?.proc || bt?.racing))
+      return ack?.({ error: "Kein eigenes Produktions- oder Rennstallgebäude" });
     const level = t.level || 1;
     if (level >= LEVEL_MAX) return ack?.({ error: `Bereits auf Höchststufe ${LEVEL_MAX}` });
     const cost = upgradeCost(bt, level);
@@ -1538,14 +1730,116 @@ io.on("connection", socket => {
     p.inv.elektronik -= cost.elektronik; p.cash -= cost.cash; t.level = level + 1; gainXp(p, 25);
     p.stats.aufgelevelt++; p.stats.ausgaben += cost.cash;
     questProg(p, "upgrade");
-    logTx(p, "Ausbau", `${bt.name} auf Stufe ${t.level} aufgelevelt`, -cost.cash);
+    logTx(p, "Ausbau", bt.racing
+      ? `${bt.name} auf Stufe ${t.level} — jetzt ${stallKapazitaet(t.level)} Stellplätze`
+      : `${bt.name} auf Stufe ${t.level} aufgelevelt`, -cost.cash);
     ack?.({ ok: true, level: t.level });
+  }));
+
+  /* --- Fahrzeug in den Rennstall einstellen ---
+   * Der Kern der ganzen Erweiterung: Hier hört das Auto auf, eine Ware zu
+   * sein. Es verlässt `p.inv` und wird Inventar DIESER Kachel. Damit gibt es
+   * es an der Börse nicht mehr — verkaufen lässt sich danach nur noch der
+   * ganze Stall über die Versteigerung an der Stadtbank. Einen Rückweg ins
+   * Lager gibt es bewusst nicht; er wäre genau das Schlupfloch, das die
+   * Regel verhindern soll. */
+  socket.on("stallEinstellen", guard((p, { x, y, good }, ack) => {
+    const t = tileAt(x, y), bt = t?.btype ? BTYPES[t.btype] : null;
+    if (!t || t.owner !== p.id || !bt?.racing) return ack?.({ error: "Kein eigener Rennstall" });
+    if (!VEHICLES.includes(good)) return ack?.({ error: "Nur Fahrzeuge können in den Rennstall" });
+    if ((p.inv[good] || 0) < 1) return ack?.({ error: `Kein ${GOODS[good].name} im Lager — an der Börse kaufen` });
+    const autos = t.autos ??= [];
+    const kap = stallKapazitaet(t.level || 1);
+    if (autos.length >= kap)
+      return ack?.({ error: `Stufe ${t.level || 1}: ${kap} Stellplatz${kap === 1 ? "" : "e"} belegt — erst ausbauen` });
+    p.inv[good] -= 1;
+    const nr = ++autoNr;
+    autos.push({ id: id(), good, nr, zustand: 100, rennen: 0, siege: 0, tuning: {}, fahrerId: null });
+    gainXp(p, 15);
+    logTx(p, "Motorsport", `${GOODS[good].name} #${nr} in den Rennstall eingestellt`, 0);
+    ack?.({ ok: true, nr });
+  }));
+
+  /* --- Fahrzeug entwickeln ---
+   * Die Teile kommen aus dem eigenen Lager, also über die Börse von fremden
+   * Betrieben. Jede Stufe kostet mehr als die vorige und bringt denselben
+   * Zugewinn — der Grenznutzen sinkt damit von allein, ohne Sonderregel. */
+  socket.on("stallTunen", guard((p, { x, y, autoId, bereich }, ack) => {
+    const t = tileAt(x, y), bt = t?.btype ? BTYPES[t.btype] : null;
+    if (!t || t.owner !== p.id || !bt?.racing) return ack?.({ error: "Kein eigener Rennstall" });
+    const a = (t.autos || []).find(a => a.id === autoId);
+    if (!a) return ack?.({ error: "Fahrzeug nicht gefunden" });
+    const T = TUNING[bereich];
+    if (!T) return ack?.({ error: "Unbekannter Tuningbereich" });
+    const stufe = (a.tuning[bereich] || 0) + 1;
+    if (stufe > TUNING_MAX) return ack?.({ error: `${T.name} ist bereits auf Höchststufe ${TUNING_MAX}` });
+    const k = tuningKosten(bereich, stufe);
+    if (p.cash < k.cash) return ack?.({ error: `Zu wenig Kapital (${k.cash.toLocaleString("de-DE")} $ nötig)` });
+    const fehlt = Object.entries(k.teile).filter(([g, n]) => (p.inv[g] || 0) < n);
+    if (fehlt.length) return ack?.({ error: "Teile fehlen: " +
+      fehlt.map(([g, n]) => `${Math.ceil(n - (p.inv[g] || 0))}× ${GOODS[g].name}`).join(", ") + " — an der Börse kaufen" });
+    p.cash -= k.cash;
+    for (const [g, n] of Object.entries(k.teile)) p.inv[g] -= n;
+    a.tuning[bereich] = stufe;
+    p.stats.ausgaben += k.cash;
+    gainXp(p, 20);
+    logTx(p, "Motorsport", `${GOODS[a.good].name} #${a.nr}: ${T.name} auf Stufe ${stufe}`, -k.cash);
+    ack?.({ ok: true, stufe, werte: autoWerte(a) });
+  }));
+
+  /* --- Fahrer anheuern --- Gehalt läuft ab sofort jede Minute weiter. */
+  socket.on("fahrerAnheuern", guard((p, { fahrerId }, ack) => {
+    const f = G.fahrer.find(f => f.id === fahrerId);
+    if (!f) return ack?.({ error: "Fahrer nicht gefunden" });
+    if (f.teamId) return ack?.({ error: `${f.name} fährt bereits für ${G.players[f.teamId]?.name ?? "ein anderes Team"}` });
+    if (!G.map.some(t => t.owner === p.id && BTYPES[t.btype]?.racing))
+      return ack?.({ error: "Ohne Rennstall kein Fahrer" });
+    /* Ein Monatsgehalt als Handgeld — sonst heuert man risikolos jeden an und
+     * entlässt ihn, sobald es teuer wird. */
+    if (p.cash < f.gehalt * 2) return ack?.({ error: `Handgeld und erstes Gehalt nötig (${(f.gehalt * 2).toLocaleString("de-DE")} $)` });
+    p.cash -= f.gehalt;
+    f.teamId = p.id;
+    logTx(p, "Motorsport", `${f.name} verpflichtet (Handgeld)`, -f.gehalt);
+    io.emit("notice", { text: `${p.name} verpflichtet ${f.name} — ${f.gehalt.toLocaleString("de-DE")} $ je Minute.` });
+    ack?.({ ok: true });
+  }));
+
+  socket.on("fahrerEntlassen", guard((p, { fahrerId }, ack) => {
+    const f = G.fahrer.find(f => f.id === fahrerId && f.teamId === p.id);
+    if (!f) return ack?.({ error: "Nicht dein Fahrer" });
+    f.teamId = null; f.autoId = null;
+    logTx(p, "Motorsport", `${f.name} entlassen`, 0);
+    ack?.({ ok: true });
+  }));
+
+  /* Zuweisung: ein Fahrer sitzt in höchstens einem Wagen, ein Wagen hat
+   * höchstens einen Fahrer. Beide Richtungen werden hier gelöst. */
+  socket.on("fahrerZuweisen", guard((p, { fahrerId, autoId }, ack) => {
+    const f = G.fahrer.find(f => f.id === fahrerId && f.teamId === p.id);
+    if (!f) return ack?.({ error: "Nicht dein Fahrer" });
+    if (autoId == null) { f.autoId = null; return ack?.({ ok: true }); }
+    const t = G.map.find(t => t.owner === p.id && (t.autos || []).some(a => a.id === autoId));
+    const a = t && t.autos.find(a => a.id === autoId);
+    if (!a) return ack?.({ error: "Fahrzeug nicht gefunden" });
+    for (const o of G.fahrer) if (o.teamId === p.id && o.autoId === autoId) o.autoId = null;
+    for (const tt of G.map) for (const aa of tt.autos || []) if (aa.fahrerId === f.id) aa.fahrerId = null;
+    f.autoId = autoId; a.fahrerId = f.id;
+    logTx(p, "Motorsport", `${f.name} sitzt jetzt in ${GOODS[a.good].name} #${a.nr}`, 0);
+    ack?.({ ok: true });
   }));
 
   socket.on("demolish", guard((p, { x, y }, ack) => {
     const t = tileAt(x, y);
     if (!t || t.owner !== p.id) return ack?.({ error: "Nicht dein Gebäude" });
     if (t.lien) return ack?.({ error: "Pfandrecht aktiv — Verkauf gesperrt" });
+    /* Ein Rennstall mit Fahrzeugen darf nicht abgerissen werden. Der Abriss
+     * zahlt die halben BAUKOSTEN — die Autos darin wären ersatzlos weg, und
+     * wer aussteigen will, hätte damit einen Weg an der Versteigerung vorbei.
+     * Genau die soll aber der einzige Ausgang sein. */
+    if (t.autos?.length)
+      return ack?.({ error: t.autos.length === 1
+        ? "Im Rennstall steht ein Fahrzeug — nur der ganze Stall lässt sich an der Stadtbank versteigern"
+        : `Im Rennstall stehen ${t.autos.length} Fahrzeuge — nur der ganze Stall lässt sich an der Stadtbank versteigern` });
     p.cash += BTYPES[t.btype].cost * 0.5;
     logTx(p, "Bau", `Abriss ${BTYPES[t.btype].name}`, BTYPES[t.btype].cost * 0.5);
     p.stats.abgerissen++;
@@ -2129,6 +2423,11 @@ function runTick() {
         logTx(creditor, "Auktion", `Verwertungserlös ${BTYPES[a.btype].name}`, a.bestBid); }
       io.emit("notice", { text: `Zuschlag: ${BTYPES[a.btype].name} für ${a.bestBid} $ an ${G.players[a.bestBidder].name}` });
     } else {
+      /* Ohne Gebot verfällt das Los. Die Fahrzeuge müssen dabei mit weg —
+       * sonst blieben sie als herrenloses Inventar auf einer leeren Kachel
+       * liegen und tauchten beim nächsten Bauherrn wieder auf. */
+      if (a.autos) io.emit("notice", { text: `${a.autos} Fahrzeug(e) im verfallenen Rennstall sind verloren.` });
+      t.autos = undefined;
       io.emit("notice", { text: `Auktion ohne Gebot beendet — ${BTYPES[a.btype].name} verfällt.` });
     }
   }
@@ -2174,6 +2473,28 @@ function runTick() {
   if (MODE !== "plan" && G.tick > 60 && G.tick % NEWS_INTERVAL === 0) sendeMarktbericht();
   /* Aktien: Dividendenausschüttung alle 10 min */
   if (--G.nextDividendIn <= 0) { distributeDividends(); G.nextDividendIn = DIVIDEND_INTERVAL; }
+  /* Fahrergehälter: eine laufende Verpflichtung, kein Einmalkauf. Wer nicht
+   * zahlen kann, verliert den Fahrer — er geht zurück in den Pool und steht
+   * den Mitbewerbern offen. Genau deshalb ist ein Spitzenfahrer eine Wette
+   * auf das eigene Preisgeld und nicht einfach eine Ausgabe. */
+  if (--G.fahrerGehaltIn <= 0) {
+    G.fahrerGehaltIn = FAHRER_GEHALT_TAKT;
+    for (const f of G.fahrer) {
+      if (!f.teamId) continue;
+      const team = G.players[f.teamId];
+      if (!team) { f.teamId = null; f.autoId = null; continue; }
+      if (team.cash >= f.gehalt) {
+        team.cash -= f.gehalt;
+        team.stats.ausgaben += f.gehalt;
+        logTx(team, "Motorsport", `Gehalt ${f.name}`, -f.gehalt);
+      } else {
+        for (const t of G.map) for (const a of t.autos || []) if (a.fahrerId === f.id) a.fahrerId = null;
+        f.teamId = null; f.autoId = null;
+        logTx(team, "Motorsport", `${f.name} hat gekündigt — Gehalt nicht gedeckt`, 0);
+        io.emit("notice", { text: `${f.name} verlässt ${team.name}: Gehalt nicht bezahlt.` });
+      }
+    }
+  }
   /* Nettovermögens-Verlauf (alle 10 s ein Punkt, max. 120 Punkte = 20 min) */
   if (G.tick % 10 === 0) for (const p of Object.values(G.players)) {
     p.nwHist.push(Math.round(netWorth(p)));
@@ -2298,11 +2619,11 @@ const BOT_LEVELS = {
    * Einkauf nur den kleinen Aufschlag, der nötig ist, um wirklich zum Zug zu
    * kommen. Kein Bot bekommt Sonderrechte — alle laufen über dieselbe API. */
   einfach: { name: "Einfach", bauPause: 150_000, takt: 34_000, maxGebaeude: 3,
-             kaufAufschlag: 1.08, verkaufKurs: 0.88, leveln: false, boosten: false, auktionen: false },
+             kaufAufschlag: 1.08, verkaufKurs: 0.88, leveln: false, boosten: false, auktionen: false, rennen: false },
   mittel:  { name: "Mittel",  bauPause:  85_000, takt: 26_000, maxGebaeude: 5,
-             kaufAufschlag: 1.00, verkaufKurs: 0.98, leveln: true,  boosten: false, auktionen: true },
+             kaufAufschlag: 1.00, verkaufKurs: 0.98, leveln: true,  boosten: false, auktionen: true,  rennen: true },
   schwer:  { name: "Schwer",  bauPause:  40_000, takt: 17_000, maxGebaeude: 8,
-             kaufAufschlag: 1.02, verkaufKurs: 1.00, leveln: true,  boosten: true,  auktionen: true },
+             kaufAufschlag: 1.02, verkaufKurs: 1.00, leveln: true,  boosten: true,  auktionen: true,  rennen: true },
 };
 const BOT_LEVEL_DEFAULT = "mittel";
 
@@ -2338,7 +2659,7 @@ const INDUSTRY_COVERAGE = {
  * Die beiden einer Branche unterscheiden sich weiterhin bewusst darin. */
 const BOT_CFGS = [
   { name: "AgrarGenossen",   industry: "agrar",     color: "#34d399",
-    plan: ["markt", "farm", "werbeagentur", "kontor"], needs: ["wasser", "strom"] },
+    plan: ["markt", "farm", "werbeagentur", "kontor"], needs: ["wasser", "strom"], rennstall: true },
   { name: "Grünhof & Söhne", industry: "agrar",     color: "#6fae4e",
     plan: ["kontor", "plantage", "werbeagentur", "markt"], needs: ["wasser", "strom"] },
 
@@ -2351,9 +2672,9 @@ const BOT_CFGS = [
    * die Zutat mit der breitesten Abhängigkeit im Spiel, sie darf nicht an
    * einem einzigen Gebäude hängen. */
   { name: "Montan & Bau AG", industry: "rohstoff",  color: "#fbbf24",
-    plan: ["stahlwerk", "bauhandel", "werbeagentur", "kontor"], needs: ["strom", "oel", "wasser"] },
+    plan: ["stahlwerk", "reifenwerk", "bauhandel", "werbeagentur", "kontor"], needs: ["strom", "oel", "wasser"] },
   { name: "Felswerk",        industry: "rohstoff",  color: "#f97316",
-    plan: ["stahlwerk", "kontor", "mine", "werbeagentur", "bauhandel"], needs: ["strom", "oel", "wasser"] },
+    plan: ["stahlwerk", "kontor", "mine", "werbeagentur", "bauhandel"], needs: ["strom", "oel", "wasser"], rennstall: true },
 
   { name: "Stadtwerke",      industry: "versorger", color: "#38bdf8",
     plan: ["kontor", "wasserwerk", "werbeagentur", "windpark"], needs: [],
@@ -2363,7 +2684,7 @@ const BOT_CFGS = [
      * Produktabdeckung eine Ölpumpe, verbrauchte das Öl aber still in der
      * eigenen Raffinerie — am Markt kam nie welches an. Ohne Öl steht das
      * Stahlwerk, ohne Stahl gibt es keine Fahrzeuge. */
-    alwaysSell: ["wasser", "strom", "oel"] },
+    alwaysSell: ["wasser", "strom", "oel"], rennstall: true },
   /* Reiner Ölförderer: baut immer weiter Ölpumpen und stellt alles Geförderte
    * sofort in den Markt. Öl ist mit 8 $ das wertvollste Grundgut, deshalb bleibt
    * er auch auf "Schwer" bei höchstens vier Pumpen gedeckelt. Bewusste Ausnahme
@@ -2373,21 +2694,21 @@ const BOT_CFGS = [
     plan: ["oelpumpe"], planLoop: true, maxGebaeude: 4, needs: [], alwaysSell: ["oel"] },
 
   { name: "ChipWerke",       industry: "tech",      color: "#a78bfa",
-    plan: ["bauhandel", "siliziummine", "werbeagentur", "kontor"], needs: ["strom", "stahl", "oel"] },
+    plan: ["bauhandel", "rennlabor", "siliziummine", "werbeagentur", "kontor"], needs: ["strom", "stahl", "oel"] },
   { name: "Volt & Silicon",  industry: "tech",      color: "#e879f9",
-    plan: ["kontor", "siliziummine", "werbeagentur", "autohaus"], needs: ["strom", "stahl"] },
+    plan: ["kontor", "siliziummine", "werbeagentur", "autohaus"], needs: ["strom", "stahl"], rennstall: true },
 
   /* Touristik: kauft Wasser und Strom zu und verkauft Übernachtungen über ein
    * eigenes Kontor. Bewusst nur einer — die Branche ist neu und soll den Markt
    * erst einmal nicht dominieren. */
   { name: "Küstenperle",     industry: "touristik", color: "#2dd4bf",
     plan: ["campingplatz", "kontor", "strandhotel", "werbeagentur"], maxGebaeude: 4,
-    needs: ["wasser", "strom"], alwaysSell: ["uebernachtung"] },
+    needs: ["wasser", "strom"], alwaysSell: ["uebernachtung"], rennstall: true },
 
   /* Rüstung: baut erst die billige Munitionsfabrik, damit früh Geld reinkommt,
    * und kauft Stahl, Elektronik und Diesel für die teureren Stufen zu. */
   { name: "Stahlfaust",      industry: "ruestung",  color: "#f43f5e",
-    plan: ["kontor", "munitionsfabrik", "waffenhandel", "werbeagentur"], maxGebaeude: 5,
+    plan: ["kontor", "munitionsfabrik", "waffenhandel", "werbeagentur"], maxGebaeude: 5, rennstall: true,
     /* Bewusst nur die Zutaten der ersten Stufen: Jede Ware in dieser Liste
      * bindet beim Einkauf bis zu 25 Stück Kapital. Mit Stahl (115 $) und
      * Elektronik (98 $) gleichzeitig war der Bot sofort klamm und kam über
@@ -2521,7 +2842,10 @@ async function spawnBot(cfg, lvl = BOT_LEVELS[BOT_LEVEL_DEFAULT]) {
       /* Zwangsversteigerungen: bieten bis max. 70 % des Neuwerts (Schnäppchenjäger).
        * Auf der leichten Stufe halten sich die Bots hier ganz raus. */
       for (const a of (lvl.auktionen ? st.auctions || [] : [])) {
-        const cap = Math.floor((BTYPES[a.btype]?.cost || 0) * 0.7);
+        /* Inhalt eines Rennstalls zählt zum Wert des Loses, sonst unterbieten
+         * Bots einen vollen Stall systematisch und der Verkaufsweg, den der
+         * Stallbesitzer als einzigen hat, wäre praktisch wertlos. */
+        const cap = Math.floor(((BTYPES[a.btype]?.cost || 0) + (a.inhalt || 0)) * 0.7);
         const next = Math.max(a.minBid, a.bestBid + Math.ceil(cap * 0.05));
         if (a.bestBidder !== myId && next <= cap && me.cash > next + 2500) {
           await em("bid", { auctionId: a.id, amount: next });
@@ -2572,13 +2896,30 @@ async function spawnBot(cfg, lvl = BOT_LEVELS[BOT_LEVEL_DEFAULT]) {
        * (INDUSTRY_COVERAGE), erst danach in cfg.plan weiter (Shops, Werbung,
        * Dopplungen). planLoop-Spezialisten (Nordsee Öl) überspringen die
        * Abdeckung bewusst — die sollen ja nur ihr eines Produkt bauen. */
-      const gesamtplan = cfg.planLoop ? cfg.plan : [...(INDUSTRY_COVERAGE[cfg.industry] || []), ...cfg.plan];
+      /* Der Rennstall gehört keiner Branche und steht deshalb weder in
+       * INDUSTRY_COVERAGE noch in cfg.plan. Hinten angehängt würde er nie
+       * gebaut: Die Baugrenze der Stufe greift vorher (Stahlfaust auf "Mittel"
+       * kommt über Planindex 4 nicht hinaus). Er wird darum direkt HINTER die
+       * Produktabdeckung gesetzt — die Abdeckung behält ihren Vorrang, der
+       * Rest des Plans rutscht um eins nach hinten, und die Grenze steigt um
+       * genau eins, damit kein Gebäude aus dem Plan verlorengeht.
+       * Auf "Einfach" bauen Bots keinen Stall — dieselbe Staffelung wie bei
+       * den Zwangsversteigerungen. */
+      /* Bots unterliegen derselben Schwelle wie Menschen — sonst stünden im
+       * Frühspiel Bot-Ställe herum, während kein Spieler einen bauen darf. */
+      const meinNW = st.players[myId]?.netWorth ?? 0;
+      const baueRennstall = !!cfg.rennstall && lvl.rennen && !cfg.planLoop
+        && meinNW >= (st.meta?.racingUnlock ?? 200000);
+      const gesamtplan = cfg.planLoop ? cfg.plan
+        : [...(INDUSTRY_COVERAGE[cfg.industry] || []), ...(baueRennstall ? ["rennstall"] : []), ...cfg.plan];
       const built = st.map.filter(t => t.owner === myId && t.btype).length;
       /* planLoop: der Bot arbeitet seinen Plan nicht einmal ab, sondern beginnt
        * danach wieder von vorn — für Spezialisten wie den Ölförderer. Die
        * Obergrenze kommt aus der Schwierigkeitsstufe, ein Bot kann sie zusätzlich
        * nach unten deckeln (cfg.maxGebaeude). */
-      const maxGeb = Math.min(lvl.maxGebaeude, cfg.maxGebaeude ?? Infinity, cfg.planLoop ? Infinity : gesamtplan.length);
+      const rennBonus = baueRennstall ? 1 : 0;
+      const maxGeb = Math.min(lvl.maxGebaeude + rennBonus, (cfg.maxGebaeude ?? Infinity) + rennBonus,
+                              cfg.planLoop ? Infinity : gesamtplan.length);
       const planFertig = built >= maxGeb;
 
       /* ---- Fremdkapital ----
@@ -2661,7 +3002,10 @@ async function spawnBot(cfg, lvl = BOT_LEVELS[BOT_LEVEL_DEFAULT]) {
         if (kandidat) await em("buyBond", { bondId: kandidat.id });
       }
       if (Date.now() - lastBuild > lvl.bauPause && !planFertig) {
-        const btid = gesamtplan[built % gesamtplan.length], bt = BTYPES[btid];
+        let btid = gesamtplan[built % gesamtplan.length];
+        if (BTYPES[btid]?.racing && st.map.some(t => t.owner === myId && BTYPES[t.btype]?.racing))
+          btid = gesamtplan[(built + 1) % gesamtplan.length];
+        const bt = BTYPES[btid];
         const mats = matCost(bt);
         const missingMat = Object.entries(mats).find(([g, n]) => me.inv[g] < n);
         if (missingMat && !st.orders.some(o => o.playerId === myId && o.side === "buy" && o.good === missingMat[0])) {
