@@ -2837,11 +2837,12 @@ const SPRITE_VARIANTS = { farm:3, plantage:2, mine:3, ewerk:3, wasserwerk:2, oel
   campingplatz:1, strandhotel:1,
   munitionsfabrik:1, waffenschmiede:1, panzerwerk:1, waffenhandel:1,
   reifenwerk:1, rennlabor:1, rennstall:1 };
-/* Fuer die drei Motorsport-Gebaeude gibt es noch keine eigene Grafik. Ohne
- * Sprite liefert spriteFor() null, und der Zeichenzweig haengt an "if (spr)" —
- * das Gebaeude waere auf der Karte unsichtbar, samt Besitzerfaerbung. Bis
- * eigene Sprites da sind, leihen sie sich deshalb vorhandene aus. */
-const SPRITE_ALIAS = { reifenwerk: "betonwerk", rennlabor: "chipfabrik", rennstall: "autohaus" };
+/* Reifenwerk und Rennlabor haben noch keine eigene Grafik und leihen sich
+ * deshalb eine vorhandene. Ohne Sprite liefert spriteFor() null, und der
+ * Zeichenzweig haengt an "if (spr)" — das Gebaeude waere sonst auf der Karte
+ * unsichtbar, samt Besitzerfaerbung. Der Rennstall hat seit rennstall-0.png
+ * sein eigenes Sprite und steht deshalb nicht mehr in dieser Liste. */
+const SPRITE_ALIAS = { reifenwerk: "betonwerk", rennlabor: "chipfabrik" };
 const SPRITES = {};
 for (const [b, n] of Object.entries(SPRITE_VARIANTS)) {
   SPRITES[b] = [];
@@ -2917,7 +2918,32 @@ function tilePosAtU(tiles, u) {
   const i = Math.floor(p), f = p - i, a = tiles[i], b = tiles[Math.min(i + 1, n - 1)];
   return { x: a.x + (b.x - a.x) * f, y: a.y + (b.y - a.y) * f };
 }
+/* ---- Verkehr in der Tiefensortierung ----
+ * Autos, Fussgaenger und LKW wurden bisher NACH der kompletten Kachelschleife
+ * gezeichnet und lagen dadurch ueber allem: Ein Fahrzeug weit hinten fuhr
+ * sichtbar ueber ein Gebaeude im Vordergrund. Jetzt wird jedes Fahrzeug der
+ * Kachel zugeordnet, auf der es gerade steht, und zusammen mit dieser Kachel
+ * gemalt — damit gilt fuer den Verkehr dieselbe Reihenfolge wie fuer alles
+ * andere auf der Karte. */
+const VERKEHR = new Map();
+function verkehrMerken(tx, ty, fn) {
+  const k = Math.round(tx) + "," + Math.round(ty);
+  let l = VERKEHR.get(k);
+  if (!l) VERKEHR.set(k, l = []);
+  l.push(fn);
+}
+function verkehrZeichnen(tx, ty) {
+  const l = VERKEHR.get(tx + "," + ty);
+  if (!l) return;
+  for (const fn of l) fn();
+  VERKEHR.delete(tx + "," + ty);
+}
+/* Was ausserhalb der sichtbaren Kacheln landet, wuerde sonst nie gezeichnet
+ * und die Sammlung immer weiter wachsen. */
+function verkehrRest() { for (const l of VERKEHR.values()) for (const fn of l) fn(); VERKEHR.clear(); }
+
 function drawAmbient(now) {
+  VERKEHR.clear();
   if (!ROUTES) return;
   const shadow = (sx, sy, rx, ry) => { cx.fillStyle = "rgba(0,0,0,.22)";
     cx.beginPath(); cx.ellipse(sx, sy, rx, ry, 0, 0, Math.PI * 2); cx.fill(); };
@@ -2951,6 +2977,8 @@ function drawAmbient(now) {
     const a = line[idx], b = line[idx + 1];
     const [sx, sy] = iso(a.x + (b.x - a.x) * f, a.y + (b.y - a.y) * f);
     const [ax] = iso(a.x, a.y), [bx] = iso(b.x, b.y);
+    const tx = a.x + (b.x - a.x) * f, ty = a.y + (b.y - a.y) * f;
+    verkehrMerken(tx, ty, () => {
     shadow(sx, sy + TH / 2 + 3, 12, 5);
     /* DDR-Optik: Blechfarben statt Buntlack, dazu eine Zweitakt-Abgasfahne. */
     if (PLAN_LOOK) {
@@ -2973,6 +3001,7 @@ function drawAmbient(now) {
       cx.drawImage(spr, sx - 14, sy + TH / 2 - 20, 28, 28);
     }
     cx.filter = "none";
+    });
     }
   });
   /* Fußgänger: kleine Pendelwege auf den Straßenzügen (Bürgersteig-Ersatz) */
@@ -2980,8 +3009,10 @@ function drawAmbient(now) {
     const spr = AMBIENT.people[i]; if (!spr || line.length < 2) return;
     const pos = tilePosAtU(line, now / 1000 * (0.18 + i * 0.03) + i * 3); if (!pos) return;
     const [sx, sy] = iso(pos.x, pos.y);
-    shadow(sx, sy + TH / 2 + 2, 6, 3);
-    cx.drawImage(spr, sx - 9, sy + TH / 2 - 16, 18, 18);
+    verkehrMerken(pos.x, pos.y, () => {
+      shadow(sx, sy + TH / 2 + 2, 6, 3);
+      cx.drawImage(spr, sx - 9, sy + TH / 2 - 16, 18, 18);
+    });
   });
 }
 
@@ -3148,6 +3179,7 @@ function drawTrucks(now) {
     const a = lkw.line[idx], b = lkw.line[idx + 1];
     const [sx, sy] = iso(a.x + (b.x - a.x) * f, a.y + (b.y - a.y) * f);
     const [ax] = iso(a.x, a.y), [bx] = iso(b.x, b.y);
+    verkehrMerken(a.x + (b.x - a.x) * f, a.y + (b.y - a.y) * f, () => {
     cx.fillStyle = "rgba(0,0,0,.22)";
     cx.beginPath(); cx.ellipse(sx, sy + TH / 2 + 3, 13, 5, 0, 0, Math.PI * 2); cx.fill();
     if (PLAN_LOOK) cx.filter = "saturate(.35) sepia(.25) brightness(.92)";
@@ -3166,6 +3198,7 @@ function drawTrucks(now) {
       cx.fillRect(sx + 11, sy + TH / 2 - 12 - hop, 7, 6);
       cx.strokeStyle = "#7a5228"; cx.strokeRect(sx + 11, sy + TH / 2 - 12 - hop, 7, 6);
     }
+    });
   }
 }
 
@@ -3421,6 +3454,10 @@ function draw() {
    * daher vorab eine Referenz sichern, sonst bricht draw() an der Bank ab
    * und alle danach gezeichneten Kacheln bleiben ohne Gebäude. */
   const uebers = t;
+  /* Verkehr einsammeln, BEVOR die Gebaeude gezeichnet werden — gemalt wird er
+   * dann je Kachel innerhalb der Schleife. */
+  drawAmbient(now);
+  drawTrucks(now);
   for (const t of st.map) {
     const [sx, sy] = iso(t.x, t.y);
     if (t.park && !t.btype) {
@@ -3508,10 +3545,12 @@ function draw() {
       if (t.level > 1) { cx.font="bold 10px sans-serif"; cx.textAlign="center"; cx.fillStyle="#38bdf8";
         cx.fillText(`★${t.level}`, sx, sy - 48); }
     }
+    /* Fahrzeuge auf dieser Kachel — nach ihrem Gebaeude, aber vor allen
+     * Kacheln, die weiter vorne liegen. */
+    verkehrZeichnen(t.x, t.y);
   }
+  verkehrRest();          // was ausserhalb der Karte liegt, nicht verschlucken
   drawEffekte(now);
-  drawAmbient(now);
-  drawTrucks(now);
   drawClouds(now);
   drawAtmosphere();
   rennStreckeZeichnen();
