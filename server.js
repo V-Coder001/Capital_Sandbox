@@ -97,6 +97,156 @@ app.get("/bugs/img/:id", (req, res) => {
   res.status(404).end();
 });
 
+/* ---------- Adminpanel ----------
+ * Eine Runde von aussen einsehen und eingreifen: Wer spielt mit, wie steht es,
+ * und notfalls jemandem Geld oder Ware geben. Gedacht fuers Testen und fuer
+ * den Fall, dass sich eine Partie festfaehrt — nicht als Spielmechanik.
+ *
+ * Anmeldung ueber denselben Schluessel wie die Bugreports: entweder aus
+ * ADMIN_KEY, sonst aus BUGS_KEY, sonst aus der Datei bugreports/.key. Die
+ * Rundenprozesse teilen sich diese Datei, es ist also fuer alle derselbe
+ * Schluessel. Nach dem Anmelden liegt er in einem HttpOnly-Cookie, damit er
+ * nicht in jeder Adresszeile und in keinem Verlauf steht. */
+const ADMINKEY = process.env.ADMIN_KEY || BUGKEY;
+const escHtml = v => String(v ?? "").replace(/[&<>"']/g, c =>
+  ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+function adminSchluessel(req) {
+  if (req.query?.key) return String(req.query.key);
+  const m = String(req.headers.cookie || "").match(/(?:^|;\s*)csadmin=([^;]+)/);
+  try { return m ? decodeURIComponent(m[1]) : ""; } catch { return ""; }
+}
+const adminOk = req => !!ADMINKEY && adminSchluessel(req) === ADMINKEY;
+const ADMIN_CSS = `body{font-family:system-ui,-apple-system,Segoe UI,sans-serif;background:#0b1220;color:#e3e9f4;margin:0;padding:26px}
+*{box-sizing:border-box}h1{font-size:19px;margin:0 0 4px}h2{font-size:13px;text-transform:uppercase;letter-spacing:.08em;color:#8ea0bd;margin:22px 0 8px;font-weight:600}
+.sub{color:#8ea0bd;font-size:12.5px;margin-bottom:18px}
+.karte{background:#111a2c;border:1px solid #22304a;border-radius:12px;padding:16px;margin-bottom:14px;max-width:1000px}
+table{width:100%;border-collapse:collapse;font-size:13px}th{text-align:left;color:#8ea0bd;font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.06em;padding:6px 8px;border-bottom:1px solid #22304a}
+td{padding:7px 8px;border-bottom:1px solid #1a2337;vertical-align:middle}tr:last-child td{border-bottom:0}
+.num{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;text-align:right;white-space:nowrap}
+input,select{background:#0b1220;border:1px solid #22304a;border-radius:7px;color:#e3e9f4;padding:6px 8px;font:inherit;font-size:12.5px}
+input[type=number]{width:104px;text-align:right}
+button{background:#38bdf8;color:#04121b;border:0;border-radius:7px;padding:6px 12px;font:600 12.5px system-ui;cursor:pointer}
+button:hover{filter:brightness(1.1)}button.geist{background:transparent;border:1px solid #22304a;color:#8ea0bd}
+.pill{display:inline-block;background:#0b1220;border:1px solid #22304a;border-radius:20px;padding:3px 10px;font-size:11.5px;color:#8ea0bd;margin-right:6px}
+.ok{color:#34d399}.warn{color:#fb7185}a{color:#38bdf8}
+form.login{max-width:360px}form.login input{width:100%;margin:10px 0}`;
+function adminLogin(res, hinweis, aktion = "admin/login") {
+  res.status(hinweis ? 401 : 200).send(`<!doctype html><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>Admin — Capital Sandbox</title>
+<style>${ADMIN_CSS}</style><div class="karte"><h1>Adminpanel</h1>
+<div class="sub">Bitte anmelden.</div>
+${hinweis ? `<div class="sub warn">${escHtml(hinweis)}</div>` : ""}
+<form class="login" method="post" action="${aktion}">
+  <input type="password" name="key" placeholder="Schlüssel" autofocus autocomplete="current-password">
+  <button type="submit">Anmelden</button></form></div>`);
+}
+app.post("/admin/login", express.urlencoded({ extended: false }), (req, res) => {
+  /* Bei Fehlschlag zeigt dieselbe Adresse (/…/admin/login) das Formular erneut —
+   * das Ziel ist von dort aus "login", nicht "admin/login". */
+  if (String(req.body?.key || "") !== ADMINKEY) return adminLogin(res, "Falscher Schlüssel.", "login");
+  res.setHeader("Set-Cookie",
+    `csadmin=${encodeURIComponent(ADMINKEY)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=43200`);
+  res.redirect("../admin");
+});
+app.post("/admin/logout", (_req, res) => {
+  res.setHeader("Set-Cookie", "csadmin=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0");
+  res.redirect("../admin");
+});
+/* Eingriffe. Bewusst nur additiv (Geld/Ware geben, auch negativ) — nichts,
+ * was den Rundenzustand strukturell zerlegen koennte. */
+app.post("/admin/eingriff", express.json(), (req, res) => {
+  if (!adminOk(req)) return res.status(403).json({ error: "nicht angemeldet" });
+  const p = G.players[String(req.body?.pid || "")];
+  if (!p) return res.status(404).json({ error: "Spieler unbekannt" });
+  const art = String(req.body?.art || "");
+  if (art === "geld") {
+    const betrag = Math.round(+req.body.betrag || 0);
+    if (!betrag) return res.status(400).json({ error: "Betrag fehlt" });
+    p.cash = Math.max(0, p.cash + betrag);
+    logTx(p, "Admin", betrag > 0 ? "Gutschrift durch die Verwaltung" : "Abbuchung durch die Verwaltung", betrag);
+    io.emit("notice", { text: `Verwaltung: ${p.name} ${betrag > 0 ? "erhält" : "verliert"} ${Math.abs(betrag).toLocaleString("de-DE")} $.` });
+  } else if (art === "ware") {
+    const good = String(req.body.good || "");
+    const menge = Math.round(+req.body.menge || 0);
+    if (!GOODS[good]) return res.status(400).json({ error: "Ware unbekannt" });
+    if (!menge) return res.status(400).json({ error: "Menge fehlt" });
+    p.inv[good] = Math.max(0, (p.inv[good] || 0) + menge);
+    logTx(p, "Admin", `${menge > 0 ? "+" : ""}${menge} ${GOODS[good].name} durch die Verwaltung`, 0);
+  } else return res.status(400).json({ error: "Unbekannte Aktion" });
+  pushState();
+  res.json({ ok: true, cash: Math.round(p.cash) });
+});
+/* Kurzfassung fuer die Rundenuebersicht im Gateway — es fragt jeden
+ * Kindprozess einmal ab, statt selbst Spielzustand zu fuehren. */
+app.get("/admin/api/kurz", (req, res) => {
+  if (!adminOk(req)) return res.status(403).json({ error: "nicht angemeldet" });
+  res.json({ started: G.started, mode: MODE, tick: G.tick, winGoal: WIN_NW,
+    winner: G.winner ? (G.players[G.winner]?.name || true) : null,
+    spieler: Object.values(G.players).map(p => ({ name: p.name, verbunden: !!p.socketId,
+      cash: Math.round(p.cash), netWorth: Math.round(netWorth(p)) })) });
+});
+app.get("/admin", (req, res) => {
+  if (!adminOk(req)) return adminLogin(res);
+  /* Kam der Schluessel per ?key=, gleich in ein Cookie umwandeln und die
+   * Adresszeile saeubern — sonst steht er im Verlauf und in jedem Screenshot. */
+  if (req.query.key) {
+    res.setHeader("Set-Cookie", `csadmin=${encodeURIComponent(ADMINKEY)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=43200`);
+    return res.redirect("admin");
+  }
+  const spieler = Object.values(G.players);
+  const geld = n => Math.round(n).toLocaleString("de-DE") + " $";
+  const zeilen = spieler.map(p => {
+    const geb = G.map.filter(t => t.owner === p.id && t.btype).length;
+    return `<tr>
+      <td><b>${escHtml(p.name)}</b><br><span class="pill">${escHtml(INDUSTRIES[p.industry]?.name || p.industry)}</span>
+        ${p.socketId ? '<span class="pill ok">verbunden</span>' : '<span class="pill">offline</span>'}</td>
+      <td class="num">${geld(p.cash)}</td>
+      <td class="num">${geld(netWorth(p))}</td>
+      <td class="num">${rating(p)}</td>
+      <td class="num">${geb}</td>
+      <td><input type="number" step="1000" value="10000" id="b-${escHtml(p.id)}">
+        <button onclick="geld('${escHtml(p.id)}')">Geld geben</button></td>
+      <td><select id="w-${escHtml(p.id)}">${Object.entries(GOODS).map(([k, g]) =>
+          `<option value="${escHtml(k)}">${escHtml(g.name)}</option>`).join("")}</select>
+        <input type="number" step="1" value="10" id="m-${escHtml(p.id)}" style="width:70px">
+        <button class="geist" onclick="ware('${escHtml(p.id)}')">Geben</button></td>
+    </tr>`;
+  }).join("");
+  const min = Math.floor(G.tick / 60), sek = G.tick % 60;
+  res.send(`<!doctype html><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>Runde — Adminpanel</title>
+<style>${ADMIN_CSS}</style>
+<h1>Runde verwalten</h1>
+<div class="sub">
+  <span class="pill">${G.started ? "läuft" : "Warteraum"}</span>
+  <span class="pill">Modus ${escHtml(MODE)}</span>
+  <span class="pill">Laufzeit ${min}:${String(sek).padStart(2, "0")}</span>
+  <span class="pill">Ziel ${geld(WIN_NW)}</span>
+  <span class="pill">${spieler.length} Firmen</span>
+  ${G.winner ? `<span class="pill ok">beendet</span>` : ""}
+  · <a href="bugs?key=${encodeURIComponent(ADMINKEY)}">Bugreports</a>
+  · <form method="post" action="admin/logout" style="display:inline"><button class="geist" type="submit">Abmelden</button></form>
+</div>
+<div class="karte">
+  <h2>Firmen</h2>
+  ${spieler.length ? `<table><tr><th>Firma</th><th class="num">Bargeld</th><th class="num">Nettovermögen</th>
+    <th class="num">Rating</th><th class="num">Gebäude</th><th>Geld</th><th>Ware</th></tr>${zeilen}</table>`
+    : "<div class='sub'>Noch niemand in dieser Runde.</div>"}
+</div>
+<script>
+async function senden(nutzlast) {
+  const r = await fetch("admin/eingriff", { method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(nutzlast) });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) return alert(j.error || "Fehlgeschlagen");
+  location.reload();
+}
+const geld = pid => senden({ art: "geld", pid, betrag: +document.getElementById("b-" + pid).value });
+const ware = pid => senden({ art: "ware", pid,
+  good: document.getElementById("w-" + pid).value, menge: +document.getElementById("m-" + pid).value });
+</script>`);
+});
+
 const httpServer = http.createServer(app);
 const io = new Server(httpServer);
 

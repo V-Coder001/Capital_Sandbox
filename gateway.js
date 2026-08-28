@@ -32,6 +32,7 @@ import net from "net";
 import crypto from "crypto";
 import httpProxy from "http-proxy";
 import path from "path";
+import fs from "fs";
 import { fileURLToPath } from "url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -143,6 +144,110 @@ const proxy = httpProxy.createProxyServer({ ws: true, xfwd: true });
 proxy.on("error", (_err, _req, res) => {
   try { res.writeHead?.(502, { "Content-Type": "text/plain" }); res.end?.("Runde nicht erreichbar — evtl. schon beendet."); } catch {}
 });
+/* ---------- Adminpanel: Uebersicht aller Runden ----------
+ * Das Gateway ist die einzige Stelle, die alle laufenden Runden kennt — die
+ * Rundenprozesse wissen nichts voneinander. Der Schluessel ist derselbe wie in
+ * den Rundenservern: ADMIN_KEY, sonst BUGS_KEY, sonst die Datei
+ * bugreports/.key, die sich alle Prozesse teilen. */
+let ADMINKEY = process.env.ADMIN_KEY || process.env.BUGS_KEY || "";
+if (!ADMINKEY) {
+  try { ADMINKEY = fs.readFileSync(path.join(__dirname, "bugreports", ".key"), "utf8").trim(); } catch {}
+}
+const escHtml = v => String(v ?? "").replace(/[&<>"']/g, c =>
+  ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+function adminSchluessel(req) {
+  const u = new URL(req.url, "http://x");
+  if (u.searchParams.get("key")) return u.searchParams.get("key");
+  const m = String(req.headers.cookie || "").match(/(?:^|;\s*)csadmin=([^;]+)/);
+  try { return m ? decodeURIComponent(m[1]) : ""; } catch { return ""; }
+}
+const adminOk = req => !!ADMINKEY && adminSchluessel(req) === ADMINKEY;
+const ADMIN_CSS = `body{font-family:system-ui,-apple-system,Segoe UI,sans-serif;background:#0b1220;color:#e3e9f4;margin:0;padding:26px}
+*{box-sizing:border-box}h1{font-size:19px;margin:0 0 4px}
+.sub{color:#8ea0bd;font-size:12.5px;margin-bottom:18px}
+.karte{background:#111a2c;border:1px solid #22304a;border-radius:12px;padding:16px;margin-bottom:14px;max-width:1000px}
+table{width:100%;border-collapse:collapse;font-size:13px}th{text-align:left;color:#8ea0bd;font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.06em;padding:6px 8px;border-bottom:1px solid #22304a}
+td{padding:8px;border-bottom:1px solid #1a2337;vertical-align:middle}tr:last-child td{border-bottom:0}
+.num{font-family:ui-monospace,Menlo,monospace;text-align:right;white-space:nowrap}
+.code{font-family:ui-monospace,Menlo,monospace;font-size:15px;font-weight:700;letter-spacing:.12em;color:#38bdf8}
+button{background:#38bdf8;color:#04121b;border:0;border-radius:7px;padding:6px 12px;font:600 12.5px system-ui;cursor:pointer}
+button.warn{background:transparent;border:1px solid #4a2733;color:#fb7185}
+input{background:#0b1220;border:1px solid #22304a;border-radius:7px;color:#e3e9f4;padding:6px 8px;font:inherit}
+.pill{display:inline-block;background:#0b1220;border:1px solid #22304a;border-radius:20px;padding:3px 10px;font-size:11.5px;color:#8ea0bd;margin-right:6px}
+a{color:#38bdf8}.ok{color:#34d399}
+form.login{max-width:360px}form.login input{width:100%;margin:10px 0}`;
+function adminLogin(res, hinweis) {
+  res.status(hinweis ? 401 : 200).set("Content-Type", "text/html; charset=utf-8").end(`<!doctype html><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>Admin — Capital Sandbox</title>
+<style>${ADMIN_CSS}</style><div class="karte"><h1>Adminpanel</h1><div class="sub">Bitte anmelden.</div>
+${hinweis ? `<div class="sub" style="color:#fb7185">${escHtml(hinweis)}</div>` : ""}
+<form class="login" method="post" action="/admin/login">
+<input type="password" name="key" placeholder="Schlüssel" autofocus autocomplete="current-password">
+<button type="submit">Anmelden</button></form></div>`);
+}
+const setzeCookie = res => res.setHeader("Set-Cookie",
+  `csadmin=${encodeURIComponent(ADMINKEY)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=43200`);
+
+app.post("/admin/login", express.urlencoded({ extended: false }), (req, res) => {
+  if (!ADMINKEY || String(req.body?.key || "") !== ADMINKEY) return adminLogin(res, "Falscher Schlüssel.");
+  setzeCookie(res); res.redirect("/admin");
+});
+app.post("/admin/logout", (_req, res) => {
+  res.setHeader("Set-Cookie", "csadmin=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0");
+  res.redirect("/admin");
+});
+app.post("/admin/beenden/:code", (req, res) => {
+  if (!adminOk(req)) return res.status(403).end("nicht angemeldet");
+  const room = rooms.get(String(req.params.code).toUpperCase());
+  if (room) { try { room.proc.kill(); } catch {} }
+  res.redirect("/admin");
+});
+app.get("/admin", async (req, res) => {
+  if (!adminOk(req)) return adminLogin(res);
+  const u = new URL(req.url, "http://x");
+  if (u.searchParams.get("key")) { setzeCookie(res); return res.redirect("/admin"); }
+  /* Jede Runde einmal nach ihrem Kurzstand fragen. Faellt eine nicht rechtzeitig
+   * zurueck, wird sie trotzdem gelistet — nur eben ohne Zahlen. */
+  const eintraege = await Promise.all([...rooms.entries()].map(async ([code, r]) => {
+    let kurz = null;
+    try {
+      const ctrl = new AbortController();
+      const zu = setTimeout(() => ctrl.abort(), 1200);
+      const a = await fetch(`http://127.0.0.1:${r.port}/admin/api/kurz?key=${encodeURIComponent(ADMINKEY)}`,
+        { signal: ctrl.signal });
+      clearTimeout(zu);
+      if (a.ok) kurz = await a.json();
+    } catch {}
+    return { code, r, kurz };
+  }));
+  const dauer = ms => { const m = Math.floor(ms / 60000); return m < 60 ? `${m} min` : `${Math.floor(m / 60)} h ${m % 60} min`; };
+  const zeilen = eintraege.map(({ code, r, kurz }) => `<tr>
+      <td><span class="code">${escHtml(code)}</span><br>
+        <span class="pill">Port ${r.port}</span>${kurz ? `<span class="pill">${kurz.started ? "läuft" : "Warteraum"}</span>` : `<span class="pill">keine Antwort</span>`}
+        ${kurz?.winner ? `<span class="pill ok">beendet</span>` : ""}</td>
+      <td class="num">${dauer(Date.now() - r.createdAt)}</td>
+      <td class="num">${dauer(Date.now() - r.lastActivity)}</td>
+      <td>${kurz ? (kurz.spieler.length
+        ? kurz.spieler.map(s2 => `${escHtml(s2.name)}${s2.verbunden ? "" : " <span class='pill'>offline</span>"} <span class="num">${s2.netWorth.toLocaleString("de-DE")} $</span>`).join("<br>")
+        : "<span class='pill'>leer</span>") : "—"}</td>
+      <td><a href="/r/${escHtml(code)}/admin"><button type="button">Verwalten</button></a>
+        <form method="post" action="/admin/beenden/${escHtml(code)}" style="display:inline"
+              onsubmit="return confirm('Runde ${escHtml(code)} wirklich beenden? Alle Mitspieler fliegen raus.')">
+          <button class="warn" type="submit">Beenden</button></form></td>
+    </tr>`).join("");
+  res.set("Content-Type", "text/html; charset=utf-8").end(`<!doctype html><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>Runden — Adminpanel</title>
+<style>${ADMIN_CSS}</style>
+<h1>Laufende Runden</h1>
+<div class="sub"><span class="pill">${rooms.size} von ${MAX_ROOMS}</span>
+  <span class="pill">Leerlaufgrenze ${Math.round(IDLE_MS / 60000)} min</span>
+  · <a href="/admin">neu laden</a>
+  · <form method="post" action="/admin/logout" style="display:inline"><button class="warn" type="submit">Abmelden</button></form></div>
+<div class="karte">${rooms.size
+  ? `<table><tr><th>Code</th><th class="num">Alter</th><th class="num">Letzte Aktivität</th><th>Firmen</th><th>Aktionen</th></tr>${zeilen}</table>`
+  : "<div class='sub'>Gerade läuft keine Runde.</div>"}</div>`);
+});
+
 const ROOM_PATH = /^\/r\/([A-Z0-9]{5})(\/.*)?$/i;
 
 app.use((req, res, next) => {
