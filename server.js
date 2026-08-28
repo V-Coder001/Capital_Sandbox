@@ -1434,7 +1434,6 @@ const QUESTS = [
   { id: "shop",    text: "Richte einen Verkaufsslot ein", en: "Set up a sales slot",                 target: 1,    reward: 1000 },
   { id: "order",   text: "Platziere eine Order an der Börse", en: "Place an order on the exchange",             target: 1,    reward: 600 },
   { id: "revenue", text: "Erwirtschafte 3.000 $ Umsatz", en: "Earn $3,000 in revenue",                  target: 3000, reward: 1500 },
-  { id: "unlock",  text: "Schalte eine Kachel in einer Sperrzone frei", en: "Unlock a tile in a locked zone",   target: 1,    reward:  500 },
   { id: "upgrade", text: "Level ein Gebäude mit Elektronik auf Stufe 2", en: "Upgrade a building to level 2 using electronics",  target: 1,    reward: 1500 },
   { id: "shares",  text: "Kaufe an der Stadtbank Anteile einer Firma", en: "Buy shares in a company at the city bank",    target: 1,    reward: 1800 },
 ];
@@ -2052,7 +2051,7 @@ io.on("connection", socket => {
     if (missing.length) return ack?.({ error: "Baumaterial fehlt: " +
       missing.map(([g, n]) => `${Math.ceil(n - p.inv[g])}× ${GOODS[g].name}`).join(", ") + " — an der Börse kaufen" });
     for (const [g, n] of Object.entries(mats)) p.inv[g] -= n;
-    if (t.locked) { t.locked = false; gainXp(p, 30); questProg(p, "unlock"); }
+    if (t.locked) { t.locked = false; gainXp(p, 30); }
     if (bt.out || bt.proc) questProg(p, "build");
     p.cash -= bt.cost + unlockCost; t.owner = p.id; t.btype = btype; t.level = 1; gainXp(p, 20);
     p.stats.gebaut++; p.stats.ausgaben += bt.cost + unlockCost;

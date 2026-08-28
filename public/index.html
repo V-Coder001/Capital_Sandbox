@@ -8,13 +8,19 @@
      das Spiel läuft schließlich auch im LAN ohne Internet. -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<!-- Archivo statt Inter, IBM Plex Mono statt JetBrains Mono. Inter ist die
+     Schrift, die in jeder Oberfläche steht, die niemand entworfen hat — sie
+     trägt keine Haltung. Archivo hat eine Breitenachse: schmal gesetzt bekommen
+     Beschriftungen etwas von einem Werksschild statt von einem Formular, und
+     die Ziffern von IBM Plex Mono passen zu einer Kursleiste, ohne wie ein
+     Editor auszusehen. -->
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..125,400..800&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
 :root{
   --bg:#0a0e15; --panel:#121824; --panel2:#1a2231; --line:#273144;
   --text:#e3e9f4; --dim:#8695ab; --accent:#38bdf8; --accent2:#a78bfa;
-  --up:#34d399; --down:#fb7185; --font:"Inter",system-ui,-apple-system,"Segoe UI",sans-serif;
-  --mono:"JetBrains Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  --up:#34d399; --down:#fb7185; --font:"Archivo",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace;
 }
 *{box-sizing:border-box;margin:0;padding:0}
 html,body{height:100%}
@@ -267,14 +273,20 @@ input,select{background:var(--panel2);border:1px solid var(--line);border-radius
 /* Hinweis über dem Startknopf, wohin Ziel und Bots gewandert sind */
 #foothint{margin:0 0 10px;text-align:center;font-size:12px;color:var(--dim)}
 /* Ablauf in drei Schritten */
-.how{background:#07090f;border:1px solid #141d2c;border-radius:12px;padding:9px 10px;
-  display:flex;flex-direction:column;gap:7px;margin-top:auto}
-.how .hrow{display:flex;align-items:flex-start;gap:12px}
-.how .hrow span{flex:none;display:grid;place-items:center;width:22px;height:22px;border-radius:50%;
-  margin-top:1px;font-size:10px;font-weight:700;font-family:var(--mono);color:var(--accent);
-  background:rgba(56,189,248,.1);border:1px solid rgba(56,189,248,.3);box-shadow:0 0 8px rgba(56,189,248,.1)}
-.how .hrow b{font-size:12.5px;font-weight:700;color:#c0cfe3}
-.how .hrow em{font-style:normal;font-size:11.5px;color:#4a6080}
+/* Ablauf: bewusst OHNE nummerierte Kreise. Eine Nummer behauptet eine
+ * Reihenfolge, die es nicht gibt — gebaut, gehandelt und gewonnen wird
+ * durcheinander. Stattdessen drei Zeilen mit schmal gesetztem Schlagwort und
+ * Trennlinie: liest sich wie eine Legende, nicht wie ein Assistent. */
+.how{border-top:1px solid #17202e;padding-top:12px;margin-top:auto;
+  display:flex;flex-direction:column}
+/* Die Spalte ist schmal — Schlagwort und Erläuterung stehen deshalb
+ * untereinander, nicht nebeneinander. */
+.how .hrow{display:block;padding:8px 0;border-bottom:1px solid #121a26}
+.how .hrow:last-child{border-bottom:0}
+.how .hrow span{display:none}
+.how .hrow b{display:block;margin-bottom:2px;font-size:11px;font-weight:700;color:#9fb3cc;
+  font-stretch:80%;text-transform:uppercase;letter-spacing:.13em}
+.how .hrow em{display:block;font-style:normal;font-size:12px;color:#5a708f;line-height:1.5}
 /* Fußbereich */
 #join .foot{position:relative;padding:2px 28px 14px}
 #join .foot .rule{background:linear-gradient(to right,transparent,#1e2d45 20%,#1e2d45 80%,transparent);
@@ -590,21 +602,44 @@ input,select{background:var(--panel2);border:1px solid var(--line);border-radius
 #ticker.auf #tickerToggle{background:linear-gradient(to left,#0d131c 62%,transparent)}
 #tickerToggle:hover{color:var(--accent)}
 #status{height:42px;display:flex;align-items:center;justify-content:space-between;padding:0 14px;background:linear-gradient(180deg,rgba(9,13,20,.85),transparent);pointer-events:auto}
-#status .left{display:flex;align-items:center;gap:12px}
-.logo{width:26px;height:26px;border-radius:6px;display:grid;place-items:center;font-weight:800;color:#0a0e15;font-size:14px}
-#networth{color:var(--dim);font-size:12px} #networth b{color:var(--text)}
-#status .right{display:flex;align-items:center;gap:16px;font-family:var(--mono);font-variant-numeric:tabular-nums}
+/* Die Kennung liest sich jetzt als Firmenschild: kantiger Farbblock, schmal
+ * gesetzter Name, darunter die Kennzahl. Vorher war es ein rundes Profilbild
+ * mit Namen daneben — das Bildzeichen eines Kontos, nicht eines Betriebs. */
+/* Alles in einer Zeile: Die rechte Seite ist breit, der linke Block bekommt
+ * sonst nur den Rest und bricht um. Der Name wird notfalls gekuerzt, die
+ * Kennzahl dahinter bleibt immer vollstaendig lesbar. */
+#status .left{display:flex;align-items:center;gap:10px;min-width:0;flex:0 1 auto;overflow:hidden}
+.logo{flex:none;width:24px;height:24px;border-radius:2px;display:grid;place-items:center;
+  font-weight:800;color:#0a0e15;font-size:13px;font-stretch:85%}
+#coname{flex:0 1 auto;min-width:40px;max-width:190px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  font-stretch:82%;font-weight:700;font-size:13.5px;letter-spacing:.01em;color:#dbe5f3}
+#networth{flex:0 1 auto;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  color:var(--dim);font-size:11.5px;font-family:var(--mono);
+  padding-left:10px;border-left:1px solid #1c2637} #networth b{color:var(--text);font-weight:600}
+#status .right{display:flex;align-items:center;gap:16px;min-width:0;flex:0 1 auto;
+  font-family:var(--mono);font-variant-numeric:tabular-nums}
 #cash{color:var(--accent);font-weight:700;font-size:16px}
 #lvlwrap{display:flex;flex-direction:column;gap:3px;width:110px}
 #lvlwrap small{font-size:10px;color:var(--dim);text-transform:uppercase;letter-spacing:.06em;font-family:var(--font)}
 #xpbar{height:5px;background:var(--panel2);border-radius:3px;overflow:hidden}
 #xpfill{height:100%;width:0%;background:var(--accent2);transition:width .4s}
-#players{display:flex;gap:5px}
+/* Bei acht Mitspielern und schmalem Fenster ist die Liste das Erste, was
+ * weichen darf — die eigene Kennung und der Kontostand nicht. */
+#players{display:flex;gap:5px;min-width:0;overflow:hidden;flex:0 1 auto}
 #players .pl{width:22px;height:22px;border-radius:6px;font-size:10px;display:grid;place-items:center;color:#0a0e15;font-weight:800;cursor:default}
 
-#dock{position:fixed;left:50%;transform:translateX(-50%);bottom:14px;z-index:20;display:flex;gap:6px;background:rgba(19,26,38,.95);border:1px solid var(--line);border-radius:14px;padding:7px}
-.dockbtn{width:66px;padding:7px 2px 6px;border:none;background:none;color:var(--dim);border-radius:10px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:3px;font-size:10.5px}
-.dockbtn.on{background:var(--panel2);color:var(--accent)}
+/* Reiterleiste statt schwebender Pille. Der aktive Reiter wird durch eine
+ * Linie markiert, nicht durch einen gefuellten Kasten — das ist die Sprache
+ * von Werkzeugen; ein Kasten mit runden Ecken ist die von Anwendungen. */
+#dock{position:fixed;left:50%;transform:translateX(-50%);bottom:0;z-index:20;display:flex;gap:0;
+  background:rgba(11,16,24,.94);border:1px solid var(--line);border-bottom:0;
+  border-radius:4px 4px 0 0;padding:0 3px;backdrop-filter:blur(8px)}
+.dockbtn{width:74px;padding:11px 2px 10px;border:none;background:none;color:#6d809b;border-radius:0;
+  cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:3px;
+  font-size:11px;font-stretch:88%;letter-spacing:.02em;
+  border-bottom:2px solid transparent;transition:color .12s,border-color .12s}
+.dockbtn:hover{color:#a9bdd6}
+.dockbtn.on{background:none;color:var(--accent);border-bottom-color:var(--accent)}
 
 /* ===== Handy und Tablet =====
  * Gemessen an den Mindestbreiten der Bausteine: Kopfzeile 446 px, Reiterleiste
@@ -1027,9 +1062,9 @@ td:first-child{font-family:var(--font)}
       <!-- Ablauf in drei Schritten: steht links, weil die Branchenauswahl
            rechts sonst allein die ganze Spaltenhöhe tragen müsste. -->
       <div class="how">
-        <div class="hrow"><span>1</span><div><b>Bauen</b> <em>— Kachel freischalten, Betrieb hochziehen, Rohstoffe verarbeiten.</em></div></div>
-        <div class="hrow"><span>2</span><div><b>Handeln</b> <em>— Im eigenen Laden, an der Börse mit den anderen oder für die Stadt.</em></div></div>
-        <div class="hrow"><span>3</span><div><b>Gewinnen</b> <em>— Wer zuerst das Vermögensziel knackt, gewinnt die Runde.</em></div></div>
+        <div class="hrow"><span>1</span><div><b>Bauen</b> <em>Kachel freischalten, Betrieb hochziehen, Rohstoffe verarbeiten.</em></div></div>
+        <div class="hrow"><span>2</span><div><b>Handeln</b> <em>Im eigenen Laden, an der Börse mit den anderen oder für die Stadt.</em></div></div>
+        <div class="hrow"><span>3</span><div><b>Gewinnen</b> <em>Wer zuerst das Vermögensziel knackt, gewinnt die Runde.</em></div></div>
       </div>
     </div>
 
@@ -1374,7 +1409,7 @@ td:first-child{font-family:var(--font)}
   <form id="chatform"><input id="chatin" placeholder="Nachricht…" autocomplete="off"><button>➤</button></form>
 </div>
 
-<div id="quests" style="position:fixed;top:84px;left:14px;z-index:14;width:230px;background:rgba(19,26,38,.92);border:1px solid var(--line);border-radius:12px;padding:11px;display:none">
+<div id="quests" style="position:fixed;top:84px;left:14px;z-index:14;width:236px;background:rgba(10,15,22,.9);border:1px solid #1c2637;border-left:2px solid var(--accent2);border-radius:0 3px 3px 0;padding:11px 12px;display:none;backdrop-filter:blur(6px)">
   <div style="font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--accent2);margin-bottom:7px">Starter-Aufgaben</div>
   <div id="questlist" style="display:flex;flex-direction:column;gap:6px;font-size:12px"></div>
 </div>
@@ -2030,6 +2065,8 @@ const EN = {
   "Menge": "Amount", "Preis $": "Price $", "Order platzieren": "Place order",
   "Meine Orders": "My orders", "Storno": "Cancel", "Beliefern": "Supply", "Kaufen": "Buy",
   "Gesuch": "Wanted", "Angebot": "Offer",
+  "jemand kauft, du lieferst": "someone is buying, you supply",
+  "jemand verkauft, du kaufst": "someone is selling, you buy",
   "Kursverlauf": "Price history", "Tief": "Low", "Hoch": "High",
   "Orderbuch leer — platziere die erste Order.": "Order book is empty — place the first order.",
   "Keine fremden Orders für diese Ware.": "No other players' orders for this good.",
@@ -2116,6 +2153,10 @@ function spracheSetzen(neu) {
   document.querySelectorAll("[data-lang]").forEach(b => b.classList.toggle("on", b.dataset.lang === neu));
   seiteUebersetzen();
   const st = store.get();
+  /* Die Warenlisten der Auswahlfelder entstehen einmal beim Beitritt. Ohne
+   * Neuaufbau bleiben sie in der Sprache von damals — im Kursband stand
+   * "Electricity", im Orderformular daneben weiter "Strom". */
+  if (st.meta?.goods) { try { initSelects(); } catch {} }
   if (st.state && st.me) render(st);      // dynamische Panels neu aufbauen
 }
 
@@ -2158,9 +2199,10 @@ document.querySelectorAll(".netopt").forEach(b => b.addEventListener("click", ()
     ? "Ziel und Bots legt der Host der Runde fest."
     : "Ziel und Bots stellst du gleich im Warteraum ein.";
 }));
-/* Musik darf erst nach einer echten Nutzerinteraktion starten (Autoplay-Sperre) —
- * die erste Berührung des Startscreens genügt, dann läuft sie schon in der Lobby. */
-document.getElementById("join").addEventListener("pointerdown", () => MUSIC.start(), { once: true });
+/* Auf dem Startbildschirm bleibt es still: Die Kulisse gehoert zur Stadt, nicht
+ * zum Formular davor. Sie setzt erst mit dem Betreten der Runde ein — der Klick
+ * auf "Runde erstellen" ist zugleich die Nutzergeste, welche die Autoplay-Sperre
+ * der Browser verlangt. */
 /* Session-Token: übersteht Tab-Reload/WLAN-Aussetzer — beim nächsten Laden wird
  * automatisch versucht, nahtlos an den bestehenden Spielstand anzuknüpfen. */
 const TOKEN_KEY = "capitalSandboxToken";
@@ -2852,6 +2894,13 @@ for (const [b, n] of Object.entries(SPRITE_VARIANTS)) {
     img.src = `assets/${SPRITE_ALIAS[b] || b}-${i}.png`;
   }
 }
+/* Gegenstueck zur Maskierung auf dem Server: Fuer Text-Zuweisungen
+ * (textContent, value, title) muss sie wieder aufgeloest werden. Bewusst ueber
+ * eine feste Tabelle statt ueber innerHTML eines Hilfselements — Letzteres
+ * waere genau der Umweg, den die Maskierung verhindern soll. */
+const ENTITAETEN = { "&amp;": "&", "&lt;": "<", "&gt;": ">", "&quot;": '"', "&#39;": "'" };
+const rohText = v => String(v ?? "").replace(/&(?:amp|lt|gt|quot|#39);/g, e => ENTITAETEN[e]);
+
 const spriteFor = (btype, x, y) => {
   const arr = SPRITES[btype];
   return arr?.length ? arr[(x * 7 + y * 13) % arr.length] : null;
@@ -3905,9 +3954,12 @@ document.getElementById("cSend").addEventListener("click", () => act("offerContr
  * Start beim Beitreten (Klick = erlaubte User-Geste für Autoplay).
  * ================================================================ */
 const MUSIC = (() => {
-  /* Nur Titel, deren Herkunft im Impressum belegt ist (siehe impressum.html) */
-  const tracks = [0, 1].sort(() => Math.random() - 0.5);
-  let i = 0, started = false;
+  /* Eine durchgehende Naturkulisse statt wechselnder Musikstuecke. Sie laeuft
+   * in Schleife; ein Titelwechsel gibt es nicht mehr. Als AAC statt MP3, weil
+   * die Vorlage als 256-kbit-MP3 18 MB gross war — jeder Mitspieler laedt die
+   * Datei, und fuer Naturambiente sind 128 kbit reichlich. */
+  const AMBIENTE = "assets/music/ambience.m4a";
+  let started = false;
   const audio = new Audio();
   /* Ohne gespeicherten Wert liefert getItem null — und +null ist 0, was die
    * Bereichsprüfung anstandslos passiert hat. Jeder neue Besucher startete
@@ -3947,9 +3999,9 @@ const MUSIC = (() => {
     </svg>`;
   const paint = () => { btn.innerHTML = icon(muted || vol === 0 ? "off" : vol < 50 ? "low" : "high"); reglerMalen(); };
   paint();
-  const next = () => { audio.src = `assets/music/track-${tracks[i++ % tracks.length]}.mp3`;
+  const next = () => { if (audio.src.indexOf(AMBIENTE) < 0) audio.src = AMBIENTE;
     if (!muted) audio.play().catch(() => {}); };
-  audio.addEventListener("ended", next);
+  audio.loop = true;
   btn.addEventListener("click", () => {
     muted = !muted; try { localStorage.setItem("cs_muted", muted ? "1" : "0"); } catch {}
     paint();
@@ -5003,9 +5055,9 @@ function render({ state, me, myId, chat, room }) {
   document.getElementById("xpfill").style.width = (me.xp / (me.lvl*100) * 100) + "%";
   if (my) { document.getElementById("nwv").textContent = fmt(my.netWorth);
     document.getElementById("myrat").textContent = my.rating;
-    document.getElementById("coname").textContent = my.name;
+    document.getElementById("coname").textContent = rohText(my.name);
     document.getElementById("mylogo").style.background = my.color;
-    document.getElementById("mylogo").textContent = my.name[0].toUpperCase(); }
+    document.getElementById("mylogo").textContent = rohText(my.name)[0].toUpperCase(); }
   if (state.winGoal) document.getElementById("goalv").textContent = fmt(state.winGoal);
 
   /* Starter-Aufgaben-Widget: offene Aufgaben mit Fortschritt, fertig = ausgeblendet */
@@ -5092,8 +5144,8 @@ function render({ state, me, myId, chat, room }) {
           <span class="meta oname">${gname(o.good)}</span>
           <button class="mini" data-cancel="${o.id}">${t("Storno")}</button></div>`).join("") : "") +
       (Object.keys(byGood).length ? `<div class="oblegend">
-          <span><b style="color:var(--up)">▲ Gesuch</b> — jemand kauft, du lieferst</span>
-          <span><b style="color:var(--down)">▼ Angebot</b> — jemand verkauft, du kaufst</span>
+          <span><b style="color:var(--up)">▲ ${t("Gesuch")}</b> — ${t("jemand kauft, du lieferst")}</span>
+          <span><b style="color:var(--down)">▼ ${t("Angebot")}</b> — ${t("jemand verkauft, du kaufst")}</span>
         </div>` + Object.entries(byGood).map(([g, { buy, sell }]) => `
         <div class="sec" style="display:flex;justify-content:space-between;align-items:center"><span>${gname(g)}</span>
           <span style="display:flex;align-items:center;gap:7px;font-family:var(--mono);text-transform:none;letter-spacing:0">
