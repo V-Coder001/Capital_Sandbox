@@ -32,6 +32,12 @@ function lanUrls(port) {
  * spielt das Intro nur, wenn sie sich geändert hat — also genau einmal je
  * "sh start.sh", nicht bei jedem Neuladen des Tabs. */
 const BOOT_ID = crypto.randomUUID();
+/* Kennzeichen fuer Bots — rein fuer die Anzeige, nicht fuer Sonderrechte. Es
+ * entsteht in diesem Prozess und verlaesst ihn nie, ein fremder Client kann
+ * sich also nicht als Bot ausgeben. Ohne die Unterscheidung zaehlt die Liste
+ * der oeffentlichen Runden Bots als Mitspieler: "7/8" bei drei Menschen und
+ * vier Bots liest sich wie eine fast volle Runde. */
+const BOT_TOKEN = crypto.randomUUID();
 app.get("/api/invite", (_req, res) => {
   res.json({ urls: [ ...(publicUrl ? [publicUrl] : []), ...lanUrls(PORT) ], bootId: BOOT_ID });
 });
@@ -251,12 +257,16 @@ const ware = pid => senden({ art: "ware", pid,
  * Liste oeffentlicher Runden fuellen kann. Bewusst knapp: Firmennamen und
  * Spielerzahl sieht man ohnehin, sobald man beitritt. Nichts darueber hinaus. */
 app.get("/api/lobby", (_req, res) => {
-  const spieler = Object.values(G.players);
+  const alle = Object.values(G.players);
+  const menschen = alle.filter(p => !p.bot);
   res.json({
     started: G.started, mode: MODE, winGoal: WIN_NW, beendet: !!G.winner,
-    spieler: spieler.length, max: 8,
-    host: spieler[0] ? spieler[0].name : null,
-    namen: spieler.map(p => p.name),
+    /* Getrennt gezaehlt: Die Platzzahl gilt fuer Menschen. Bots stehen daneben,
+     * damit "3/8" nicht wie eine fast volle Runde aussieht, nur weil vier Bots
+     * mitspielen. */
+    spieler: menschen.length, bots: alle.length - menschen.length, max: 8,
+    host: menschen[0] ? menschen[0].name : null,
+    namen: menschen.map(p => p.name),
     laufzeit: G.tick,
   });
 });
@@ -1844,7 +1854,7 @@ io.on("connection", socket => {
   });
 
   /* Lobby / Registrierung */
-  socket.on("register", ({ name, color, winGoal, industry, bots, botLevel }, ack) => {
+  socket.on("register", ({ name, color, winGoal, industry, bots, botLevel, botToken }, ack) => {
     name = sicherText(String(name || "").trim().slice(0, 20));
     if (!name) return ack?.({ error: "Name fehlt" });
     if (Object.values(G.players).some(p => p.name === name)) return ack?.({ error: "Name vergeben" });
@@ -1859,6 +1869,8 @@ io.on("connection", socket => {
     const pid = crypto.randomUUID();
     const istErster = Object.keys(G.players).length === 0;
     G.players[pid] = newPlayer(pid, name, sichereFarbe(color), industry, socket.id);
+    /* Nur fuer die Anzeige — am Spiel aendert das Kennzeichen nichts. */
+    if (botToken && botToken === BOT_TOKEN) G.players[pid].bot = true;
     G.socketToPid[socket.id] = pid;
     socket.data.registered = true;
     if (istErster) G.hostId = pid;   // Host: darf im Warteraum einstellen und die Runde starten
@@ -3247,7 +3259,7 @@ async function spawnBot(cfg, lvl = BOT_LEVELS[BOT_LEVEL_DEFAULT]) {
     st = botMap ? { ...x, map: botMap } : x;
   });
   let botMeta = null;   // Registrierungsdaten (Tuning-Tabelle, Schwellen) für die Rennlogik
-  s.on("connect", () => s.emit("register", { name: cfg.name, color: cfg.color, industry: cfg.industry },
+  s.on("connect", () => s.emit("register", { name: cfg.name, color: cfg.color, industry: cfg.industry, botToken: BOT_TOKEN },
     res => { if (res?.ok) { myId = res.you; botMeta = res; } }));
   /* Mit Zeitlimit: bleibt eine Bestätigung aus — etwa weil ein Handler sie
    * vergisst —, würde der Bot sonst an dieser Stelle für immer stehen bleiben

@@ -160,7 +160,7 @@ app.get("/api/rooms/public", async (_req, res) => {
         /* Beendete und volle Runden bleiben in der Liste, aber gekennzeichnet —
          * sonst verschwindet eine Runde vor den Augen dessen, der gerade
          * daraufklickt. */
-        return { code, spieler: l.spieler, max: l.max, host: l.host, namen: l.namen,
+        return { code, spieler: l.spieler, bots: l.bots || 0, max: l.max, host: l.host, namen: l.namen,
                  gestartet: l.started, beendet: l.beendet, mode: l.mode,
                  winGoal: l.winGoal, alter: Date.now() - r.createdAt };
       } catch { return null; }
