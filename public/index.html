@@ -94,6 +94,28 @@ input,select{background:var(--panel2);border:1px solid var(--line);border-radius
 #joinSlots .slot{width:8px;height:8px;border-radius:50%;background:#1a2231;border:1px solid #273144;transition:all .2s}
 #joinSlots .slot.on{background:var(--accent);border:none;box-shadow:0 0 6px rgba(56,189,248,.6)}
 #joinSlots .count{font-size:10.5px;color:var(--dim);margin-left:4px}
+/* Öffentliche Runden */
+.oeffSchalter{display:flex;gap:10px;align-items:flex-start;cursor:pointer;
+  padding:10px 12px;border:1px solid #1a2535;border-radius:3px;background:#070b10}
+.oeffSchalter input{margin-top:2px;accent-color:var(--accent);width:15px;height:15px;flex:none}
+.oeffSchalter b{display:block;font-size:12.5px;font-weight:650;color:#c0cfe3}
+.oeffSchalter em{display:block;font-style:normal;font-size:11.5px;color:#5a708f;margin-top:2px;line-height:1.45}
+#oeffListe{margin-bottom:10px}
+#oeffListe .kopf{font-size:10.5px;letter-spacing:.13em;text-transform:uppercase;color:#5a708f;
+  font-stretch:82%;margin-bottom:6px}
+.oeffRunde{display:flex;align-items:center;gap:10px;width:100%;text-align:left;
+  padding:9px 11px;margin-bottom:5px;background:#070b10;border:1px solid #1a2535;border-radius:3px;
+  color:var(--text);font:inherit;cursor:pointer;transition:border-color .12s,background .12s}
+.oeffRunde:hover:not(:disabled){border-color:var(--accent);background:#0c1420}
+.oeffRunde:disabled{cursor:default;opacity:.5}
+.oeffRunde .wer{flex:1;min-width:0}
+.oeffRunde .wer b{display:block;font-size:12.5px;font-weight:650;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.oeffRunde .wer span{display:block;font-size:11px;color:#5a708f;font-family:var(--mono)}
+.oeffRunde .zahl{flex:none;font-family:var(--mono);font-size:12px;color:var(--accent)}
+.oeffRunde .lage{flex:none;font-size:10px;letter-spacing:.08em;text-transform:uppercase;
+  padding:2px 7px;border-radius:2px;background:#111a2c;color:#5a708f}
+.oeffRunde .lage.offen{color:var(--up)}
+#oeffListe .leer{font-size:11.5px;color:#5a708f;padding:8px 0 12px}
 #rundenZahl{font-size:10.5px;color:var(--dim);font-family:var(--mono);letter-spacing:.04em}
 #join h1{position:relative;display:flex;align-items:baseline;gap:10px;margin-bottom:11px;
   font-size:28px;font-weight:800;letter-spacing:-.045em;line-height:1;color:#f0f6ff}
@@ -1059,7 +1081,15 @@ td:first-child{font-family:var(--font)}
             </div>
           </div>
         </div>
+        <div id="oeffentlichRow" style="display:none">
+          <label class="oeffSchalter">
+            <input type="checkbox" id="oeffentlich" checked>
+            <span><b>Runde öffentlich zeigen</b>
+              <em>Sie steht dann für alle auf dem Startbildschirm und ist ohne Code zu betreten.</em></span>
+          </label>
+        </div>
         <div id="joinCodeRow" style="display:none">
+          <div id="oeffListe"></div>
           <div class="joinbox">
             <div class="lbl">
               <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><rect x="1" y="3" width="10" height="7" rx="1.5" stroke="#a78bfa" stroke-width="1" opacity=".5"/><path d="M4 3V2a2 2 0 014 0v1" stroke="#a78bfa" stroke-width="1" stroke-linecap="round"/></svg>
@@ -2106,6 +2136,13 @@ const EN = {
   "Wer zuerst das Vermögensziel knackt, gewinnt die Runde.":
     "Whoever reaches the wealth target first wins the round.",
   "Code deines Hosts": "Your host's code", "Zurück": "Back",
+  "Öffentliche Runden": "Public rounds", "Runde öffentlich zeigen": "List round publicly",
+  "Sie steht dann für alle auf dem Startbildschirm und ist ohne Code zu betreten.":
+    "It then appears on everyone's start screen and can be joined without a code.",
+  "Gerade ist keine öffentliche Runde offen — erstelle selbst eine.":
+    "No public round is open right now — start one yourself.",
+  "Noch niemand da": "Nobody here yet", "gerade eröffnet": "just opened",
+  "Warteraum": "Lobby", "läuft": "running", "voll": "full", "beendet": "finished",
   "Noch in Entwicklung — Fehler sind wahrscheinlich, und mit jeder Aktualisierung gehen laufende Runden verloren. Meldungen gern über":
     "Still in development — expect bugs, and every update ends any round in progress. Reports welcome via",
   "unten rechts im Spiel.": "at the bottom right in game.",
@@ -2247,6 +2284,11 @@ document.querySelectorAll(".netopt").forEach(b => b.addEventListener("click", ()
   document.querySelectorAll(".netopt").forEach(x => x.classList.toggle("on", x === b));
   document.getElementById("invite").style.display = netMode === "host" ? "" : "none";
   document.getElementById("joinCodeRow").style.display = netMode === "join" ? "" : "none";
+  /* Der Schalter gilt nur beim Erstellen und nur mit Gateway — ohne Gateway
+   * gibt es gar keine Rundenliste, in der etwas oeffentlich sein koennte. */
+  document.getElementById("oeffentlichRow").style.display =
+    (netMode === "host" && MULTIROOM) ? "" : "none";
+  if (netMode === "join" && MULTIROOM) oeffentlicheLaden();
   /* Kurz halten — die Beschriftung steht jetzt in Versalien im Feldkopf */
   document.getElementById("netstep").textContent = netMode === "join" ? "Runde beitreten" : "Mitspieler einladen";
   /* Beim Beitreten wird die eigene Vermittlung abgebaut (man hostet ja nicht).
@@ -2521,7 +2563,9 @@ document.getElementById("jgo").addEventListener("click", async () => {
        * dem andere gezielt zu GENAU dieser Runde finden (statt zu irgendeiner). */
       jgoBtn.disabled = true;
       try {
-        const r = await fetch("/api/rooms", { method: "POST" });
+        const r = await fetch("/api/rooms", { method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ oeffentlich: document.getElementById("oeffentlich").checked }) });
         const data = await r.json();
         if (!r.ok || data.error) throw new Error(data.error || "Runde konnte nicht erstellt werden.");
         myRoomCode = data.code;
@@ -2586,6 +2630,38 @@ document.getElementById("jgo").addEventListener("click", async () => {
   myPeer.on("error", () => { status.textContent = "Verbindung fehlgeschlagen — Code prüfen."; });
 });
 document.getElementById("jname").addEventListener("keydown", e => { if (e.key === "Enter") document.getElementById("jgo").click(); });
+
+/* ---- Öffentliche Runden ----
+ * Wer keinen Code hat, soll trotzdem mitspielen können. Die Liste zeigt, was
+ * gerade offen ist; ein Klick trägt den Code ein und verbindet. */
+let oeffTimer = null;
+async function oeffentlicheLaden() {
+  const box = document.getElementById("oeffListe");
+  if (!box || !MULTIROOM) return;
+  clearTimeout(oeffTimer);
+  let runden = [];
+  try { runden = await (await fetch("/api/rooms/public")).json(); } catch {}
+  const dauer = ms => { const m = Math.floor(ms / 60000); return m < 1 ? t("gerade eröffnet") : `${m} min`; };
+  box.innerHTML = `<div class="kopf">${t("Öffentliche Runden")}</div>` + (runden.length
+    ? runden.map(r => {
+        const voll = r.spieler >= r.max, zu = voll || r.beendet;
+        const lage = r.beendet ? t("beendet") : voll ? t("voll") : r.gestartet ? t("läuft") : t("Warteraum");
+        return `<button type="button" class="oeffRunde" data-code="${r.code}" ${zu ? "disabled" : ""}>
+            <span class="wer"><b>${r.host ? rohText(r.host) : t("Noch niemand da")}</b>
+              <span>${r.code} · ${dauer(r.alter)}</span></span>
+            <span class="zahl">${r.spieler}/${r.max}</span>
+            <span class="lage${!zu && !r.gestartet ? " offen" : ""}">${lage}</span>
+          </button>`;
+      }).join("")
+    : `<div class="leer">${t("Gerade ist keine öffentliche Runde offen — erstelle selbst eine.")}</div>`);
+  box.querySelectorAll("[data-code]").forEach(b => b.addEventListener("click", () => {
+    document.getElementById("jcode").value = b.dataset.code;
+    document.getElementById("jgo").click();
+  }));
+  /* Nur weiterlaufen, solange der Beitritts-Tab wirklich sichtbar ist. */
+  if (netMode === "join" && document.getElementById("join").style.display !== "none")
+    oeffTimer = setTimeout(oeffentlicheLaden, 4000);
+}
 
 /* ---- Werbeplakate neben dem Startbildschirm ----
  * Drei Plakate auf zwei Plätzen: sie wechseln langsam durch, sodass man beim

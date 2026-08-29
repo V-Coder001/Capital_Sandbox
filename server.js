@@ -247,6 +247,20 @@ const ware = pid => senden({ art: "ware", pid,
 </script>`);
 });
 
+/* Schaufenster einer Runde — ohne Anmeldung erreichbar, damit das Gateway die
+ * Liste oeffentlicher Runden fuellen kann. Bewusst knapp: Firmennamen und
+ * Spielerzahl sieht man ohnehin, sobald man beitritt. Nichts darueber hinaus. */
+app.get("/api/lobby", (_req, res) => {
+  const spieler = Object.values(G.players);
+  res.json({
+    started: G.started, mode: MODE, winGoal: WIN_NW, beendet: !!G.winner,
+    spieler: spieler.length, max: 8,
+    host: spieler[0] ? spieler[0].name : null,
+    namen: spieler.map(p => p.name),
+    laufzeit: G.tick,
+  });
+});
+
 const httpServer = http.createServer(app);
 const io = new Server(httpServer);
 

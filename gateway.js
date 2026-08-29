@@ -102,7 +102,7 @@ function wartenBisBereit(port, versucheUebrig = 300) {
   });
 }
 
-async function raumErstellen() {
+async function raumErstellen(oeffentlich = false) {
   if (rooms.size >= MAX_ROOMS) throw new Error("Gerade sind schon so viele Runden gleichzeitig aktiv — bitte kurz später erneut versuchen.");
   const port = await freierPort();
   const code = neuerCode();
@@ -111,7 +111,7 @@ async function raumErstellen() {
     env: { ...process.env, PORT: String(port) },
     stdio: ["ignore", "pipe", "pipe"],
   });
-  const room = { proc, port, createdAt: Date.now(), lastActivity: Date.now() };
+  const room = { proc, port, createdAt: Date.now(), lastActivity: Date.now(), oeffentlich: false };
   rooms.set(code, room);
   proc.stdout.on("data", d => process.stdout.write(`[Runde ${code}] ${d}`));
   proc.stderr.on("data", d => process.stderr.write(`[Runde ${code}] ${d}`));
@@ -126,13 +126,47 @@ async function raumErstellen() {
   return code;
 }
 
-app.post("/api/rooms", express.json(), async (_req, res) => {
+app.post("/api/rooms", express.json(), async (req, res) => {
   try {
     const code = await raumErstellen();
-    res.json({ code });
+    /* Oeffentlich heisst: taucht auf dem Startbildschirm auf und ist ohne Code
+     * zu betreten. Der Code funktioniert weiterhin — er ist nur nicht mehr
+     * noetig. Voreinstellung ist privat, damit eine Runde nicht versehentlich
+     * fuer alle offensteht. */
+    const room = rooms.get(code);
+    if (room) room.oeffentlich = req.body?.oeffentlich === true;
+    res.json({ code, oeffentlich: !!room?.oeffentlich });
   } catch (e) {
     res.status(503).json({ error: e.message });
   }
+});
+/* Liste der oeffentlichen Runden. Das Gateway fragt dafuer jeden Kindprozess
+ * einmal nach seinem Schaufenster. Der Startbildschirm ruft das im Sekundentakt
+ * ab, deshalb ein kurzer Zwischenspeicher — sonst laeuft bei zwanzig Runden
+ * jede Sekunde ein Schwall interner Anfragen los. */
+let oeffentlicheListe = { zeit: 0, daten: [] };
+app.get("/api/rooms/public", async (_req, res) => {
+  if (Date.now() - oeffentlicheListe.zeit < 2500) return res.json(oeffentlicheListe.daten);
+  const eintraege = await Promise.all([...rooms.entries()]
+    .filter(([, r]) => r.oeffentlich)
+    .map(async ([code, r]) => {
+      try {
+        const ctrl = new AbortController();
+        const zu = setTimeout(() => ctrl.abort(), 900);
+        const a = await fetch(`http://127.0.0.1:${r.port}/api/lobby`, { signal: ctrl.signal });
+        clearTimeout(zu);
+        if (!a.ok) return null;
+        const l = await a.json();
+        /* Beendete und volle Runden bleiben in der Liste, aber gekennzeichnet —
+         * sonst verschwindet eine Runde vor den Augen dessen, der gerade
+         * daraufklickt. */
+        return { code, spieler: l.spieler, max: l.max, host: l.host, namen: l.namen,
+                 gestartet: l.started, beendet: l.beendet, mode: l.mode,
+                 winGoal: l.winGoal, alter: Date.now() - r.createdAt };
+      } catch { return null; }
+    }));
+  oeffentlicheListe = { zeit: Date.now(), daten: eintraege.filter(Boolean) };
+  res.json(oeffentlicheListe.daten);
 });
 app.get("/api/rooms/:code", (req, res) => {
   const code = String(req.params.code || "").toUpperCase();
