@@ -2105,7 +2105,7 @@ const EN = {
     "In your own shop, on the exchange with the others, or for the city.",
   "Wer zuerst das Vermögensziel knackt, gewinnt die Runde.":
     "Whoever reaches the wealth target first wins the round.",
-  "Code deines Hosts": "Your host's code",
+  "Code deines Hosts": "Your host's code", "Zurück": "Back",
   "Noch in Entwicklung — Fehler sind wahrscheinlich, und mit jeder Aktualisierung gehen laufende Runden verloren. Meldungen gern über":
     "Still in development — expect bugs, and every update ends any round in progress. Reports welcome via",
   "unten rechts im Spiel.": "at the bottom right in game.",
@@ -2218,6 +2218,7 @@ function spracheSetzen(neu) {
    * Neuaufbau bleiben sie in der Sprache von damals — im Kursband stand
    * "Electricity", im Orderformular daneben weiter "Strom". */
   if (st.meta?.goods) { try { initSelects(); } catch {} }
+  window.lernbuchNeuZeichnen?.();
   if (st.state && st.me) render(st);      // dynamische Panels neu aufbauen
 }
 
@@ -5618,11 +5619,23 @@ const TUT_BUCH = [
       Geschäften zwischen euch. Wenn alle dasselbe verkaufen, fällt der Preis — und
       wenn eine Ware knapp wird, steigt er.</p>
       <div class="merk">Der Host stellt Rundenziel und Bots im Warteraum ein.
-      Von 100.000 $ (etwa eine Stunde) bis 10 Mio. $ (Marathon).</div>` },
+      Von 100.000 $ (etwa eine Stunde) bis 10 Mio. $ (Marathon).</div>`,
+    en: { t: "What it's about", lead: "The goal in one sentence", html: `
+      <p>You run a company in a shared city. You build plants, make goods and sell them —
+      to the city, through your own shops, or directly to the other players.
+      Whoever reaches the <b>round target</b> in net worth first wins.</p>
+      <div class="kasten"><div class="t">Net worth</div>
+      Cash + inventory (at the current rate) + buildings (70 % of build cost)
+      + shares held − debt. You can see yours at the top left.</div>
+      <p>There are <b>no artificial prices</b>. Every rate comes out of real deals between
+      you. If everyone sells the same thing the price falls — and when a good gets scarce
+      it rises.</p>
+      <div class="merk">The host sets the round target and the bots in the lobby.
+      From $100,000 (about an hour) up to $10M (a marathon).</div>` } },
 
   { t: "Deine Branche", lead: "Warum du nicht alles selbst bauen kannst",
     html: `
-      <p>Beim Beitritt wählst du <b>eine von vier Branchen</b>. Du kannst nur deren
+      <p>Beim Beitritt wählst du <b>eine Branche</b>. Du kannst nur deren
       Betriebe bauen — alles andere musst du einkaufen. Das ist der Kern des Spiels:
       Ihr seid aufeinander angewiesen.</p>
       <ul>
@@ -5630,11 +5643,29 @@ const TUT_BUCH = [
         <li><b>Rohstoff &amp; Bau</b> — Erze; daraus Ziegel, Beton und Stahl</li>
         <li><b>Wasser, Strom &amp; Öl</b> — die Grundversorgung, die jeder ständig braucht</li>
         <li><b>Technologie</b> — Silizium, Elektronik und die drei Autowerke</li>
+        <li><b>Touristik</b> — macht aus Wasser und Strom Übernachtungen</li>
+        <li><b>Rüstung</b> — Munition, Pistolen und Panzer am Ende jeder Kette</li>
       </ul>
       <div class="merk">Läden darf jede Branche bauen — verkaufen kann also jeder.</div>
       <p>Ohne die Bauindustrie stehen alle still: <b>Jedes Gebäude kostet Ziegel</b>,
       teure zusätzlich Beton. Und ohne Technologie gibt es keine Elektronik, ohne die
-      niemand seine Betriebe hochstufen kann.</p>` },
+      niemand seine Betriebe hochstufen kann.</p>`,
+    en: { t: "Your industry", lead: "Why you cannot build everything yourself", html: `
+      <p>When you join you pick <b>one industry</b>. You can only build its plants —
+      everything else you have to buy. That is the heart of the game:
+      you depend on each other.</p>
+      <ul>
+        <li><b>Agriculture</b> — fruit, cannabis, honey; from those juice, pastry and medicine</li>
+        <li><b>Raw materials &amp; construction</b> — ore; from it bricks, concrete and steel</li>
+        <li><b>Water, power &amp; oil</b> — the basics everyone needs all the time</li>
+        <li><b>Technology</b> — silicon, electronics and the three car plants</li>
+        <li><b>Tourism</b> — turns water and power into lodging</li>
+        <li><b>Armament</b> — ammunition, pistols and tanks, at the end of every chain</li>
+      </ul>
+      <div class="merk">Shops may be built by any industry — so everyone can sell.</div>
+      <p>Without the construction industry everyone stalls: <b>every building costs
+      bricks</b>, expensive ones also concrete. And without technology there are no
+      electronics, without which nobody can upgrade their plants.</p>` } },
 
   { t: "Bauen &amp; Zonen", lead: "Wo was hindarf",
     html: `
@@ -5648,7 +5679,19 @@ const TUT_BUCH = [
       <p>Zum Bauen klickst du eine freie Kachel an und wählst den Betrieb. Du brauchst
       genug Bargeld <b>und</b> das Baumaterial im Lager. Fehlen Ziegel, kauf sie an der
       Börse — die Bauindustrie stellt sie dort ein.</p>
-      <p>Ein Abriss erstattet dir <b>die Hälfte</b> des Baupreises zurück.</p>` },
+      <p>Ein Abriss erstattet dir <b>die Hälfte</b> des Baupreises zurück.</p>`,
+    en: { t: "Building &amp; zones", lead: "What goes where", html: `
+      <p>The map has four zones, told apart by colour. Every plant belongs in a specific
+      one: farms on the green, factories in the industrial area, shops in the centre,
+      oil pumps on the coast.</p>
+      <div class="kasten"><div class="t">Locked zones</div>
+      Industry and coast start out locked. Unlocking a tile there costs extra — it is
+      billed together with the build. The centre and the farmland are open from the
+      start.</div>
+      <p>To build, click a free tile and pick the plant. You need enough cash <b>and</b>
+      the material in your inventory. If bricks are missing, buy them on the exchange —
+      the construction industry puts them up there.</p>
+      <p>Demolishing refunds <b>half</b> the build cost.</p>` } },
 
   { t: "Freischalten &amp; Ausbauen", lead: "Mehr Fläche, mehr Ausstoß",
     html: `
@@ -5667,7 +5710,24 @@ const TUT_BUCH = [
       eine der zuverlässigsten Einnahmequellen für Techniker.</p>
       <div class="merk">Faustregel: Erst jedes Produkt deiner Branche einmal abdecken,
       dann ausbauen. Ein fünffach ausgebautes Gebäude nützt wenig, wenn die Zutat dafür
-      im Spiel gar nicht hergestellt wird.</div>` },
+      im Spiel gar nicht hergestellt wird.</div>`,
+    en: { t: "Unlocking &amp; upgrading", lead: "More space, more output", html: `
+      <p>Not every tile is buildable from the start. Locked areas look darker on the map
+      and cost a one-off <b>unlock fee</b>, which is billed together with the build — so
+      you pay for building and unlocking in one go.</p>
+      <p>Every production building can be upgraded with <b>electronics</b> up to
+      <b>level 5</b>. Each level adds <b>+30 % output</b> — and consumes proportionally
+      more inputs, because consumption scales with it.</p>
+      <div class="kasten"><div class="t">What an upgrade costs</div>
+      Electronics and cash, both rising with the level reached. A cheap building at level 2
+      is paid off quickly; level 5 on an expensive plant is an investment on the scale of a
+      second building.</div>
+      <p>You do not make electronics yourself unless you are in technology. It comes over
+      the exchange — and because everyone needs it to upgrade, it is one of the most
+      reliable sources of income for technologists.</p>
+      <div class="merk">Rule of thumb: first cover every product of your industry once,
+      then upgrade. A five-times-upgraded building is worth little if its input is not
+      being produced anywhere in the game.</div>` } },
 
   { t: "Produktion &amp; Boost", lead: "Wie deine Betriebe arbeiten",
     html: `
@@ -5682,7 +5742,20 @@ const TUT_BUCH = [
       <b>+30 % Ausstoß</b>. Das ist der stärkste Hebel im späteren Spiel — und der Grund,
       warum Elektronik immer gefragt ist.</p>
       <div class="merk">Verarbeitende Betriebe rechnen mit der knappsten Zutat. Fehlt
-      auch nur eine, steht die Fabrik still — egal wie voll das Lager sonst ist.</div>` },
+      auch nur eine, steht die Fabrik still — egal wie voll das Lager sonst ist.</div>`,
+    en: { t: "Production &amp; boost", lead: "How your plants work", html: `
+      <p>Plants produce automatically, a little every second. You do not have to click
+      anything — just make sure the inputs are there.</p>
+      <div class="kasten"><div class="t">The boost</div>
+      Some plants run faster when their supplies are in stock: a farm with
+      <b>power and water</b> produces up to <b>two and a half times</b> as much. Consumption
+      depends on the size of the plant and runs automatically as long as there is
+      stock.</div>
+      <p>Plants can be upgraded with <b>electronics</b>: roughly <b>+30 % output</b> per
+      level. That is the strongest lever in the later game — and the reason electronics
+      are always in demand.</p>
+      <div class="merk">Processing plants run on the scarcest input. If even one is
+      missing the factory stands still — no matter how full the rest of the store is.</div>` } },
 
   { t: "Verarbeitungsketten", lead: "Aus billig wird wertvoll",
     html: `
@@ -5707,7 +5780,30 @@ const TUT_BUCH = [
       </div></div>
       <p>Autos sind die wertvollsten Waren im Spiel — sie brauchen aber Zulieferungen aus
       <b>drei fremden Branchen</b>. Wer sie bauen will, muss vorher Handelsbeziehungen
-      aufbauen.</p>` },
+      aufbauen.</p>`,
+    en: { t: "Processing chains", lead: "Cheap becomes valuable", html: `
+      <p>Raw materials pay little. The money is in refining — every step multiplies the
+      value.</p>
+      <div class="kasten"><div class="t">Agriculture</div><div class="kette">
+        Fruit <b>→</b> juice (juice press)<br>
+        Fruit + honey <b>→</b> pastry (bakery)<br>
+        Cannabis <b>→</b> medicine (pharma lab)
+      </div></div>
+      <div class="kasten"><div class="t">Raw materials &amp; construction</div><div class="kette">
+        Ore + water <b>→</b> bricks (brickworks)<br>
+        Ore + oil <b>→</b> concrete (concrete plant)<br>
+        Ore + oil <b>→</b> steel (steel mill)
+      </div></div>
+      <div class="kasten"><div class="t">Utilities &amp; technology</div><div class="kette">
+        Oil <b>→</b> diesel (refinery)<br>
+        Silicon + power <b>→</b> electronics (chip factory)<br>
+        Electronics + steel + oil <b>→</b> petrol car<br>
+        Electronics + steel + diesel <b>→</b> diesel car<br>
+        Electronics + steel + power <b>→</b> electric car
+      </div></div>
+      <p>Cars are the most valuable goods in the game — but they need supplies from
+      <b>three other industries</b>. Anyone who wants to build them has to establish trade
+      relations first.</p>` } },
 
   { t: "Lager", lead: "Was du besitzt und was es wert ist",
     html: `
@@ -5717,7 +5813,15 @@ const TUT_BUCH = [
       aber nicht für dich. Und wenn der Kurs fällt, schrumpft dein Vermögen, ohne dass du
       etwas falsch gemacht hast.</p>
       <div class="merk">Faustregel: Betriebsstoffe wie Strom und Wasser bevorraten,
-      Endprodukte zügig verkaufen.</div>` },
+      Endprodukte zügig verkaufen.</div>`,
+    en: { t: "Storage", lead: "What you own and what it is worth", html: `
+      <p>Storage shows every good with quantity, current average rate and total value. It
+      has <b>no upper limit</b> — hoarding is allowed.</p>
+      <p>But stock is dead capital. It counts towards net worth, yet it does not work for
+      you. And if the rate falls, your wealth shrinks without you having done anything
+      wrong.</p>
+      <div class="merk">Rule of thumb: stock up on supplies like power and water, sell
+      finished products promptly.</div>` } },
 
   { t: "Eigene Läden", lead: "An die Stadt verkaufen",
     html: `
@@ -5735,7 +5839,22 @@ const TUT_BUCH = [
         <li><b>Autohaus</b> — nur Fahrzeuge</li>
       </ul>
       <div class="merk">Achte beim Bauen darauf, was der Laden überhaupt führt — ein
-      Marktstand nützt dir nichts, wenn du Strom verkaufen willst.</div>` },
+      Marktstand nützt dir nichts, wenn du Strom verkaufen willst.</div>`,
+    en: { t: "Your own shops", lead: "Selling to the city", html: `
+      <p>Shops sell continuously to the city's population — no other player has to buy.
+      You build a shop, click it and set per sales slot:
+      <b>which good, at what price</b>, optionally a maximum quantity.</p>
+      <div class="kasten"><div class="t">Price sets the pace</div>
+      At the average rate you sell at full speed. Dearer means slower, cheaper means
+      faster — up to double the pace. You decide between margin and turnover.</div>
+      <ul>
+        <li><b>Market stall</b> — farm goods</li>
+        <li><b>Builders merchant</b> — building material</li>
+        <li><b>Trading house</b> — almost everything, two slots</li>
+        <li><b>Car dealership</b> — vehicles only</li>
+      </ul>
+      <div class="merk">When building, check what the shop actually carries — a market
+      stall is no use if you want to sell power.</div>` } },
 
   { t: "Börse", lead: "Handel unter Spielern",
     html: `
@@ -5749,7 +5868,19 @@ const TUT_BUCH = [
       mehr als nötig, bekommst du die Differenz zurück — du zahlst nie mehr als den
       tatsächlichen Marktpreis.</p>
       <p>Der Ticker oben zeigt nur <b>echte Abschlüsse</b>. Steigt dort ein Preis, hat
-      wirklich jemand so viel bezahlt.</p>` },
+      wirklich jemand so viel bezahlt.</p>`,
+    en: { t: "Exchange", lead: "Trading between players", html: `
+      <p>The exchange is a real <b>order book</b>. You post an offer ("selling 50 bricks at
+      $34") or a bid ("buying 20 oil at $9"). When two sides match, it executes at
+      once.</p>
+      <div class="kasten"><div class="t">Your stake is held</div>
+      On a sell offer the goods go into escrow, on a buy bid the money does. That way
+      nobody can spend the same thing twice. Cancel and you get everything back.</div>
+      <p>Execution always happens at the price of the order that was <b>already
+      standing</b>. Bid more than necessary and you get the difference back — you never
+      pay more than the actual market price.</p>
+      <p>The ticker at the top shows <b>real trades only</b>. If a price rises there,
+      somebody genuinely paid that much.</p>` } },
 
   { t: "Preise &amp; Ankerkurs", lead: "Warum dein Angebot den Kurs bewegt",
     html: `
@@ -5767,7 +5898,23 @@ const TUT_BUCH = [
       <p>Umgekehrt gilt: Eine Ware, die niemand herstellt, driftet nach oben. Wer als Erster
       eine Lücke im Markt füllt, verkauft zum besten Kurs, den es für dieses Gut gibt.</p>
       <div class="merk">Wenn ein Kurs über Minuten unbewegt steht, heißt das nicht, dass er
-      stabil ist — meist heißt es, dass zu diesem Preis niemand kauft.</div>` },
+      stabil ist — meist heißt es, dass zu diesem Preis niemand kauft.</div>`,
+    en: { t: "Prices &amp; anchor rate", lead: "Why your supply moves the rate", html: `
+      <p>There is no dealer buying at fixed prices. <b>Every price in the game comes out of
+      deals between companies</b> — including the average rate you see in the bar at the
+      top.</p>
+      <div class="kasten"><div class="t">Selling pressure lowers the anchor</div>
+      Every good has a base value. The more of it gets sold, the further its <b>anchor
+      price</b> falls — down to half the base value. Produce it alone and it can rise to
+      <b>1.3 times</b>.</div>
+      <p>From that follows the most important thing about this game: <b>monoculture ruins
+      your own market.</b> Five farms are not five times as good as one — they push the
+      fruit price down until building stops paying. Breadth beats depth, as long as demand
+      does not grow with you.</p>
+      <p>The reverse holds too: a good nobody produces drifts upwards. Whoever fills a gap
+      in the market first sells at the best rate that good will ever see.</p>
+      <div class="merk">When a rate sits unmoved for minutes, that does not mean it is
+      stable — usually it means nobody is buying at that price.</div>` } },
 
   { t: "Direkthandel &amp; Chat", lead: "Geschäfte von Firma zu Firma",
     html: `
@@ -5782,7 +5929,19 @@ const TUT_BUCH = [
       werden: Wer Stahl sucht, fragt danach, statt zu hoffen, dass zufällig eine Order im
       Buch steht.</p>
       <div class="merk">Direktverträge sind das Mittel gegen die Börse, wenn ein Dritter dir
-      sonst die Ware vor der Nase wegkauft.</div>` },
+      sonst die Ware vor der Nase wegkauft.</div>`,
+    en: { t: "Direct trade &amp; chat", lead: "Deals from company to company", html: `
+      <p>Besides the open exchange there is the <b>direct contract</b>: you offer a
+      specific company a specific quantity at a negotiated price. They accept or decline.
+      Offers expire after two minutes.</p>
+      <div class="kasten"><div class="t">Escrow instead of trust</div>
+      Goods and money are held until the deal closes. Nobody can sell what they do not
+      have, and nobody can accept what they cannot pay for — not even in a direct
+      contract. Fraud is therefore technically impossible.</div>
+      <p>The <b>chat</b> has several rooms and is where prices are really made: if you need
+      steel, ask for it instead of hoping an order happens to be sitting in the book.</p>
+      <div class="merk">Direct contracts are the answer to the exchange when a third party
+      would otherwise snap up the goods in front of you.</div>` } },
 
   { t: "Großaufträge", lead: "Die Stadt zahlt Festpreise",
     html: `
@@ -5796,7 +5955,19 @@ const TUT_BUCH = [
       <p>Läuft die Frist ab, ohne dass die Menge zusammenkommt, gehen die eingezahlten
       Waren an ihre Einzahler zurück. Du riskierst also nichts außer Zeit.</p>
       <div class="merk">Großaufträge sind der beste Weg, große Mengen loszuwerden, ohne
-      den Kurs kaputtzumachen.</div>` },
+      den Kurs kaputtzumachen.</div>`,
+    en: { t: "Bulk orders", lead: "The city pays fixed prices", html: `
+      <p>From time to time a city puts out a <b>bulk order</b>: it needs a certain quantity
+      of a good and pays a <b>guaranteed price</b> for it, usually well above market
+      value.</p>
+      <div class="kasten"><div class="t">How it works</div>
+      The order appears in the storage panel with the good, the remaining quantity and a
+      deadline. You pay in your goods and receive the fixed price immediately. Several
+      players can share the same order — whoever delivers first earns.</div>
+      <p>If the deadline passes without the quantity coming together, the goods paid in go
+      back to those who contributed them. You risk nothing but time.</p>
+      <div class="merk">Bulk orders are the best way to move large quantities without
+      wrecking the rate.</div>` } },
 
   { t: "Werbeagentur", lead: "Höhere Preise ohne Tempoverlust",
     html: `
@@ -5808,7 +5979,17 @@ const TUT_BUCH = [
       dass der Absatz einbricht — mit einer Agentur bis +20 %, mit weiteren bis +40 %.</div>
       <p>Die Reichweite <b>zerfällt laufend</b>. Ohne Nachschub bist du nach gut zwei
       Minuten wieder beim normalen Kurs. Werbung lohnt sich also nur, wenn du viel über
-      eigene Läden verkaufst — nicht für reine Börsenhändler.</p>` },
+      eigene Läden verkaufst — nicht für reine Börsenhändler.</p>`,
+    en: { t: "Ad agency", lead: "Higher prices without losing pace", html: `
+      <p>Normally, selling dearer means selling slower. The ad agency is what defeats
+      exactly that.</p>
+      <div class="kasten"><div class="t">Reach</div>
+      You book a campaign and build up <b>reach</b>. While it is high, customers in
+      <b>your own shops</b> accept a higher price without sales collapsing — up to +20 %
+      with one agency, up to +40 % with more.</div>
+      <p>Reach <b>decays continuously</b>. Without a top-up you are back at the normal rate
+      after a good two minutes. Advertising therefore only pays if you sell a lot through
+      your own shops — not for pure exchange traders.</p>` } },
 
   { t: "Stadtbank &amp; Anteile", lead: "Firmen kaufen und übernehmen",
     html: `
@@ -5824,7 +6005,21 @@ const TUT_BUCH = [
       Beteiligung an einer starken Firma verdient also mit, ohne dass du etwas tust.</p>
       <p><b>Übernahme:</b> Hältst du <b>alle vier Anteile</b>, kannst du die Firma
       fusionieren. Ihr Bargeld, Lager und alle Gebäude gehen auf dich über. Das ist der
-      schnellste Weg an die Spitze — und der teuerste.</p>` },
+      schnellste Weg an die Spitze — und der teuerste.</p>`,
+    en: { t: "City bank &amp; shares", lead: "Buying and taking over companies", html: `
+      <p>Every company is split into <b>four shares of 25 % each</b>. At the start you hold
+      all four in yourself. At the city bank you can buy shares in other companies — or
+      sell your own to raise fresh capital.</p>
+      <div class="kasten"><div class="t">Purchase request</div>
+      You offer a company a price for 25 % or more. The other side decides whether to
+      accept. The proceeds go to the selling company — it trades ownership for
+      capital.</div>
+      <p><b>Dividends:</b> whoever holds shares in a company is paid part of its revenue at
+      regular intervals, in proportion to the percentage held. A stake in a strong company
+      therefore earns alongside it without you doing anything.</p>
+      <p><b>Takeover:</b> hold <b>all four shares</b> and you can merge the company. Its
+      cash, stock and every building pass to you. That is the fastest way to the top — and
+      the most expensive.</p>` } },
 
   { t: "Anleihen", lead: "Geld leihen und verleihen",
     html: `
@@ -5838,7 +6033,19 @@ const TUT_BUCH = [
       <p>Dein <b>Rating</b> (AAA bis D) ergibt sich aus deiner Verschuldung und Größe.
       Es ist öffentlich sichtbar und beeinflusst, ob dir jemand Geld leiht.</p>
       <div class="merk">Auf der anderen Seite: Fremde Anleihen zu kaufen ist eine ruhige
-      Einnahmequelle — vorausgesetzt, der Schuldner bleibt zahlungsfähig.</div>` },
+      Einnahmequelle — vorausgesetzt, der Schuldner bleibt zahlungsfähig.</div>`,
+    en: { t: "Bonds", lead: "Borrowing and lending", html: `
+      <p>If you need capital without giving up shares, you issue a <b>bond</b>: you set the
+      amount, the interest rate and the term. If another player buys it you get the money
+      immediately and pay them interest for it.</p>
+      <div class="kasten"><div class="t">If you cannot pay</div>
+      Miss interest payments and a <b>lien</b> is registered against one of your buildings
+      first. Keep not paying and it is <b>seized and auctioned</b> — the proceeds go to the
+      creditor.</div>
+      <p>Your <b>rating</b> (AAA down to D) follows from your debt and your size. It is
+      publicly visible and influences whether anyone will lend to you.</p>
+      <div class="merk">From the other side: buying other people's bonds is a quiet source
+      of income — provided the debtor stays solvent.</div>` } },
 
   { t: "Zwangsversteigerung", lead: "Wenn Schulden fällig werden",
     html: `
@@ -5854,7 +6061,20 @@ const TUT_BUCH = [
       Produktionskapazität. Bots bieten ab der mittleren Schwierigkeit mit — auf ein gutes
       Los bleibst du selten allein.</div>
       <p>Der Erlös geht an den Gläubiger, nicht an die Stadt. Wer Anleihen zeichnet, ist
-      also nicht schutzlos, wenn der Schuldner zusammenbricht.</p>` },
+      also nicht schutzlos, wenn der Schuldner zusammenbricht.</p>`,
+    en: { t: "Forced auction", lead: "When debts fall due", html: `
+      <p>If a company does not pay its interest, it collects warnings. After the third a
+      <b>lien</b> is registered against one of its buildings — selling and demolishing are
+      blocked from then on.</p>
+      <p>Stay in arrears and the building is <b>seized and auctioned</b>. The auction runs
+      for <b>30 seconds</b>, the minimum bid is around a third of the build cost. Whoever
+      wins takes over the tile with the building — and with everything inside it.</p>
+      <div class="kasten"><div class="t">An opportunity for you too</div>
+      A fully upgraded plant for a third of its new price is the cheapest route to
+      production capacity. Bots bid from medium difficulty upwards — on a good lot you are
+      rarely alone.</div>
+      <p>The proceeds go to the creditor, not to the city. So anyone underwriting bonds is
+      not defenceless when the debtor collapses.</p>` } },
 
   { t: "Motorsport", lead: "Ein Kreislauf für das späte Spiel",
     html: `
@@ -5876,8 +6096,40 @@ const TUT_BUCH = [
       <p><b>Fahrer</b> stehen in einem Pool, den alle sehen — wer zuerst zugreift, hat ihn.
       Ein Fahrer kostet Handgeld und danach <b>Gehalt pro Minute</b>. Wer nicht zahlt,
       verliert ihn zurück an den Pool.</p>
-      <div class="merk">Rennen, Preisgelder und der Wettpool sind noch nicht im Spiel — der
-      Kreislauf bis zum fertig entwickelten Rennwagen steht, der Rest kommt als Nächstes.</div>` },
+      <p><b>Renntag:</b> In festem Takt wird ein Rennen ausgeschrieben. Wer einen
+      startklaren Wagen samt Fahrer hat, meldet gegen Nenngeld; danach laufen Wettphase
+      und Rennen. Preisgeld gibt es für die ersten drei, gewettet wird über einen
+      gemeinsamen Topf — die Quote ergibt sich aus den Einsätzen, nicht aus einem
+      Buchmacher. Sponsoren können ein gemeldetes Team unterstützen und werden am
+      Preisgeld beteiligt.</p>
+      <div class="merk">Jedes Rennen kostet Zustand. Unter 25 % ist ein Wagen nicht mehr
+      startklar — dann hilft nur Instandsetzung, und die kostet Geld und Rennreifen.</div>`,
+    en: { t: "Motorsport", lead: "A cycle for the late game", html: `
+      <p>From <b>$200,000 in net worth</b> any company may build a <b>racing stable</b> —
+      regardless of industry, like the sales buildings. Exactly one, for $30,000.</p>
+      <p>The stable produces nothing. It is a pure <b>buyer</b>: you buy a finished car
+      from the company that builds cars and move it in. The number of bays follows the
+      upgrade level — level 1 one car, level 5 five.</p>
+      <div class="kasten"><div class="t">A car that has moved in is no longer a good</div>
+      It leaves your storage for good and belongs to the building from then on. The only
+      way to turn it back into money is to have the <b>whole stable</b> auctioned at the
+      city bank — vehicles included, with their value inside the minimum bid. Demolishing
+      is blocked while cars are inside.</div>
+      <p>In the motorsport panel you develop the car in six areas: drivetrain, battery,
+      tyres, chassis, aerodynamics and race software, three levels each. <b>Every area
+      raises two values and lowers others</b> — there is deliberately no setup that
+      improves everything. The parts for it (<b>racing tyres</b> and <b>racing
+      software</b>) are made by other companies; you buy them on the exchange.</p>
+      <p><b>Drivers</b> sit in a pool everyone can see — first to sign gets them. A driver
+      costs a signing fee and then a <b>salary per minute</b>. Fail to pay and they go back
+      to the pool.</p>
+      <p><b>Race day:</b> a race is called at a fixed interval. Anyone with a race-ready car
+      and a driver enters against an entry fee; then come the betting phase and the race.
+      Prize money goes to the first three, and betting runs through a shared pool — the
+      odds come from the stakes, not from a bookmaker. Sponsors can back an entered team
+      and share in its prize money.</p>
+      <div class="merk">Every race costs condition. Below 25 % a car is no longer
+      race-ready — then only repair helps, and that costs money and racing tyres.</div>` } },
 
   { t: "Planwirtschaft", lead: "Der zweite Spielmodus",
     html: `
@@ -5896,7 +6148,24 @@ const TUT_BUCH = [
       Eintrag in die <b>Kaderakte</b> und <b>40 Planpunkte</b> Abzug. Beim dritten Eintrag
       wird die nächste Zuteilung halbiert.</p>
       <div class="merk">Derselbe Produktionsapparat, völlig andere Frage: nicht „was bringt
-      am meisten ein", sondern „was verlangt der Plan".</div>` },
+      am meisten ein", sondern „was verlangt der Plan".</div>`,
+    en: { t: "Planned economy", lead: "The second game mode", html: `
+      <p>Instead of a wealth target, the <b>planning office</b> sets the direction here.
+      There is no open exchange — anyone trading anyway does so under the counter.</p>
+      <p>The round runs in <b>five plan phases of eight minutes each</b>. At the start of
+      every phase the planning office announces your <b>quota</b>: certain goods in certain
+      quantities, which you deliver at fixed state prices. That earns <b>plan points</b>.
+      Reach 1,000 points and you win early.</p>
+      <div class="kasten"><div class="t">Allocation instead of purchase</div>
+      You do not get materials on a market but through <b>ration coupons</b>. Exceed your
+      quota and you get more next time — fall behind and you get less. The quota itself
+      grows with success: good performance is rewarded with higher demands.</div>
+      <p>What is officially unobtainable can be had on the <b>black market</b> — where the
+      city bank normally stands. That is fast but risky: get caught and you receive an
+      entry in your <b>cadre file</b> and <b>40 plan points</b> deducted. On the third entry
+      your next allocation is halved.</p>
+      <div class="merk">The same production apparatus, an entirely different question: not
+      "what earns the most", but "what does the plan demand".</div>` } },
 
   { t: "Mitspieler &amp; Bots", lead: "Allein, zu zweit oder zu acht",
     html: `
@@ -5913,7 +6182,21 @@ const TUT_BUCH = [
         <li><b>Schwer</b> — bis zu acht Gebäude, boosten ihre Produktion, greifen überall zu</li>
       </ul></div>
       <p>Auch allein ist der Markt dadurch lebendig: Die Bots sind deine Lieferanten und
-      deine Konkurrenz zugleich.</p>` },
+      deine Konkurrenz zugleich.</p>`,
+    en: { t: "Players &amp; bots", lead: "Alone, in pairs or eight-handed", html: `
+      <p>Up to <b>eight companies</b> play a round. Players on the same Wi-Fi simply get the
+      link; from elsewhere the five-character code in the lobby works.</p>
+      <p>On top of that come up to ten <b>bot companies</b>, two per industry. They play
+      through the same interface you do: <b>no extra capital, no higher output, no hidden
+      prices</b>. They build, buy inputs, sell, take out loans and bid at auctions.</p>
+      <div class="kasten"><div class="t">Three difficulty levels</div>
+      <ul style="margin:0 0 0 16px">
+        <li><b>Easy</b> — build slowly, three buildings at most, no upgrades, no auctions</li>
+        <li><b>Medium</b> — build faster, upgrade their plants, join the bidding</li>
+        <li><b>Hard</b> — up to eight buildings, boost their output, take part in everything</li>
+      </ul></div>
+      <p>That keeps the market alive even on your own: the bots are your suppliers and your
+      competition at the same time.</p>` } },
 
   { t: "Aufgaben &amp; Fortschritt", lead: "Wobei dich das Spiel begleitet",
     html: `
@@ -5929,7 +6212,21 @@ const TUT_BUCH = [
       Kursleiste schaut, erfährt hier, wo gerade etwas zu holen ist.</div>
       <p>Fällt dir etwas auf, das nicht stimmt, gibt es unten den Knopf <b>Fehler melden</b>
       — die Meldung landet direkt beim Server, mitsamt dem, was gerade auf dem Bildschirm
-      war.</p>` },
+      war.</p>`,
+    en: { t: "Tasks &amp; progress", lead: "What the game walks you through", html: `
+      <p>Top left are the <b>starter tasks</b>. They take you once through every system —
+      building, setting up a sales slot, placing an order, upgrading a building, buying
+      shares — and pay a bonus for it. Completed tasks disappear.</p>
+      <p>Every action earns <b>experience</b>. Nothing about your production grows with your
+      level; it is a measure of progress, not an advantage — the economy is meant to be won
+      through decisions, not through time spent.</p>
+      <div class="kasten"><div class="t">The news tower</div>
+      It stands in the centre of the map and regularly sends a <b>market report</b> into the
+      chat: which good is scarce, which is in surplus. If you are not constantly watching
+      the ticker, this is where you learn where something is to be had.</div>
+      <p>If you notice something wrong, there is a <b>Report a bug</b> button at the bottom
+      — the report goes straight to the server, along with whatever was on screen at the
+      time.</p>` } },
 
   { t: "Gewinnen", lead: "Die letzte Runde zählt",
     html: `
@@ -5945,8 +6242,28 @@ const TUT_BUCH = [
       <p>Meist gewinnt eine Mischung. Reine Produktion ist langsam, reiner Handel braucht
       Mitspieler mit Ware, reine Übernahme braucht sehr viel Kapital.</p>
       <div class="merk">Viel Erfolg — und denk dran: Jeder Preis, den du siehst, hat ein
-      Mitspieler gemacht.</div>` },
+      Mitspieler gemacht.</div>`,
+    en: { t: "Winning", lead: "The last round counts", html: `
+      <p>As soon as somebody reaches the round target in net worth, the game ends and the
+      <b>final table</b> appears: who produced the most, ran the best retail, held the most
+      shares.</p>
+      <div class="kasten"><div class="t">Three routes to the target</div>
+      <ul style="margin:0 0 0 16px">
+        <li><b>Production</b> — many plants, upgraded, permanently supplied</li>
+        <li><b>Trade</b> — spot scarce goods early and skim the spread</li>
+        <li><b>Ownership</b> — earn alongside other companies and take them over</li>
+      </ul></div>
+      <p>Usually a mixture wins. Pure production is slow, pure trading needs players with
+      goods, pure takeover needs a great deal of capital.</p>
+      <div class="merk">Good luck — and remember: every price you see was made by another
+      player.</div>` } },
 ];
+
+/* Jedes Kapitel traegt seine englische Fassung als Feld `en` direkt bei sich —
+ * nicht in einer zweiten Liste. So kann sie beim Hinzufuegen eines Kapitels
+ * nicht vergessen werden, und fehlt sie doch, faellt die Anzeige auf Deutsch
+ * zurueck statt leer zu bleiben. */
+const kap = k => (SPRACHE === "en" && k.en) ? { ...k, ...k.en } : k;
 
 (function tutorialBuch() {
   const el = document.getElementById("tutBuch");
@@ -5958,19 +6275,22 @@ const TUT_BUCH = [
   const weiter = document.getElementById("tbWeiter");
   let i = 0;
 
-  nav.innerHTML = TUT_BUCH.map((k, n) =>
-    `<button type="button" data-k="${n}"><span class="num">${String(n + 1).padStart(2, "0")}</span>${k.t}</button>`).join("");
+  const navFuellen = () => nav.innerHTML = TUT_BUCH.map((k, n) =>
+    `<button type="button" data-k="${n}"><span class="num">${String(n + 1).padStart(2, "0")}</span>${kap(k).t}</button>`).join("");
+  navFuellen();
   punkte.innerHTML = TUT_BUCH.map(() => "<i></i>").join("");
 
   function zeichnen() {
-    const k = TUT_BUCH[i];
+    const k = kap(TUT_BUCH[i]);
+    navFuellen();                      // Kapitelnamen folgen der Sprache
     inhalt.innerHTML = `<h3>${k.t}</h3><div class="lead">${k.lead}</div>${k.html}`;
     inhalt.scrollTop = 0;
     nav.querySelectorAll("button").forEach((b, n) => b.classList.toggle("on", n === i));
     punkte.querySelectorAll("i").forEach((p, n) => p.classList.toggle("on", n <= i));
-    fortschritt.textContent = `Kapitel ${i + 1} von ${TUT_BUCH.length}`;
+    fortschritt.textContent = SPRACHE === "en"
+      ? `Chapter ${i + 1} of ${TUT_BUCH.length}` : `Kapitel ${i + 1} von ${TUT_BUCH.length}`;
     zurueck.disabled = i === 0;
-    weiter.textContent = i === TUT_BUCH.length - 1 ? "Fertig" : "Weiter";
+    weiter.textContent = t(i === TUT_BUCH.length - 1 ? "Fertig" : "Weiter");
     /* Das gewählte Kapitel auch in der Seitenspalte sichtbar halten — sonst
      * verliert man auf schmalen Fenstern beim Blättern den Bezug. */
     nav.querySelectorAll("button")[i]?.scrollIntoView({ block: "nearest", inline: "nearest" });
@@ -5984,6 +6304,7 @@ const TUT_BUCH = [
    * bleibt als Nachschlagewerk erhalten — es öffnet sich über das Lexikon im
    * Spiel und über den kleinen Verweis im letzten Schritt. */
   window.lernbuchOeffnen = auf;
+  window.lernbuchNeuZeichnen = () => { if (el.classList.contains("auf")) zeichnen(); };
   /* Der Knopf im Warteraum öffnet wieder die geschriebene Anleitung. Die
    * geführte Übungsrunde bleibt erhalten und ist aus dem Buch heraus zu
    * starten — wer lesen will, liest; wer lieber macht, klickt unten links. */
@@ -6039,7 +6360,8 @@ const TUT_BUCH = [
   /* Aus dem Kapitel-HTML wird gesprochener Text: Blöcke bekommen eine Pause,
    * Aufzählungspunkte einen Satzschluss — sonst laufen die Stichworte
    * atemlos ineinander. */
-  function kapitelText(k) {
+  function kapitelText(roh) {
+    const k = kap(roh);
     const d = document.createElement("div");
     d.innerHTML = `<p>${k.t}.</p><p>${k.lead}.</p>` + k.html;
     d.querySelectorAll("li").forEach(li => {
