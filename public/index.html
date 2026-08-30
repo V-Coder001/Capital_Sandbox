@@ -97,7 +97,11 @@ input,select{background:var(--panel2);border:1px solid var(--line);border-radius
 /* Öffentliche Runden */
 .oeffSchalter{display:flex;gap:10px;align-items:flex-start;cursor:pointer;
   padding:10px 12px;border:1px solid #1a2535;border-radius:3px;background:#070b10}
-.oeffSchalter input{margin-top:2px;accent-color:var(--accent);width:15px;height:15px;flex:none}
+/* Mit ID im Selektor, sonst gewinnt "#join input{width:100%}" — das dehnte den
+ * Haken ueber die ganze Zeile und schob den Text aus dem Kasten. */
+#join .oeffSchalter input[type=checkbox]{flex:none;width:16px;height:16px;margin:2px 0 0;
+  padding:0;border-radius:3px;box-shadow:none;accent-color:var(--accent);cursor:pointer}
+.oeffSchalter span{min-width:0}
 .oeffSchalter b{display:block;font-size:12.5px;font-weight:650;color:#c0cfe3}
 .oeffSchalter em{display:block;font-style:normal;font-size:11.5px;color:#5a708f;margin-top:2px;line-height:1.45}
 #oeffListe{margin-bottom:10px}
@@ -111,7 +115,8 @@ input,select{background:var(--panel2);border:1px solid var(--line);border-radius
 .oeffRunde .wer{flex:1;min-width:0}
 .oeffRunde .wer b{display:block;font-size:12.5px;font-weight:650;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .oeffRunde .wer span{display:block;font-size:11px;color:#5a708f;font-family:var(--mono)}
-.oeffRunde .zahl{flex:none;font-family:var(--mono);font-size:12px;color:var(--accent)}
+.oeffRunde .zahl{flex:none;font-family:var(--mono);font-size:12px;color:var(--accent);text-align:right}
+.oeffRunde .zahl .bots{display:block;font-size:10px;color:#5a708f}
 .oeffRunde .lage{flex:none;font-size:10px;letter-spacing:.08em;text-transform:uppercase;
   padding:2px 7px;border-radius:2px;background:#111a2c;color:#5a708f}
 .oeffRunde .lage.offen{color:var(--up)}
@@ -1197,12 +1202,17 @@ td:first-child{font-family:var(--font)}
       <div id="lwMode">
         <button type="button" data-mode="sandbox" class="on">Sandbox</button>
         <button type="button" data-mode="plan">Planwirtschaft (DDR)</button>
+        <button type="button" data-mode="einsteiger">Einsteiger</button>
       </div>
     </div>
     <p id="lwModeHint" style="display:none;font-size:11.5px;color:#8695ab;margin:2px 0 6px">
       Planwirtschaft: Kein Vermögensziel — das Planbüro verkündet Plansolls, du lieferst zu festen
       Ankaufspreisen ab und sammelst Planpunkte. Nach 5 Planphasen (oder bei 1.000 Punkten) gewinnt
       der „Held der Arbeit".</p>
+    <p id="lwEinsteigerHint" style="display:none;font-size:11.5px;color:#8695ab;margin:2px 0 6px">
+      Einsteiger: Ein geführter Durchgang durch das ganze Spiel — Bauen, Verkaufen, Börse,
+      Kursticker, Nachrichten und Bank, Schritt für Schritt erklärt. Nichts ist gesperrt, die Bots
+      spielen normal mit. Die Runde endet, wenn du durch bist. Karte: San Francisco.</p>
     <div class="lwRow" id="lwGoalRow">
       <label for="lwGoal">Ziel</label>
       <select id="lwGoal">
@@ -1841,9 +1851,16 @@ let auswertungGezeigt = false;
 function zeigeAuswertung(state) {
   if (auswertungGezeigt) return;          // einmal aufbauen, nicht im Sekundentakt neu
   const r = state.report;
-  document.getElementById("winsub").textContent = r
-    ? `${fmt(state.winGoal)} Nettovermögen erreicht — nach ${r.dauerMin} Minuten.`
-    : `${fmt(state.winGoal)} Nettovermögen wurde erreicht.`;
+  /* Das Einsteiger-Tutorial endet ueber denselben Weg wie ein Sieg, aber nicht
+   * aus demselben Grund — hier stand sonst "100.000 $ erreicht" bei jemandem
+   * mit 6.000 $ auf dem Konto. */
+  document.getElementById("winname").parentElement.lastChild.textContent =
+    state.tutorialEnde ? " hat es geschafft!" : " gewinnt!";
+  document.getElementById("winsub").textContent = state.tutorialEnde
+    ? (r ? `Einsteiger-Tutorial abgeschlossen — nach ${r.dauerMin} Minuten.`
+         : "Einsteiger-Tutorial abgeschlossen.")
+    : r ? `${fmt(state.winGoal)} Nettovermögen erreicht — nach ${r.dauerMin} Minuten.`
+        : `${fmt(state.winGoal)} Nettovermögen wurde erreicht.`;
   if (!r) return;
   auswertungGezeigt = true;
 
@@ -2424,8 +2441,9 @@ let lwMode = "sandbox";
 function lwModeSpiegeln() {
   document.querySelectorAll("#lwMode button").forEach(b => b.classList.toggle("on", b.dataset.mode === lwMode));
   /* In der Planwirtschaft gibt es kein Vermögensziel — die Zeile ausblenden. */
-  document.getElementById("lwGoalRow").style.display = lwMode === "plan" ? "none" : "";
+  document.getElementById("lwGoalRow").style.display = (lwMode === "plan" || lwMode === "einsteiger") ? "none" : "";
   document.getElementById("lwModeHint").style.display = lwMode === "plan" ? "" : "none";
+  document.getElementById("lwEinsteigerHint").style.display = lwMode === "einsteiger" ? "" : "none";
 }
 document.getElementById("lwMode").addEventListener("click", e => {
   const b = e.target.closest("button[data-mode]"); if (!b) return;
@@ -2475,10 +2493,14 @@ function doRegister(name) {
 /* Das Tutorial führt durchs Bauen — im Warteraum ginge das ins Leere, weil
  * noch nichts produziert wird. Also erst zeigen, wenn die Runde wirklich läuft. */
 function tutErstBeiRundenstart() {
-  if (store.get().state?.started) { tutShow(0); return; }
+  /* Im Einsteiger-Modus fuehrt die lange Strecke durch das ganze Spiel statt
+   * der kurzen Einfuehrung zur gewaehlten Branche. */
+  const waehlen = () => { if (store.get().state?.mode === "einsteiger") TUT = TUT_EINSTEIGER; };
+  if (store.get().state?.started) { waehlen(); tutShow(0); return; }
   const ab = store.subscribe(() => {
     if (!store.get().state?.started) return;
     ab?.();
+    waehlen();
     tutShow(0);
   });
 }
@@ -2649,7 +2671,7 @@ async function oeffentlicheLaden() {
         return `<button type="button" class="oeffRunde" data-code="${r.code}" ${zu ? "disabled" : ""}>
             <span class="wer"><b>${r.host ? rohText(r.host) : t("Noch niemand da")}</b>
               <span>${r.code} · ${dauer(r.alter)}</span></span>
-            <span class="zahl">${r.spieler}/${r.max}</span>
+            <span class="zahl">${r.spieler}/${r.max}${r.bots ? `<span class="bots">+${r.bots} ${t("Bots")}</span>` : ""}</span>
             <span class="lage${!zu && !r.gestartet ? " offen" : ""}">${lage}</span>
           </button>`;
       }).join("")
@@ -2917,7 +2939,7 @@ function makeDiamond(zeichne) {
 /* Flache Textur isometrisch auf die Raute scheren: die vier Ecken des
  * Texturquadrats landen auf den vier Rautenspitzen. */
 function groundDiamond(img) {
-  const ts = img.naturalWidth;
+  const ts = img.naturalWidth || img.width;
   return makeDiamond(g => {
     g.transform(TW/2/ts, TH/2/ts, -TW/2/ts, TH/2/ts, TW/2, 0);
     g.drawImage(img, 0, 0, ts, ts);
@@ -2928,6 +2950,80 @@ function groundDiamond(img) {
 function roadDiamond(img) {
   return makeDiamond(g => g.drawImage(img, 0, 0, img.naturalWidth, img.naturalWidth / 2, 0, 0, TW, TH));
 }
+/* ---- Strassen nach Nachbarschaft ----
+ * Vorher waehlte tileSprite() die Strassenkachel ueber "t.x % 6 === 3" — also
+ * ueber die Annahme, dass Strassen auf festen Rasterlinien liegen. Das gilt nur
+ * fuer die prozedurale Sandkasten-Flaeche; auf jeder anderen Karte kam ein
+ * Flickenteppich heraus. Jetzt entscheidet die tatsaechliche Nachbarschaft.
+ *
+ * Das Kenney-Strassenpack liefert Randstuecke und grosse Kurven, aber kein
+ * Autotile fuer ein netzfoermiges Strassennetz mit einer Kachel Breite. Die
+ * Flaeche kommt deshalb aus dem Pack (gleichmaessiger Asphalt), die 16
+ * Nachbarschaftsfaelle zeichne ich darauf — in derselben flachen Optik.
+ *
+ * Achsen: groundDiamond bildet Textur-x auf Welt-+x ab und Textur-y auf Welt-+y.
+ * Bit 1 = Norden (-y), 2 = Osten (+x), 4 = Sueden (+y), 8 = Westen (-x). */
+const ROADIMG = [];
+function strassenTextur(mask, asphalt) {
+  const S = 64, C = S / 2, K = 3;
+  const c = document.createElement("canvas"); c.width = c.height = S;
+  const g = c.getContext("2d");
+  g.drawImage(asphalt, 0, 0, S, S);
+  /* Bordstein an jeder Seite ohne Anschluss — das ist die Kante, an der die
+   * Strasse ans Gruen stoesst. */
+  g.fillStyle = "#cfd6dd";
+  if (!(mask & 1)) g.fillRect(0, 0, S, K);
+  if (!(mask & 2)) g.fillRect(S - K, 0, K, S);
+  if (!(mask & 4)) g.fillRect(0, S - K, S, K);
+  if (!(mask & 8)) g.fillRect(0, 0, K, S);
+  const an = [mask & 1, mask & 2, mask & 4, mask & 8].map(Boolean);
+  const zahl = an.filter(Boolean).length;
+  g.strokeStyle = "#eef3f8"; g.lineWidth = 2.4; g.lineCap = "butt";
+  const gerade = zahl === 2 && ((an[0] && an[2]) || (an[1] && an[3]));
+  const kurve  = zahl === 2 && !gerade;
+  if (gerade) {
+    g.setLineDash([8, 8]);
+    g.beginPath();
+    if (an[0]) { g.moveTo(C, 0); g.lineTo(C, S); } else { g.moveTo(0, C); g.lineTo(S, C); }
+    g.stroke();
+  } else if (kurve) {
+    /* Viertelkreis von der einen offenen Seite zur anderen. */
+    g.setLineDash([7, 7]);
+    const mx = an[3] ? 0 : S, my = an[0] ? 0 : S;
+    g.beginPath(); g.arc(mx, my, C, 0, Math.PI * 2); g.stroke();
+  } else if (zahl >= 3) {
+    /* Kreuzung und Einmuendung: Mitte frei lassen, sonst laeuft die
+     * Mittellinie quer durch den Knoten. Stattdessen Haltebalken. */
+    g.setLineDash([]);
+    g.lineWidth = 2;
+    const D = 16, a1 = K + 2, a2 = S - K - 2;   // Abstand des Balkens von der Mitte
+    if (an[0]) { g.beginPath(); g.moveTo(a1, C - D); g.lineTo(a2, C - D); g.stroke(); }
+    if (an[2]) { g.beginPath(); g.moveTo(a1, C + D); g.lineTo(a2, C + D); g.stroke(); }
+    if (an[1]) { g.beginPath(); g.moveTo(C + D, a1); g.lineTo(C + D, a2); g.stroke(); }
+    if (an[3]) { g.beginPath(); g.moveTo(C - D, a1); g.lineTo(C - D, a2); g.stroke(); }
+  } else if (zahl === 1) {
+    g.setLineDash([8, 8]);
+    g.beginPath();
+    if (an[0]) { g.moveTo(C, 0); g.lineTo(C, C + 6); }
+    else if (an[2]) { g.moveTo(C, S); g.lineTo(C, C - 6); }
+    else if (an[1]) { g.moveTo(S, C); g.lineTo(C - 6, C); }
+    else { g.moveTo(0, C); g.lineTo(C + 6, C); }
+    g.stroke();
+  }
+  g.setLineDash([]);
+  return c;
+}
+/* Welche Kacheln Strasse sind — einmal je Karte, danach nur noch nachgeschlagen. */
+let ROADSET = null;
+function roadMask(t) {
+  if (!ROADSET) {
+    ROADSET = new Set();
+    for (const q of (store.get()?.state?.map || [])) if (q.road) ROADSET.add(q.x + "," + q.y);
+  }
+  const R = (x, y) => ROADSET.has(x + "," + y) ? 1 : 0;
+  return R(t.x, t.y - 1) | (R(t.x + 1, t.y) << 1) | (R(t.x, t.y + 1) << 2) | (R(t.x - 1, t.y) << 3);
+}
+
 for (const [key, pfad, art] of [
   ["gras",      "assets/ground/gras.png",      groundDiamond],
   ["stadt",     "assets/ground/stadt.png",     groundDiamond],
@@ -2944,23 +3040,18 @@ for (const [key, pfad, art] of [
   img.onload = () => TILEIMG[key] = art(img);
   img.src = pfad;
 }
+{
+  /* Asphalt aus dem Kenney-Strassenpack (CC0) — daraus einmal alle 16
+   * Nachbarschaftsfaelle vorrendern. */
+  const asphalt = new Image();
+  asphalt.onload = () => {
+    for (let m = 0; m < 16; m++) ROADIMG[m] = groundDiamond(strassenTextur(m, asphalt));
+  };
+  asphalt.src = "assets/ground/asphalt.png";
+}
 const tileSprite = t => {
   if (t.water) return TILEIMG.meer;
-  if (t.road) {
-    /* Das Straßenraster liegt je nach Spielfläche auf anderen Linien:
-     * Sandbox auf x/y % 6 == 3, Planwirtschaft auf % 6 == 2. Mit dem
-     * falschen Wert kippt die Sprite-Orientierung um 90 Grad. */
-    const rl = store.get()?.state?.mode === "plan" ? 2 : 3;
-    const isCol = t.x % 6 === rl, isRow = t.y % 6 === rl;
-    if (isCol && isRow) return TILEIMG.crossroad;
-    /* Vorsicht Isometrie: iso() bildet +x auf "rechts-unten" ab und +y auf
-     * "links-unten". Eine Spaltenstraße (x fest, y läuft) verläuft auf dem
-     * Bildschirm also von unten-links nach oben-rechts — dafür braucht es die
-     * Kachel, deren Asphalt oben-rechts und unten-links ausläuft, und das ist
-     * roadEW. Die Dateinamen meinen Weltachsen, nicht Bildschirmrichtungen;
-     * genau daran war die Zuordnung vorher um 90° verdreht. */
-    return isCol ? TILEIMG.roadEW : TILEIMG.roadNS;
-  }
+  if (t.road) return ROADIMG[roadMask(t)] || TILEIMG.road;
   if (t.sand) return TILEIMG.sand;
   if (t.zone === "industrie") return TILEIMG.industrie;
   if (t.zone === "kueste") return TILEIMG.kueste;
@@ -3012,6 +3103,54 @@ BANKIMG.src = "assets/bank.png";
 let NEWSSPR = null;
 const NEWSIMG = new Image(); NEWSIMG.onload = () => NEWSSPR = spriteHiRes(NEWSIMG);
 NEWSIMG.src = "assets/newstower.png";
+/* Vier Hochhaeuser als Kulisse im Zentrum. Sie gehoeren der Stadt, sind nicht
+ * bebaubar und haben keinen Besitzer — reine Skyline. Der Server setzt das Feld
+ * deko (1..4) auf ein paar zentrale Kacheln. */
+const DEKOSPR = [];
+for (let i = 1; i <= 4; i++) {
+  const img = new Image();
+  img.onload = () => DEKOSPR[i - 1] = spriteHiRes(img);
+  img.src = `assets/deko/hochhaus-${i}.png`;
+}
+const dekoSprite = t => DEKOSPR[(t.deko - 1) % 4] || null;
+/* Wie breit der Sockel eines Sprites ist — die breiteste sichtbare Zeile im
+ * untersten Fuenftel. spriteGeo() misst die Gesamtbreite, und die taeuscht bei
+ * einem Turm mit schmalem Fuss und ausladendem Aufbau: hochhaus-3 ist unten 37
+ * Pixel breit, insgesamt aber 57. Nach Gesamtbreite skaliert stuende es
+ * sichtbar ueber die Kachel hinaus. */
+const sockelCache = new WeakMap();
+function sockelBreite(img) {
+  let v = sockelCache.get(img);
+  if (v) return v;
+  const w = img.naturalWidth || img.width, h = img.naturalHeight || img.height;
+  const c = document.createElement("canvas"); c.width = w; c.height = h;
+  const q = c.getContext("2d", { willReadFrequently: true });
+  q.drawImage(img, 0, 0);
+  try {
+    const d = q.getImageData(0, 0, w, h).data;
+    const zeile = [];
+    for (let y = 0; y < h; y++) {
+      let x0 = -1, x1 = -1;
+      for (let x = 0; x < w; x++) if (d[(y * w + x) * 4 + 3] > 8) { if (x0 < 0) x0 = x; x1 = x; }
+      zeile[y] = x0 < 0 ? null : [x0, x1];
+    }
+    const sicht = zeile.map((r, y) => r ? y : -1).filter(y => y >= 0);
+    const y0 = sicht[0], y1 = sicht[sicht.length - 1];
+    let b = 2;
+    for (let y = Math.floor(y1 - (y1 - y0) * 0.18); y <= y1; y++)
+      if (zeile[y]) b = Math.max(b, zeile[y][1] - zeile[y][0] + 1);
+    v = b;
+  } catch { v = (img.naturalWidth || img.width) * 0.55; }
+  sockelCache.set(img, v);
+  return v;
+}
+/* Malgroesse, damit die Grundflaeche genauso breit aufsetzt wie bei der
+ * Stadtbank (36 px bei 64 px Kachelbreite). Damit stehen alle vier Tuerme auf
+ * genau einer Kachel, unabhaengig davon, wie schlank oder breit sie gezeichnet
+ * sind — der schlanke Turm wird dadurch hoeher, nicht schmaler. */
+const DEKO_SOCKEL = 36;
+const dekoGroesse = img => DEKO_SOCKEL * (img.naturalWidth || img.width) / sockelBreite(img);
+
 const SPRITE_VARIANTS = { farm:3, plantage:2, mine:3, ewerk:3, wasserwerk:2, oelpumpe:2, buero:3, brunnen:1, markt:1, kontor:1, laden:1, bauhandel:1, saftpresse:1, stahlwerk:1, pharma:1, ziegelei:1, betonwerk:1, imkerei:1, baeckerei:1, windpark:1, raffinerie:1, siliziummine:1, chipfabrik:1,
   autowerk:1, dieselwerk:1, eautowerk:1, autohaus:1, werbeagentur:1,
   campingplatz:1, strandhotel:1,
@@ -3045,6 +3184,25 @@ const spriteFor = (btype, x, y) => {
 };
 /* Natur-Deko (Kenney Nature Kit, CC0): Bäume, Palmen, Felsen, Getreidefelder */
 const DECO = { tree: [], palm: [], rock: [], field: [] };
+/* Deko sass exakt auf dem Kachelmittelpunkt — ein perfektes Gitter, das in der
+ * Isometrie als Streifen zu sehen war. Jetzt wird jedes Stueck innerhalb seiner
+ * Kachel versetzt und in der Groesse variiert.
+ *
+ * Deterministisch aus der Kachelkoordinate, nicht per Math.random(): Die Karte
+ * wird jedes Bild neu gezeichnet, ein Zufallswert je Bild liesse die Baeume
+ * zappeln — und alle Clients muessen ohnehin dasselbe sehen.
+ *
+ * Der Versatz wird in Kachelkoordinaten gewuerfelt und erst dann isometrisch
+ * abgebildet. In Bildschirmkoordinaten gestreut waeren die Baeume ueber die
+ * Rautenkante auf die Strasse gewandert. */
+const streu = (x, y, k) => {
+  const n = Math.sin(x * 127.1 + y * 311.7 + k * 74.7) * 43758.5453;
+  return n - Math.floor(n);
+};
+function streuVersatz(t, weite = .5) {
+  const du = (streu(t.x, t.y, 1) - .5) * weite, dv = (streu(t.x, t.y, 2) - .5) * weite;
+  return [(du - dv) * TW / 2, (du + dv) * TH / 2];
+}
 for (const [d, n] of [["tree", 5], ["palm", 2], ["rock", 3], ["field", 3]]) for (let i = 0; i < n; i++) {
   const img = new Image();
   img.onload = () => DECO[d][i] = img;
@@ -3054,6 +3212,31 @@ const decoFor = (t) => {
   const arr = t.zone === "kueste" ? DECO.palm : DECO.tree;
   return arr.length ? arr[(t.x * 11 + t.y * 5) % arr.length] : null;
 };
+/* Wo auf einer Parkkachel Baeume stehen — Anzahl, Versatz, Groesse und Sprite.
+ *
+ * Genau ein Baum je Kachel sah gepflanzt aus, egal wie stark man ihn versetzt:
+ * die Anzahl selbst verraet das Raster. Deshalb traegt eine Kachel keinen,
+ * einen oder zwei Baeume — das gibt Luecken und Gruppen.
+ *
+ * Deterministisch aus der Kachelkoordinate: Der Schattendurchgang und der
+ * Zeichendurchgang muessen dieselben Stellen benutzen, die Karte wird jedes
+ * Bild neu gezeichnet, und alle Clients sollen dasselbe sehen. */
+function dekoStellen(t) {
+  const arr = t.zone === "kueste" ? DECO.palm : DECO.tree;
+  if (!arr.length) return [];
+  const dichte = streu(t.x, t.y, 5);
+  const anzahl = dichte < .20 ? 0 : dichte < .74 ? 1 : 2;
+  const out = [];
+  for (let i = 0; i < anzahl; i++) {
+    const du = (streu(t.x, t.y, 10 + i * 4) - .5) * .8;
+    const dv = (streu(t.x, t.y, 11 + i * 4) - .5) * .8;
+    const img = arr[Math.floor(streu(t.x, t.y, 12 + i * 4) * arr.length) % arr.length];
+    if (!img) continue;
+    out.push({ img, ox: (du - dv) * TW / 2, oy: (du + dv) * TH / 2,
+               gr: 72 + streu(t.x, t.y, 13 + i * 4) * 32 });
+  }
+  return out;
+}
 function shade(hex, amt){ const n = parseInt(hex.slice(1), 16);
   const c = v => Math.max(0, Math.min(255, v));
   return `rgb(${c((n>>16)+amt)},${c(((n>>8)&255)+amt)},${c((n&255)+amt)})`; }
@@ -3071,7 +3254,9 @@ const AMBIENT_FILES = {
 };
 for (const [cat, files] of Object.entries(AMBIENT_FILES)) for (const f of files) {
   const img = new Image();
-  img.onload = () => AMBIENT[cat].push(img);
+  /* Wie bei Gebaeuden und LKW hochrechnen: die Kenney-Sprites liegen klein vor
+   * und wurden beim Hineinzoomen sichtbar grob. */
+  img.onload = () => AMBIENT[cat].push(spriteHiRes(img));
   img.src = `assets/kenney/${cat}/${f}.png`;
 }
 /* Bewegungspfade werden einmal aus der (statischen) Karte abgeleitet und gecacht. */
@@ -3129,11 +3314,54 @@ function verkehrZeichnen(tx, ty) {
  * und die Sammlung immer weiter wachsen. */
 function verkehrRest() { for (const l of VERKEHR.values()) for (const fn of l) fn(); VERKEHR.clear(); }
 
+/* ---- Scheinwerfer ----
+ * Nachts fuhren die Autos unbeleuchtet durch eine Stadt, in der jedes Gebaeude
+ * Fensterlicht zeigt. Ein erster Versuch mit dem runden Fensterlicht-Fleck sah
+ * falsch aus: eine Kugel, die neben dem Fahrzeug in der Luft schwebte. Licht
+ * gehoert auf die Strasse — also eine flache Pfuetze in der Isometrie-Ebene
+ * (doppelt so breit wie hoch, wie jede Grundflaeche hier), vor das Fahrzeug in
+ * Fahrtrichtung gelegt. Nur der Kegel, keine Lampen und kein Ruecklicht: bei
+ * 28 px Fahrzeuggroesse wurden daraus bloss Punkte, die auf der Karosserie
+ * klebten, statt nach Leuchten auszusehen.
+ * Alle Strassen laufen entlang der Weltachsen, ein Fahrzeug bewegt sich auf dem
+ * Bildschirm also immer im Verhaeltnis 2:1 nach unten — daher der feste
+ * Richtungsvektor. */
+const LICHTPFUETZE = (() => {
+  const c = document.createElement("canvas"); c.width = c.height = 128;
+  const g = c.getContext("2d");
+  const grad = g.createRadialGradient(64, 64, 2, 64, 64, 62);
+  grad.addColorStop(0, "rgba(255,224,150,.66)");
+  grad.addColorStop(.45, "rgba(255,203,110,.30)");
+  grad.addColorStop(1, "rgba(255,190,90,0)");
+  g.fillStyle = grad; g.fillRect(0, 0, 128, 128);
+  return c;
+})();
+function scheinwerfer(sx, bodenY, dirX, groesse) {
+  if (LICHT >= .55) return;
+  const a = Math.min(1, (.55 - LICHT) * 1.8);
+  /* Fahrtrichtung auf dem Bildschirm: 2:1 nach unten, dirX gibt die Seite an. */
+  const d = groesse * .62, ox = dirX * d * .894, oy = d * .447;
+  cx.save();
+  cx.globalCompositeOperation = "lighter";   // Licht addiert sich auf den Asphalt, statt ihn zu ueberdecken
+  cx.globalAlpha = a * .9;
+  cx.translate(sx + ox, bodenY + oy);
+  /* In Fahrtrichtung gestreckt, quer dazu schmal — sonst liegt da ein runder
+   * Fleck statt eines Lichtkegels. Gedreht um den Winkel der 2:1-Achse. */
+  cx.rotate(Math.atan2(.447, dirX * .894));
+  cx.scale(1.4, .5);
+  const r = groesse * .8;
+  cx.drawImage(LICHTPFUETZE, -r, -r, r * 2, r * 2);
+  cx.restore();
+}
 function drawAmbient(now) {
   VERKEHR.clear();
   if (!ROUTES) return;
-  const shadow = (sx, sy, rx, ry) => { cx.fillStyle = "rgba(0,0,0,.22)";
-    cx.beginPath(); cx.ellipse(sx, sy, rx, ry, 0, 0, Math.PI * 2); cx.fill(); };
+  /* Fussgaenger sind zu klein fuer einen geworfenen Schatten — sie behalten
+   * ihren Fleck, der aber jetzt mit der Sonne verschwindet statt nachts
+   * unveraendert stehen zu bleiben. */
+  const shadow = (sx, sy, rx, ry) => { const st = sonnenStaerke(); if (st <= 0) return;
+    cx.globalAlpha = st; cx.fillStyle = "rgba(0,0,0,.22)";
+    cx.beginPath(); cx.ellipse(sx, sy, rx, ry, 0, 0, Math.PI * 2); cx.fill(); cx.globalAlpha = 1; };
   /* Autos wie auf einem Laufband: jedes fährt vom einen Kartenrand zum
    * anderen und wird dort entfernt; nach einer kurzen Lücke spawnt am
    * Startrand ein anderes Modell. Das frühere Hin- und Herpendeln sah aus,
@@ -3165,8 +3393,12 @@ function drawAmbient(now) {
     const [sx, sy] = iso(a.x + (b.x - a.x) * f, a.y + (b.y - a.y) * f);
     const [ax] = iso(a.x, a.y), [bx] = iso(b.x, b.y);
     const tx = a.x + (b.x - a.x) * f, ty = a.y + (b.y - a.y) * f;
+    const nachLinks = !(bx > ax);
     verkehrMerken(tx, ty, () => {
-    shadow(sx, sy + TH / 2 + 3, 12, 5);
+    /* Derselbe Schattenwurf wie bei den Gebaeuden statt der frueheren festen
+     * Ellipse — die lag auch nachts noch unter dem Auto, obwohl keine Sonne
+     * schien, und zeigte in keine Richtung. */
+    schattenMalen(spr, sx, sy + TH / 2 + 3, sy + TH / 2 - 20, 28, !nachLinks, .42);
     /* DDR-Optik: Blechfarben statt Buntlack, dazu eine Zweitakt-Abgasfahne. */
     if (PLAN_LOOK) {
       cx.filter = "saturate(.35) sepia(.25) brightness(.92)";
@@ -3188,6 +3420,7 @@ function drawAmbient(now) {
       cx.drawImage(spr, sx - 14, sy + TH / 2 - 20, 28, 28);
     }
     cx.filter = "none";
+    scheinwerfer(sx, sy + TH / 2, nachLinks ? -1 : 1, 28);
     });
     }
   });
@@ -3367,8 +3600,7 @@ function drawTrucks(now) {
     const [sx, sy] = iso(a.x + (b.x - a.x) * f, a.y + (b.y - a.y) * f);
     const [ax] = iso(a.x, a.y), [bx] = iso(b.x, b.y);
     verkehrMerken(a.x + (b.x - a.x) * f, a.y + (b.y - a.y) * f, () => {
-    cx.fillStyle = "rgba(0,0,0,.22)";
-    cx.beginPath(); cx.ellipse(sx, sy + TH / 2 + 3, 13, 5, 0, 0, Math.PI * 2); cx.fill();
+    schattenMalen(TRUCKSPR, sx, sy + TH / 2 + 3, sy + TH / 2 - 22, 30, bx > ax, .42);
     if (PLAN_LOOK) cx.filter = "saturate(.35) sepia(.25) brightness(.92)";
     if (bx > ax) {
       cx.save(); cx.translate(sx, 0); cx.scale(-1, 1);
@@ -3378,6 +3610,7 @@ function drawTrucks(now) {
       cx.drawImage(TRUCKSPR, sx - 15, sy + TH / 2 - 22, 30, 30);
     }
     cx.filter = "none";
+    scheinwerfer(sx, sy + TH / 2, bx > ax ? 1 : -1, 30);
     if (lkw.phase === "laden") {
       /* Anlieferung: eine kleine Kiste hüpft neben dem LKW. */
       const hop = Math.abs(Math.sin(now / 220)) * 5;
@@ -3564,6 +3797,77 @@ function decoY(sy, img, size) {
   return sy + TH / 2 - g.footY * (size / (img.naturalWidth || img.width));
 }
 
+/* ---- Schattenwurf ----
+ * Bisher standen die Gebaeude ohne Schatten auf der Karte und wirkten dadurch
+ * aufgeklebt statt aufgestellt. Der Schatten entsteht aus der Silhouette des
+ * Sprites selbst — einmal je Sprite gerechnet und zwischengelagert, danach ist
+ * er ein einziges drawImage.
+ *
+ * Richtung: die Sonne steht links oben, der Schatten faellt entlang der
+ * Weltachse +x, auf dem Bildschirm also nach rechts unten. Weil iso() einen
+ * Schritt in +x auf (TW/2, TH/2) = (32, 16) abbildet, muss das Verhaeltnis von
+ * Scherung zu Stauchung 2:1 sein, sonst liegt der Schatten nicht in der
+ * Bodenebene. */
+const SCHER = -0.95, STAUCH = -0.475;  // 0.95 : 0.475 = 2 : 1
+const SCHATTEN_RAND = 10;              // Rand im Sprite, damit die Weichzeichnung Platz hat
+const schattenCache = new WeakMap();
+function schattenBild(img) {
+  let s = schattenCache.get(img);
+  if (s) return s;
+  const w = img.naturalWidth || img.width, h = img.naturalHeight || img.height;
+  const P = SCHATTEN_RAND;
+  /* Erst die reine Silhouette: das Sprite zeichnen und ueber "source-in" alles
+   * Sichtbare durch Schwarz ersetzen. So bleibt die Form erhalten, die Farben
+   * verschwinden. */
+  const a = document.createElement("canvas");
+  a.width = w + 2 * P; a.height = h + 2 * P;
+  const ag = a.getContext("2d");
+  ag.drawImage(img, P, P, w, h);
+  ag.globalCompositeOperation = "source-in";
+  ag.fillStyle = "#000"; ag.fillRect(0, 0, a.width, a.height);
+  /* Dann weichzeichnen. Ein harter Schatten sieht nach ausgeschnittenem Papier
+   * aus; der Rand oben sorgt dafuer, dass die Unschaerfe nicht abgeschnitten
+   * wird. Der Filter laeuft genau einmal je Sprite, nicht je Bild. */
+  const b = document.createElement("canvas");
+  b.width = a.width; b.height = a.height;
+  const bg = b.getContext("2d");
+  try { bg.filter = `blur(${Math.max(2, w / 64)}px)`; } catch {}
+  bg.drawImage(a, 0, 0);
+  schattenCache.set(img, b);
+  return b;
+}
+/* Schatten fuer ein Sprite, das mit (sx - gr/2, standY(...)) in der Groesse gr
+ * gezeichnet wird. Angelpunkt ist die Kachelmitte: dort steht das Gebaeude, und
+ * dort bleibt der Schatten beim Scheren liegen. */
+/* Wie stark die Sonne gerade scheint: 1 am Mittag, 0 sobald es dunkel wird.
+ * Nachts gibt es keinen Schlagschatten. */
+const sonnenStaerke = () => Math.min(1, Math.max(0, (LICHT - .18) / .5));
+/* Kern: legt die Silhouette in die Bodenebene. "oben" ist die Bildschirm-Y, an
+ * der das Sprite selbst gezeichnet wird, "ankerY" der Punkt, an dem es den
+ * Boden beruehrt — dort bleibt der Schatten beim Scheren stehen. "spiegeln"
+ * fuer Sprites, die zur Fahrtrichtung gespiegelt werden: gespiegelt wird die
+ * Form, nicht die Lichtrichtung. */
+function schattenMalen(img, ankerX, ankerY, oben, gr, spiegeln, deckkraft) {
+  const staerke = sonnenStaerke();
+  if (!img || staerke <= 0) return;
+  const w = img.naturalWidth || img.width, sk = gr / w;
+  const sch = schattenBild(img), P = SCHATTEN_RAND;
+  cx.save();
+  cx.translate(ankerX, ankerY);
+  cx.transform(1, 0, SCHER, STAUCH, 0, 0);
+  if (spiegeln) cx.scale(-1, 1);
+  cx.globalAlpha = deckkraft * staerke;
+  cx.drawImage(sch, -gr / 2 - P * sk, oben - ankerY - P * sk, sch.width * sk, sch.height * sk);
+  cx.restore();
+  cx.globalAlpha = 1;
+}
+/* Gebaeude: Fusspunkt ist die Kachelmitte, Hoehe ueber standY(). */
+function drawSchatten(img, sx, sy, gr) {
+  if (!img) return;
+  const g = spriteGeo(img), sk = gr / (img.naturalWidth || img.width);
+  schattenMalen(img, sx, sy + TH / 2, sy + TH / 2 + (g.halbBasis - g.footY) * sk, gr, false, .5);
+}
+
 function draw() {
   requestAnimationFrame(draw);
   const st = store.get().state, now = Date.now();
@@ -3580,8 +3884,17 @@ function draw() {
    * müssen dann neu aufgebaut werden. */
   PLAN_LOOK = st.mode === "plan";
   const mapKey = st.mode + ":" + st.started;
-  if (draw.mapKey !== mapKey) { draw.mapKey = mapKey; ROUTES = null; SHORE = null; }
-  if (!ROUTES) { ROUTES = buildRoutes(st.map); SHORE = buildShore(st.map); }
+  if (draw.mapKey !== mapKey) { draw.mapKey = mapKey; ROUTES = null; SHORE = null; ROADSET = null; }
+  if (!ROUTES) {
+    /* Gebackene Karten bringen ihre Fahrspuren mit: die echten Strassenzuege
+     * laufen diagonal, aus geraden Gitterzeilen entstuende dort kein Verkehr.
+     * tilePosAtU interpoliert ohnehin zwischen den Stuetzpunkten, die muessen
+     * also nicht auf Achsen liegen. */
+    ROUTES = st.routes?.length
+      ? { carLines: st.routes.map(l => l.map(([x, y]) => ({ x, y }))) }
+      : buildRoutes(st.map);
+    SHORE = buildShore(st.map);
+  }
   lichtBerechnen(now);
   effekteErkennen(st.map, now);
   const dt = Math.min(.1, (now - (draw.letzt || now)) / 1000); draw.letzt = now;
@@ -3636,6 +3949,27 @@ function draw() {
       cx.globalAlpha = 1; cx.lineWidth = 1; cx.lineCap = "butt";
     }
   }
+  /* Schatten-Durchgang: eigener Lauf zwischen Boden und Gebaeuden. Direkt beim
+   * Gebaeude gezeichnet waere er wertlos — er faellt nach rechts unten ueber die
+   * Kachelkante hinaus, und dort liegt eine Kachel, die spaeter an die Reihe
+   * kommt und ihn wieder uebermalen wuerde. Nach dem vollstaendigen Boden
+   * gezeichnet, bleibt er liegen. */
+  for (const t of st.map) {
+    const spr = t.bank    ? (BANKSPR || spriteFor("kontor", t.x, t.y))
+              : t.news    ? (NEWSSPR || spriteFor("buero", t.x, t.y))
+              : t.deko    ? dekoSprite(t)
+              : t.schwarz ? (spriteFor("markt", t.x, t.y) || spriteFor("kontor", t.x, t.y))
+              : t.btype   ? spriteFor(t.btype, t.x, t.y)
+              : null;
+    if (!spr) continue;
+    const [sx, sy] = iso(t.x, t.y);
+    drawSchatten(spr, sx, sy, t.deko ? dekoGroesse(spr) : t.btype ? 64 : 72);
+  }
+  for (const t of st.map) {
+    if (!t.park || t.btype) continue;
+    const [sx, sy] = iso(t.x, t.y);
+    for (const b of dekoStellen(t)) drawSchatten(b.img, sx + b.ox, sy + b.oy, b.gr);
+  }
   /* 2. Durchgang: Gebäude & Deko — nach Boden, damit Sprites nicht überdeckt werden */
   /* Die Kachel-Variable t verdeckt hier die Übersetzungsfunktion t() —
    * daher vorab eine Referenz sichern, sonst bricht draw() an der Bank ab
@@ -3648,20 +3982,39 @@ function draw() {
   for (const t of st.map) {
     const [sx, sy] = iso(t.x, t.y);
     if (t.park && !t.btype) {
-      const d = decoFor(t);
-      if (d) {
-        cx.fillStyle = "rgba(0,0,0,.18)";
-        cx.beginPath(); cx.ellipse(sx, sy + TH / 2, TW / 3.4, TH / 3.6, 0, 0, Math.PI * 2); cx.fill();
-        cx.drawImage(d, sx - 48, decoY(sy, d, 96), 96, 96);
-      }
+      /* Der fruehere dunkle Ellipsenfleck unter jedem Baum ist weg: einer je
+       * Kachel ergab ein Gitter aus dunklen Flecken, das staerker ins Auge fiel
+       * als die Baumpositionen selbst. Baeume werfen jetzt denselben Schatten
+       * wie Gebaeude und Fahrzeuge — gezeichnet im Schattendurchgang weiter
+       * oben, damit ihn die naechste Kachel nicht uebermalt. */
+      for (const b of dekoStellen(t))
+        cx.drawImage(b.img, sx + b.ox - b.gr / 2, decoY(sy + b.oy, b.img, b.gr), b.gr, b.gr);
     }
     if (t.rock && DECO.rock.length) {
       const d = DECO.rock[(t.x * 7 + t.y * 3) % DECO.rock.length];
-      if (d) cx.drawImage(d, sx - 30, decoY(sy, d, 60), 60, 60);
+      if (d) {
+        const [ox, oy] = streuVersatz(t, .4);
+        const gr = 52 + streu(t.x, t.y, 4) * 16;
+        cx.drawImage(d, sx + ox - gr / 2, decoY(sy + oy, d, gr), gr, gr);
+      }
     }
     if (t.field && !t.btype && DECO.field.length) {
       const d = DECO.field[(t.x * 3 + t.y * 7) % DECO.field.length];
-      if (d) cx.drawImage(d, sx - 38, decoY(sy, d, 76), 76, 76);
+      if (d) {
+        const [ox, oy] = streuVersatz(t, .34);   // enger als im Park: Aecker sind angelegt
+        const gr = 70 + streu(t.x, t.y, 6) * 14;
+        cx.drawImage(d, sx + ox - gr / 2, decoY(sy + oy, d, gr), gr, gr);
+      }
+    }
+    if (t.deko) {
+      /* Bewusst ohne Sockel und ohne Beschriftung: Bank und Nachrichtenzentrale
+       * sind Orte, die man anklickt — diese Tuerme sind nur Stadtbild und
+       * sollen sich nicht als bedienbar ausgeben. */
+      const dimg = dekoSprite(t);
+      if (dimg) {
+        const gr = dekoGroesse(dimg);
+        cx.drawImage(dimg, sx - gr / 2, standY(sy, dimg, gr), gr, gr);
+      }
     }
     if (t.bank) {
       /* Bank: goldener Sockel, damit sie sich als städtisches Gebäude von den
@@ -3767,6 +4120,10 @@ function clickTile(e) {
   if (t?.schwarz && me) { openPanel("schwarz"); return; }
   if (t?.bank && me) { openPanel("bank"); return; }
   if (t?.news && me) { openPanel("news"); return; }
+  /* Die Deko-Hochhaeuser sind reines Stadtbild. Ohne diese Zeile ginge beim
+   * Klick das Baumenue auf und boete Gebaeude an, die der Server anschliessend
+   * ablehnt — ein Versprechen, das nicht eingeloest werden kann. */
+  if (t?.deko) return;
   if (!t || t.water || t.road || t.park || !me) return;
   tm.style.display = "block";
   tm.style.left = Math.min(innerWidth-275, e.clientX+10)+"px";
@@ -4006,7 +4363,12 @@ DOCK.forEach(([pid, label]) => { const b = document.createElement("button");
   b.addEventListener("click", () => openPanel(pid)); dock.append(b); });
 /* stumm=true nur für den Aufruf beim Seitenaufbau: dort gibt es weder eine
  * Nutzergeste noch schon ein SFX-Modul (das entsteht erst weiter unten). */
+/* Welche Panels der Spieler schon geoeffnet hat. Das Einsteiger-Tutorial
+ * fuehrt auch durch Dinge, die man nicht "tut", sondern liest — Kursticker,
+ * Nachrichten, Lexikon. Fuer die ist das Oeffnen die Handlung. */
+const TUT_GESEHEN = new Set();
 function openPanel(pid, stumm = false) {
+  TUT_GESEHEN.add(pid);
   if (!stumm) SFX.spiel("klick");
   document.querySelectorAll(".panel").forEach(p => p.classList.remove("open"));
   document.querySelectorAll(".dockbtn").forEach(b => b.classList.toggle("on", b.dataset.p === pid));
@@ -4333,6 +4695,84 @@ const TUT_SPIEL = [
     p: `Du hast gebaut, produziert, verkauft, eingekauft und gehandelt — mehr braucht es im Kern nicht.<br><br>Was jetzt noch dazukommt, findest du im Spiel selbst: <b>Anteile</b> und <b>Anleihen</b> in der Stadtbank, <b>Großaufträge</b> im Lager, <b>Werbung</b> für bessere Preise. Im <b>Lexikon</b> steht alles nach.<br><br>Spiel ruhig weiter — oder lade die Seite neu und starte eine echte Runde mit Freunden.` },
 ];
 
+/* ---------- Einsteiger-Modus: der ganze Rundgang ----------
+ * Die Uebungsrunde (TUT_SPIEL) zeigt den Kern in sechs Schritten und hoert
+ * dann auf. Der Einsteiger-Modus soll das ganze Spiel zeigen — also auch
+ * Kursticker, Nachrichten, Lager, Stadtbank, Anleihen und Ausbau.
+ *
+ * Die Bau-Schritte fragen nicht nach einem bestimmten Gebaeudetyp: Im
+ * Einsteiger-Modus waehlt man seine Branche selbst, und "baue eine Farm" ginge
+ * fuer einen Versorger ins Leere. Unterschieden wird nur zwischen Produktion
+ * und Laden — Laeden tragen ein shop-Feld, Produktionsgebaeude nicht. */
+const istLaden = t => Array.isArray(t.shop);
+const TUT_EINSTEIGER = [
+  { t: "Willkommen im Einsteiger-Modus",
+    p: `Ich gehe mit dir einmal durch <b>alles</b> — bauen, produzieren, verkaufen, handeln, Anteile, Anleihen, Ausbau.<br><br>Das hier ist eine echte Runde mit echten Bot-Firmen. Nichts ist gesperrt, du kannst nichts kaputtmachen. Jeder Schritt wartet, bis du ihn wirklich gemacht hast.` },
+
+  { t: "Erst der Blick auf die Stadt",
+    p: `Drei Dinge, die immer da sind:<br><br>Ganz <b>oben</b> läuft der Kursticker mit den Ø-Kursen aller Waren. <b>Oben links</b> stehen dein Bargeld und dein Nettovermögen. <b>Unten</b> liegt die Leiste mit allen Panels — Karte, Lager, Börse, Finanzen, Firma, Lexikon.<br><br>Die Karte selbst: grün ist Agrarland, grau die Innenstadt, braun die Hafenindustrie, dazu Küste und Bucht.` },
+
+  { t: "Schritt 1 — Bau dein erstes Produktionsgebäude",
+    warte: (st, me, id) => st.map.some(t => t.owner === id && t.btype && !istLaden(t)),
+    p: `Klick eine freie Kachel an und bau ein Gebäude <b>deiner Branche</b>.<br><br>Es produziert von allein, Sekunde für Sekunde, ins Lager. Bauen kostet sofort — verdient wird erst später. Das ist der Grundrhythmus des ganzen Spiels.` },
+
+  { t: "Schritt 2 — Bau einen Laden",
+    warte: (st, me, id) => st.map.some(t => t.owner === id && istLaden(t)),
+    p: `Ware im Lager ist noch kein Geld. Du brauchst einen <b>Laden</b> — Marktstand, Bäckerei, Handelskontor, was dir zusagt.<br><br>Läden darf <b>jede</b> Branche bauen. Nur Produktionsgebäude sind an deine Branche gebunden.` },
+
+  { t: "Schritt 3 — Leg eine Ware in den Verkauf",
+    warte: (st, me, id) => st.map.some(t => t.owner === id && (t.shop || []).some(sl => sl && sl.good)),
+    p: `Klick deinen Laden an und belege einen <b>Verkaufsslot</b>.<br><br>Den Preis bestimmst du. Und hier verrechnen sich die meisten: <b>billiger ist nicht besser</b>. Das Verkaufstempo ist gedeckelt — unter etwa 70 % des Ø-Kurses wirst du nicht schneller, verschenkst aber bei jedem Stück Geld.` },
+
+  { t: "Schritt 4 — Lies den Kursticker",
+    warte: () => TUT_GESEHEN.has("boerse"),
+    p: `Öffne die <b>Börse</b> unten in der Leiste.<br><br>Oben im Ticker steht zu jeder Ware ein Ø-Kurs mit Trendpfeil. Der Wert steht bewusst <b>30 Sekunden still</b>, bevor er nachzieht — eine Zahl, die im Sekundentakt zappelt, taugt nicht, um den eigenen Preis danach zu setzen. Der Pfeil vergleicht deshalb 30 Sekunden gegen 30 Sekunden.` },
+
+  { t: "Schritt 5 — Kauf etwas an der Börse",
+    /* Nur Wasser oder Strom zaehlen, nicht "irgendein Einkauf": Ziegel kauft
+     * man ohnehin zum Bauen, damit haette sich der Schritt selbst erledigt,
+     * ohne dass die Lektion je zu sehen war. Eine offene Kauforder zaehlt mit —
+     * ob gerade jemand verkauft, liegt nicht in der Hand des Lernenden. */
+    warte: (st, me, id) => {
+      const hat = g => (me.sales?.[g]?.buyQty || 0) > 0
+        || st.orders.some(o => o.playerId === id && o.side === "buy" && o.good === g);
+      return hat("wasser") || hat("strom");
+    },
+    p: `Kauf dir <b>Wasser</b> oder <b>Strom</b> — direkt aus einem Angebot, oder über eine eigene Kauforder, falls das Buch gerade leer ist.<br><br>Liegen beide im Lager, läuft deine Produktion mit bis zu <b>+150 % Tempo</b>. Sie werden dabei verbraucht. Das ist der größte Hebel im frühen Spiel und kostet fast nichts.` },
+
+  { t: "Schritt 6 — Stell eine eigene Order ein",
+    warte: (st, me, id) => st.orders.some(o => o.playerId === id),
+    p: `Bisher hast du aus dem Buch gekauft. Jetzt andersherum: Stell eine <b>eigene Order</b> ein — verkauf deine Ware oder such etwas, das du brauchst.<br><br>Sie bleibt stehen, bis jemand sie bedient. Ware und Geld liegen so lange treuhänderisch fest; niemand kann dich hängen lassen.` },
+
+  { t: "Schritt 7 — Schau ins Lager",
+    warte: () => TUT_GESEHEN.has("lager"),
+    p: `Öffne das <b>Lager</b>.<br><br>Hier steht jede Ware mit Bestand — und hier findest du die <b>Großaufträge</b> der Städte: feste Mengen zum doppelten Ø-Kurs, an denen sich alle Spieler gemeinsam beteiligen. Der Preis ist bei Auftragsvergabe fixiert, egal wohin der Markt danach läuft.` },
+
+  { t: "Schritt 8 — Lies die Nachrichten",
+    warte: () => TUT_GESEHEN.has("news"),
+    p: `Öffne die <b>Nachrichten</b>.<br><br>Dort laufen Marktberichte und Ereignisse: welche Ware knapp wird, wo Preise anziehen, was die anderen Firmen treiben. Wer den Bericht liest, bevor er den Ladenpreis setzt, verdient schlicht mehr.` },
+
+  { t: "Schritt 9 — Kauf Anteile an einer Firma",
+    warte: (st, me, id) => (me.portfolio || []).length > 0 || (me.balance?.holdings || 0) > 0,
+    p: `Geh zur <b>Stadtbank</b> — sie steht mitten im Zentrum, du kannst sie auch auf der Karte anklicken.<br><br>Dort handelst du <b>Anteile</b> anderer Firmen. Wächst eine Firma, wächst dein Anteil mit, ohne dass du selbst baust. Kauf dir ein Paket von irgendjemandem.` },
+
+  { t: "Schritt 10 — Wirf einen Blick auf die Finanzen",
+    warte: () => TUT_GESEHEN.has("bonds"),
+    p: `Öffne <b>Finanzen</b>.<br><br>Hier gibst du <b>Anleihen</b> aus: Geld sofort, Rückzahlung mit Zins über die Laufzeit. Nützlich, um schneller zu wachsen — aber bei Verzug wird gepfändet. Ich sage nicht, dass du eine aufnehmen sollst. Du sollst nur wissen, dass es sie gibt.` },
+
+  { t: "Schritt 11 — Bau ein Gebäude aus",
+    warte: (st, me, id) => st.map.some(t => t.owner === id && (t.level || 1) >= 2),
+    p: `Klick eines deiner Gebäude an und <b>levele es auf</b>.<br><br>Höhere Stufen produzieren deutlich mehr auf derselben Kachel. Ab Stufe 2 brauchst du dafür Elektronik — die kaufst du an der Börse. Ausbauen schlägt fast immer neu bauen.` },
+
+  { t: "Schritt 12 — Bring dein Vermögen auf 20.000 $",
+    warte: (st, me, id) => (st.players[id]?.netWorth || 0) >= 20000,
+    p: `Jetzt läuft alles zusammen: produzieren, verkaufen, nachkaufen, ausbauen.<br><br>Dein <b>Nettovermögen</b> oben links ist Bargeld plus Lager plus Gebäude plus Beteiligungen minus Schulden. Bring es auf <b>20.000 $</b>. Halt den Boost am Laufen, setz den Ladenpreis dicht am Ø-Kurs und bau eine zweite Produktion.` },
+
+  { t: "Geschafft — du kennst jetzt das ganze Spiel",
+    fertig: true,
+    p: `Gebaut, produziert, verkauft, gehandelt, beteiligt, ausgebaut. Mehr Werkzeuge gibt es nicht — alles Weitere ist Übung.<br><br>Im <b>Lexikon</b> steht jede Regel nach, auch die Feinheiten: Werbung, Fusionen, Verträge, Motorsport.<br><br>Spiel diese Runde ruhig weiter, oder starte eine richtige mit Freunden.` },
+];
+
 let TUT = buildTut("agrar");
 let tutIdx = -1;
 const tutEl = document.getElementById("tut");
@@ -4351,7 +4791,13 @@ function tutShow(i) {
   if (i === TUT.length - 1) document.getElementById("tutNext").textContent = "Los geht's!";
 }
 function tutDone() { tutIdx = -1; tutEl.style.display = "none"; try { localStorage.setItem("cs_tut_done", "1"); } catch {} }
-document.getElementById("tutNext").addEventListener("click", () => tutIdx >= TUT.length - 1 ? tutDone() : tutShow(tutIdx + 1));
+document.getElementById("tutNext").addEventListener("click", () => {
+  if (tutIdx < TUT.length - 1) return tutShow(tutIdx + 1);
+  /* Im Einsteiger-Modus endet die Runde mit dem Tutorial — sonst bleibt sie
+   * einfach weiter laufen. */
+  if (TUT[tutIdx]?.fertig && store.get().state?.mode === "einsteiger") socket.emit("tutorialFertig");
+  tutDone();
+});
 document.getElementById("tutSkip").addEventListener("click", tutDone);
 document.getElementById("help").addEventListener("click", () => tutShow(0));
 /* Schritte haken sich selbst ab, sobald die Handlung wirklich passiert ist.

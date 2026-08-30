@@ -32,6 +32,12 @@ function lanUrls(port) {
  * spielt das Intro nur, wenn sie sich geändert hat — also genau einmal je
  * "sh start.sh", nicht bei jedem Neuladen des Tabs. */
 const BOOT_ID = crypto.randomUUID();
+/* Kennzeichen fuer Bots — rein fuer die Anzeige, nicht fuer Sonderrechte. Es
+ * entsteht in diesem Prozess und verlaesst ihn nie, ein fremder Client kann
+ * sich also nicht als Bot ausgeben. Ohne die Unterscheidung zaehlt die Liste
+ * der oeffentlichen Runden Bots als Mitspieler: "7/8" bei drei Menschen und
+ * vier Bots liest sich wie eine fast volle Runde. */
+const BOT_TOKEN = crypto.randomUUID();
 app.get("/api/invite", (_req, res) => {
   res.json({ urls: [ ...(publicUrl ? [publicUrl] : []), ...lanUrls(PORT) ], bootId: BOOT_ID });
 });
@@ -251,12 +257,16 @@ const ware = pid => senden({ art: "ware", pid,
  * Liste oeffentlicher Runden fuellen kann. Bewusst knapp: Firmennamen und
  * Spielerzahl sieht man ohnehin, sobald man beitritt. Nichts darueber hinaus. */
 app.get("/api/lobby", (_req, res) => {
-  const spieler = Object.values(G.players);
+  const alle = Object.values(G.players);
+  const menschen = alle.filter(p => !p.bot);
   res.json({
     started: G.started, mode: MODE, winGoal: WIN_NW, beendet: !!G.winner,
-    spieler: spieler.length, max: 8,
-    host: spieler[0] ? spieler[0].name : null,
-    namen: spieler.map(p => p.name),
+    /* Getrennt gezaehlt: Die Platzzahl gilt fuer Menschen. Bots stehen daneben,
+     * damit "3/8" nicht wie eine fast volle Runde aussieht, nur weil vier Bots
+     * mitspielen. */
+    spieler: menschen.length, bots: alle.length - menschen.length, max: 8,
+    host: menschen[0] ? menschen[0].name : null,
+    namen: menschen.map(p => p.name),
     laufzeit: G.tick,
   });
 });
@@ -831,7 +841,11 @@ const RECONNECT_GRACE_MS = 5 * 60 * 1000;   // 5 Minuten
  * Agrar 2×Farm+Saftpresse=$5.600, Rohstoff 2×Mine+Betonwerk=$8.000,
  * Versorger Brunnen+Wasserwerk+Ölpumpe=$5.100, Tech 2×Siliziummine+Chipfabrik=$6.000
  * (Zonen-Freischaltung kommt on top, dafür gibt's die Starter-Aufgabe +$1.000). */
-const START_CASH = +process.env.START_CASH || 9500, MAP_W = 26, MAP_H = 26;
+const START_CASH = +process.env.START_CASH || 9500;
+/* Die Kartengroesse haengt an der Karte, nicht am Spiel: der Sandkasten und
+ * die Planwirtschaft laufen auf 26x26, die gebackene San-Francisco-Karte auf
+ * 64x64. buildMap() und der Kartenlader setzen beides, alles andere liest es. */
+let MAP_W = 26, MAP_H = 26;
 
 /* Spielergesteuerte Texte — Firmenname und Chatnachricht — landen im Client an
  * rund einem Dutzend Stellen in innerHTML: Kopfleiste, Kurstafel, Orderbuch,
@@ -877,8 +891,213 @@ const PLAN_ZIEL = 1000;         // Planpunkte für den vorzeitigen Sieg
 const UNLOCK = { industrie: 300, kueste: 700 };
 const ROOMS = ["[Game]", "[Sales]", "[DE] Spielthemen", "[DE] Handel", "[DE] Plauderecke"];
 
+/* ---------- Gebackene Karten ----------
+ * Der Einsteiger-Modus laeuft auf einer echten Stadt: maps/sanfrancisco.json
+ * entsteht offline aus einem topoexport-DXF (siehe tools/build-sf-map.py) und
+ * liegt fertig im Repository, damit der Server keine Geodaten-Bibliothek
+ * braucht. Sie bringt ihre eigenen Fahrspuren mit — die echten Strassenzuege
+ * laufen diagonal, aus geraden Gitterzeilen liesse sich dort kein Verkehr
+ * ableiten. Quellen und Lizenz: maps/ATTRIBUTION.md */
+let MAP_ROUTES = null;          // Fahrspuren der aktuellen Karte, null = aus dem Gitter ableiten
+let BAKED = null;
+function ladeGebackeneKarte(datei = "sanfrancisco.json") {
+  if (!BAKED) BAKED = JSON.parse(fs.readFileSync(path.join(__dirname, "maps", datei), "utf8"));
+  const k = BAKED;
+  MAP_W = k.w; MAP_H = k.h;
+  MAP_ROUTES = k.routes;
+  const tiles = [];
+  for (let y = 0; y < MAP_H; y++) for (let x = 0; x < MAP_W; x++) {
+    const z = k.tiles[y][x];
+    const water = z === "~", road = z === "#", park = z === '"';
+    const dichte = +k.dichte[y][x];
+    /* Die Zonen stecken schon in der Karte: der Konverter leitet sie aus der
+     * geglaetteten Bebauungsintensitaet ab (Anzahl x Hoehe ueber 3x3, danach
+     * Perzentile). So liegt die Innenstadt da, wo sie in der Stadt auch liegt,
+     * statt in einem gemalten Kreis. */
+    const zc = k.zonen[y][x];
+    const zone = water ? "wasser" : zc === "Z" ? "zentrum" : zc === ":" ? "industrie" : "agrar";
+    tiles.push({ x, y, zone, road, water, locked: false, unlockCost: 0,
+      park, field: !water && !road && !park && dichte === 0 && +k.baeume[y][x] > 0,
+      owner: null, btype: null, lien: false });
+  }
+  const at = (x, y) => (x < 0 || y < 0 || x >= MAP_W || y >= MAP_H) ? null : tiles[y * MAP_W + x];
+  for (const t of tiles) {
+    const nb = [at(t.x+1,t.y), at(t.x-1,t.y), at(t.x,t.y+1), at(t.x,t.y-1)];
+    if (!t.water && nb.some(n => n?.water)) t.sand = true;
+    if (t.water && !nb.some(n => n && !n.water)) t.deep = true;
+  }
+  /* Bank und Nachrichtenzentrale in die dichteste Ecke der Innenstadt, aber
+   * nicht auf eine Strasse — sonst fehlt dem Verkehr eine Spur. */
+  const frei = tiles.filter(t => t.zone === "zentrum" && !t.road && !t.water && !t.park);
+  const mitte = [MAP_W / 2, MAP_H / 2];
+  frei.sort((a, b) => Math.hypot(a.x-mitte[0], a.y-mitte[1]) - Math.hypot(b.x-mitte[0], b.y-mitte[1]));
+  if (frei[0]) Object.assign(frei[0], { bank: true, park: false, field: false });
+  const news = frei.find(t => !t.bank && Math.hypot(t.x-frei[0].x, t.y-frei[0].y) > 2);
+  if (news) Object.assign(news, { news: true, park: false, field: false });
+  return tiles;
+}
+
+/* ---------- Stadtflaechen ----------
+ * Ein Generator fuer alle von Hand entworfenen Karten. Der erste Versuch nahm
+ * einen echten Stadtausschnitt aus CAD-Daten; das sah schlecht aus, weil aus
+ * 18 m je Kachel ein Flickenteppich aus Strassenstummeln und riesigen
+ * einfarbigen Feldern wurde. Eine Spielkarte braucht Lesbarkeit, keine
+ * Katastergenauigkeit.
+ *
+ * Ueber die Optionen unterscheiden sich die Flaechen deutlich, ohne dass es
+ * zwei Generatoren braucht:
+ *   ufer    "ecke" = diagonale Bucht in einer Ecke, "sued" = Kueste ueber die
+ *           ganze Unterkante mit vorgelagerter Halbinsel
+ *   sperren Industrie und Kueste kosten Zutritt (Sandkasten) oder nicht
+ *           (Einsteiger — dort soll nichts im Weg stehen)
+ *   deko    wie viele Hochhaeuser als Kulisse ins Zentrum kommen
+ *   seed    verschiebt das Rauschen, damit zwei Karten nicht gleich aussehen */
+function buildStadtMap({ w = 32, h = 32, seed = 0, ufer = "ecke",
+                         sperren = false, deko = 4, raster = 6, inseln = [] } = {}) {
+  MAP_W = w; MAP_H = h; MAP_ROUTES = null;
+  const noise = (x, y) => {
+    const n = Math.sin((x + seed) * 12.9898 + (y + seed * 1.7) * 78.233) * 43758.5453;
+    return n - Math.floor(n);
+  };
+  /* Wasserfeld, danach zweimal Mehrheitsglaettung gegen Sprenkel. */
+  let wat = [];
+  for (let y = 0; y < MAP_H; y++) for (let x = 0; x < MAP_W; x++) {
+    const tiefe = ufer === "sued"
+      ? y - (MAP_H - 5.5) + Math.max(0, (x - MAP_W * .62)) * .12
+      : (x + y) - (MAP_W + MAP_H - 17);
+    wat.push(tiefe + (noise(x, y) - .5) * 3 > 0);
+  }
+  for (let pass = 0; pass < 2; pass++) {
+    const next = [...wat];
+    for (let y = 0; y < MAP_H; y++) for (let x = 0; x < MAP_W; x++) {
+      let n = 0, c = 0;
+      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+        const xx = x + dx, yy = y + dy;
+        if (xx < 0 || yy < 0 || xx >= MAP_W || yy >= MAP_H) {
+          n += (ufer === "sued" ? yy >= MAP_H : (xx >= MAP_W || yy >= MAP_H)) ? 1 : 0; c++; continue;
+        }
+        n += wat[yy * MAP_W + xx] ? 1 : 0; c++;
+      }
+      next[y * MAP_W + x] = n > c / 2;
+    }
+    wat = next;
+  }
+  /* Inseln und Halbinseln: bebaubares Land mit Aussicht statt leerer Flaeche. */
+  for (let y = 0; y < MAP_H; y++) for (let x = 0; x < MAP_W; x++)
+    if (inseln.some(([ix, iy, r]) => Math.hypot(x - ix, y - iy) < r)) wat[y * MAP_W + x] = false;
+
+  const mx = (MAP_W - 1) / 2, my = (MAP_H - 1) / 2;
+  const tiles = [];
+  for (let y = 0; y < MAP_H; y++) for (let x = 0; x < MAP_W; x++) {
+    const water = wat[y * MAP_W + x];
+    const road = !water && (x % raster === 3 || y % raster === 3);
+    /* Ganze Blocks als Park statt einzelner Streukacheln — ein Stadtpark liest
+     * sich als Ort, verteilte Einzelbaeume nur als Rauschen. */
+    const bx = Math.floor(x / raster), by = Math.floor(y / raster);
+    const park = !water && !road && (bx * 7 + by * 13 + seed) % 7 === 0;
+    let zone = "agrar";
+    if (water) zone = "wasser";
+    /* Radius 0,30 statt 0,24: Laeden duerfen nur im Zentrum stehen, und mit
+     * dem kleineren Kreis blieben auf 30x30 nur 73 freie Kacheln fuer bis zu
+     * acht Spieler. Die alte Sandkasten-Flaeche hatte anteilig ein Drittel
+     * Innenstadt — darunter wird es eng. */
+    else if (Math.hypot(x - mx, y - my) < Math.min(MAP_W, MAP_H) * .30) zone = "zentrum";
+    tiles.push({ x, y, zone, road, water, locked: false, unlockCost: 0, park,
+      field: false, owner: null, btype: null, lien: false });
+  }
+  const at = (x, y) => (x < 0 || y < 0 || x >= MAP_W || y >= MAP_H) ? null : tiles[y * MAP_W + x];
+  /* Kueste und Industrie haengen am Wasser, nicht an einem gemalten Band:
+   * was nah am Ufer liegt, ist Kueste; der Streifen dahinter Hafenindustrie. */
+  for (const t of tiles) {
+    if (t.water || t.zone === "zentrum") continue;
+    let d = 99;
+    for (let r = 1; r <= 6 && d === 99; r++)
+      for (let dy = -r; dy <= r && d === 99; dy++)
+        for (let dx = -r; dx <= r; dx++)
+          if (at(t.x + dx, t.y + dy)?.water) { d = Math.max(Math.abs(dx), Math.abs(dy)); break; }
+    /* Der Hafenguertel reicht weit landeinwaerts. Weil das Wasser nur an einer
+     * Kante liegt, bleibt er sonst ein schmaler Streifen: bei fuenf Kacheln
+     * Tiefe waren nach Strassen, Parks und Zentrum noch 32 bebaubare Kacheln
+     * uebrig, bei acht 44 — die alte Sandkasten-Flaeche bot rund 95. */
+    if (d <= 2) t.zone = "kueste";
+    else if (d <= 12) t.zone = "industrie";
+  }
+  /* Nur das groesste zusammenhaengende Strassennetz behalten. Auf einer Insel
+   * entstuende sonst ein eigenes Kreuz, das an nichts anschliesst und wie ein
+   * Zeichenfehler aussieht. Eine Stadt hat ein Netz, nicht mehrere. */
+  {
+    const gesehen = new Set(); const gruppen = [];
+    for (const start of tiles) {
+      if (!start.road || gesehen.has(start)) continue;
+      const gruppe = [], stapel = [start];
+      gesehen.add(start);
+      while (stapel.length) {
+        const t = stapel.pop(); gruppe.push(t);
+        for (const n of [at(t.x+1,t.y), at(t.x-1,t.y), at(t.x,t.y+1), at(t.x,t.y-1)])
+          if (n?.road && !gesehen.has(n)) { gesehen.add(n); stapel.push(n); }
+      }
+      gruppen.push(gruppe);
+    }
+    gruppen.sort((a, b) => b.length - a.length);
+    for (const g of gruppen.slice(1)) for (const t of g) t.road = false;
+  }
+  /* Deko-Felder nur im Ackerland und abseits der Strassen. */
+  for (const t of tiles)
+    if (t.zone === "agrar" && !t.road && !t.park && (t.x * 5 + t.y * 11) % 9 === 0) t.field = true;
+  for (const t of tiles) {
+    const nb = [at(t.x+1,t.y), at(t.x-1,t.y), at(t.x,t.y+1), at(t.x,t.y-1)];
+    if (!t.water && nb.some(n => n?.water)) t.sand = true;
+    if (t.water && !nb.some(n => n && !n.water)) t.deep = true;
+    if (t.water && (t.x * 3 + t.y * 17) % 19 === 0) t.rock = true;
+  }
+  /* Zutritt zu Industrie und Kueste kostet — aber bewusst als Formalitaet,
+   * nicht als Kapitalgrab (siehe UNLOCK). Im Einsteiger-Modus entfaellt es. */
+  if (sperren) for (const t of tiles) {
+    if (t.water || t.road || t.park) continue;
+    if (t.zone === "industrie" || t.zone === "kueste") {
+      t.locked = true; t.unlockCost = UNLOCK[t.zone] || 0;
+    }
+  }
+  /* Bank und Nachrichtenzentrale an die Hauptkreuzung im Zentrum, aber neben
+   * die Strasse — auf der Fahrbahn fehlte dem Verkehr sonst eine Spur. */
+  const zentral = tiles.filter(t => t.zone === "zentrum" && !t.road && !t.water && !t.park)
+    .sort((a, b) => Math.hypot(a.x-mx, a.y-my) - Math.hypot(b.x-mx, b.y-my));
+  if (!zentral.length) return tiles;
+  Object.assign(zentral[0], { bank: true, park: false, field: false, locked: false, unlockCost: 0 });
+  const news = zentral.find(t => !t.bank && Math.hypot(t.x - zentral[0].x, t.y - zentral[0].y) > 4.5);
+  if (news) Object.assign(news, { news: true, park: false, field: false, locked: false, unlockCost: 0 });
+  /* Hochhaeuser als reine Kulisse: Sie geben der Innenstadt eine Skyline,
+   * gehoeren aber niemandem und lassen sich nicht bebauen. Verteilt statt
+   * nebeneinander — ein Block aus Tuermen sieht aus wie ein Zaun. */
+  let gesetzt = 0;
+  for (const t of zentral) {
+    if (gesetzt >= deko) break;
+    if (t.bank || t.news) continue;
+    /* Abstand 2,5 statt 3: dichter beieinander wirkt die Innenstadt belebt,
+     * ohne dass die Tuerme zu einer geschlossenen Wand zusammenlaufen. Zur
+     * Bank und zur Nachrichtenzentrale bleibt es bei drei Kacheln, damit ihre
+     * Beschriftung frei steht. */
+    const nah = tiles.some(o => (o.bank || o.news) && Math.hypot(o.x - t.x, o.y - t.y) < 3)
+             || tiles.some(o => o.deko && Math.hypot(o.x - t.x, o.y - t.y) < 2.5);
+    if (nah) continue;
+    Object.assign(t, { deko: (gesetzt % 4) + 1, park: false, field: false, locked: false, unlockCost: 0 });
+    gesetzt++;
+  }
+  return tiles;
+}
+
 /* ---------- Karte (deterministisch, damit alle Clients identisch rendern) ---------- */
 function buildMap(mode = "sandbox") {
+  /* Einsteiger und Sandkasten laufen beide auf einer entworfenen Stadt, aber
+   * mit deutlich anderer Flaeche. Nur die Planwirtschaft benutzt noch den
+   * prozeduralen Code weiter unten. */
+  if (mode === "einsteiger")
+    return buildStadtMap({ w: 32, h: 32, seed: 0, ufer: "ecke", sperren: false,
+                           deko: 6, inseln: [[26, 26, 2.6]] });
+  if (mode === "sandbox")
+    return buildStadtMap({ w: 30, h: 30, seed: 71, ufer: "sued", sperren: true,
+                           deko: 9, inseln: [[6, 27, 2.2], [21, 28, 2.8]] });
+  MAP_W = 26; MAP_H = 26; MAP_ROUTES = null;
   /* Die Planwirtschaft spielt auf einer eigenen Fläche: andere Küstenlinie
    * (verschobenes Rauschen), engeres Straßenraster, Industrie links statt
    * rechts und das Zentrum in der Kartenmitte. Statt Stadtbank steht dort
@@ -1593,12 +1812,14 @@ function snapshot() {
   const rankOf = Object.fromEntries(ranked.map(([pid], i) => [pid, i + 1]));
   return {
     tick: G.tick, winner: G.winner, winGoal: WIN_NW, report: G.report || null,
+    tutorialEnde: !!G.tutorialEnde,
     started: G.started, hostId: G.hostId,
     mode: MODE, plan: MODE === "plan" ? G.plan : null,
+    routes: MAP_ROUTES,
     lobby: G.started ? null : { winGoal: WIN_NW, bots: botAuswahl, botLevel: botLevelKey, mode: MODE },
     map: G.map.map(t => ({ x: t.x, y: t.y, zone: t.zone, road: t.road, water: t.water,
       park: t.park, field: t.field, sand: t.sand, deep: t.deep, rock: t.rock,
-      bank: t.bank, news: t.news, schwarz: t.schwarz, locked: t.locked, unlockCost: t.unlockCost, owner: t.owner, btype: t.btype, lien: t.lien, shop: t.shop, paused: t.paused, level: t.level, autos: autosDyn(t) })),
+      bank: t.bank, news: t.news, schwarz: t.schwarz, deko: t.deko, locked: t.locked, unlockCost: t.unlockCost, owner: t.owner, btype: t.btype, lien: t.lien, shop: t.shop, paused: t.paused, level: t.level, autos: autosDyn(t) })),
     players: Object.fromEntries(Object.entries(G.players).map(([sid, p]) =>
       [sid, { id: sid, name: p.name, color: p.color, lvl: p.lvl, xp: p.xp, industry: p.industry, industries: p.industries,
               netWorth: Math.round(netWorth(p)), rating: rating(p), rank: rankOf[sid],
@@ -1844,7 +2065,7 @@ io.on("connection", socket => {
   });
 
   /* Lobby / Registrierung */
-  socket.on("register", ({ name, color, winGoal, industry, bots, botLevel }, ack) => {
+  socket.on("register", ({ name, color, winGoal, industry, bots, botLevel, botToken }, ack) => {
     name = sicherText(String(name || "").trim().slice(0, 20));
     if (!name) return ack?.({ error: "Name fehlt" });
     if (Object.values(G.players).some(p => p.name === name)) return ack?.({ error: "Name vergeben" });
@@ -1859,6 +2080,8 @@ io.on("connection", socket => {
     const pid = crypto.randomUUID();
     const istErster = Object.keys(G.players).length === 0;
     G.players[pid] = newPlayer(pid, name, sichereFarbe(color), industry, socket.id);
+    /* Nur fuer die Anzeige — am Spiel aendert das Kennzeichen nichts. */
+    if (botToken && botToken === BOT_TOKEN) G.players[pid].bot = true;
     G.socketToPid[socket.id] = pid;
     socket.data.registered = true;
     if (istErster) G.hostId = pid;   // Host: darf im Warteraum einstellen und die Runde starten
@@ -1889,12 +2112,29 @@ io.on("connection", socket => {
     const pid = G.socketToPid[socket.id];
     if (!pid || pid !== G.hostId) return ack?.({ error: "Das darf nur der Host" });
     if (G.started) return ack?.({ error: "Die Runde läuft schon" });
-    if (mode === "sandbox" || mode === "plan") MODE = mode;
+    if (mode === "sandbox" || mode === "plan" || mode === "einsteiger") MODE = mode;
     if (WIN_CHOICES.includes(+winGoal)) WIN_NW = +winGoal;
     if (bots && typeof bots === "object") botAuswahl = bots;
     if (BOT_LEVELS[botLevel]) botLevelKey = botLevel;
     ack?.({ ok: true });
     pushState();
+  });
+  /* Das Einsteiger-Tutorial beendet die Runde, wenn es durch ist — so war der
+   * Modus gedacht: er laeuft, bis alles gezeigt wurde. Derselbe Weg wie beim
+   * Sieg, damit die Auswertung am Ende identisch aussieht. */
+  socket.on("tutorialFertig", (_payload, ack) => {
+    const pid = G.socketToPid[socket.id];
+    if (!pid) return ack?.({ error: "Unbekannter Spieler" });
+    if (MODE !== "einsteiger") return ack?.({ error: "Nur im Einsteiger-Modus" });
+    if (G.winner) return ack?.({ ok: true });
+    const p = G.players[pid];
+    if (!p) return ack?.({ error: "Unbekannter Spieler" });
+    G.winner = p.name;
+    G.tutorialEnde = true;      // damit der Endbildschirm nicht vom Vermoegensziel spricht
+    G.report = buildReport(pid);
+    io.emit("notice", { text: `${p.name} hat das Einsteiger-Tutorial abgeschlossen — Runde beendet.` });
+    pushState();
+    ack?.({ ok: true });
   });
   socket.on("startRound", (_payload, ack) => {
     const pid = G.socketToPid[socket.id];
@@ -1905,6 +2145,14 @@ io.on("connection", socket => {
      * zuerst zugreift, hat sie. */
     if (!G.fahrer.length) G.fahrer = FAHRER_NAMEN.map((_, i) => fahrerBauen(i));
     startBots();
+    if (MODE === "einsteiger") {
+      /* Einsteiger: eigene Flaeche (San Francisco, 64x64). Wie beim Plan-Modus
+       * muss nach dem Kartentausch jeder Client die Karte einmal vollstaendig
+       * bekommen — der Kachel-Diff traegt nur veraenderliche Felder. */
+      G.map = buildMap("einsteiger");
+      lastTileSigs = null;
+      for (const sock of io.sockets.sockets.values()) sock.data.gotMap = false;
+    }
     if (MODE === "plan") {
       /* Eigene Spielfläche für die Planwirtschaft — Gebäude gibt es zu diesem
        * Zeitpunkt noch keine, der Tausch ist also verlustfrei. WICHTIG: Der
@@ -2040,6 +2288,7 @@ io.on("connection", socket => {
     if (t.water || t.road || t.park) return ack?.({ error: "Nicht bebaubar" });
     if (t.bank) return ack?.({ error: "Die Stadtbank gehört der Stadt" });
     if (t.news) return ack?.({ error: "Die Nachrichtenzentrale gehört der Stadt" });
+    if (t.deko) return ack?.({ error: "Das Hochhaus gehört der Stadt" });
     if (t.schwarz) return ack?.({ error: "Hier wird nur unter der Hand gehandelt" });
     if (t.owner) return ack?.({ error: "Kachel bereits belegt" });
     if (bt.zone !== t.zone) return ack?.({ error: `Nur in Zone ${bt.zone} baubar` });
@@ -2573,7 +2822,7 @@ io.on("connection", socket => {
     G.shareListings = []; G.shareBids = [];
     G.lastTrade = {};
     G.chat = Object.fromEntries(ROOMS.map(r => [r, []]));
-    G.tick = 0; G.winner = null; G.report = null; G.plan = null;
+    G.tick = 0; G.winner = null; G.report = null; G.plan = null; G.tutorialEnde = false;
     G.rennen = null; G.naechstesRennenIn = RENN_INTERVALL;
     G.started = false; G.hostId = null;   // neue Runde beginnt wieder im Warteraum
     G.groupOrder = null; G.nextGroupIn = 20;
@@ -3247,7 +3496,7 @@ async function spawnBot(cfg, lvl = BOT_LEVELS[BOT_LEVEL_DEFAULT]) {
     st = botMap ? { ...x, map: botMap } : x;
   });
   let botMeta = null;   // Registrierungsdaten (Tuning-Tabelle, Schwellen) für die Rennlogik
-  s.on("connect", () => s.emit("register", { name: cfg.name, color: cfg.color, industry: cfg.industry },
+  s.on("connect", () => s.emit("register", { name: cfg.name, color: cfg.color, industry: cfg.industry, botToken: BOT_TOKEN },
     res => { if (res?.ok) { myId = res.you; botMeta = res; } }));
   /* Mit Zeitlimit: bleibt eine Bestätigung aus — etwa weil ein Handler sie
    * vergisst —, würde der Bot sonst an dieser Stelle für immer stehen bleiben
@@ -3581,7 +3830,7 @@ async function spawnBot(cfg, lvl = BOT_LEVELS[BOT_LEVEL_DEFAULT]) {
            * davon zuerst, scheitert sein Bau in jedem Zyklus erneut an derselben
            * Kachel — er käme in der Zone nie voran. Bei der Bank lag das seit
            * jeher latent vor, mit der zweiten Stadtkachel wird es wahrscheinlicher. */
-          const frei = t => t.zone === bt.zone && !t.road && !t.water && !t.park && !t.bank && !t.news;
+          const frei = t => t.zone === bt.zone && !t.road && !t.water && !t.park && !t.bank && !t.news && !t.deko;
           let t = st.map.find(t => frei(t) && !t.locked && !t.owner);
           if (!t) {   // Zone gesperrt → passende Kachel wird beim Bauen mit-freigeschaltet
             const lt = st.map.find(t => frei(t) && t.locked);
