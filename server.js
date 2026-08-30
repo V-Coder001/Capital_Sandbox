@@ -937,60 +937,77 @@ function ladeGebackeneKarte(datei = "sanfrancisco.json") {
   return tiles;
 }
 
-/* ---------- Einsteiger-Flaeche: eine von Hand entworfene Stadt ----------
- * Der erste Versuch nahm einen echten Stadtausschnitt aus CAD-Daten. Das sah
- * schlecht aus: aus 18 m je Kachel wurde ein Flickenteppich aus Strassenstummeln
- * und riesigen einfarbigen Feldern. Eine Spielkarte braucht Lesbarkeit, keine
- * Katastergenauigkeit — also ein sauberes Raster, klare Bezirke und eine Bucht
- * als Blickfang.
+/* ---------- Stadtflaechen ----------
+ * Ein Generator fuer alle von Hand entworfenen Karten. Der erste Versuch nahm
+ * einen echten Stadtausschnitt aus CAD-Daten; das sah schlecht aus, weil aus
+ * 18 m je Kachel ein Flickenteppich aus Strassenstummeln und riesigen
+ * einfarbigen Feldern wurde. Eine Spielkarte braucht Lesbarkeit, keine
+ * Katastergenauigkeit.
  *
- * 32x32: sechs mal sechs Blocks a 5x5 bebaubaren Kacheln plus Rand. Gross genug
- * fuer mehrere Spieler, klein genug, um die Uebersicht zu behalten. */
-function buildStadtMap() {
-  MAP_W = 32; MAP_H = 32; MAP_ROUTES = null;
-  const RASTER = 6;                       // Strassen alle 6 Kacheln, wie im Sandkasten
-  const noise = (x, y) => { const n = Math.sin(x * 12.9898 + y * 78.233) * 43758.5453; return n - Math.floor(n); };
-  /* Bucht in der Suedostecke: eine diagonale Uferlinie, mit Rauschen
-   * aufgebrochen und zweimal geglaettet, damit keine Sprenkel bleiben. */
+ * Ueber die Optionen unterscheiden sich die Flaechen deutlich, ohne dass es
+ * zwei Generatoren braucht:
+ *   ufer    "ecke" = diagonale Bucht in einer Ecke, "sued" = Kueste ueber die
+ *           ganze Unterkante mit vorgelagerter Halbinsel
+ *   sperren Industrie und Kueste kosten Zutritt (Sandkasten) oder nicht
+ *           (Einsteiger — dort soll nichts im Weg stehen)
+ *   deko    wie viele Hochhaeuser als Kulisse ins Zentrum kommen
+ *   seed    verschiebt das Rauschen, damit zwei Karten nicht gleich aussehen */
+function buildStadtMap({ w = 32, h = 32, seed = 0, ufer = "ecke",
+                         sperren = false, deko = 4, raster = 6, inseln = [] } = {}) {
+  MAP_W = w; MAP_H = h; MAP_ROUTES = null;
+  const noise = (x, y) => {
+    const n = Math.sin((x + seed) * 12.9898 + (y + seed * 1.7) * 78.233) * 43758.5453;
+    return n - Math.floor(n);
+  };
+  /* Wasserfeld, danach zweimal Mehrheitsglaettung gegen Sprenkel. */
   let wat = [];
-  for (let y = 0; y < MAP_H; y++) for (let x = 0; x < MAP_W; x++)
-    wat.push((x + y) - (MAP_W + MAP_H - 17) + (noise(x, y) - .5) * 3 > 0);
+  for (let y = 0; y < MAP_H; y++) for (let x = 0; x < MAP_W; x++) {
+    const tiefe = ufer === "sued"
+      ? y - (MAP_H - 5.5) + Math.max(0, (x - MAP_W * .62)) * .12
+      : (x + y) - (MAP_W + MAP_H - 17);
+    wat.push(tiefe + (noise(x, y) - .5) * 3 > 0);
+  }
   for (let pass = 0; pass < 2; pass++) {
     const next = [...wat];
     for (let y = 0; y < MAP_H; y++) for (let x = 0; x < MAP_W; x++) {
       let n = 0, c = 0;
       for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
         const xx = x + dx, yy = y + dy;
-        if (xx < 0 || yy < 0 || xx >= MAP_W || yy >= MAP_H) { n += (xx >= MAP_W || yy >= MAP_H) ? 1 : 0; c++; continue; }
+        if (xx < 0 || yy < 0 || xx >= MAP_W || yy >= MAP_H) {
+          n += (ufer === "sued" ? yy >= MAP_H : (xx >= MAP_W || yy >= MAP_H)) ? 1 : 0; c++; continue;
+        }
         n += wat[yy * MAP_W + xx] ? 1 : 0; c++;
       }
       next[y * MAP_W + x] = n > c / 2;
     }
     wat = next;
   }
-  /* Eine Insel in der Bucht — bebaubares Land mit Aussicht statt leerer Flaeche. */
+  /* Inseln und Halbinseln: bebaubares Land mit Aussicht statt leerer Flaeche. */
   for (let y = 0; y < MAP_H; y++) for (let x = 0; x < MAP_W; x++)
-    if (Math.hypot(x - 26, y - 26) < 2.6) wat[y * MAP_W + x] = false;
+    if (inseln.some(([ix, iy, r]) => Math.hypot(x - ix, y - iy) < r)) wat[y * MAP_W + x] = false;
 
   const mx = (MAP_W - 1) / 2, my = (MAP_H - 1) / 2;
   const tiles = [];
   for (let y = 0; y < MAP_H; y++) for (let x = 0; x < MAP_W; x++) {
     const water = wat[y * MAP_W + x];
-    const road = !water && (x % RASTER === 3 || y % RASTER === 3);
+    const road = !water && (x % raster === 3 || y % raster === 3);
     /* Ganze Blocks als Park statt einzelner Streukacheln — ein Stadtpark liest
      * sich als Ort, verteilte Einzelbaeume nur als Rauschen. */
-    const bx = Math.floor(x / RASTER), by = Math.floor(y / RASTER);
-    const parkBlock = (bx * 7 + by * 13) % 11 === 0;
-    const park = !water && !road && parkBlock;
+    const bx = Math.floor(x / raster), by = Math.floor(y / raster);
+    const park = !water && !road && (bx * 7 + by * 13 + seed) % 7 === 0;
     let zone = "agrar";
     if (water) zone = "wasser";
-    else if (Math.hypot(x - mx, y - my) < 7.5) zone = "zentrum";
+    /* Radius 0,30 statt 0,24: Laeden duerfen nur im Zentrum stehen, und mit
+     * dem kleineren Kreis blieben auf 30x30 nur 73 freie Kacheln fuer bis zu
+     * acht Spieler. Die alte Sandkasten-Flaeche hatte anteilig ein Drittel
+     * Innenstadt — darunter wird es eng. */
+    else if (Math.hypot(x - mx, y - my) < Math.min(MAP_W, MAP_H) * .30) zone = "zentrum";
     tiles.push({ x, y, zone, road, water, locked: false, unlockCost: 0, park,
       field: false, owner: null, btype: null, lien: false });
   }
   const at = (x, y) => (x < 0 || y < 0 || x >= MAP_W || y >= MAP_H) ? null : tiles[y * MAP_W + x];
-  /* Kueste und Industrie haengen am Wasser, nicht an einer gemalten Bandbreite:
-   * was nah am Ufer liegt, ist Kueste; der Streifen dahinter wird Hafenindustrie. */
+  /* Kueste und Industrie haengen am Wasser, nicht an einem gemalten Band:
+   * was nah am Ufer liegt, ist Kueste; der Streifen dahinter Hafenindustrie. */
   for (const t of tiles) {
     if (t.water || t.zone === "zentrum") continue;
     let d = 99;
@@ -998,12 +1015,16 @@ function buildStadtMap() {
       for (let dy = -r; dy <= r && d === 99; dy++)
         for (let dx = -r; dx <= r; dx++)
           if (at(t.x + dx, t.y + dy)?.water) { d = Math.max(Math.abs(dx), Math.abs(dy)); break; }
+    /* Der Hafenguertel reicht weit landeinwaerts. Weil das Wasser nur an einer
+     * Kante liegt, bleibt er sonst ein schmaler Streifen: bei fuenf Kacheln
+     * Tiefe waren nach Strassen, Parks und Zentrum noch 32 bebaubare Kacheln
+     * uebrig, bei acht 44 — die alte Sandkasten-Flaeche bot rund 95. */
     if (d <= 2) t.zone = "kueste";
-    else if (d <= 5) t.zone = "industrie";
+    else if (d <= 12) t.zone = "industrie";
   }
-  /* Nur das groesste zusammenhaengende Strassennetz behalten. Auf der Insel in
-   * der Bucht entstand sonst ein eigenes kleines Kreuz, das an nichts anschliesst
-   * und wie ein Zeichenfehler aussieht. Eine Stadt hat ein Netz, nicht mehrere. */
+  /* Nur das groesste zusammenhaengende Strassennetz behalten. Auf einer Insel
+   * entstuende sonst ein eigenes Kreuz, das an nichts anschliesst und wie ein
+   * Zeichenfehler aussieht. Eine Stadt hat ein Netz, nicht mehrere. */
   {
     const gesehen = new Set(); const gruppen = [];
     for (const start of tiles) {
@@ -1020,7 +1041,7 @@ function buildStadtMap() {
     gruppen.sort((a, b) => b.length - a.length);
     for (const g of gruppen.slice(1)) for (const t of g) t.road = false;
   }
-  /* Deko-Felder nur im Ackerland, und nur abseits der Strassen. */
+  /* Deko-Felder nur im Ackerland und abseits der Strassen. */
   for (const t of tiles)
     if (t.zone === "agrar" && !t.road && !t.park && (t.x * 5 + t.y * 11) % 9 === 0) t.field = true;
   for (const t of tiles) {
@@ -1029,24 +1050,37 @@ function buildStadtMap() {
     if (t.water && !nb.some(n => n && !n.water)) t.deep = true;
     if (t.water && (t.x * 3 + t.y * 17) % 19 === 0) t.rock = true;
   }
+  /* Zutritt zu Industrie und Kueste kostet — aber bewusst als Formalitaet,
+   * nicht als Kapitalgrab (siehe UNLOCK). Im Einsteiger-Modus entfaellt es. */
+  if (sperren) for (const t of tiles) {
+    if (t.water || t.road || t.park) continue;
+    if (t.zone === "industrie" || t.zone === "kueste") {
+      t.locked = true; t.unlockCost = UNLOCK[t.zone] || 0;
+    }
+  }
   /* Bank und Nachrichtenzentrale an die Hauptkreuzung im Zentrum, aber neben
    * die Strasse — auf der Fahrbahn fehlte dem Verkehr sonst eine Spur. */
   const zentral = tiles.filter(t => t.zone === "zentrum" && !t.road && !t.water && !t.park)
     .sort((a, b) => Math.hypot(a.x-mx, a.y-my) - Math.hypot(b.x-mx, b.y-my));
-  if (zentral[0]) Object.assign(zentral[0], { bank: true, park: false, field: false });
+  if (!zentral.length) return tiles;
+  Object.assign(zentral[0], { bank: true, park: false, field: false, locked: false, unlockCost: 0 });
   const news = zentral.find(t => !t.bank && Math.hypot(t.x - zentral[0].x, t.y - zentral[0].y) > 4.5);
-  if (news) Object.assign(news, { news: true, park: false, field: false });
-  /* Vier Hochhaeuser als reine Kulisse: Sie geben der Innenstadt eine Skyline,
+  if (news) Object.assign(news, { news: true, park: false, field: false, locked: false, unlockCost: 0 });
+  /* Hochhaeuser als reine Kulisse: Sie geben der Innenstadt eine Skyline,
    * gehoeren aber niemandem und lassen sich nicht bebauen. Verteilt statt
-   * nebeneinander — ein Block aus vier Tuermen sieht aus wie ein Zaun. */
-  const dekoPlaetze = zentral.filter(t => !t.bank && !t.news);
+   * nebeneinander — ein Block aus Tuermen sieht aus wie ein Zaun. */
   let gesetzt = 0;
-  for (const t of dekoPlaetze) {
-    if (gesetzt >= 4) break;
-    /* Mindestabstand zu Bank, Nachrichten und den schon gesetzten Tuermen. */
-    const zuNah = tiles.some(o => (o.bank || o.news || o.deko) && Math.hypot(o.x - t.x, o.y - t.y) < 3);
-    if (zuNah) continue;
-    Object.assign(t, { deko: gesetzt + 1, park: false, field: false });
+  for (const t of zentral) {
+    if (gesetzt >= deko) break;
+    if (t.bank || t.news) continue;
+    /* Abstand 2,5 statt 3: dichter beieinander wirkt die Innenstadt belebt,
+     * ohne dass die Tuerme zu einer geschlossenen Wand zusammenlaufen. Zur
+     * Bank und zur Nachrichtenzentrale bleibt es bei drei Kacheln, damit ihre
+     * Beschriftung frei steht. */
+    const nah = tiles.some(o => (o.bank || o.news) && Math.hypot(o.x - t.x, o.y - t.y) < 3)
+             || tiles.some(o => o.deko && Math.hypot(o.x - t.x, o.y - t.y) < 2.5);
+    if (nah) continue;
+    Object.assign(t, { deko: (gesetzt % 4) + 1, park: false, field: false, locked: false, unlockCost: 0 });
     gesetzt++;
   }
   return tiles;
@@ -1054,7 +1088,15 @@ function buildStadtMap() {
 
 /* ---------- Karte (deterministisch, damit alle Clients identisch rendern) ---------- */
 function buildMap(mode = "sandbox") {
-  if (mode === "einsteiger") return buildStadtMap();
+  /* Einsteiger und Sandkasten laufen beide auf einer entworfenen Stadt, aber
+   * mit deutlich anderer Flaeche. Nur die Planwirtschaft benutzt noch den
+   * prozeduralen Code weiter unten. */
+  if (mode === "einsteiger")
+    return buildStadtMap({ w: 32, h: 32, seed: 0, ufer: "ecke", sperren: false,
+                           deko: 6, inseln: [[26, 26, 2.6]] });
+  if (mode === "sandbox")
+    return buildStadtMap({ w: 30, h: 30, seed: 71, ufer: "sued", sperren: true,
+                           deko: 9, inseln: [[6, 27, 2.2], [21, 28, 2.8]] });
   MAP_W = 26; MAP_H = 26; MAP_ROUTES = null;
   /* Die Planwirtschaft spielt auf einer eigenen Fläche: andere Küstenlinie
    * (verschobenes Rauschen), engeres Straßenraster, Industrie links statt

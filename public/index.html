@@ -3184,6 +3184,25 @@ const spriteFor = (btype, x, y) => {
 };
 /* Natur-Deko (Kenney Nature Kit, CC0): Bäume, Palmen, Felsen, Getreidefelder */
 const DECO = { tree: [], palm: [], rock: [], field: [] };
+/* Deko sass exakt auf dem Kachelmittelpunkt — ein perfektes Gitter, das in der
+ * Isometrie als Streifen zu sehen war. Jetzt wird jedes Stueck innerhalb seiner
+ * Kachel versetzt und in der Groesse variiert.
+ *
+ * Deterministisch aus der Kachelkoordinate, nicht per Math.random(): Die Karte
+ * wird jedes Bild neu gezeichnet, ein Zufallswert je Bild liesse die Baeume
+ * zappeln — und alle Clients muessen ohnehin dasselbe sehen.
+ *
+ * Der Versatz wird in Kachelkoordinaten gewuerfelt und erst dann isometrisch
+ * abgebildet. In Bildschirmkoordinaten gestreut waeren die Baeume ueber die
+ * Rautenkante auf die Strasse gewandert. */
+const streu = (x, y, k) => {
+  const n = Math.sin(x * 127.1 + y * 311.7 + k * 74.7) * 43758.5453;
+  return n - Math.floor(n);
+};
+function streuVersatz(t, weite = .5) {
+  const du = (streu(t.x, t.y, 1) - .5) * weite, dv = (streu(t.x, t.y, 2) - .5) * weite;
+  return [(du - dv) * TW / 2, (du + dv) * TH / 2];
+}
 for (const [d, n] of [["tree", 5], ["palm", 2], ["rock", 3], ["field", 3]]) for (let i = 0; i < n; i++) {
   const img = new Image();
   img.onload = () => DECO[d][i] = img;
@@ -3193,6 +3212,31 @@ const decoFor = (t) => {
   const arr = t.zone === "kueste" ? DECO.palm : DECO.tree;
   return arr.length ? arr[(t.x * 11 + t.y * 5) % arr.length] : null;
 };
+/* Wo auf einer Parkkachel Baeume stehen — Anzahl, Versatz, Groesse und Sprite.
+ *
+ * Genau ein Baum je Kachel sah gepflanzt aus, egal wie stark man ihn versetzt:
+ * die Anzahl selbst verraet das Raster. Deshalb traegt eine Kachel keinen,
+ * einen oder zwei Baeume — das gibt Luecken und Gruppen.
+ *
+ * Deterministisch aus der Kachelkoordinate: Der Schattendurchgang und der
+ * Zeichendurchgang muessen dieselben Stellen benutzen, die Karte wird jedes
+ * Bild neu gezeichnet, und alle Clients sollen dasselbe sehen. */
+function dekoStellen(t) {
+  const arr = t.zone === "kueste" ? DECO.palm : DECO.tree;
+  if (!arr.length) return [];
+  const dichte = streu(t.x, t.y, 5);
+  const anzahl = dichte < .20 ? 0 : dichte < .74 ? 1 : 2;
+  const out = [];
+  for (let i = 0; i < anzahl; i++) {
+    const du = (streu(t.x, t.y, 10 + i * 4) - .5) * .8;
+    const dv = (streu(t.x, t.y, 11 + i * 4) - .5) * .8;
+    const img = arr[Math.floor(streu(t.x, t.y, 12 + i * 4) * arr.length) % arr.length];
+    if (!img) continue;
+    out.push({ img, ox: (du - dv) * TW / 2, oy: (du + dv) * TH / 2,
+               gr: 72 + streu(t.x, t.y, 13 + i * 4) * 32 });
+  }
+  return out;
+}
 function shade(hex, amt){ const n = parseInt(hex.slice(1), 16);
   const c = v => Math.max(0, Math.min(255, v));
   return `rgb(${c((n>>16)+amt)},${c(((n>>8)&255)+amt)},${c((n&255)+amt)})`; }
@@ -3921,6 +3965,11 @@ function draw() {
     const [sx, sy] = iso(t.x, t.y);
     drawSchatten(spr, sx, sy, t.deko ? dekoGroesse(spr) : t.btype ? 64 : 72);
   }
+  for (const t of st.map) {
+    if (!t.park || t.btype) continue;
+    const [sx, sy] = iso(t.x, t.y);
+    for (const b of dekoStellen(t)) drawSchatten(b.img, sx + b.ox, sy + b.oy, b.gr);
+  }
   /* 2. Durchgang: Gebäude & Deko — nach Boden, damit Sprites nicht überdeckt werden */
   /* Die Kachel-Variable t verdeckt hier die Übersetzungsfunktion t() —
    * daher vorab eine Referenz sichern, sonst bricht draw() an der Bank ab
@@ -3933,20 +3982,29 @@ function draw() {
   for (const t of st.map) {
     const [sx, sy] = iso(t.x, t.y);
     if (t.park && !t.btype) {
-      const d = decoFor(t);
-      if (d) {
-        cx.fillStyle = "rgba(0,0,0,.18)";
-        cx.beginPath(); cx.ellipse(sx, sy + TH / 2, TW / 3.4, TH / 3.6, 0, 0, Math.PI * 2); cx.fill();
-        cx.drawImage(d, sx - 48, decoY(sy, d, 96), 96, 96);
-      }
+      /* Der fruehere dunkle Ellipsenfleck unter jedem Baum ist weg: einer je
+       * Kachel ergab ein Gitter aus dunklen Flecken, das staerker ins Auge fiel
+       * als die Baumpositionen selbst. Baeume werfen jetzt denselben Schatten
+       * wie Gebaeude und Fahrzeuge — gezeichnet im Schattendurchgang weiter
+       * oben, damit ihn die naechste Kachel nicht uebermalt. */
+      for (const b of dekoStellen(t))
+        cx.drawImage(b.img, sx + b.ox - b.gr / 2, decoY(sy + b.oy, b.img, b.gr), b.gr, b.gr);
     }
     if (t.rock && DECO.rock.length) {
       const d = DECO.rock[(t.x * 7 + t.y * 3) % DECO.rock.length];
-      if (d) cx.drawImage(d, sx - 30, decoY(sy, d, 60), 60, 60);
+      if (d) {
+        const [ox, oy] = streuVersatz(t, .4);
+        const gr = 52 + streu(t.x, t.y, 4) * 16;
+        cx.drawImage(d, sx + ox - gr / 2, decoY(sy + oy, d, gr), gr, gr);
+      }
     }
     if (t.field && !t.btype && DECO.field.length) {
       const d = DECO.field[(t.x * 3 + t.y * 7) % DECO.field.length];
-      if (d) cx.drawImage(d, sx - 38, decoY(sy, d, 76), 76, 76);
+      if (d) {
+        const [ox, oy] = streuVersatz(t, .34);   // enger als im Park: Aecker sind angelegt
+        const gr = 70 + streu(t.x, t.y, 6) * 14;
+        cx.drawImage(d, sx + ox - gr / 2, decoY(sy + oy, d, gr), gr, gr);
+      }
     }
     if (t.deko) {
       /* Bewusst ohne Sockel und ohne Beschriftung: Bank und Nachrichtenzentrale
