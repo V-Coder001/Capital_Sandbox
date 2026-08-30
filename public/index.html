@@ -1837,7 +1837,7 @@ function bindSocketEvents(s) {
     toast(`${c.from} bietet dir ${c.qty}× ${gname(c.good)} für ${fmt(c.price)}/Stk — annehmen im Finanz-Panel? Chat-Panel → Verträge`));
   s.on("shareOffer", o =>
     toast(`${o.from} bietet dir ${o.count*25}% seiner Firma für ${fmt(o.price)} an — annehmen im Finanzen-Panel.`));
-  s.on("roundReset", () => backToLobby());
+  s.on("roundReset", () => { TUT_GESEHEN.clear(); backToLobby(); });
   s.on("disconnect", () => toast("Verbindung zum Server verloren", true));
 }
 /* Zurück in die Lobby nach dem Rundenende. Wichtig ist, dabei wirklich ALLES
@@ -2494,13 +2494,22 @@ function doRegister(name) {
  * noch nichts produziert wird. Also erst zeigen, wenn die Runde wirklich läuft. */
 function tutErstBeiRundenstart() {
   /* Im Einsteiger-Modus fuehrt die lange Strecke durch das ganze Spiel statt
-   * der kurzen Einfuehrung zur gewaehlten Branche. */
-  const waehlen = () => { if (store.get().state?.mode === "einsteiger") TUT = TUT_EINSTEIGER; };
-  if (store.get().state?.started) { waehlen(); tutShow(0); return; }
+   * der kurzen Einfuehrung zur gewaehlten Branche.
+   *
+   * Dabei muss TUT_GESEHEN geleert werden: Die vier Lese-Schritte (Boerse,
+   * Lager, Nachrichten, Finanzen) haken sich am Oeffnen des Panels ab. Ohne
+   * Leeren traegt eine zweite Runde im selben Seitenaufruf die Panels der
+   * ersten noch im Gedaechtnis — und ueberspringt vier von fuenfzehn
+   * Schritten, ohne dass der Lernende sie je gesehen hat. */
+  const vorbereiten = () => {
+    TUT_GESEHEN.clear();
+    if (store.get().state?.mode === "einsteiger") TUT = TUT_EINSTEIGER;
+  };
+  if (store.get().state?.started) { vorbereiten(); tutShow(0); return; }
   const ab = store.subscribe(() => {
     if (!store.get().state?.started) return;
     ab?.();
-    waehlen();
+    vorbereiten();
     tutShow(0);
   });
 }
@@ -4788,7 +4797,10 @@ function tutShow(i) {
   const wartet = !!(s.build || s.warte);
   document.getElementById("tutNext").style.display = wartet ? "none" : "";
   document.getElementById("tutWait").style.display = wartet ? "flex" : "none";
-  if (i === TUT.length - 1) document.getElementById("tutNext").textContent = "Los geht's!";
+  /* Beschriftung immer setzen, nicht nur beim letzten Schritt: sonst traegt der
+   * Knopf in einer zweiten Runde ab Schritt 1 noch das "Los geht's!" der
+   * vorigen. */
+  document.getElementById("tutNext").textContent = t(i === TUT.length - 1 ? "Los geht's!" : "Weiter");
 }
 function tutDone() { tutIdx = -1; tutEl.style.display = "none"; try { localStorage.setItem("cs_tut_done", "1"); } catch {} }
 document.getElementById("tutNext").addEventListener("click", () => {
