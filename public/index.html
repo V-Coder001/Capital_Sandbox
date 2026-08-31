@@ -481,6 +481,19 @@ input,select{background:var(--panel2);border:1px solid var(--line);border-radius
 .herkunft.spieler{color:var(--accent);border-color:rgba(56,189,248,.45)}
 .herkunft.selbst{color:#fbbf24;border-color:rgba(251,191,36,.45)}
 .letztes{font-size:10.5px;opacity:.75;white-space:nowrap}
+/* Gesuchszeilen: eigener Block statt einer Textzeile mit nacktem Knopf. */
+.gesuch{display:flex;align-items:center;gap:10px;padding:8px 10px;margin:6px 0;
+  background:rgba(16,24,40,.72);border:1px solid rgba(45,60,88,.55);border-radius:10px}
+.gesuch.kann{border-color:rgba(56,189,248,.35)}
+.gesuch .was{flex:1;min-width:0}
+.gesuch .was b{font-size:13px}
+.gesuch .bedarf{font-size:12.5px;font-weight:700;color:#fbbf24}
+.gesuch button{flex:none;border-radius:8px;border:1px solid rgba(56,189,248,.45);
+  background:rgba(56,189,248,.14);color:var(--accent);font:700 11.5px var(--font);
+  padding:6px 11px;cursor:pointer}
+.gesuch button:hover:not(:disabled){background:rgba(56,189,248,.26)}
+.gesuch button:disabled{border-color:var(--line);background:transparent;color:var(--dim);cursor:not-allowed}
+.eigenesGesuch{background:rgba(251,191,36,.07);border-color:rgba(251,191,36,.35)}
 .rennteil .meta,.rennstand .meta{font-size:11px;opacity:.62}
 .rennstand .wer b{font-size:14px;letter-spacing:.2px}
 input.autoname{flex:1;min-width:0;background:transparent;border:1px solid transparent;border-radius:6px;
@@ -5284,7 +5297,10 @@ function rennenRendern(state, myId) {
     /* Nur neu bauen, wenn sich strukturell etwas ändert und niemand tippt —
      * sonst frisst der Sekunden-Rerender die Eingaben. */
     const sig = "a" + r.teilnehmer.map(t2 => t2.autoId).join(",") + ":" + r.pool + ":" + r.sponsoren.length
-      + ":" + (r.gesuche || []).length + ":" + JSON.stringify(r.quoten);
+      /* Nicht nur die Anzahl der Gesuche: Wer sein eigenes ersetzt, aendert
+       * nichts an der Zahl — die Anzeige bliebe sonst auf dem alten stehen. */
+      + ":" + (r.gesuche || []).map(g => g.id + "/" + (g.betrag ?? g.menge)).join(",")
+      + ":" + JSON.stringify(r.quoten);
     const tippt = body.contains(document.activeElement) && /INPUT|SELECT/.test(document.activeElement?.tagName);
     if (rennenRendern.sig !== sig && !tippt) {
       rennenRendern.sig = sig;
@@ -5338,21 +5354,44 @@ function rennenRendern(state, myId) {
               /* Die Teams fragen selbst an — nach Geld oder nach Teilen. Was
                * fehlt, steht dabei: so sieht man sofort, ob man es erfuellen
                * kann, ohne erst ins Lager zu wechseln. */
-              const offen = (r.gesuche || []).filter(g => g.teamId !== myId);
-              if (!offen.length) return `<p class="note">Zurzeit sucht kein Team einen Sponsor.</p>`;
-              return offen.map(g => {
+              const alle = r.gesuche || [];
+              const offen = alle.filter(g => g.teamId !== myId);
+              const meins = alle.find(g => g.teamId === myId);
+              const binGemeldet = r.teilnehmer.some(t2 => t2.ownerId === myId);
+              const zeile = g => {
                 const geld = g.art === "geld";
-                const brauchtText = geld ? fmt(g.betrag) : `${g.menge}× ${gname(g.art)}`;
+                const braucht = geld ? fmt(g.betrag) : `${g.menge}× ${gname(g.art)}`;
                 const habe = geld ? me.cash : (me.inv?.[g.art] || 0);
-                const nötig = geld ? g.betrag : g.menge;
-                const reicht = habe >= nötig;
-                return `<div class="rennteil">
-                  <span style="flex:1;min-width:0"><b>${escapeHtml(g.team)}</b> sucht <b>${brauchtText}</b>
-                    <br><span class="meta">${geld ? "Barmittel" : `du hast ${habe}×`} · Gegenwert ${fmt(g.wert)}</span></span>
-                  <button data-gesuch="${g.id}" ${reicht ? "" : "disabled"}
-                          style="flex:none">${reicht ? "Erfüllen" : "zu wenig"}</button>
+                const reicht = habe >= (geld ? g.betrag : g.menge);
+                return `<div class="gesuch${reicht ? " kann" : ""}">
+                  <span class="was"><b>${escapeHtml(g.team)}</b> sucht <span class="bedarf">${braucht}</span>
+                    <br><span class="meta">${geld ? `du hast ${fmt(me.cash)}` : `du hast ${habe}×`} · Gegenwert ${fmt(g.wert)}</span></span>
+                  <button data-gesuch="${g.id}" ${reicht ? "" : "disabled"}>${reicht ? "Erfüllen" : "zu wenig"}</button>
                 </div>`;
-              }).join("") + `<p class="note" style="margin-top:6px">Dafür bekommst du bis zu 50 % des Preisgeldes dieses Teams (pro rata mit anderen Sponsoren). Teile werden zum Ø-Kurs bewertet.</p>`;
+              };
+              /* Eigenes Gesuch: nur wer selbst gemeldet ist, kann Sponsoren
+               * suchen — ohne Wagen im Rennen gaebe es nichts zu sponsern. */
+              const eigenes = !binGemeldet ? "" : `
+                <div class="gesuch eigenesGesuch">
+                  <span class="was"><b>Dein Gesuch</b>
+                    <br><span class="meta">${meins
+                      ? (meins.art === "geld" ? `Du suchst ${fmt(meins.betrag)}` : `Du suchst ${meins.menge}× ${gname(meins.art)}`)
+                      : "Noch keins aufgegeben"}</span></span>
+                </div>
+                <div class="rennform">
+                  <select id="gesuchArt">
+                    <option value="geld">Geld</option>
+                    <option value="rennsoftware">Rennsoftware</option>
+                    <option value="rennreifen">Rennreifen</option>
+                  </select>
+                  <input id="gesuchMenge" type="number" min="1" placeholder="Menge">
+                  <button id="gesuchSenden">Sponsoren suchen</button>
+                </div>
+                <p class="note" style="margin:4px 0 10px">Bei Geld der Betrag (1.000–20.000 $), bei Teilen die Stückzahl (1–10). Ein neues Gesuch ersetzt dein altes.</p>`;
+              const fremd = offen.length
+                ? offen.map(zeile).join("") + `<p class="note" style="margin-top:6px">Dafür bekommst du bis zu 50 % des Preisgeldes dieses Teams (pro rata mit anderen Sponsoren). Teile werden zum Ø-Kurs bewertet.</p>`
+                : `<p class="note">Zurzeit sucht kein anderes Team einen Sponsor.</p>`;
+              return eigenes + fremd;
             })()}
             ${r.sponsoren.length ? `<div class="lbl" style="margin-top:12px">Sponsoren</div>` +
               r.sponsoren.map(s => `<div class="rennteil"><span>${escapeHtml(s.name)} → <b>${escapeHtml(s.team || "?")}</b>${
@@ -5375,6 +5414,11 @@ function rennenRendern(state, myId) {
            * den Pool, das Panel baut sich daraufhin neu auf — eine Meldung
            * darin waere nach einer Sekunde wieder weg. */
           res => toast(res?.error || `Wette steht: ${fmt(+document.getElementById("wettBetrag")?.value || 0)} auf ${name}`, !!res?.error));
+      });
+      document.getElementById("gesuchSenden")?.addEventListener("click", () => {
+        socket.emit("gesuchAufgeben", { art: document.getElementById("gesuchArt").value,
+                                        menge: +document.getElementById("gesuchMenge").value },
+          res => toast(res?.error || "Sponsorgesuch steht.", !!res?.error));
       });
       body.querySelectorAll("[data-gesuch]").forEach(b => b.addEventListener("click", () => {
         socket.emit("gesuchErfuellen", { gesuchId: +b.dataset.gesuch },

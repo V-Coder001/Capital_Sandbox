@@ -2767,6 +2767,29 @@ io.on("connection", socket => {
     ack?.({ ok: true, name: a.name });
   }));
 
+  /* --- Eigenes Sponsorgesuch aufgeben ---
+   * Bisher wuerfelte der Server beim Melden ein Gesuch. Wer weiss, was ihm
+   * fehlt, soll es selbst sagen duerfen — ein bestehendes wird dabei ersetzt,
+   * es bleibt bei einem Gesuch je Team. */
+  socket.on("gesuchAufgeben", guard((p, { art, menge }, ack) => {
+    const r = G.rennen;
+    if (!r || r.phase !== "anmeldung") return ack?.({ error: "Nur waehrend der Anmeldung" });
+    if (!r.teilnehmer.some(t2 => t2.ownerId === p.id))
+      return ack?.({ error: "Erst einen Wagen melden, dann Sponsoren suchen" });
+    if (!GESUCH_ARTEN.includes(art)) return ack?.({ error: "Unbekannte Art" });
+    menge = Math.floor(+menge);
+    if (art === "geld") {
+      if (!(menge >= 1000) || menge > 20000) return ack?.({ error: "Zwischen 1.000 und 20.000 $" });
+    } else if (!(menge >= 1) || menge > 10) return ack?.({ error: "Zwischen 1 und 10 Stück" });
+    r.gesuche = (r.gesuche || []).filter(g => g.teamId !== p.id);
+    r.gesuche.push(art === "geld"
+      ? { id: id(), teamId: p.id, team: p.name, art, betrag: menge, wert: menge }
+      : { id: id(), teamId: p.id, team: p.name, art, menge, wert: Math.round(menge * MM[art].price) });
+    io.emit("notice", { text: `${p.name} sucht Sponsoren: ${art === "geld"
+      ? menge.toLocaleString("de-DE") + " $" : menge + "× " + GOODS[art].name}.` });
+    ack?.({ ok: true });
+  }));
+
   /* --- Sponsorgesuch erfuellen --- */
   socket.on("gesuchErfuellen", guard((p, { gesuchId }, ack) => {
     const r = G.rennen;
