@@ -555,8 +555,14 @@ const RENN_GRUNDPREIS = 8000;
  * Race Clubs — Laeden gibt es nicht, produziert wird nichts. Ohne eine
  * Einnahme, die nicht vom Podest abhaengt, zahlt der Club nur Fahrergehalt und
  * ist nach gut zehn Minuten pleite; danach kuendigt der Fahrer und der Club
- * kann nicht einmal mehr starten. Gemessen: 9.100 $ Ausgaben, 0 Einnahmen. */
-const RENN_STARTGELD = 3000;
+ * kann nicht einmal mehr starten. Gemessen: 9.100 $ Ausgaben, 0 Einnahmen.
+ *
+ * Die Hoehe folgt aus dem gemessenen Zyklus: Anmeldung, Rennen und Siegerehrung
+ * dauern zusammen rund sieben Minuten, ein Fahrer kostet dabei bis zu 4.900 $.
+ * Mit 3.000 verlor ein Club, der nicht in die Punkte faehrt, jeden Renntag
+ * rund 1.900 $ — ein langsames Ausbluten ohne Weg zurueck. 5.000 deckt das
+ * Gehalt auch ohne Podestplatz; verdient wird weiterhin ueber das Ergebnis. */
+const RENN_STARTGELD = 5000;
 const RENN_RUNDE = 900;          // Distanz einer Runde (für Runden-Anzeige und Streckengrafik)
 const WETT_RAKE = 0.1;           // Anteil des Wettpools, der in den Preistopf fließt
 const RENN_FELD_SOLL = 5;        // so viele Wagen sollen mindestens am Start stehen
