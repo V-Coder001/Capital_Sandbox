@@ -39,7 +39,9 @@ const BOOT_ID = crypto.randomUUID();
  * vier Bots liest sich wie eine fast volle Runde. */
 const BOT_TOKEN = crypto.randomUUID();
 app.get("/api/invite", (_req, res) => {
-  res.json({ urls: [ ...(publicUrl ? [publicUrl] : []), ...lanUrls(PORT) ], bootId: BOOT_ID });
+  /* hof: die Bestenliste für den Startbildschirm — dort gibt es noch keinen
+   * Socket-Spielzustand, also kommt sie über diesen ohnehin geladenen Weg. */
+  res.json({ urls: [ ...(publicUrl ? [publicUrl] : []), ...lanUrls(PORT) ], bootId: BOOT_ID, hof: HOF });
 });
 /* ---------- Bugreports ----------
  * Spieler melden Fehler mit Beschreibung und optionalem Screenshot; die
@@ -270,6 +272,27 @@ app.get("/api/lobby", (_req, res) => {
     laufzeit: G.tick,
   });
 });
+
+/* ---------- Bestenliste ----------
+ * Bleibt über Server-Neustarts erhalten (leaderboard.json neben server.js):
+ * Am Ende jeder Runde landet jeder menschliche Spieler mit Firmenname,
+ * Nettovermögen, Spieldauer und Modus in der Liste; gehalten werden die
+ * zehn besten nach Nettovermögen. Der Startbildschirm zeigt sie als Ansporn. */
+const HOF_DATEI = path.join(__dirname, "leaderboard.json");
+let HOF = [];
+try { HOF = JSON.parse(fs.readFileSync(HOF_DATEI, "utf8")); if (!Array.isArray(HOF)) HOF = []; } catch {}
+function hofSpeichern() {
+  for (const p of Object.values(G.players)) {
+    if (p.bot) continue;
+    const nw = Math.round(netWorth(p));
+    if (nw < 1000) continue;
+    HOF.push({ name: p.name, nw, minuten: Math.max(1, Math.round(G.tick / 60)),
+      modus: MODE, sieger: p.name === G.winner, datum: new Date().toISOString().slice(0, 10) });
+  }
+  HOF.sort((a, b) => b.nw - a.nw);
+  HOF = HOF.slice(0, 10);
+  try { fs.writeFileSync(HOF_DATEI, JSON.stringify(HOF)); } catch {}
+}
 
 const httpServer = http.createServer(app);
 const io = new Server(httpServer);
@@ -2281,6 +2304,7 @@ function snapshot() {
     tutorialEnde: !!G.tutorialEnde,
     started: G.started, hostId: G.hostId,
     mode: MODE, plan: MODE === "plan" ? G.plan : null,
+    hof: HOF,
     routes: MAP_ROUTES,
     lobby: G.started ? null : { winGoal: WIN_NW, bots: botAuswahl, botLevel: botLevelKey, mode: MODE, saison: SAISON_RENNEN, saisonWahl: SAISON_CHOICES },
     map: G.map.map(t => ({ x: t.x, y: t.y, zone: t.zone, road: t.road, water: t.water,
@@ -3474,6 +3498,7 @@ io.on("connection", socket => {
     G.tick = 0; G.winner = null; G.report = null; G.plan = null; G.tutorialEnde = false;
     G.rennen = null; G.naechstesRennenIn = RENN_INTERVALL; G.werksTeams = werksTeamsBauen();
     G.wm = {}; G.saisonRennen = 0; G.fanAuszahlungIn = FAN_TAKT;
+    G.hofGespeichert = false;
     G.started = false; G.hostId = null;   // neue Runde beginnt wieder im Warteraum
     G.groupOrder = null; G.nextGroupIn = 20;
     G.nextDividendIn = DIVIDEND_INTERVAL;
@@ -3654,6 +3679,8 @@ setInterval(() => {
 function runTick() {
   if (!G.started) return;   // Warteraum: nichts produzieren, keine Fristen laufen lassen
   G.tick++;
+  /* Rundenende: die Bestenliste genau einmal fortschreiben. */
+  if (G.winner && !G.hofGespeichert) { G.hofGespeichert = true; hofSpeichern(); }
   /* --- Renntage (nur Marktwirtschaft) --- */
   if (MODE !== "plan" && !G.winner) {
     if (!G.rennen) {

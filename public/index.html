@@ -94,6 +94,19 @@ input,select{background:var(--panel2);border:1px solid var(--line);border-radius
 #joinSlots .slot{width:8px;height:8px;border-radius:50%;background:#1a2231;border:1px solid #273144;transition:all .2s}
 #joinSlots .slot.on{background:var(--accent);border:none;box-shadow:0 0 6px rgba(56,189,248,.6)}
 #joinSlots .count{font-size:10.5px;color:var(--dim);margin-left:4px}
+/* Bestenliste auf dem Startbildschirm */
+.hofzeile{display:flex;align-items:center;gap:10px;padding:7px 10px;margin:5px 0;
+  background:rgba(16,24,40,.6);border:1px solid rgba(45,60,88,.5);border-radius:10px;font-size:12.5px}
+.hofplatz{width:22px;height:22px;flex:none;border-radius:50%;display:grid;place-items:center;
+  font:800 11px var(--font);background:#1a2438;color:#8ea0bd;border:1px solid rgba(90,110,150,.4)}
+.hofplatz.p1{background:linear-gradient(135deg,#8a6d1d,#fbbf24);color:#241a03;border-color:#fbbf24}
+.hofplatz.p2{background:linear-gradient(135deg,#6d7683,#cdd6e2);color:#1a2028;border-color:#cdd6e2}
+.hofplatz.p3{background:linear-gradient(135deg,#6e4a26,#c98a4b);color:#22150a;border-color:#c98a4b}
+.hofname{flex:1;min-width:0}
+.hofname .meta{display:block;font-size:10.5px}
+.hofwert{text-align:right}
+.hofwert b{font-family:var(--mono,ui-monospace);color:var(--accent)}
+.hofwert .meta{display:block;font-size:10.5px}
 /* Öffentliche Runden */
 .oeffSchalter{display:flex;gap:10px;align-items:flex-start;cursor:pointer;
   padding:10px 12px;border:1px solid #1a2535;border-radius:3px;background:#070b10}
@@ -1222,6 +1235,14 @@ td:first-child{font-family:var(--font)}
         <div class="hrow"><span>1</span><div><b>Bauen</b> <em>Kachel freischalten, Betrieb hochziehen, Rohstoffe verarbeiten.</em></div></div>
         <div class="hrow"><span>2</span><div><b>Handeln</b> <em>Im eigenen Laden, an der Börse mit den anderen oder für die Stadt.</em></div></div>
         <div class="hrow"><span>3</span><div><b>Gewinnen</b> <em>Wer zuerst das Vermögensziel knackt, gewinnt die Runde.</em></div></div>
+      </div>
+
+      <!-- Bestenliste: die besten Nettovermögen bisheriger Runden auf diesem
+           Server — als Ansporn, die eigene Bestmarke zu schlagen. Bleibt
+           leer/versteckt, bis die erste Runde beendet wurde. -->
+      <div id="hofBox" style="display:none">
+        <label class="flabel" style="margin-top:14px">🏆 Bestenliste dieses Servers</label>
+        <div id="hofListe"></div>
       </div>
     </div>
 
@@ -2967,8 +2988,38 @@ async function oeffentlicheLaden() {
    * Fehlalarm, und "0/8" zählt Mitspieler einer Runde, die es noch nicht gibt.
    * Dort stehen deshalb die Code-Suche und die Zahl der laufenden Runden. */
   const rundenZahl = document.getElementById("rundenZahl");
+  /* Bestenliste auf dem Startbildschirm: Top-Nettovermögen bisheriger Runden.
+   * Vor dem Beitritt gibt es noch keinen Spielzustand — die Liste kommt
+   * deshalb über /api/invite, das der Startbildschirm ohnehin lädt. */
+  let hofSig = "", hofDaten = null;
+  (async function hofLaden() {
+    try {
+      const antwort = await fetch("/api/invite");
+      hofDaten = (await antwort.json()).hof || [];
+      hofZeichnen();
+    } catch {}
+  })();
+  function hofZeichnen() {
+    const hof = hofDaten || store.get().state?.hof;
+    const box = document.getElementById("hofBox");
+    if (!box) return;
+    if (!hof?.length) { box.style.display = "none"; return; }
+    const sig = JSON.stringify(hof);
+    if (sig === hofSig) { box.style.display = ""; return; }
+    hofSig = sig;
+    box.style.display = "";
+    const modusName = { sandbox: "Sandbox", plan: "Planwirtschaft", renntag: "Race Day", einsteiger: "Einsteiger" };
+    document.getElementById("hofListe").innerHTML = hof.slice(0, 5).map((e, i) => `
+      <div class="hofzeile">
+        <span class="hofplatz p${i + 1}">${i + 1}</span>
+        <span class="hofname"><b>${e.name}</b>${e.sieger ? " 👑" : ""}
+          <span class="meta">${modusName[e.modus] || e.modus} · ${e.datum}</span></span>
+        <span class="hofwert"><b>${fmt(e.nw)}</b><span class="meta">in ${e.minuten} min</span></span>
+      </div>`).join("");
+  }
   function statusZeichnen() {
     if (join.style.display === "none") return;
+    hofZeichnen();
     const mehrrunden = MULTIROOM;
     document.getElementById("joinPulse").style.display = mehrrunden ? "none" : "";
     document.getElementById("joinStatusText").style.display = mehrrunden ? "none" : "";

@@ -50,9 +50,11 @@ th{color:var(--dim);font-weight:600;font-family:var(--mono);font-size:11px;text-
   <h2>Kurzfassung</h2>
   <p>Capital Sandbox verlangt kein Benutzerkonto, keine E-Mail-Adresse und keinen echten Namen.
     Es gibt keine Analyse- oder Tracking-Werkzeuge, keine Werbung und keine Weitergabe von Daten zu
-    Werbezwecken. Der gesamte Spielstand liegt nur im Arbeitsspeicher des Servers, den der Betreiber
-    dieser Runde gestartet hat — nichts wird dauerhaft auf einer Festplatte gespeichert, und mit dem
-    Ende einer Runde ist der Spielstand unwiderruflich weg.</p>
+    Werbezwecken. Der Spielstand liegt nur im Arbeitsspeicher des Servers, den der Betreiber
+    dieser Runde gestartet hat — mit dem Ende einer Runde ist er unwiderruflich weg. Dauerhaft
+    gespeichert werden nur zwei Dinge, beide ohne Klarnamen-Zwang: die <b>Bestenliste</b>
+    (frei gewählter Firmenname und Rundenergebnis) und <b>Fehlerberichte</b>, die du selbst
+    aktiv abschickst — Details unten.</p>
 
   <h2>Verantwortliche Stelle</h2>
   <div class="card">
@@ -67,7 +69,26 @@ th{color:var(--dim);font-weight:600;font-family:var(--mono);font-size:11px;text-
     Angaben werden für die Dauer der Runde im Arbeitsspeicher des Servers gehalten, an alle
     Mitspieler derselben Runde übertragen (damit sie dich auf der Karte sehen) und nach Ende der
     Runde bzw. einem Neustart des Servers vollständig gelöscht. Es gibt keine Datenbank und keine
-    Protokolldatei, in der Spielstände über die laufende Runde hinaus aufbewahrt werden.</p>
+    Protokolldatei, in der Spielstände über die laufende Runde hinaus aufbewahrt werden — mit den
+    zwei im nächsten Abschnitt beschriebenen Ausnahmen.</p>
+
+  <h2>Dauerhaft gespeicherte Daten (Bestenliste und Fehlerberichte)</h2>
+  <div class="card">
+    <p><b>Bestenliste</b> — Am Ende jeder Runde speichert der Server für die Bestenliste auf dem
+      Startbildschirm je Spieler: den frei gewählten Firmennamen, das erreichte Nettovermögen,
+      die Spieldauer in Minuten, den Spielmodus und das Datum. Gehalten werden nur die zehn besten
+      Einträge; ältere fallen automatisch heraus. Der Firmenname ist frei wählbar — wer nicht in
+      der Liste erscheinen möchte, wählt einfach einen Fantasienamen ohne Personenbezug.</p>
+  </div>
+  <div class="card">
+    <p><b>Fehlerberichte</b> — Über den Melden-Knopf im Spiel kannst du freiwillig einen
+      Fehlerbericht abschicken. Gespeichert werden dann deine Beschreibung, dein Firmenname,
+      der Zeitpunkt und — nur wenn du es beim Absenden auswählst — ein Screenshot der Spielkarte
+      oder ein von dir hochgeladenes Bild. Diese Berichte dienen ausschließlich der
+      Fehlerbehebung, sind nur für den Betreiber einsehbar und werden nicht weitergegeben.</p>
+  </div>
+  <p>Beides liegt als Datei auf dem Server des jeweiligen Rundenbetreibers. Auf Wunsch löscht der
+    Betreiber einzelne Einträge — eine kurze Nachricht an die verantwortliche Stelle genügt.</p>
   <p>Der Server selbst führt kein Zugriffsprotokoll über einzelne Anfragen. Wird das Spiel bei
     einem Hosting-Anbieter betrieben, kann dieser auf seiner eigenen Infrastruktur-Ebene technisch bedingt
     kurzzeitig Verbindungsdaten (z. B. IP-Adresse) protokollieren — das liegt außerhalb der
@@ -110,10 +131,12 @@ th{color:var(--dim);font-weight:600;font-family:var(--mono);font-size:11px;text-
   </div>
 
   <h2>Deine Rechte</h2>
-  <p>Da Capital Sandbox keine dauerhaften, personenbezogenen Daten auf einem Server speichert —
-    der Spielstand verschwindet spätestens mit dem Ende der Runde —, gibt es in der Regel nichts,
-    worüber du Auskunft verlangen oder dessen Löschung du fordern müsstest. Für Fragen zu einer
-    konkret betriebenen Runde wende dich an die oben genannte verantwortliche Stelle.</p>
+  <p>Der laufende Spielstand verschwindet spätestens mit dem Ende der Runde von selbst. Dauerhaft
+    gespeichert sind nur die Bestenlisten-Einträge und die freiwillig abgeschickten Fehlerberichte
+    (siehe oben) — beides in der Regel ohne Personenbezug, sofern du keinen Klarnamen als
+    Firmennamen wählst oder in einen Bericht schreibst. Du kannst jederzeit Auskunft über diese
+    Einträge verlangen oder ihre Löschung fordern; wende dich dafür an die oben genannte
+    verantwortliche Stelle.</p>
 
   <a class="back" href="/">← Zurück zum Spiel</a>
   <a class="back" href="impressum.html" style="margin-left:18px">Impressum</a>
