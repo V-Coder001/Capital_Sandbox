@@ -1155,11 +1155,6 @@ td:first-child{font-family:var(--font)}
     <div class="divider"></div>
 
     <div class="col">
-      <div>
-        <label class="flabel">Deine Branche</label>
-        <p style="font-size:12px">Du baust nur Gebäude deiner Branche — alles andere kaufst du bei den anderen ein.</p>
-      </div>
-
       <div id="jind">
         <button type="button" data-ind="agrar" class="indopt on" style="--ac:#34d399;--ac08:rgba(52,211,153,.03);--ac15:rgba(52,211,153,.08);--ac18:rgba(52,211,153,.09);--ac35:rgba(52,211,153,.21);--ac50:rgba(52,211,153,.31)">
           <img src="assets/skyline/farm-0.png" alt="">
@@ -1232,6 +1227,11 @@ td:first-child{font-family:var(--font)}
     <div id="lwPlayers"></div>
   </div>
 
+  <div class="joinbox" id="lwBrancheBox">
+    <div class="lbl">Deine Branche</div>
+    <p style="font-size:12px;margin:2px 0 8px;color:#8695ab">Du baust nur Gebäude deiner Branche — alles andere kaufst du bei den anderen ein. Bis zum Start kannst du wechseln.</p>
+    <div id="lwBrancheSlot"></div>
+  </div>
   <div class="joinbox" id="lwSettings">
     <div class="lbl">Einstellungen</div>
     <div class="lwRow">
@@ -2341,9 +2341,18 @@ COLORS.forEach((c, i) => { const b = document.createElement("button"); b.style.b
   b.addEventListener("click", () => { myColor = c; jc.querySelectorAll("button").forEach(x => x.classList.toggle("on", x === b)); });
   jc.append(b); });
 let myIndustry = "agrar";
+/* Die Branche wird nicht mehr am Startbildschirm gewaehlt, sondern im
+ * Warteraum — dort sehen alle, wer was nimmt, und koennen sich absprechen,
+ * bevor es losgeht. Statt das Markup zu doppeln, wandert der vorhandene Block
+ * beim Laden hinueber: Stile und Klick-Logik bleiben damit unveraendert. */
+document.getElementById("lwBrancheSlot")?.append(document.getElementById("jind"));
 document.querySelectorAll(".indopt:not(.netopt)").forEach(b => b.addEventListener("click", () => {
   myIndustry = b.dataset.ind;
   document.querySelectorAll(".indopt:not(.netopt)").forEach(x => x.classList.toggle("on", x === b));
+  /* Im Warteraum ist man bereits angemeldet — der Wechsel muss zum Server. */
+  if (store.get().state && !store.get().state.started)
+    socket.emit("brancheWaehlen", { industry: myIndustry },
+      res => { if (res?.error) toast(res.error, true); });
 }));
 /* Host vs. Beitreten-per-Code umschalten */
 let netMode = "host", remoteConn = null;
@@ -2414,6 +2423,10 @@ const escapeHtml = s => String(s).replace(/[&<>"']/g, c =>
 let lwBotLevel = "mittel", lwBots = { agrar: 1, rohstoff: 1, versorger: 1, tech: 1, touristik: 1, ruestung: 1 };
 let lwEigeneAenderung = 0;   // kurz nach eigener Änderung nicht vom Server überschreiben lassen
 
+/* Kurznamen der Branchen fuer die Warteraumliste — die vollen Namen aus dem
+ * Auswahlblock waeren dort zu lang. */
+const BRANCHE_NAME = { agrar: "Landwirtschaft", rohstoff: "Rohstoff & Bau", versorger: "Versorger",
+                       tech: "Technologie", touristik: "Touristik", ruestung: "Rüstung" };
 function lobbyWaitZeichnen() {
   const { state, myId } = store.get();
   if (!state || !myId) return;
@@ -2432,6 +2445,9 @@ function lobbyWaitZeichnen() {
       <span>${escapeHtml(p.name)}</span>
       ${p.id === state.hostId ? '<span class="tag">Host</span>' : ""}
       ${p.id === myId ? '<span class="tag">du</span>' : ""}
+      <!-- Branche mit anzeigen: Erst dadurch bringt die Wahl im Warteraum
+           etwas — man sieht, was schon besetzt ist, und kann sich absprechen. -->
+      <span class="tag" style="margin-left:auto">${escapeHtml(BRANCHE_NAME[p.industry] || p.industry || "—")}</span>
     </div>`).join("") || '<div class="leer">Noch niemand da.</div>';
 
   /* Solange man allein wartet, ist das Teilen des Codes der nächste Schritt —

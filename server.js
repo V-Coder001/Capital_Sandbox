@@ -2475,6 +2475,19 @@ io.on("connection", socket => {
     pushState();
   };
 
+  /* --- Branche im Warteraum waehlen ---
+   * Frueher stand die Wahl am Startbildschirm, bevor man ueberhaupt wusste,
+   * wer sonst mitspielt. Jetzt entscheidet man sie im Warteraum, wo alle
+   * Branchen sichtbar sind — bis zum Start ist sie frei wechselbar, danach
+   * nicht mehr: ab da haengen Gebaeude und Rezepte daran. */
+  socket.on("brancheWaehlen", guard((p, { industry }, ack) => {
+    if (G.started) return ack?.({ error: "Die Runde läuft schon" });
+    if (!INDUSTRIES[industry]) return ack?.({ error: "Unbekannte Branche" });
+    p.industry = industry;
+    p.industries = [industry];
+    ack?.({ ok: true });
+  }));
+
   /* --- Planwirtschaft: Ware ans Planbüro abliefern ---
    * Liefert so viel wie möglich (Lagerbestand, gedeckelt aufs Restsoll) zum
    * festen staatlichen Ankaufspreis. Punkte gibt es sofort je Warenwert. */
