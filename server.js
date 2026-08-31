@@ -648,6 +648,55 @@ function gesuchStellen(r, team) {
                      wert: Math.round(menge * MM[art].price) });
   }
 }
+/* ---- Wettkontore ----
+ * Ohne Publikum ist der Totalisator leer: Wer als Erster setzt, bekommt bei
+ * einem Sieg fast nur den eigenen Einsatz zurueck, und die Quoten sagen
+ * nichts. Drei Kontore tragen deshalb den Markt — mit klarem Profil statt
+ * Zufall, damit sich die Quoten lesen lassen:
+ *
+ *   Sicher    setzt auf den staerksten Wagen — druekt dessen Quote
+ *   Risiko    setzt auf den schwaechsten — haelt Aussenseiterquoten hoch
+ *   Streuung  verteilt kleine Betraege auf alle
+ *
+ * Sie sind keine Spieler: Ihre Einsaetze wandern in den Pool, gewinnen aber
+ * nie etwas zurueck (G.players kennt ihre Kennung nicht). Was sie einzahlen,
+ * geht damit an die menschlichen Siegerwetten und ueber den Rake in den
+ * Preistopf — das Publikum finanziert das Rennen mit. */
+const WETTKONTORE = [
+  { id: "kontor-sicher",   name: "Kontor Sicher",   art: "favorit",      einsatz: 3000 },
+  { id: "kontor-risiko",   name: "Kontor Risiko",   art: "aussenseiter", einsatz: 2500 },
+  { id: "kontor-streuung", name: "Kontor Streuung", art: "streuung",     einsatz: 2400 },
+];
+/* Dieselbe Formel wie im Rennschritt, nur ohne Streuung und Zustand: Was ein
+ * Wagen im Mittel leisten kann. Waeren es andere Gewichte, saehen die Kontore
+ * ein anderes Rennen als das, das gefahren wird. */
+function staerkeSchaetzen(teil) {
+  if (teil.bot) {
+    const w = teil.werte;
+    return w.speed * .45 + w.beschl * .2 + w.handling * .2 + teil.fahrerWert * .45;
+  }
+  const fund = findeAuto(teil.autoId);
+  if (!fund) return 0;
+  const w = autoWerte(fund.a);
+  const f = G.fahrer.find(x => x.id === teil.fahrerId);
+  const fWert = f ? (f.speed + f.handling + f.reaktion) / 3 + f.erfahrung * .15 : 40;
+  return w.speed * .45 + w.beschl * .2 + w.handling * .2 + fWert * .45;
+}
+function wettkontoreSetzen(r) {
+  if (r.kontoreGesetzt || r.teilnehmer.length < 2) return;
+  r.kontoreGesetzt = true;
+  const nachStaerke = [...r.teilnehmer].sort((a, b) => staerkeSchaetzen(b) - staerkeSchaetzen(a));
+  for (const k of WETTKONTORE) {
+    if (k.art === "streuung") {
+      const je = Math.max(100, Math.round(k.einsatz / r.teilnehmer.length / 100) * 100);
+      for (const teil of r.teilnehmer) r.wetten.push({ playerId: k.id, autoId: teil.autoId, betrag: je });
+      continue;
+    }
+    const ziel = k.art === "favorit" ? nachStaerke[0] : nachStaerke[nachStaerke.length - 1];
+    if (ziel) r.wetten.push({ playerId: k.id, autoId: ziel.autoId, betrag: k.einsatz });
+  }
+  io.emit("notice", { text: "Die Wettkontore haben gesetzt — die Quoten stehen." });
+}
 function rennAnkuendigen() {
   G.rennen = { id: id(), phase: "anmeldung", rest: RENN_ANMELDUNG, teilnehmer: [], wetten: [], sponsoren: [], gesuche: [] };
   feldAuffuellen(G.rennen);
@@ -3298,6 +3347,9 @@ function runTick() {
     } else {
       const r = G.rennen;
       r.rest--;
+      /* Erst kurz vor Schluss, damit die Kontore das fertige Feld bewerten —
+       * wer frueh setzt, kennt die spaeter gemeldeten Wagen noch nicht. */
+      if (r.phase === "anmeldung" && r.rest === 20) wettkontoreSetzen(r);
       if (r.phase === "anmeldung" && r.rest <= 0) rennStarten();
       else if (r.phase === "laeuft") { rennTick(); if (r.rest <= 0) rennBeenden(); }
       else if (r.phase === "ergebnis" && r.rest <= 0) { G.rennen = null; G.naechstesRennenIn = RENN_INTERVALL; }
