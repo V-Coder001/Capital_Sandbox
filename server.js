@@ -551,6 +551,12 @@ const RENN_ANMELDUNG = 75;       // Anmelde- und Wettphase
 const RENN_DAUER = 75;           // Fahrzeit
 const RENN_NENNGELD = 1500;
 const RENN_GRUNDPREIS = 8000;
+/* Antrittspraemie im Renntag. Dort ist Rennen die einzige Taetigkeit eines
+ * Race Clubs — Laeden gibt es nicht, produziert wird nichts. Ohne eine
+ * Einnahme, die nicht vom Podest abhaengt, zahlt der Club nur Fahrergehalt und
+ * ist nach gut zehn Minuten pleite; danach kuendigt der Fahrer und der Club
+ * kann nicht einmal mehr starten. Gemessen: 9.100 $ Ausgaben, 0 Einnahmen. */
+const RENN_STARTGELD = 3000;
 const RENN_RUNDE = 900;          // Distanz einer Runde (für Runden-Anzeige und Streckengrafik)
 const WETT_RAKE = 0.1;           // Anteil des Wettpools, der in den Preistopf fließt
 const RENN_FELD_SOLL = 5;        // so viele Wagen sollen mindestens am Start stehen
@@ -744,6 +750,21 @@ function wettkontoreSetzen(r, welle) {
 }
 function rennAnkuendigen() {
   G.rennen = { id: id(), phase: "anmeldung", rest: RENN_ANMELDUNG, teilnehmer: [], wetten: [], sponsoren: [], gesuche: [] };
+  /* Wer seinen Fahrer verloren hat, koennte im Renntag nie wieder starten und
+   * damit auch nichts mehr verdienen — eine Sackgasse, aus der es keinen Weg
+   * zurueck gibt. Deshalb bekommt ein Stall ohne Fahrer vor dem Renntag einen
+   * freien zugewiesen, ohne Handgeld. */
+  if (MODE === "renntag") for (const t of G.map) {
+    if (!BTYPES[t.btype]?.racing || !t.owner) continue;
+    for (const a of t.autos || []) {
+      if (a.fahrerId && G.fahrer.some(f => f.id === a.fahrerId && f.teamId === t.owner)) continue;
+      const frei = G.fahrer.find(f => !f.teamId);
+      if (!frei) break;
+      frei.teamId = t.owner; frei.autoId = a.id; a.fahrerId = frei.id;
+      const p2 = G.players[t.owner];
+      if (p2) logTx(p2, "Motorsport", `${frei.name} übernimmt das Cockpit von ${autoName(a)}`, 0);
+    }
+  }
   feldAuffuellen(G.rennen);
   io.emit("notice", { text: `🏁 Renntag! Anmeldung, Wetten und Sponsoring sind ${RENN_ANMELDUNG} s offen — Nenngeld ${RENN_NENNGELD.toLocaleString("de-DE")} $.` });
 }
@@ -800,7 +821,7 @@ function rennBeenden() {
   const { pool } = rennQuoten(r);
   /* Nur gemeldete Spielerwagen haben Nenngeld gezahlt — Werkswagen duerfen den
    * Topf also nicht aufblaehen. */
-  const zahlende = r.teilnehmer.filter(t2 => !t2.bot).length;
+  const zahlende = MODE === "renntag" ? 0 : r.teilnehmer.filter(t2 => !t2.bot).length;
   const topf = RENN_GRUNDPREIS + zahlende * RENN_NENNGELD * 2 + Math.round(pool * WETT_RAKE);
   /* Das Preisgeld geht an die menschlichen Teilnehmer, in ihrer Reihenfolge
    * untereinander. Werkswagen fahren um Ruhm und fuer die Wetten: sie zahlen
@@ -827,6 +848,15 @@ function rennBeenden() {
     const ergebnis = { platz: teil.platz, aus: !!teil.ausgefallen, feld: r.teilnehmer.length };
     if (teil.bot) { const w = (G.werksTeams || []).find(x => x.id === teil.autoId); if (w) w.letztes = ergebnis; }
     else if (a) a.letztes = ergebnis;
+    /* Antrittspraemie fuer jeden gemeldeten Spielerwagen, unabhaengig vom
+     * Ergebnis — auch wer ausfaellt, war angetreten. */
+    if (MODE === "renntag" && !teil.bot) {
+      const club = G.players[teil.ownerId];
+      if (club) {
+        club.cash += RENN_STARTGELD;
+        logTx(club, "Motorsport", `Antrittsprämie: ${teil.name}`, RENN_STARTGELD);
+      }
+    }
     const preis = teil.bot ? 0 : Math.round(topf * (anteile[menschen.indexOf(teil)] || 0));
     if (preis > 0) {
       const p = G.players[teil.ownerId];
@@ -2824,8 +2854,12 @@ io.on("connection", socket => {
     if (r.teilnehmer.length >= RENN_FELD_SOLL) botWeichen(r);
     if (r.teilnehmer.length >= RENN_FELD_MAX)
       return ack?.({ error: `Das Startfeld ist voll (${RENN_FELD_MAX} Wagen)` });
-    if (p.cash < RENN_NENNGELD) return ack?.({ error: `Nenngeld fehlt (${RENN_NENNGELD.toLocaleString("de-DE")} $)` });
-    p.cash -= RENN_NENNGELD;
+    /* Im Renntag kostet das Melden nichts: Teilnehmen ist dort der Zweck des
+     * Modus, nicht eine Investition, die sich lohnen muss. */
+    if (MODE !== "renntag") {
+      if (p.cash < RENN_NENNGELD) return ack?.({ error: `Nenngeld fehlt (${RENN_NENNGELD.toLocaleString("de-DE")} $)` });
+      p.cash -= RENN_NENNGELD;
+    }
     const f = cockpit;
     /* Jede Startnummer bekommt eine eindeutige Lackierung — Teamfarben
      * kollidieren sonst (zwei blaue Teams = zwei ununterscheidbare Wagen). */
@@ -2846,7 +2880,10 @@ io.on("connection", socket => {
       r.wetten.push({ playerId: streu.id, autoId: a.id, betrag: 300 });
     }
     gesuchStellen(r, p);
-    logTx(p, "Motorsport", `Zum Rennen gemeldet: ${autoName(a)}`, -RENN_NENNGELD);
+    /* Betrag nur buchen, wenn er auch gezogen wurde — im Renntag ist das Melden
+     * kostenlos, eine Buchung ueber -1.500 $ waere schlicht falsch. */
+    logTx(p, "Motorsport", `Zum Rennen gemeldet: ${autoName(a)}`,
+      MODE === "renntag" ? 0 : -RENN_NENNGELD);
     io.emit("notice", { text: `${p.name} meldet ${autoName(a)} (Fahrer: ${f?.name || "?"}) zum Rennen.` });
     ack?.({ ok: true });
   }));
