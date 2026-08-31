@@ -468,6 +468,11 @@ input,select{background:var(--panel2);border:1px solid var(--line);border-radius
 @media(max-width:640px){.renngrid{grid-template-columns:1fr}}
 .rennbox{background:#0d1524;border:1px solid var(--line);border-radius:11px;padding:11px}
 .rennbox .lbl{font-size:10.5px;font-weight:700;letter-spacing:.09em;color:#5f7292;text-transform:uppercase;margin-bottom:7px}
+input.autoname{flex:1;min-width:0;background:transparent;border:1px solid transparent;border-radius:6px;
+  color:var(--fg);font:inherit;font-weight:700;font-size:13px;padding:2px 5px;margin:-2px -5px}
+input.autoname:hover{border-color:var(--line)}
+input.autoname:focus{border-color:var(--accent);background:var(--panel2);outline:none}
+input.autoname::placeholder{color:var(--fg);opacity:.95;font-weight:700}
 .rennteil{display:flex;align-items:center;gap:8px;padding:4px 0;font-size:12.5px}
 .rennteil.wettbar{cursor:pointer;border-radius:8px;padding:5px 7px;margin:1px -7px;transition:background .12s}
 .rennteil.wettbar:hover{background:rgba(255,255,255,.06)}
@@ -5068,9 +5073,12 @@ function motorsportRendern(state, me, myId) {
               <i style="display:block;height:100%;width:${a.zustand}%;background:${
                 a.zustand < 25 ? "var(--down)" : a.zustand < 55 ? "#fbbf24" : "var(--up)"}"></i></div></div>
           <div style="flex:1;min-width:0">
-            <div style="display:flex;justify-content:space-between;align-items:baseline">
-              <b>${gname(a.good)} #${a.nr}</b>
-              <span style="font-size:11px;opacity:.7">Wert ${fmt(a.wert || 0)}</span>
+            <div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px">
+              <input class="autoname" data-rename="${a.id}" data-x="${a.x}" data-y="${a.y}"
+                     maxlength="24" value="${escapeHtml(a.name || "")}"
+                     placeholder="${escapeHtml(gname(a.good) + " #" + a.nr)}"
+                     title="Eigener Name — leer lassen für die Vorgabe">
+              <span style="font-size:11px;opacity:.7;flex:none">Wert ${fmt(a.wert || 0)}</span>
             </div>
             <div style="font-size:11px;opacity:.7;margin-bottom:6px">
               ${a.rennen} Rennen · ${a.siege} Siege${f ? ` · am Steuer: <b style="color:var(--accent)">${f.name}</b>` : ""}</div>
@@ -5198,6 +5206,20 @@ function motorsportRendern(state, me, myId) {
     act("fahrerAnheuern", { fahrerId: +b.dataset.heuer })));
   box.querySelectorAll("[data-feuer]").forEach(b => b.addEventListener("click", () =>
     act("fahrerEntlassen", { fahrerId: +b.dataset.feuer })));
+  /* Wagenname: Enter oder Verlassen speichert. Leeres Feld setzt auf die
+   * Vorgabe zurueck — der Platzhalter zeigt sie dann wieder an. */
+  box.querySelectorAll("[data-rename]").forEach(inp => {
+    const senden = () => {
+      const neu = inp.value.trim();
+      if (neu === (inp.dataset.stand ?? "")) return;      // nichts geaendert
+      inp.dataset.stand = neu;
+      act("autoUmbenennen", { x: +inp.dataset.x, y: +inp.dataset.y,
+                              autoId: +inp.dataset.rename, name: neu });
+    };
+    inp.dataset.stand = inp.value.trim();
+    inp.addEventListener("blur", senden);
+    inp.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); inp.blur(); } });
+  });
   box.querySelectorAll("[data-setfahrer]").forEach(sel => sel.addEventListener("change", () => {
     const autoId = +sel.dataset.setfahrer;
     if (sel.value) return act("fahrerZuweisen", { fahrerId: +sel.value, autoId });
@@ -5241,13 +5263,13 @@ function rennenRendern(state, myId) {
   if (r.phase === "anmeldung") {
     /* Nur neu bauen, wenn sich strukturell etwas ändert und niemand tippt —
      * sonst frisst der Sekunden-Rerender die Eingaben. */
-    const sig = "a" + r.teilnehmer.length + ":" + r.pool + ":" + r.sponsoren.length + ":" + JSON.stringify(r.quoten);
+    const sig = "a" + r.teilnehmer.length + ":" + r.pool + ":" + r.sponsoren.length
+      + ":" + (r.gesuche || []).length + ":" + JSON.stringify(r.quoten);
     const tippt = body.contains(document.activeElement) && /INPUT|SELECT/.test(document.activeElement?.tagName);
     if (rennenRendern.sig !== sig && !tippt) {
       rennenRendern.sig = sig;
       /* Werkswagen haben keinen Besitzer — sie lassen sich weder sponsern noch
        * in der Teamauswahl anzeigen. */
-      const teamIds = [...new Set(r.teilnehmer.map(t2 => t2.ownerId))].filter(id2 => id2 && id2 !== myId);
       const wettbar = r.teilnehmer.filter(t2 => t2.ownerId !== myId);
       /* Getroffene Wahl ueber den Neuaufbau retten — das Panel baut sich bei
        * jeder fremden Wette neu auf, und dabei soll die Auswahl stehen
@@ -5255,7 +5277,6 @@ function rennenRendern(state, myId) {
        * gemeldeten Stall), faellt sie auf den ersten zurueck. */
       if (!wettbar.some(t2 => t2.autoId === rennenRendern.wahl))
         rennenRendern.wahl = wettbar[0]?.autoId ?? null;
-      const teamOpts = teamIds.map(id2 => `<option value="${id2}">${state.players[id2]?.name || "?"}</option>`).join("");
       body.innerHTML = `
         <div class="renngrid">
           <div class="rennbox">
@@ -5279,16 +5300,30 @@ function rennenRendern(state, myId) {
             <p class="note" style="margin:8px 0 0">Preistopf aktuell: <b>${fmt(r.topf)}</b> · Wettpool: <b>${fmt(r.pool)}</b></p>
           </div>
           <div class="rennbox">
-            <div class="lbl">Sponsoring</div>
-            ${teamOpts ? `<div class="rennform">
-              <select id="sponsTeam">${teamOpts}</select>
-              <input id="sponsBetrag" type="number" min="500" max="50000" placeholder="Summe $">
-              <button id="sponsSenden">Sponsern</button>
-            </div>
-            <p class="note" style="margin-top:6px">Das Geld geht sofort an den Rennstall — dafür bekommst du bis zu 50 % seines Preisgeldes (pro rata mit anderen Sponsoren).</p>`
-            : `<p class="note">Kein fremdes Team gemeldet.</p>`}
+            <div class="lbl">Sponsorgesuche</div>
+            ${(() => {
+              /* Die Teams fragen selbst an — nach Geld oder nach Teilen. Was
+               * fehlt, steht dabei: so sieht man sofort, ob man es erfuellen
+               * kann, ohne erst ins Lager zu wechseln. */
+              const offen = (r.gesuche || []).filter(g => g.teamId !== myId);
+              if (!offen.length) return `<p class="note">Zurzeit sucht kein Team einen Sponsor.</p>`;
+              return offen.map(g => {
+                const geld = g.art === "geld";
+                const brauchtText = geld ? fmt(g.betrag) : `${g.menge}× ${gname(g.art)}`;
+                const habe = geld ? me.cash : (me.inv?.[g.art] || 0);
+                const nötig = geld ? g.betrag : g.menge;
+                const reicht = habe >= nötig;
+                return `<div class="rennteil">
+                  <span style="flex:1;min-width:0"><b>${escapeHtml(g.team)}</b> sucht <b>${brauchtText}</b>
+                    <br><span class="meta">${geld ? "Barmittel" : `du hast ${habe}×`} · Gegenwert ${fmt(g.wert)}</span></span>
+                  <button data-gesuch="${g.id}" ${reicht ? "" : "disabled"}
+                          style="flex:none">${reicht ? "Erfüllen" : "zu wenig"}</button>
+                </div>`;
+              }).join("") + `<p class="note" style="margin-top:6px">Dafür bekommst du bis zu 50 % des Preisgeldes dieses Teams (pro rata mit anderen Sponsoren). Teile werden zum Ø-Kurs bewertet.</p>`;
+            })()}
             ${r.sponsoren.length ? `<div class="lbl" style="margin-top:12px">Sponsoren</div>` +
-              r.sponsoren.map(s => `<div class="rennteil"><span>${s.name} → <b>${s.team}</b></span><span class="quote">${fmt(s.betrag)}</span></div>`).join("") : ""}
+              r.sponsoren.map(s => `<div class="rennteil"><span>${escapeHtml(s.name)} → <b>${escapeHtml(s.team || "?")}</b>${
+                s.was ? `<br><span class="meta">${escapeHtml(s.was)}</span>` : ""}</span><span class="quote">${fmt(s.betrag)}</span></div>`).join("") : ""}
           </div>
         </div>
 `;
@@ -5308,10 +5343,10 @@ function rennenRendern(state, myId) {
            * darin waere nach einer Sekunde wieder weg. */
           res => toast(res?.error || `Wette steht: ${fmt(+document.getElementById("wettBetrag")?.value || 0)} auf ${name}`, !!res?.error));
       });
-      document.getElementById("sponsSenden")?.addEventListener("click", () => {
-        socket.emit("sponsern", { teamId: document.getElementById("sponsTeam").value, betrag: +document.getElementById("sponsBetrag").value },
+      body.querySelectorAll("[data-gesuch]").forEach(b => b.addEventListener("click", () => {
+        socket.emit("gesuchErfuellen", { gesuchId: +b.dataset.gesuch },
           res => toast(res?.error || "Sponsorvertrag steht!", !!res?.error));
-      });
+      }));
     }
   } else if (r.phase === "laeuft") {
     if (rennenRendern.sig !== "live") {

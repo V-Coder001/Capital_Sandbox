@@ -441,6 +441,10 @@ function autoWert(a) {
     }
   return v;
 }
+/* Anzeigename eines Wagens: der selbst vergebene, sonst Gattung plus Nummer.
+ * An einer Stelle gebuendelt, damit Rennmeldung, Notizen und Finanzlog nicht
+ * auseinanderlaufen, sobald jemand seinen Wagen umtauft. */
+const autoName = a => a.name || `${GOODS[a.good].name} #${a.nr}`;
 function autoWerte(a) {
   const w = { ...RACE_STATS[a.good] };
   for (const [b, stufe] of Object.entries(a.tuning || {})) {
@@ -622,8 +626,29 @@ function botWeichen(r) {
   io.emit("notice", { text: `${raus.name} (${raus.team}) macht Platz fuer einen gemeldeten Wagen.` });
   return true;
 }
+/* ---- Sponsorgesuche ----
+ * Frueher suchte man sich selbst ein Team aus einer Liste und warf ihm Geld
+ * hinterher. Jetzt kommt die Anfrage vom Team: "Wir brauchen 4.000 $" oder
+ * "Wir brauchen 3x Rennreifen". Das gibt dem Sponsoring einen Anlass und macht
+ * die Teile aus der eigenen Produktion zu einer echten zweiten Waehrung.
+ *
+ * Der Gegenwert zaehlt wie bisher pro rata beim Preisgeld — Teile werden dafuer
+ * zum aktuellen Boersenkurs bewertet, damit Geld und Ware vergleichbar bleiben. */
+const GESUCH_ARTEN = ["geld", "rennsoftware", "rennreifen"];
+function gesuchStellen(r, team) {
+  if ((r.gesuche ??= []).some(g => g.teamId === team.id)) return;
+  const art = GESUCH_ARTEN[Math.floor(Math.random() * GESUCH_ARTEN.length)];
+  if (art === "geld") {
+    const betrag = (2 + Math.floor(Math.random() * 7)) * 1000;
+    r.gesuche.push({ id: id(), teamId: team.id, team: team.name, art, betrag, wert: betrag });
+  } else {
+    const menge = 1 + Math.floor(Math.random() * 4);
+    r.gesuche.push({ id: id(), teamId: team.id, team: team.name, art, menge,
+                     wert: Math.round(menge * MM[art].price) });
+  }
+}
 function rennAnkuendigen() {
-  G.rennen = { id: id(), phase: "anmeldung", rest: RENN_ANMELDUNG, teilnehmer: [], wetten: [], sponsoren: [] };
+  G.rennen = { id: id(), phase: "anmeldung", rest: RENN_ANMELDUNG, teilnehmer: [], wetten: [], sponsoren: [], gesuche: [] };
   feldAuffuellen(G.rennen);
   io.emit("notice", { text: `🏁 Renntag! Anmeldung, Wetten und Sponsoring sind ${RENN_ANMELDUNG} s offen — Nenngeld ${RENN_NENNGELD.toLocaleString("de-DE")} $.` });
 }
@@ -1987,7 +2012,8 @@ function snapshot() {
         teilnehmer: G.rennen.teilnehmer.map(t2 => ({ autoId: t2.autoId, name: t2.name, team: t2.team,
           farbe: t2.livree || t2.farbe, fahrer: t2.fahrer, ownerId: t2.ownerId, bot: !!t2.bot,
           dist: Math.round(t2.dist), ausgefallen: t2.ausgefallen })),
-        sponsoren: G.rennen.sponsoren.map(s => ({ name: s.name, team: G.players[s.teamId]?.name, betrag: s.betrag })),
+        sponsoren: G.rennen.sponsoren.map(s => ({ name: s.name, team: G.players[s.teamId]?.name, betrag: s.betrag, was: s.was })),
+        gesuche: (G.rennen.gesuche || []).map(g => ({ ...g })),
         ergebnis: G.rennen.ergebnis || null,
       };
     })() : null,
@@ -2551,7 +2577,7 @@ io.on("connection", socket => {
     (a.historie ??= []).push({ t: G.tick, text: `${T.name} auf Stufe ${stufe}`, amt: -(k.cash + teileWert) });
     p.stats.ausgaben += k.cash;
     gainXp(p, 20);
-    logTx(p, "Motorsport", `${GOODS[a.good].name} #${a.nr}: ${T.name} auf Stufe ${stufe}`, -k.cash);
+    logTx(p, "Motorsport", `${autoName(a)}: ${T.name} auf Stufe ${stufe}`, -k.cash);
     ack?.({ ok: true, stufe, werte: autoWerte(a) });
   }));
 
@@ -2581,7 +2607,7 @@ io.on("connection", socket => {
     p.stats.ausgaben += k.cash;
     gainXp(p, 12);
     (a.historie ??= []).push({ t: G.tick, text: `Instandsetzung ${vorher} % → 100 %`, amt: -(k.cash + teileWert) });
-    logTx(p, "Motorsport", `${GOODS[a.good].name} #${a.nr} instand gesetzt (${vorher} % → 100 %)`, -k.cash);
+    logTx(p, "Motorsport", `${autoName(a)} instand gesetzt (${vorher} % → 100 %)`, -k.cash);
     ack?.({ ok: true, zustand: 100 });
   }));
 
@@ -2617,9 +2643,13 @@ io.on("connection", socket => {
     const LIVREEN = ["#e74c3c", "#f5c542", "#2ecc71", "#3b9cf6", "#e67e22", "#b07cf7", "#1abc9c", "#eef2f7"];
     const livree = LIVREEN.find(c => !r.teilnehmer.some(x2 => x2.livree === c)) || p.color;
     r.teilnehmer.push({ autoId: a.id, fahrerId: a.fahrerId, ownerId: p.id, team: p.name, farbe: p.color, livree,
-      name: `${GOODS[a.good].name} #${a.nr}`, fahrer: f?.name || "?", dist: 0, ausgefallen: false });
-    logTx(p, "Motorsport", `Zum Rennen gemeldet: ${GOODS[a.good].name} #${a.nr}`, -RENN_NENNGELD);
-    io.emit("notice", { text: `${p.name} meldet ${GOODS[a.good].name} #${a.nr} (Fahrer: ${f?.name || "?"}) zum Rennen.` });
+      name: autoName(a), fahrer: f?.name || "?", dist: 0, ausgefallen: false });
+    /* Wer meldet, sucht einen Sponsor. Ein Team fragt entweder nach Geld oder
+     * nach Teilen — Teile sind fuer den Sponsor oft der guenstigere Weg, weil
+     * er sie selbst herstellen oder billiger einkaufen kann als der Rennstall. */
+    gesuchStellen(r, p);
+    logTx(p, "Motorsport", `Zum Rennen gemeldet: ${autoName(a)}`, -RENN_NENNGELD);
+    io.emit("notice", { text: `${p.name} meldet ${autoName(a)} (Fahrer: ${f?.name || "?"}) zum Rennen.` });
     ack?.({ ok: true });
   }));
   socket.on("wetteSetzen", guard((p, { autoId, betrag }, ack) => {
@@ -2696,7 +2726,50 @@ io.on("connection", socket => {
     for (const o of G.fahrer) if (o.teamId === p.id && o.autoId === autoId) o.autoId = null;
     for (const tt of G.map) for (const aa of tt.autos || []) if (aa.fahrerId === f.id) aa.fahrerId = null;
     f.autoId = autoId; a.fahrerId = f.id;
-    logTx(p, "Motorsport", `${f.name} sitzt jetzt in ${GOODS[a.good].name} #${a.nr}`, 0);
+    logTx(p, "Motorsport", `${f.name} sitzt jetzt in ${autoName(a)}`, 0);
+    ack?.({ ok: true });
+  }));
+
+  /* --- Wagen umbenennen ---
+   * Ein eigener Name statt "Benzin-Auto #2". Leerer Name setzt auf die
+   * Vorgabe zurueck. Wie Spielernamen beim Speichern maskiert, damit im
+   * Client nichts ausbrechen kann. */
+  socket.on("autoUmbenennen", guard((p, { x, y, autoId, name }, ack) => {
+    const t = tileAt(x, y);
+    if (!t || t.owner !== p.id || !BTYPES[t.btype]?.racing) return ack?.({ error: "Kein eigener Rennstall" });
+    const a = (t.autos || []).find(a2 => a2.id === autoId);
+    if (!a) return ack?.({ error: "Fahrzeug nicht gefunden" });
+    const neu = sicherText(String(name || "").trim().slice(0, 24));
+    a.name = neu || null;
+    logTx(p, "Motorsport", neu ? `Wagen umbenannt: ${neu}` : `Wagenname zurueckgesetzt (${autoName(a)})`, 0);
+    ack?.({ ok: true, name: a.name });
+  }));
+
+  /* --- Sponsorgesuch erfuellen --- */
+  socket.on("gesuchErfuellen", guard((p, { gesuchId }, ack) => {
+    const r = G.rennen;
+    if (!r || r.phase !== "anmeldung") return ack?.({ error: "Sponsoring nur vor dem Start" });
+    const g = (r.gesuche || []).find(x2 => x2.id === gesuchId);
+    if (!g) return ack?.({ error: "Dieses Gesuch gibt es nicht mehr" });
+    if (g.teamId === p.id) return ack?.({ error: "Das eigene Team sponsert man nicht" });
+    const team = G.players[g.teamId];
+    if (!team) return ack?.({ error: "Team nicht gefunden" });
+    if (g.art === "geld") {
+      if (p.cash < g.betrag) return ack?.({ error: `Dir fehlen ${Math.ceil(g.betrag - p.cash).toLocaleString("de-DE")} $` });
+      p.cash -= g.betrag; team.cash += g.betrag;
+    } else {
+      if ((p.inv[g.art] || 0) < g.menge)
+        return ack?.({ error: `Du hast nur ${p.inv[g.art] || 0}× ${GOODS[g.art].name}, gebraucht werden ${g.menge}` });
+      p.inv[g.art] -= g.menge;
+      team.inv[g.art] = (team.inv[g.art] || 0) + g.menge;
+    }
+    const was = g.art === "geld" ? `${g.betrag.toLocaleString("de-DE")} $`
+                                 : `${g.menge}× ${GOODS[g.art].name}`;
+    r.sponsoren.push({ playerId: p.id, teamId: g.teamId, betrag: g.wert, name: p.name, was });
+    r.gesuche = r.gesuche.filter(x2 => x2.id !== g.id);
+    logTx(p, "Motorsport", `Sponsoring an ${team.name}: ${was}`, g.art === "geld" ? -g.betrag : 0);
+    logTx(team, "Motorsport", `Sponsor ${p.name}: ${was}`, g.art === "geld" ? g.betrag : 0);
+    io.emit("notice", { text: `${p.name} erfüllt das Sponsorgesuch von ${team.name} (${was}).` });
     ack?.({ ok: true });
   }));
 
