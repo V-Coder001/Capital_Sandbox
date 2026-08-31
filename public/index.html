@@ -4365,7 +4365,21 @@ function clickTile(e) {
     return;
   }
   const myInds = store.get().state?.players?.[myId]?.industries || [store.get().meta?.industry];
-  const opts = Object.entries(BTYPES()).filter(([,b]) => b.zone === t.zone && (!b.industry || myInds.includes(b.industry)));
+  /* Im Renntag entscheidet die Rolle, nicht die Branche — und kein Gebaeude
+   * traegt "rennclub" oder "rennindustrie" als industry. Ohne diesen Zweig
+   * fiele die Liste fuer beide Rollen leer aus: der Server erlaubt den Bau,
+   * das Menue bietet ihn nur nicht an. Dieselbe Regel wie serverseitig, damit
+   * beide Seiten dasselbe sagen. */
+  const RENNTAG_BAUTEN = {
+    rennclub: ["rennstall", "werbeagentur"],
+    rennindustrie: ["reifenwerk", "rennlabor", "oelpumpe", "mine", "stahlwerk",
+                    "siliziummine", "chipfabrik", "ewerk", "windpark", "werbeagentur"],
+  };
+  const rolleErlaubt = RENNTAG_BAUTEN[store.get().state?.players?.[store.get().myId]?.industry] || [];
+  const opts = Object.entries(BTYPES()).filter(([bid, b]) => b.zone === t.zone && (
+    store.get().state?.mode === "renntag"
+      ? rolleErlaubt.includes(bid)
+      : (!b.industry || myInds.includes(b.industry))));
   const mats = b => { const m = { ziegel: Math.ceil(b.cost / 400) };
     if (b.cost >= 4000 && b.proc?.out !== "beton") m.beton = Math.ceil(b.cost / 2000);
     return m; };
@@ -4391,7 +4405,9 @@ function clickTile(e) {
   const gesperrt = b => !!b.racing && (hatStall || (!rennModus && meinNW < nwSchwelle));
   const canAfford = b => !gesperrt(b) && me.cash >= totalCost(b) && Object.entries(mats(b)).every(([g, n]) => me.inv[g] >= n);
   const lockNote = t.locked ? ` (inkl. ${fmt(t.unlockCost)} Freischaltung)` : "";
-  tm.innerHTML = `<h3>${t.locked ? "Gesperrt · " : ""}Bauen — ${t.zone}</h3>` + (opts.length ? `<div class="note">Baumaterial: Ziegel und Beton — Nachschub über die Börse. Später mit Elektronik auflevelbar.${lockNote}</div>` : `<div class="note">Deine Industrie kann hier nichts bauen — handle stattdessen an der Börse.</div>`)
+  tm.innerHTML = `<h3>${t.locked ? "Gesperrt · " : ""}Bauen — ${t.zone}</h3>` + (opts.length ? `<div class="note">Baumaterial: Ziegel und Beton — Nachschub über die Börse. Später mit Elektronik auflevelbar.${lockNote}</div>` : `<div class="note">${store.get().state?.mode === "renntag"
+        ? "Deine Rolle baut hier nichts — Teile und Rohstoffe gehen über die Börse."
+        : "Deine Industrie kann hier nichts bauen — handle stattdessen an der Börse."}</div>`)
     + opts.map(([bid, b]) => `<button class="opt" data-b="${bid}" ${canAfford(b) ? "" : "disabled"}>${b.name}<small>${
         !gesperrt(b) ? `${fmt(totalCost(b))} · ${matTxt(b)}`
         : hatStall && b.racing ? "Du betreibst bereits einen Rennstall — mehr als einer ist nicht erlaubt"
