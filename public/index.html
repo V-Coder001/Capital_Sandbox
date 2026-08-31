@@ -469,6 +469,10 @@ input,select{background:var(--panel2);border:1px solid var(--line);border-radius
 .rennbox{background:#0d1524;border:1px solid var(--line);border-radius:11px;padding:11px}
 .rennbox .lbl{font-size:10.5px;font-weight:700;letter-spacing:.09em;color:#5f7292;text-transform:uppercase;margin-bottom:7px}
 .rennteil{display:flex;align-items:center;gap:8px;padding:4px 0;font-size:12.5px}
+.rennteil.wettbar{cursor:pointer;border-radius:8px;padding:5px 7px;margin:1px -7px;transition:background .12s}
+.rennteil.wettbar:hover{background:rgba(255,255,255,.06)}
+.rennteil.gewaehlt{background:rgba(56,189,248,.15);box-shadow:inset 0 0 0 1px var(--accent)}
+.rennteil .eigen{margin-left:auto;font-size:11px;color:#8695ab}
 .rennteil .quote{margin-left:auto;font-family:var(--mono,ui-monospace);font-weight:700;color:#fbbf24}
 .rennfarb{width:10px;height:10px;border-radius:3px;flex:none}
 #rennStrecke{display:block;width:100%;border-radius:11px;border:1px solid var(--line);background:#0a1120}
@@ -1203,12 +1207,17 @@ td:first-child{font-family:var(--font)}
         <button type="button" data-mode="sandbox" class="on">Sandbox</button>
         <button type="button" data-mode="plan">Planwirtschaft (DDR)</button>
         <button type="button" data-mode="einsteiger">Einsteiger</button>
+        <button type="button" data-mode="renntag">Race Day</button>
       </div>
     </div>
     <p id="lwModeHint" style="display:none;font-size:11.5px;color:#8695ab;margin:2px 0 6px">
       Planwirtschaft: Kein Vermögensziel — das Planbüro verkündet Plansolls, du lieferst zu festen
       Ankaufspreisen ab und sammelst Planpunkte. Nach 5 Planphasen (oder bei 1.000 Punkten) gewinnt
       der „Held der Arbeit".</p>
+    <p id="lwRenntagHint" style="display:none;font-size:11.5px;color:#8695ab;margin:2px 0 6px">
+      Race Day: Motorsport von der ersten Minute. Jeder startet mit Rennstall, einem Wagen und einem
+      Fahrer — kein Freischalten, keine 200.000 $ Schwelle. Wagen tunen, Stall ausbauen, Renntage kommen
+      häufiger. Wirtschaft, Börse und Vermögensziel laufen daneben normal weiter.</p>
     <p id="lwEinsteigerHint" style="display:none;font-size:11.5px;color:#8695ab;margin:2px 0 6px">
       Einsteiger: Ein geführter Durchgang durch das ganze Spiel — Bauen, Verkaufen, Börse,
       Kursticker, Nachrichten und Bank, Schritt für Schritt erklärt. Nichts ist gesperrt, die Bots
@@ -2444,6 +2453,7 @@ function lwModeSpiegeln() {
   document.getElementById("lwGoalRow").style.display = (lwMode === "plan" || lwMode === "einsteiger") ? "none" : "";
   document.getElementById("lwModeHint").style.display = lwMode === "plan" ? "" : "none";
   document.getElementById("lwEinsteigerHint").style.display = lwMode === "einsteiger" ? "" : "none";
+  document.getElementById("lwRenntagHint").style.display = lwMode === "renntag" ? "" : "none";
 }
 document.getElementById("lwMode").addEventListener("click", e => {
   const b = e.target.closest("button[data-mode]"); if (!b) return;
@@ -5228,31 +5238,41 @@ function rennenRendern(state, myId) {
     const tippt = body.contains(document.activeElement) && /INPUT|SELECT/.test(document.activeElement?.tagName);
     if (rennenRendern.sig !== sig && !tippt) {
       rennenRendern.sig = sig;
-      const teilOpts = r.teilnehmer.filter(t2 => t2.ownerId !== myId)
-        .map(t2 => `<option value="${t2.autoId}">${t2.name} (${t2.team})</option>`).join("");
-      const teamIds = [...new Set(r.teilnehmer.map(t2 => t2.ownerId))].filter(id2 => id2 !== myId);
+      /* Werkswagen haben keinen Besitzer — sie lassen sich weder sponsern noch
+       * in der Teamauswahl anzeigen. */
+      const teamIds = [...new Set(r.teilnehmer.map(t2 => t2.ownerId))].filter(id2 => id2 && id2 !== myId);
+      const wettbar = r.teilnehmer.filter(t2 => t2.ownerId !== myId);
+      /* Getroffene Wahl ueber den Neuaufbau retten — das Panel baut sich bei
+       * jeder fremden Wette neu auf, und dabei soll die Auswahl stehen
+       * bleiben. Ist der Wagen inzwischen weg (Werkswagen weicht einem
+       * gemeldeten Stall), faellt sie auf den ersten zurueck. */
+      if (!wettbar.some(t2 => t2.autoId === rennenRendern.wahl))
+        rennenRendern.wahl = wettbar[0]?.autoId ?? null;
       const teamOpts = teamIds.map(id2 => `<option value="${id2}">${state.players[id2]?.name || "?"}</option>`).join("");
       body.innerHTML = `
         <div class="renngrid">
           <div class="rennbox">
-            <div class="lbl">Startfeld (${r.teilnehmer.length}/8) · Quoten live</div>
-            ${r.teilnehmer.map(t2 => `<div class="rennteil">
+            <div class="lbl">Startfeld (${r.teilnehmer.length}/8) · Wagen wählen und setzen</div>
+            ${r.teilnehmer.map(t2 => {
+              const eigen = t2.ownerId === myId;
+              const gewaehlt = !eigen && t2.autoId === rennenRendern.wahl;
+              return `<div class="rennteil${eigen ? "" : " wettbar"}${gewaehlt ? " gewaehlt" : ""}"${eigen ? "" : ` data-auto="${t2.autoId}"`}>
                 <span class="rennfarb" style="background:${t2.farbe}"></span>
                 <span><b>${t2.name}</b> · ${t2.team}<br><span class="meta">Fahrer: ${t2.fahrer}</span></span>
-                <span class="quote">${r.quoten[t2.autoId] ? r.quoten[t2.autoId].toFixed(2) : "—"}</span>
-              </div>`).join("") || `<p class="note">Noch kein Wagen gemeldet. Rennställe melden über das Motorsport-Panel.</p>`}
+                ${eigen ? `<span class="eigen">dein Wagen</span>`
+                        : `<span class="quote">${r.quoten[t2.autoId] ? r.quoten[t2.autoId].toFixed(2) : "—"}</span>`}
+              </div>`;
+            }).join("") || `<p class="note">Noch kein Wagen gemeldet.</p>`}
+            ${wettbar.length ? `<div class="rennform" style="margin-top:10px">
+              <input id="wettBetrag" type="number" min="100" max="20000" placeholder="Einsatz $">
+              <button id="wettSenden">Auf gewählten Wagen setzen</button>
+            </div>
+            <p class="note" style="margin-top:6px">Totalisator: Der ganze Pool (−10 % für den Preistopf) geht an die Siegerwetten — die Quote steht erst mit dem Start fest.</p>`
+            : `<p class="note" style="margin-top:8px">Keine fremden Wagen zum Wetten gemeldet.</p>`}
             <p class="note" style="margin:8px 0 0">Preistopf aktuell: <b>${fmt(r.topf)}</b> · Wettpool: <b>${fmt(r.pool)}</b></p>
           </div>
           <div class="rennbox">
-            <div class="lbl">Wettschein · Quoten nach Pool (Totalisator)</div>
-            ${teilOpts ? `<div class="rennform">
-              <select id="wettAuto">${teilOpts}</select>
-              <input id="wettBetrag" type="number" min="100" max="20000" placeholder="Einsatz $">
-              <button id="wettSenden">Wetten</button>
-            </div>
-            <p class="note" style="margin-top:6px">Der ganze Pool (−10 % für den Preistopf) geht an die Siegerwetten — die Quote steht erst mit dem Start fest.</p>`
-            : `<p class="note">Keine fremden Wagen zum Wetten gemeldet.</p>`}
-            <div class="lbl" style="margin-top:12px">Sponsoring</div>
+            <div class="lbl">Sponsoring</div>
             ${teamOpts ? `<div class="rennform">
               <select id="sponsTeam">${teamOpts}</select>
               <input id="sponsBetrag" type="number" min="500" max="50000" placeholder="Summe $">
@@ -5264,14 +5284,26 @@ function rennenRendern(state, myId) {
               r.sponsoren.map(s => `<div class="rennteil"><span>${s.name} → <b>${s.team}</b></span><span class="quote">${fmt(s.betrag)}</span></div>`).join("") : ""}
           </div>
         </div>
-        <p id="rennStatus" class="note" style="margin:10px 0 0;min-height:14px"></p>`;
+`;
+      /* Wetten laeuft jetzt ueber die Liste statt ueber ein Auswahlfeld: anklicken,
+       * Einsatz eintragen, setzen. Die Auswahl wird ohne Neuaufbau markiert,
+       * sonst ginge bei jedem Klick die Eingabe im Einsatzfeld verloren. */
+      body.querySelectorAll(".rennteil.wettbar").forEach(el => el.addEventListener("click", () => {
+        rennenRendern.wahl = Number(el.dataset.auto);
+        body.querySelectorAll(".rennteil.wettbar").forEach(o => o.classList.toggle("gewaehlt", o === el));
+      }));
       document.getElementById("wettSenden")?.addEventListener("click", () => {
-        socket.emit("wetteSetzen", { autoId: +document.getElementById("wettAuto").value, betrag: +document.getElementById("wettBetrag").value },
-          res => { document.getElementById("rennStatus").textContent = res?.error || "Wette platziert — viel Glück!"; });
+        if (rennenRendern.wahl == null) return toast("Erst einen Wagen in der Liste anklicken.", true);
+        const name = r.teilnehmer.find(t2 => t2.autoId === rennenRendern.wahl)?.name || "Wagen";
+        socket.emit("wetteSetzen", { autoId: rennenRendern.wahl, betrag: +document.getElementById("wettBetrag").value },
+          /* Rueckmeldung als Toast statt in die Panelzeile: Jede Wette aendert
+           * den Pool, das Panel baut sich daraufhin neu auf — eine Meldung
+           * darin waere nach einer Sekunde wieder weg. */
+          res => toast(res?.error || `Wette steht: ${fmt(+document.getElementById("wettBetrag")?.value || 0)} auf ${name}`, !!res?.error));
       });
       document.getElementById("sponsSenden")?.addEventListener("click", () => {
         socket.emit("sponsern", { teamId: document.getElementById("sponsTeam").value, betrag: +document.getElementById("sponsBetrag").value },
-          res => { document.getElementById("rennStatus").textContent = res?.error || "Sponsorvertrag steht!"; });
+          res => toast(res?.error || "Sponsorvertrag steht!", !!res?.error));
       });
     }
   } else if (r.phase === "laeuft") {
