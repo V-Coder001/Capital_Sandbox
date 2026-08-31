@@ -2773,6 +2773,7 @@ io.on("connection", socket => {
    * Betrieben. Jede Stufe kostet mehr als die vorige und bringt denselben
    * Zugewinn — der Grenznutzen sinkt damit von allein, ohne Sonderregel. */
   socket.on("stallTunen", guard((p, { x, y, autoId, bereich }, ack) => {
+    if (process.env.DIAG) console.log(`[DIAG] stallTunen von ${p.name} (bot=${!!p.bot}) socket=${socket.id}`);
     const t = tileAt(x, y), bt = t?.btype ? BTYPES[t.btype] : null;
     if (!t || t.owner !== p.id || !bt?.racing) return ack?.({ error: "Kein eigener Rennstall" });
     const a = (t.autos || []).find(a => a.id === autoId);
@@ -2802,6 +2803,7 @@ io.on("connection", socket => {
 
   /* --- Fahrzeug instand setzen --- */
   socket.on("stallReparieren", guard((p, { x, y, autoId }, ack) => {
+    if (process.env.DIAG) console.log(`[DIAG] stallReparieren von ${p.name} (bot=${!!p.bot}) socket=${socket.id}`);
     const t = tileAt(x, y);
     if (!t || t.owner !== p.id || !BTYPES[t.btype]?.racing) return ack?.({ error: "Kein eigener Rennstall" });
     const a = (t.autos || []).find(a2 => a2.id === autoId);
