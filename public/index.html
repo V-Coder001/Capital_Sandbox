@@ -530,10 +530,25 @@ input.autoname::placeholder{color:var(--fg);opacity:.95;font-weight:700}
 .rennstat .chip2{display:flex;align-items:center;gap:7px;background:#0b1220;border:1px solid var(--line);
   border-radius:9px;padding:6px 12px;font-size:12px;color:var(--dim)}
 .rennstat .chip2 b{color:var(--text);font-family:var(--mono,ui-monospace)}
-.rennpodium{display:flex;gap:12px;justify-content:center;align-items:flex-end;margin:14px 0 8px}
-.rennpodium .stufe{text-align:center;flex:1;max-width:180px}
-.rennpodium .sockel{background:linear-gradient(180deg,#1e3a5a,#122540);border:1px solid var(--line);border-radius:10px 10px 0 0;
-  display:flex;flex-direction:column;justify-content:flex-start;padding:8px 6px}
+.rennpodium{display:flex;gap:14px;justify-content:center;align-items:flex-end;margin:18px 0 10px}
+.rennpodium .stufe{text-align:center;flex:1;max-width:190px}
+/* Das Podest trug frueher nur eine Zahl auf blaugrauem Kasten. Jetzt bekommt
+ * jede Stufe die Lackierung ihres Teams als Lichtsaum, einen Metallverlauf
+ * nach Rang und eine grosse Platzziffer — auf einen Blick lesbar, wer wo steht. */
+.rennpodium .sockel{border-radius:12px 12px 0 0;position:relative;overflow:hidden;
+  display:flex;align-items:center;justify-content:center;
+  border:1px solid rgba(255,255,255,.10);border-bottom:none;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.14), 0 -6px 22px -10px var(--liv,#38bdf8)}
+.rennpodium .sockel .nr{font:900 30px/1 var(--font);color:rgba(255,255,255,.92);
+  text-shadow:0 2px 10px rgba(0,0,0,.55)}
+.rennpodium .sockel::after{content:"";position:absolute;left:0;right:0;top:0;height:3px;background:var(--liv,#38bdf8)}
+.rennpodium .p1 .sockel{background:linear-gradient(180deg,#8a6d18,#3a2f0c)}
+.rennpodium .p2 .sockel{background:linear-gradient(180deg,#5c6470,#2b3038)}
+.rennpodium .p3 .sockel{background:linear-gradient(180deg,#6b4426,#33200f)}
+.rennpodium .krone{font-size:30px;line-height:1;filter:drop-shadow(0 3px 8px rgba(0,0,0,.5))}
+.rennpodium .wer2{font-size:13.5px;margin:5px 0 7px;line-height:1.35}
+.rennpodium .wer2 b{font-size:14.5px;letter-spacing:.2px}
+.wmdelta{color:#fbbf24;font-weight:800}
 .rennform{display:flex;gap:7px;flex-wrap:wrap;align-items:center;margin-top:8px}
 .rennform select,.rennform input{background:#0b1220;border:1px solid var(--line);border-radius:8px;color:var(--text);
   font-family:var(--font);font-size:12px;padding:7px 8px}
@@ -5604,11 +5619,19 @@ function rennenRendern(state, myId) {
       const reihenfolge = podium.length >= 3 ? [1, 0, 2] : podium.map((_, i) => i);
       body.innerHTML = `
         <div class="rennpodium">${reihenfolge.map(i => { const e = podium[i]; if (!e) return "";
-          const hoehe = [96, 128, 78][i] || 80;
-          return `<div class="stufe">
-            <div style="font-size:26px">${medaille[e.platz - 1] || ""}</div>
-            <div style="font-size:13px;margin:4px 0"><b>${e.name}</b><br><span class="meta">${e.team} · ${e.fahrer}</span></div>
-            <div class="sockel" style="height:${hoehe}px"><b style="font-size:18px">${e.platz}</b></div>
+          /* Hoehe nach PLATZ, nicht nach Schleifenindex: reihenfolge ist
+           * [1,0,2], damit der Sieger in der Mitte steht — mit dem Index als
+           * Schluessel bekam bisher der Zweite den hoechsten Sockel. */
+          const hoehe = { 1: 140, 2: 104, 3: 84 }[e.platz] || 84;
+          /* Im Renntag zeigt das Podest gleich mit, was der Platz an
+           * Meisterschaftspunkten wert war — sonst muesste man dafuer in den
+           * Rennstall wechseln. */
+          const wmp = state.mode === "renntag" ? [10, 6, 4, 3, 2, 1][e.platz - 1] : 0;
+          return `<div class="stufe p${e.platz}">
+            <div class="krone">${medaille[e.platz - 1] || ""}</div>
+            <div class="wer2"><b>${escapeHtml(e.name)}</b><br><span class="meta">${escapeHtml(e.team)} · ${escapeHtml(e.fahrer)}</span>${
+              wmp && !e.ausgefallen ? `<br><span class="wmdelta">+${wmp} Punkte</span>` : ""}</div>
+            <div class="sockel" style="height:${hoehe}px;--liv:${e.farbe}"><span class="nr">${e.platz}</span></div>
           </div>`; }).join("")}</div>
         <div class="rennbox">
           <div class="lbl">Endstand · Preistopf ${fmt(r.topf)}</div>
@@ -5619,7 +5642,24 @@ function rennenRendern(state, myId) {
             <span class="dist">${e.dist} m</span>
           </div>`).join("")}
           <p class="note" style="margin:8px 0 0">Preisgelder, Sponsoranteile und Wettgewinne sind ausgezahlt — Details im Finanzlog.</p>
-        </div>`;
+        </div>` + (state.wm && state.saison ? (() => {
+          /* Nach dem Rennen gleich die Tabelle: Im Renntag entscheidet sie die
+           * Runde, und ohne sie muesste man dafuer in den Rennstall wechseln. */
+          const rang = Object.entries(state.wm).sort((a2, b2) => b2[1] - a2[1]);
+          const rest = state.saison.gesamt - state.saison.gefahren;
+          return `<div class="rennbox" style="margin-top:10px">
+            <div class="lbl">Meisterschaft · Renntag ${state.saison.gefahren} von ${state.saison.gesamt}${
+              rest > 0 ? ` · noch ${rest}` : " · Finale"}</div>
+            ${rang.length ? rang.map(([pid, pkt], i) => `<div class="rennstand"${
+                pid === myId ? ' style="box-shadow:inset 3px 0 0 var(--accent)"' : ""}>
+                <b style="width:20px">${i + 1}.</b>
+                <span class="rennfarb" style="background:${state.players[pid]?.color || "#7ad"}"></span>
+                <span>${escapeHtml(state.players[pid]?.name || "—")}${pid === myId ? ` <span class="meta" style="color:var(--accent)">· du</span>` : ""}</span>
+                <span class="dist"><b style="color:#fbbf24">${pkt}</b> Punkte</span>
+              </div>`).join("")
+              : `<p class="note">Noch keine Punkte vergeben.</p>`}
+          </div>`;
+        })() : "");
     }
   }
 }

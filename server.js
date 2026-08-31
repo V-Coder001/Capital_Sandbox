@@ -463,6 +463,16 @@ function autoWert(a) {
  * An einer Stelle gebuendelt, damit Rennmeldung, Notizen und Finanzlog nicht
  * auseinanderlaufen, sobald jemand seinen Wagen umtauft. */
 const autoName = a => a.name || `${GOODS[a.good].name} #${a.nr}`;
+/* Bot-Ställe tauften ihre Wagen nicht — im Startfeld standen dann "Benzin-Auto
+ * #4" neben "Ferro Tipo 12", und die Werksteams wirkten als Einzige wie echte
+ * Rennwagen. Jeder Bot-Wagen bekommt deshalb einen Namen aus diesem Pool,
+ * deterministisch nach Startnummer, damit er ueber die Runde stabil bleibt. */
+const BOT_WAGENNAMEN = [
+  "Sturmvogel", "Nordlicht", "Basilisk", "Kometa", "Wildkatze", "Zenit",
+  "Falkenauge", "Donnerkeil", "Silberdistel", "Taifun", "Mistral", "Panther",
+  "Rubin", "Vulkan", "Habicht", "Meteor", "Lawine", "Orkan",
+];
+const botWagenName = nr => BOT_WAGENNAMEN[(nr - 1) % BOT_WAGENNAMEN.length];
 function autoWerte(a) {
   const w = { ...RACE_STATS[a.good] };
   for (const [b, stufe] of Object.entries(a.tuning || {})) {
@@ -1457,6 +1467,7 @@ function renntagAusstatten(p) {
   const nr = ++autoNr;
   platz.autos = [{ id: id(), good: RENNTAG_STARTWAGEN, nr, zustand: 100, rennen: 0, siege: 0,
     tuning: {}, fahrerId: null, km: 0, kaufpreis: 0, tuningAusgaben: 0,
+    name: p.bot ? botWagenName(nr) : null,
     historie: [{ t: G.tick, text: "Startwagen — Race Day", amt: 0 }] }];
   /* Ohne Fahrer kein Start. Einen aus dem Pool zuweisen, ohne Handgeld: die
    * Ausruestung soll fahrbereit sein, nicht halb. Das Gehalt laeuft ab jetzt
@@ -2720,7 +2731,7 @@ io.on("connection", socket => {
      * Tuningausgaben laufen hier zusammen — die Akte des Wagens. */
     const kaufpreis = Math.round(MM[good].price);
     autos.push({ id: id(), good, nr, zustand: 100, rennen: 0, siege: 0, tuning: {}, fahrerId: null,
-      km: 0, kaufpreis, tuningAusgaben: 0,
+      km: 0, kaufpreis, tuningAusgaben: 0, name: p.bot ? botWagenName(nr) : null,
       historie: [{ t: G.tick, text: "In den Rennstall eingestellt", amt: -kaufpreis }] });
     gainXp(p, 15);
     logTx(p, "Motorsport", `${GOODS[good].name} #${nr} in den Rennstall eingestellt`, 0);
