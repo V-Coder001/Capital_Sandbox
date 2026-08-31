@@ -1156,6 +1156,15 @@ td:first-child{font-family:var(--font)}
 
     <div class="col">
       <div id="jind">
+        <!-- Nur im Renntag sichtbar: dort ersetzen zwei Rollen die sechs Branchen. -->
+        <button type="button" data-ind="rennclub" class="indopt rennrolle" style="display:none;--ac:#38bdf8;--ac08:rgba(56,189,248,.03);--ac15:rgba(56,189,248,.08);--ac18:rgba(56,189,248,.09);--ac35:rgba(56,189,248,.21);--ac50:rgba(56,189,248,.31)">
+          <img src="assets/deko/hochhaus-1.png" alt="">
+          <span class="txt"><span class="head"><b>Race Club</b><span class="chosen">Gewählt</span></span>
+          <small>Rennstall, Wagen und Fahrer. Du fährst um Punkte, Preisgeld und den Titel — Teile kaufst du bei der Rennindustrie.</small></span></button>
+        <button type="button" data-ind="rennindustrie" class="indopt rennrolle" style="display:none;--ac:#fbbf24;--ac08:rgba(251,191,36,.03);--ac15:rgba(251,191,36,.08);--ac18:rgba(251,191,36,.09);--ac35:rgba(251,191,36,.21);--ac50:rgba(251,191,36,.31)">
+          <img src="assets/skyline/chipfabrik-0.png" alt="">
+          <span class="txt"><span class="head"><b>Rennindustrie</b><span class="chosen">Gewählt</span></span>
+          <small>Rennreifen und Rennsoftware samt Zulieferkette. Du verkaufst an die Clubs, sponserst sie — und kaufst dir an der Bank Anteile an ihnen.</small></span></button>
         <button type="button" data-ind="agrar" class="indopt on" style="--ac:#34d399;--ac08:rgba(52,211,153,.03);--ac15:rgba(52,211,153,.08);--ac18:rgba(52,211,153,.09);--ac35:rgba(52,211,153,.21);--ac50:rgba(52,211,153,.31)">
           <img src="assets/skyline/farm-0.png" alt="">
           <span class="txt"><span class="head"><b>Landwirtschaft</b><span class="chosen">Gewählt</span></span>
@@ -2441,7 +2450,8 @@ let lwEigeneAenderung = 0;   // kurz nach eigener Änderung nicht vom Server üb
 /* Kurznamen der Branchen fuer die Warteraumliste — die vollen Namen aus dem
  * Auswahlblock waeren dort zu lang. */
 const BRANCHE_NAME = { agrar: "Landwirtschaft", rohstoff: "Rohstoff & Bau", versorger: "Versorger",
-                       tech: "Technologie", touristik: "Touristik", ruestung: "Rüstung" };
+                       tech: "Technologie", touristik: "Touristik", ruestung: "Rüstung",
+                       rennclub: "Race Club", rennindustrie: "Rennindustrie" };
 function lobbyWaitZeichnen() {
   const { state, myId } = store.get();
   if (!state || !myId) return;
@@ -2507,9 +2517,14 @@ function lwPickerSpiegeln() {
   /* Die vier Zahlenreihen allein sagen nicht, worauf man sich einlässt —
    * diese Zeile fasst Anzahl und Spielweise in einem Satz zusammen. */
   const summe = Object.values(lwBots).reduce((a, b) => a + b, 0);
+  /* Im Renntag gibt es die sechs Branchen nicht — dort zaehlt nur, wie viele
+   * Bots mitspielen; die Rollen verteilt der Server abwechselnd. Ohne diesen
+   * Hinweis stellt man Agrar und Touristik ein und bekommt Rennstaelle. */
   document.getElementById("lwBotSum").innerHTML = summe === 0
     ? "<b>Keine Bots</b> · ihr spielt die Runde nur untereinander"
-    : `<b>${summe} ${summe === 1 ? "Bot" : "Bots"}</b> · ${LW_LEVEL_TEXT[lwBotLevel] || ""}`;
+    : lwMode === "renntag"
+      ? `<b>${summe} ${summe === 1 ? "Bot" : "Bots"}</b> · ${LW_LEVEL_TEXT[lwBotLevel] || ""} — im Race Day zählt nur die Anzahl: der Server besetzt abwechselnd Race Clubs und Rennindustrie`
+      : `<b>${summe} ${summe === 1 ? "Bot" : "Bots"}</b> · ${LW_LEVEL_TEXT[lwBotLevel] || ""}`;
 }
 function lwSettingsSenden() {
   lwEigeneAenderung = Date.now();
@@ -2533,6 +2548,18 @@ function lwModeSpiegeln() {
   /* Im Renntag entscheidet die Meisterschaft — das Vermoegensziel waere dort
    * eine Angabe ohne Wirkung. */
   document.getElementById("lwSaisonRow").style.display = lwMode === "renntag" ? "" : "none";
+  /* Im Renntag gibt es keine Branchen, sondern zwei Rollen. Beim Umschalten
+   * auch die Auswahl mitziehen — sonst bliebe man mit einer Branche zurueck,
+   * die es im Modus gar nicht gibt. */
+  const renn = lwMode === "renntag";
+  document.querySelectorAll(".indopt.rennrolle").forEach(b => b.style.display = renn ? "" : "none");
+  document.querySelectorAll(".indopt:not(.rennrolle):not(.netopt)").forEach(b => b.style.display = renn ? "none" : "");
+  const gueltig = renn ? ["rennclub", "rennindustrie"].includes(myIndustry)
+                       : !["rennclub", "rennindustrie"].includes(myIndustry);
+  if (!gueltig) {
+    const ziel = document.querySelector(`.indopt[data-ind="${renn ? "rennclub" : "agrar"}"]`);
+    ziel?.click();
+  }
 }
 document.getElementById("lwMode").addEventListener("click", e => {
   const b = e.target.closest("button[data-mode]"); if (!b) return;
@@ -4349,13 +4376,25 @@ function clickTile(e) {
    * nirgends, ohne je zu erfahren, woran es liegt. */
   const nwSchwelle = store.get().meta?.racingUnlock ?? 200000;
   const meinNW = store.get().state?.players?.[store.get().myId]?.netWorth ?? 0;
-  const gesperrt = b => !!b.racing && meinNW < nwSchwelle;
+  /* Im Renntag ist Motorsport kein Spaetspiel-Inhalt, sondern der Zweck des
+   * Modus — dort entfaellt die Schwelle. Der Server sieht das genauso; ohne
+   * diese Zeile blieb der Knopf aber gesperrt und nannte einen Grund, den es
+   * gar nicht mehr gab. */
+  const rennModus = store.get().state?.mode === "renntag";
+  /* Mehr als einen Rennstall je Firma laesst der Server nicht zu — im Renntag
+   * hat man ihn von Anfang an. Ohne diese Zeile stuende dort ein ausgegrauter
+   * "Rennstall $30.000" mit dem Preis als einzigem Hinweis, und der Grund
+   * fuer die Sperre bliebe im Dunkeln. */
+  const hatStall = (store.get().state?.map || [])
+    .some(q => q.owner === store.get().myId && BTYPES()[q.btype]?.racing);
+  const gesperrt = b => !!b.racing && (hatStall || (!rennModus && meinNW < nwSchwelle));
   const canAfford = b => !gesperrt(b) && me.cash >= totalCost(b) && Object.entries(mats(b)).every(([g, n]) => me.inv[g] >= n);
   const lockNote = t.locked ? ` (inkl. ${fmt(t.unlockCost)} Freischaltung)` : "";
   tm.innerHTML = `<h3>${t.locked ? "Gesperrt · " : ""}Bauen — ${t.zone}</h3>` + (opts.length ? `<div class="note">Baumaterial: Ziegel und Beton — Nachschub über die Börse. Später mit Elektronik auflevelbar.${lockNote}</div>` : `<div class="note">Deine Industrie kann hier nichts bauen — handle stattdessen an der Börse.</div>`)
     + opts.map(([bid, b]) => `<button class="opt" data-b="${bid}" ${canAfford(b) ? "" : "disabled"}>${b.name}<small>${
-        gesperrt(b) ? `Motorsport ab ${fmt(nwSchwelle)} Nettovermögen — dir fehlen ${fmt(nwSchwelle - meinNW)}`
-                    : `${fmt(totalCost(b))} · ${matTxt(b)}`}</small></button>`).join("");
+        !gesperrt(b) ? `${fmt(totalCost(b))} · ${matTxt(b)}`
+        : hatStall && b.racing ? "Du betreibst bereits einen Rennstall — mehr als einer ist nicht erlaubt"
+        : `Motorsport ab ${fmt(nwSchwelle)} Nettovermögen — dir fehlen ${fmt(nwSchwelle - meinNW)}`}</small></button>`).join("");
   tm.querySelectorAll(".opt").forEach(btn => btn.addEventListener("click", () => {
     act("build", { x:t.x, y:t.y, btype: btn.dataset.b }); tm.style.display = "none"; }));
 }

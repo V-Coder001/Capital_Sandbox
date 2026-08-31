@@ -342,6 +342,24 @@ const INDUSTRIES = {
   tech:      { name: "Technologie & Elektronik", en: "Technology & electronics" },
   touristik: { name: "Touristik", en: "Tourism" },
   ruestung:  { name: "Rüstungsindustrie", en: "Armament industry" },
+  /* Nur im Renntag-Modus waehlbar: Dort gibt es keine sechs Branchen, sondern
+   * zwei Rollen — wer faehrt und wer beliefert. */
+  rennclub:      { name: "Race Club", en: "Race club" },
+  rennindustrie: { name: "Rennindustrie", en: "Racing industry" },
+};
+/* Welche Rollen im Renntag zur Wahl stehen. */
+const RENNTAG_ROLLEN = ["rennclub", "rennindustrie"];
+/* Was die beiden Rollen bauen duerfen. Laeden (bt.retail) und der Rennstall
+ * sind gesondert geregelt.
+ *
+ * Die Rennindustrie bekommt die komplette Zulieferkette, nicht nur die beiden
+ * Teile-Werke: Rennreifen brauchen Oel und Stahl, Rennsoftware Elektronik und
+ * Silizium. Ohne die Vorstufen stuenden ihre Werke still, denn im Renntag gibt
+ * es keine Agrar- oder Versorgerbranche mehr, die sie liefern koennte. */
+const RENNTAG_BAUTEN = {
+  rennclub: new Set(["rennstall", "werbeagentur"]),
+  rennindustrie: new Set(["reifenwerk", "rennlabor", "oelpumpe", "mine", "stahlwerk",
+                          "siliziummine", "chipfabrik", "ewerk", "windpark", "werbeagentur"]),
 };
 /* Baumaterial-Bedarf jedes Gebäudes: Ziegel immer, Beton ab $4.000. Elektronik
  * wird NICHT zum Bauen gebraucht, sondern zum Aufleveln bestehender Gebäude
@@ -1417,6 +1435,17 @@ const RENNTEILE_WERKE = new Set(["reifenwerk", "rennlabor"]);
 const RENNTAG_STARTTEILE = { rennreifen: 6, rennsoftware: 4 };
 function renntagAusstatten(p) {
   if (MODE !== "renntag") return;
+  /* Die Rennindustrie faehrt nicht — sie bekommt statt Stall und Wagen einen
+   * Vorrat, um sofort produzieren zu koennen, statt erst Rohstoffe zu suchen,
+   * die im Renntag niemand sonst herstellt. */
+  if (p.industry === "rennindustrie") {
+    if (p.rennstart) return;
+    p.rennstart = true;
+    for (const [g, n2] of Object.entries({ oel: 40, erze: 40, stahl: 8, silizium: 20, elektronik: 8 }))
+      p.inv[g] = (p.inv[g] || 0) + n2;
+    logTx(p, "Motorsport", "Race Day: Grundstock für die Zulieferkette", 0);
+    return;
+  }
   if (G.map.some(t => t.owner === p.id && BTYPES[t.btype]?.racing)) return;   // hat schon einen
   /* Platz suchen: bevorzugt in der Industriezone (dort gehoert ein Rennstall
    * hin), sonst irgendwo frei — niemand soll ohne Stall dastehen, bloss weil
@@ -2604,9 +2633,17 @@ io.on("connection", socket => {
      * im ganzen Spiel nicht — dann laesst sich kein Wagen tunen und kein
      * Teile-Sponsorgesuch erfuellen. Im Renntag-Modus, wo genau das der Kern
      * ist, darf sie deshalb jede Branche bauen — wie Laeden und Rennstall. */
-    const rennteilWerk = MODE === "renntag" && RENNTEILE_WERKE.has(btype);
-    if (bt.industry && !rennteilWerk && !(p.industries || [p.industry]).includes(bt.industry))
+    if (MODE === "renntag") {
+      /* Im Renntag zaehlt die Rolle, nicht die Branche. Laeden darf wie ueberall
+       * jeder — sie sind der gemeinsame Weg, Ware zu Geld zu machen. */
+      const erlaubt = RENNTAG_BAUTEN[p.industry];
+      if (!bt.retail && !(erlaubt && erlaubt.has(btype)))
+        return ack?.({ error: p.industry === "rennclub"
+          ? "Als Race Club baust du Rennstall, Werbung und Läden — Teile kaufst du bei der Rennindustrie"
+          : "Als Rennindustrie baust du die Zulieferkette, die Teile-Werke und Läden — gefahren wird im Race Club" });
+    } else if (bt.industry && !(p.industries || [p.industry]).includes(bt.industry)) {
       return ack?.({ error: `Nur ${INDUSTRIES[bt.industry].name} kann das bauen` });
+    }
     /* Der Rennstall ist branchenfrei, aber auf einen je Firma begrenzt: Ohne
      * diese Grenze wäre "mehr Ställe" die beste Strategie, und der Wettpool
      * gehörte am Ende dem, der am meisten Kacheln hält. */
@@ -3796,6 +3833,23 @@ const INDUSTRY_COVERAGE = {
  * davon zu. `plan` ist hier nur noch die ZWEITE Phase (nach vollständiger
  * Produktabdeckung): Shops, Werbung, welches Produkt zuerst verdoppelt wird.
  * Die beiden einer Branche unterscheiden sich weiterhin bewusst darin. */
+/* Bots fuer den Renntag: abwechselnd Club und Zulieferer. Die Bauplaene der
+ * normalen Bots taugen hier nicht — deren Gebaeude darf im Renntag niemand
+ * bauen, sie stuenden untaetig herum. */
+const RENNTAG_BOT_CFGS = [
+  { name: "Scuderia Bora",    industry: "rennclub",      color: "#e74c3c",
+    plan: ["markt", "kontor", "werbeagentur"], needs: [], rennstall: true },
+  { name: "Tempo Motors",     industry: "rennindustrie", color: "#3b9cf6",
+    plan: ["reifenwerk", "mine", "stahlwerk", "kontor"], needs: ["strom"] },
+  { name: "Vento Racing",     industry: "rennclub",      color: "#2ecc71",
+    plan: ["markt", "werbeagentur", "kontor"], needs: [], rennstall: true },
+  { name: "Silizium Dynamics",industry: "rennindustrie", color: "#b07cf7",
+    plan: ["rennlabor", "siliziummine", "chipfabrik", "kontor"], needs: ["strom"] },
+  { name: "Aurora Team",      industry: "rennclub",      color: "#f5c542",
+    plan: ["kontor", "markt"], needs: [], rennstall: true },
+  { name: "Kraft & Reifen",   industry: "rennindustrie", color: "#1abc9c",
+    plan: ["reifenwerk", "oelpumpe", "stahlwerk", "markt"], needs: ["strom"] },
+];
 const BOT_CFGS = [
   { name: "AgrarGenossen",   industry: "agrar",     color: "#34d399",
     plan: ["markt", "farm", "werbeagentur", "kontor"], needs: ["wasser", "strom"], rennstall: true },
@@ -3878,11 +3932,17 @@ function startBots() {
     const n = botAuswahl ? Math.max(0, Math.min(2, Math.floor(+botAuswahl[k] || 0))) : 1;
     gewuenscht[k] = n;
   }
+  /* Im Renntag gibt es die sechs Branchen nicht — die Botauswahl im Warteraum
+   * zaehlt dort nur, WIE VIELE mitspielen. Die Rollen verteilt der Server
+   * abwechselnd, damit immer beide Seiten besetzt sind: ohne Zulieferer gaebe
+   * es keine Teile, ohne Clubs kein Rennen. */
   const genommen = {};
-  const liste = BOT_CFGS.filter(cfg => {
-    genommen[cfg.industry] = (genommen[cfg.industry] || 0) + 1;
-    return genommen[cfg.industry] <= (gewuenscht[cfg.industry] || 0);
-  });
+  const liste = MODE === "renntag"
+    ? RENNTAG_BOT_CFGS.slice(0, Object.values(gewuenscht).reduce((a2, b2) => a2 + b2, 0))
+    : BOT_CFGS.filter(cfg => {
+        genommen[cfg.industry] = (genommen[cfg.industry] || 0) + 1;
+        return genommen[cfg.industry] <= (gewuenscht[cfg.industry] || 0);
+      });
   if (!liste.length) { botsStarted = false; return; }   // ohne Bots gar nicht erst hochfahren
   const gen = ++botGen;
   console.log(`Bots: ${liste.map(c => c.name).join(", ") || "keine"} — Stufe ${lvl.name}`);
