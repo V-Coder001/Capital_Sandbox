@@ -807,10 +807,30 @@ function rennStarten() {
 /* Ein Simulationsschritt pro Sekunde: Tempo aus Wagenwerten, Fahrerkönnen und
  * Zustand; die Konstanz des Fahrers bestimmt, wie stark das Tempo streut.
  * Standfestigkeit und Verschleiß speisen das Ausfallrisiko. */
+/* Boxenstopp: ~5 Sekunden Stillstand, danach zählt der Wagen für den Rest
+ * des Rennens als frischer — mehr Tempo-Substanz und weniger Ausfallrisiko.
+ * Der Zustand des Wagens selbst bleibt unangetastet: repariert wird in der
+ * Werkstatt (Instandsetzung), nicht gratis an der Box. */
+const BOX_DAUER = 5, BOX_FRISCHE = 30, BOX_MAX = 2;
+function boxenstoppStarten(r, teil) {
+  teil.boxe = true;
+  teil.boxeRest = BOX_DAUER;
+  teil.stopps = (teil.stopps || 0) + 1;
+  tickerPush(r, `🔧 ${teil.name} biegt an die Box ab!`);
+}
 function rennTick() {
   const r = G.rennen;
   for (const teil of r.teilnehmer) {
     if (teil.ausgefallen) continue;
+    /* In der Box: Der Wagen steht, die Uhr läuft. */
+    if (teil.boxe) {
+      if (--teil.boxeRest <= 0) {
+        teil.boxe = false;
+        teil.frisch = (teil.frisch || 0) + BOX_FRISCHE;
+        tickerPush(r, `🔧 ${teil.name} verlässt die Box — frische Technik!`);
+      }
+      continue;
+    }
     /* Werkswagen stehen auf keiner Kachel — ihre Werte haengen am Teilnehmer
      * selbst. Sonst rechnet der Schritt fuer beide gleich. */
     const fund = teil.bot ? null : findeAuto(teil.autoId);
@@ -822,13 +842,21 @@ function rennTick() {
     const fWert = teil.bot ? teil.fahrerWert
       : f ? (f.speed + f.handling + f.reaktion) / 3 + f.erfahrung * .15 : 40;
     const konstanz = teil.bot ? teil.konstanz : f?.konstanz;
+    /* Werksteams ziehen bei Verschleiß selbst an die Box. */
+    if (teil.bot && !teil.frisch && zustand < 60 && r.rest > 25 && Math.random() < .06) {
+      boxenstoppStarten(r, teil);
+      continue;
+    }
+    /* Frische aus dem Boxenstopp wirkt wie zusätzlicher Zustand — nur für
+     * dieses Rennen, der Wagen selbst bleibt wie er ist. */
+    const zustandEff = Math.min(100, zustand + (teil.frisch || 0));
     const koennen = w.speed * .45 + w.beschl * .2 + w.handling * .2 + fWert * .45;
     const streu = 1 + (Math.random() - .5) * (konstanz ? (1.4 - konstanz / 100) : .7);
-    teil.dist += koennen * streu * (zustand / 100 * .4 + .6) / 6;
+    teil.dist += koennen * streu * (zustandEff / 100 * .4 + .6) / 6;
     /* Kalibrierung: Ein frischer Wagen mit Standfestigkeit 84 soll pro Rennen
      * etwa 10 % Ausfallchance haben, ein verschlissener deutlich mehr — mit
      * den ersten Werten (0.00045/0.0004) fielen im Test BEIDE Wagen aus. */
-    const risiko = (100 - w.standfest) * .00016 + (100 - zustand) * .00025;
+    const risiko = (100 - w.standfest) * .00016 + (100 - zustandEff) * .00025;
     if (Math.random() < risiko) {
       teil.ausgefallen = true;
       tickerPush(r, `💥 ${teil.name} rollt aus — technischer Defekt!`);
@@ -2297,6 +2325,7 @@ function snapshot() {
         teilnehmer: G.rennen.teilnehmer.map(t2 => ({ autoId: t2.autoId, name: t2.name, team: t2.team,
           farbe: t2.livree || t2.farbe, fahrer: t2.fahrer, ownerId: t2.ownerId, bot: !!t2.bot,
           letztes: t2.letztes || null,
+          boxe: !!t2.boxe, frisch: t2.frisch || 0, stopps: t2.stopps || 0,
           dist: Math.round(t2.dist), ausgefallen: t2.ausgefallen })),
         sponsoren: G.rennen.sponsoren.map(s => ({ name: s.name, team: G.players[s.teamId]?.name, betrag: s.betrag, was: s.was })),
         gesuche: (G.rennen.gesuche || []).map(g => ({ ...g })),
@@ -3005,6 +3034,21 @@ io.on("connection", socket => {
     logTx(p, "Motorsport", `Wette (${artText}): ${betrag.toLocaleString("de-DE")} $ auf ${teil.name}`, -betrag);
     ack?.({ ok: true });
   }));
+  /* --- Boxenstopp: die eine Live-Entscheidung während des Rennens --- */
+  socket.on("boxenstopp", guard((p, { autoId }, ack) => {
+    const r = G.rennen;
+    if (!r || r.phase !== "laeuft") return ack?.({ error: "Kein laufendes Rennen" });
+    const meine = r.teilnehmer.filter(t2 => t2.ownerId === p.id && !t2.bot);
+    const teil = autoId != null ? meine.find(t2 => t2.autoId === autoId) : meine[0];
+    if (!teil) return ack?.({ error: "Kein eigener Wagen im Rennen" });
+    if (teil.ausgefallen) return ack?.({ error: "Der Wagen steht schon — da hilft keine Box mehr" });
+    if (teil.boxe) return ack?.({ error: "Der Wagen ist bereits in der Box" });
+    if ((teil.stopps || 0) >= BOX_MAX) return ack?.({ error: `Höchstens ${BOX_MAX} Boxenstopps je Rennen` });
+    if (r.rest <= BOX_DAUER + 3) return ack?.({ error: "Zu spät — die Boxengasse ist zu" });
+    boxenstoppStarten(r, teil);
+    ack?.({ ok: true });
+  }));
+
   socket.on("sponsern", guard((p, { teamId, betrag }, ack) => {
     const r = G.rennen;
     if (!r || r.phase !== "anmeldung") return ack?.({ error: "Sponsoring nur vor dem Start" });
@@ -4265,6 +4309,14 @@ async function spawnBot(cfg, lvl = BOT_LEVELS[BOT_LEVEL_DEFAULT]) {
                 await em("stallTunen", { x: meinStall.x, y: meinStall.y, autoId: auto.id, bereich });
               }
             }
+          }
+        }
+        /* Läuft das Rennen: bei Verschleiß rechtzeitig an die Box. */
+        if (st.rennen?.phase === "laeuft") {
+          const meinTeil = st.rennen.teilnehmer.find(x2 => x2.ownerId === myId);
+          if (meinTeil && !meinTeil.ausgefallen && !meinTeil.boxe && !meinTeil.frisch && st.rennen.rest > 25) {
+            const autoZ = meineAutos.find(a2 => a2.id === meinTeil.autoId)?.zustand ?? 100;
+            if (autoZ < 60) await em("boxenstopp", { autoId: meinTeil.autoId });
           }
         }
         /* Renntag: eigene startklare Wagen melden … */

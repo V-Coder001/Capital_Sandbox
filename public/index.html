@@ -578,6 +578,16 @@ input.autoname::placeholder{color:var(--fg);opacity:.95;font-weight:700}
   background:linear-gradient(135deg,rgba(56,189,248,.22),rgba(56,189,248,.10));color:var(--accent);
   font:700 13px var(--font);padding:10px 0;cursor:pointer;transition:all .15s}
 .wettknopf:hover{background:linear-gradient(135deg,rgba(56,189,248,.32),rgba(56,189,248,.16))}
+/* Box-Knopf während des Rennens */
+#boxBar{display:flex;align-items:center;gap:12px;margin-top:10px}
+#boxBar[hidden]{display:none}
+#boxKnopf{flex:none;border-radius:10px;border:1px solid rgba(251,191,36,.55);
+  background:linear-gradient(135deg,rgba(251,191,36,.24),rgba(251,191,36,.10));color:#fbbf24;
+  font:800 13px var(--font);letter-spacing:.04em;padding:11px 18px;cursor:pointer;transition:all .15s;
+  animation:boxPuls 1.6s infinite}
+#boxKnopf:hover:not(:disabled){background:linear-gradient(135deg,rgba(251,191,36,.36),rgba(251,191,36,.18))}
+#boxKnopf:disabled{animation:none;opacity:.65;cursor:default;color:#8ea0bd;border-color:var(--line);background:#0b1220}
+@keyframes boxPuls{0%,100%{box-shadow:0 0 0 rgba(251,191,36,0)}50%{box-shadow:0 0 14px rgba(251,191,36,.35)}}
 .rennpodium{display:flex;gap:14px;justify-content:center;align-items:flex-end;margin:18px 0 10px}
 .rennpodium .stufe{text-align:center;flex:1;max-width:190px}
 /* Das Podest trug frueher nur eine Zahl auf blaugrauem Kasten. Jetzt bekommt
@@ -5758,6 +5768,10 @@ function rennenRendern(state, myId) {
       rennenRendern.sig = "live";
       body.innerHTML = `
         <canvas id="rennStrecke" width="740" height="320"></canvas>
+        <div id="boxBar" hidden>
+          <button id="boxKnopf" type="button">🔧 BOX! Boxenstopp jetzt</button>
+          <span id="boxInfo" class="note"></span>
+        </div>
         <div class="rennbox" id="rennFunkBox" style="margin-top:10px">
           <div class="lbl">Boxenfunk</div>
           <div id="rennTicker"><p class="note">…Funk knistert…</p></div>
@@ -5771,6 +5785,30 @@ function rennenRendern(state, myId) {
             <span class="chip2" style="margin-left:auto">Auszahlung nach Zieldurchfahrt</span>
           </div>
         </div>`;
+    }
+    /* Box-Knopf: nur sichtbar, wenn der eigene Wagen fährt. Zustände:
+     * bereit -> in der Box (Countdown) -> frische Technik. */
+    const boxBar = document.getElementById("boxBar");
+    if (boxBar) {
+      const meinTeil = r.teilnehmer.find(t2 => t2.ownerId === myId && !t2.bot);
+      if (!meinTeil || meinTeil.ausgefallen) boxBar.hidden = true;
+      else {
+        boxBar.hidden = false;
+        const knopf = document.getElementById("boxKnopf"), info = document.getElementById("boxInfo");
+        if (meinTeil.boxe) {
+          knopf.disabled = true; knopf.textContent = "🔧 In der Box …";
+          info.textContent = "Reifen, Technik, raus hier!";
+        } else if (meinTeil.frisch) {
+          knopf.disabled = true; knopf.textContent = "✓ Frische Technik";
+          info.textContent = `Stopp erledigt — mehr Tempo-Substanz und weniger Ausfallrisiko (${meinTeil.stopps}/2).`;
+        } else {
+          const zu = r.rest <= 8;
+          knopf.disabled = zu || meinTeil.stopps >= 2;
+          knopf.textContent = "🔧 BOX! Boxenstopp jetzt";
+          info.textContent = zu ? "Boxengasse zu — Schlussphase." :
+            "Kostet ~5 s Stillstand, bringt Frische: mehr Tempo, weniger Ausfallrisiko.";
+        }
+      }
     }
     /* Boxenfunk aktualisieren — neueste Meldung oben, leicht verblassend. */
     if (r.ticker?.length) {
@@ -5804,7 +5842,7 @@ function rennenRendern(state, myId) {
       <div class="rennstand${i === 0 && !t2.ausgefallen ? " fuehrt" : ""}${meins2 ? " meins" : ""}" style="${t2.ausgefallen ? "opacity:.45" : ""}">
         <span class="platzbadge p${i + 1}">${i + 1}</span>
         ${wagenChip(t2.farbe, t2.ausgefallen)}
-        <span class="wer"><b>${escapeHtml(t2.name)}</b>${t2.ausgefallen ? " 💥" : ""}${meins2 ? ` <span class="meta" style="color:var(--accent)">· dein Stall</span>` : ""}
+        <span class="wer"><b>${escapeHtml(t2.name)}</b>${t2.ausgefallen ? " 💥" : t2.boxe ? " 🔧" : t2.frisch ? " ✓" : ""}${meins2 ? ` <span class="meta" style="color:var(--accent)">· dein Stall</span>` : ""}
           <span class="meta">${escapeHtml(t2.team)} · ${escapeHtml(t2.fahrer)}</span></span>
         <span class="fortschritt">
           <span class="zeile"><span>R${Math.floor(t2.dist / r.runde) + 1} · ${t2.dist} m</span><span>${t2.ausgefallen ? "DNF" : rueckstand}</span></span>
@@ -6124,6 +6162,11 @@ function rennStreckeZeichnen() {
       }
       g.globalAlpha = 1;
     }
+    /* Boxenstopp: Schraubenschlüssel über dem stehenden Wagen */
+    if (t2.boxe) {
+      g.font = "12px sans-serif"; g.textAlign = "center";
+      g.fillText("🔧", px2, py2 - 24);
+    }
     g.font = "700 10px sans-serif"; g.textAlign = "center";
     g.fillStyle = "rgba(10,14,20,.65)";
     const label = "#" + (t2.name.match(/#(\d+)/)?.[1] || i + 1);
@@ -6138,6 +6181,10 @@ function rennStreckeZeichnen() {
     g.fillText(`Runde ${Math.floor(erster.dist / r.runde) + 1}`, 14, 22);
   }
 }
+document.getElementById("rennOverlay").addEventListener("click", e => {
+  if (e.target.id !== "boxKnopf") return;
+  socket.emit("boxenstopp", {}, res => { if (res?.error) toast(res.error, true); else rennTon(300, .25, "square", .09); });
+});
 document.getElementById("rennMini").addEventListener("click", () => { rennMinimiert = true; render(store.get()); });
 document.getElementById("rennChip").addEventListener("click", () => { rennMinimiert = false; rennenRendern.sig = ""; render(store.get()); });
 
