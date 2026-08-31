@@ -2253,6 +2253,43 @@ const EN = {
   "Spielanleitung lesen": "Read the manual", "Lieber ausprobieren": "Rather try it out",
   "Vorlesen": "Read aloud", "Stopp": "Stop", "Spielanleitung": "Manual",
   "Neuer Spielmodus": "New game mode",
+  "🏆 Bestenliste dieses Servers": "🏆 Server leaderboard",
+  "Startfeld": "Grid",
+  /* Renntag-Overlay */
+  "🏁 Renntag — Anmeldung & Wetten": "🏁 Race day — entries & betting",
+  "🏁 Das Rennen läuft": "🏁 The race is on",
+  "🏁 Siegerehrung": "🏁 Podium ceremony",
+  "🏁 Renntag": "🏁 Race day",
+  "RENNEN LÄUFT": "RACE LIVE",
+  "Siegerehrung": "Podium", "Rennen": "Race", "Anmeldung": "Entries",
+  "Wettschein": "Betting slip", "Sponsorgesuche": "Sponsorship requests",
+  "Sponsoren an Bord": "Sponsors on board", "Boxenfunk": "Pit radio", "Zwischenstand": "Standings",
+  "Sieg": "Win", "Podium (Top 3)": "Podium (top 3)", "Ausfall": "DNF",
+  "Wette platzieren": "Place bet", "Sponsoren suchen": "Find sponsors",
+  "Erfüllen": "Fulfil", "zu wenig": "not enough", "Werksteam": "Works team",
+  "dein Stall": "your stable", "gemeldet": "entered", "startet": "racing",
+  "Erstes Rennen": "First race", "Wagen": "cars", "Preistopf": "Prize pot",
+  "Wettpool": "Betting pool", "Sieg-Pool": "Win pool", "Podium-Pool": "Podium pool",
+  "Ausfall-Pool": "DNF pool", "Auszahlung nach Zieldurchfahrt": "Paid out after the finish",
+  "Einsatz $": "Stake $", "Menge": "Amount", "Geld": "Money",
+  "🔧 BOX! Boxenstopp jetzt": "🔧 BOX! Pit stop now",
+  "🔧 In der Box …": "🔧 In the pits …",
+  "✓ Frische Technik": "✓ Fresh machinery",
+  "Reifen, Technik, raus hier!": "Tyres, wrenches, go go go!",
+  "Boxengasse zu — Schlussphase.": "Pit lane closed — final phase.",
+  "Kostet ~5 s Stillstand, bringt Frische: mehr Tempo, weniger Ausfallrisiko.":
+    "Costs ~5 s standing still, buys freshness: more pace, lower DNF risk.",
+  "…Funk knistert…": "…radio static…",
+  "Wagen links in der Liste anklicken": "Click a car in the list on the left",
+  "Dein Gesuch": "Your request", "Noch keins aufgegeben": "None posted yet",
+  "Zurzeit sucht kein anderes Team einen Sponsor.": "No other team is looking for a sponsor right now.",
+  "Keine fremden Wagen zum Wetten gemeldet.": "No rival cars entered to bet on.",
+  "Noch kein Wagen gemeldet — Rennställe melden im Motorsport-Panel.":
+    "No cars entered yet — racing stables enter via the motorsport panel.",
+  "Fahrzeugakte": "Vehicle record", "Verlauf": "History",
+  "Zum Rennen melden": "Enter the race",
+  "✓ Zum Rennen gemeldet": "✓ Entered in the race",
+  "Nicht startklar (Fahrer + Zustand ≥ 25 % nötig)": "Not race-ready (driver + condition ≥ 25 % required)",
   /* Bugreport */
   "Fehler melden": "Report a bug",
   "Beschreibe kurz, was schiefgelaufen ist — je genauer, desto schneller lässt es sich beheben.":
@@ -5344,7 +5381,7 @@ function motorsportRendern(state, me, myId) {
           </div>
         </div>
         <div class="sec" style="margin-top:8px">Entwicklung</div>${tuningKnoepfe}
-        <div class="sec" style="margin-top:8px">Fahrzeugakte</div>
+        <div class="sec" style="margin-top:8px">${t("Fahrzeugakte")}</div>
         <div style="font-size:11.5px;opacity:.85;display:flex;gap:14px;flex-wrap:wrap">
           <span><b>${(a.km || 0).toLocaleString("de-DE")}</b> km</span>
           <span>Kauf: <b>${fmt(a.kaufpreis || 0)}</b></span>
@@ -5352,7 +5389,7 @@ function motorsportRendern(state, me, myId) {
           <span>Investiert: <b>${fmt((a.kaufpreis || 0) + (a.tuningAusgaben || 0))}</b></span>
         </div>
         <details data-akte="${a.id}" ${akteOffen.has(String(a.id)) ? "open" : ""} style="margin-top:5px">
-          <summary class="note" style="cursor:pointer">Verlauf (${(a.historie || []).length})</summary>
+          <summary class="note" style="cursor:pointer">${t("Verlauf")} (${(a.historie || []).length})</summary>
           ${(a.historie || []).slice().reverse().map(h =>
             `<div style="display:flex;justify-content:space-between;font-size:11px;opacity:.8;padding:2px 0">
                <span>${h.text}</span><span>${h.amt ? fmt(h.amt) : ""}</span></div>`).join("")}
@@ -5384,7 +5421,7 @@ function motorsportRendern(state, me, myId) {
           const startklar = a.fahrerId && a.zustand >= 25;
           return `<button class="buyb" style="margin-top:8px;width:100%" data-anmelden="${a.id}" data-x="${a.x}" data-y="${a.y}"
             ${gemeldet || !startklar ? "disabled" : ""}>
-            ${gemeldet ? "✓ Zum Rennen gemeldet" : startklar ? `Zum Rennen melden (${fmt(state.rennen.nenngeld || 1500)} Nenngeld)` : "Nicht startklar (Fahrer + Zustand ≥ 25 % nötig)"}</button>`;
+            ${gemeldet ? t("✓ Zum Rennen gemeldet") : startklar ? `${t("Zum Rennen melden")} (${fmt(state.rennen.nenngeld || 1500)})` : t("Nicht startklar (Fahrer + Zustand ≥ 25 % nötig)")}</button>`;
         })() : ""}
       </div>`;
   };
@@ -5626,11 +5663,11 @@ function rennenRendern(state, myId) {
   chip.hidden = !rennMinimiert;
   rennAmpelRendern(r);
   document.getElementById("rennChipText").textContent =
-    r.phase === "anmeldung" ? `Anmeldung ${r.rest}s` : r.phase === "laeuft" ? "RENNEN LÄUFT" : "Siegerehrung";
+    r.phase === "anmeldung" ? `${t("Anmeldung")} ${r.rest}s` : r.phase === "laeuft" ? t("RENNEN LÄUFT") : t("Siegerehrung");
   if (rennMinimiert) return;
   document.getElementById("rennTitel").textContent =
-    r.phase === "anmeldung" ? "🏁 Renntag — Anmeldung & Wetten" :
-    r.phase === "laeuft" ? "🏁 Das Rennen läuft" : "🏁 Siegerehrung";
+    r.phase === "anmeldung" ? t("🏁 Renntag — Anmeldung & Wetten") :
+    r.phase === "laeuft" ? t("🏁 Das Rennen läuft") : t("🏁 Siegerehrung");
   document.getElementById("rennUhr").textContent =
     r.phase === "ergebnis" ? "ZIEL" : `${Math.floor(r.rest / 60)}:${String(r.rest % 60).padStart(2, "0")}`;
   const body = document.getElementById("rennBody");
@@ -5663,25 +5700,25 @@ function rennenRendern(state, myId) {
         <div class="phasenkopf">
           <div class="phasenbalken"><i id="phasenFuell" style="width:${phaseProz}%"></i></div>
           <div class="rennstat" style="margin-top:8px">
-            <span class="chip2">🏆 Preistopf <b>${fmt(r.topf)}</b></span>
-            <span class="chip2">Sieg-Pool <b>${fmt(r.pools?.sieg || 0)}</b></span>
-            <span class="chip2">Podium-Pool <b>${fmt(r.pools?.podium || 0)}</b></span>
-            <span class="chip2">Ausfall-Pool <b>${fmt(r.pools?.ausfall || 0)}</b></span>
+            <span class="chip2">🏆 ${t("Preistopf")} <b>${fmt(r.topf)}</b></span>
+            <span class="chip2">${t("Sieg-Pool")} <b>${fmt(r.pools?.sieg || 0)}</b></span>
+            <span class="chip2">${t("Podium-Pool")} <b>${fmt(r.pools?.podium || 0)}</b></span>
+            <span class="chip2">${t("Ausfall-Pool")} <b>${fmt(r.pools?.ausfall || 0)}</b></span>
           </div>
         </div>
         <div class="renngrid">
           <div class="rennbox">
-            <div class="lbl">Startfeld · ${r.teilnehmer.length}/8 Wagen</div>
+            <div class="lbl">${t("Startfeld")} · ${r.teilnehmer.length}/8 ${t("Wagen")}</div>
             ${r.teilnehmer.map((t2, i) => {
               const eigen = t2.ownerId === myId;
               const gewaehlt = !eigen && t2.autoId === rennenRendern.wahl;
-              const marke = eigen ? `<span class="herkunft selbst">dein Stall</span>`
-                          : t2.bot ? `<span class="herkunft">Werksteam</span>`
-                                   : `<span class="herkunft spieler">gemeldet</span>`;
+              const marke = eigen ? `<span class="herkunft selbst">${t("dein Stall")}</span>`
+                          : t2.bot ? `<span class="herkunft">${t("Werksteam")}</span>`
+                                   : `<span class="herkunft spieler">${t("gemeldet")}</span>`;
               const L = t2.letztes;
               const letztes = L
                 ? `Zuletzt: ${L.aus ? "ausgefallen" : `${L.platz}. von ${L.feld}`}`
-                : "Erstes Rennen";
+                : t("Erstes Rennen");
               return `<div class="startzeile${eigen ? " selbst" : " wettbar rennteil"}${gewaehlt ? " gewaehlt" : ""}"${eigen ? "" : ` data-auto="${t2.autoId}"`}>
                 <span class="startnr">${i + 1}</span>
                 ${wagenChipHtml(t2.farbe)}
@@ -5689,35 +5726,35 @@ function rennenRendern(state, myId) {
                   <b>${escapeHtml(t2.name)}</b> ${marke}
                   <span class="meta" style="display:block">${escapeHtml(t2.team)} · ${escapeHtml(t2.fahrer)} · ${letztes}</span>
                 </span>
-                ${eigen ? `<span class="quotepill selbstpill">startet</span>`
+                ${eigen ? `<span class="quotepill selbstpill">${t("startet")}</span>`
                         : `<span class="quotepill${gewaehlt ? " an" : ""}">${r.quoten[t2.autoId] ? r.quoten[t2.autoId].toFixed(2) : "—"}</span>`}
               </div>`;
-            }).join("") || `<p class="note">Noch kein Wagen gemeldet — Rennställe melden im Motorsport-Panel.</p>`}
+            }).join("") || `<p class="note">${t("Noch kein Wagen gemeldet — Rennställe melden im Motorsport-Panel.")}</p>`}
           </div>
           <div class="rennbox">
             ${wettbar.length ? `
-            <div class="lbl">Wettschein</div>
+            <div class="lbl">${t("Wettschein")}</div>
             <div class="wettschein">
               <div class="wettwahl">
                 ${gewaehlter ? `${wagenChipHtml(gewaehlter.farbe)}<span><b>${escapeHtml(gewaehlter.name)}</b>
                     <span class="meta" style="display:block">${escapeHtml(gewaehlter.team)} · ${escapeHtml(gewaehlter.fahrer)}</span></span>`
-                  : `<span class="note">Wagen links in der Liste anklicken</span>`}
+                  : `<span class="note">${t("Wagen links in der Liste anklicken")}</span>`}
               </div>
               <div class="artwahl">
                 ${[["sieg", "Sieg"], ["podium", "Podium"], ["ausfall", "Ausfall"]].map(([k2, l2]) =>
-                  `<button type="button" data-wettart="${k2}" class="${artWahl === k2 ? "an" : ""}">${l2}</button>`).join("")}
+                  `<button type="button" data-wettart="${k2}" class="${artWahl === k2 ? "an" : ""}">${t(l2)}</button>`).join("")}
               </div>
               <div class="rennform" style="margin-top:8px">
-                <input id="wettBetrag" type="number" min="100" max="20000" placeholder="Einsatz $">
+                <input id="wettBetrag" type="number" min="100" max="20000" placeholder="${t("Einsatz $")}">
                 ${[500, 1000, 5000].map(b2 => `<button type="button" class="schnell" data-einsatz="${b2}">${b2 >= 1000 ? (b2 / 1000) + "k" : b2}</button>`).join("")}
               </div>
               <p class="note" id="wettVorschau" style="margin:7px 0"></p>
-              <button id="wettSenden" class="wettknopf">Wette platzieren</button>
+              <button id="wettSenden" class="wettknopf">${t("Wette platzieren")}</button>
               <p class="note" style="margin-top:7px"><b>Sieg</b>: Quote live · <b>Podium</b>: zahlt für Top 3 ·
                 <b>Ausfall</b>: zahlt bei Defekt. Je Markt ein Totalisator-Pool (−10 % in den Preistopf);
                 ohne Gewinner gibt es den Einsatz zurück.</p>
-            </div>` : `<div class="lbl">Wettschein</div><p class="note">Keine fremden Wagen zum Wetten gemeldet.</p>`}
-            <div class="lbl" style="margin-top:14px">Sponsorgesuche</div>
+            </div>` : `<div class="lbl">${t("Wettschein")}</div><p class="note">${t("Keine fremden Wagen zum Wetten gemeldet.")}</p>`}
+            <div class="lbl" style="margin-top:14px">${t("Sponsorgesuche")}</div>
             ${(() => {
               const alle = r.gesuche || [];
               const offen = alle.filter(g => g.teamId !== myId);
@@ -5731,15 +5768,15 @@ function rennenRendern(state, myId) {
                 return `<div class="gesuch${reicht ? " kann" : ""}">
                   <span class="was"><b>${escapeHtml(g.team)}</b> sucht <span class="bedarf">${braucht}</span>
                     <br><span class="meta">${geld ? `du hast ${fmt(me.cash)}` : `du hast ${habe}×`} · Gegenwert ${fmt(g.wert)}</span></span>
-                  <button data-gesuch="${g.id}" ${reicht ? "" : "disabled"}>${reicht ? "Erfüllen" : "zu wenig"}</button>
+                  <button data-gesuch="${g.id}" ${reicht ? "" : "disabled"}>${reicht ? t("Erfüllen") : t("zu wenig")}</button>
                 </div>`;
               };
               const eigenes = !binGemeldet ? "" : `
                 <div class="gesuch eigenesGesuch">
-                  <span class="was"><b>Dein Gesuch</b>
+                  <span class="was"><b>${t("Dein Gesuch")}</b>
                     <br><span class="meta">${meins
                       ? (meins.art === "geld" ? `Du suchst ${fmt(meins.betrag)}` : `Du suchst ${meins.menge}× ${gname(meins.art)}`)
-                      : "Noch keins aufgegeben"}</span></span>
+                      : t("Noch keins aufgegeben")}</span></span>
                 </div>
                 <div class="rennform">
                   <select id="gesuchArt">
@@ -5748,15 +5785,15 @@ function rennenRendern(state, myId) {
                     <option value="rennreifen">Rennreifen</option>
                   </select>
                   <input id="gesuchMenge" type="number" min="1" placeholder="Menge">
-                  <button id="gesuchSenden">Sponsoren suchen</button>
+                  <button id="gesuchSenden">${t("Sponsoren suchen")}</button>
                 </div>
                 <p class="note" style="margin:4px 0 10px">Bei Geld der Betrag (1.000–20.000 $), bei Teilen die Stückzahl (1–10). Ein neues Gesuch ersetzt dein altes.</p>`;
               const fremd = offen.length
                 ? offen.map(zeile).join("") + `<p class="note" style="margin-top:6px">Dafür bekommst du bis zu 50 % des Preisgeldes dieses Teams (pro rata mit anderen Sponsoren). Teile werden zum Ø-Kurs bewertet.</p>`
-                : `<p class="note">Zurzeit sucht kein anderes Team einen Sponsor.</p>`;
+                : `<p class="note">${t("Zurzeit sucht kein anderes Team einen Sponsor.")}</p>`;
               return eigenes + fremd;
             })()}
-            ${r.sponsoren.length ? `<div class="lbl" style="margin-top:12px">Sponsoren an Bord</div>` +
+            ${r.sponsoren.length ? `<div class="lbl" style="margin-top:12px">${t("Sponsoren an Bord")}</div>` +
               r.sponsoren.map(s => `<div class="gesuch" style="padding:6px 10px"><span class="was">${escapeHtml(s.name)} → <b>${escapeHtml(s.team || "?")}</b>${
                 s.was ? `<br><span class="meta">${escapeHtml(s.was)}</span>` : ""}</span><span class="quotepill">${fmt(s.betrag)}</span></div>`).join("") : ""}
           </div>
@@ -5820,20 +5857,20 @@ function rennenRendern(state, myId) {
       body.innerHTML = `
         <canvas id="rennStrecke" width="740" height="320"></canvas>
         <div id="boxBar" hidden>
-          <button id="boxKnopf" type="button">🔧 BOX! Boxenstopp jetzt</button>
+          <button id="boxKnopf" type="button">${t("🔧 BOX! Boxenstopp jetzt")}</button>
           <span id="boxInfo" class="note"></span>
         </div>
         <div class="rennbox" id="rennFunkBox" style="margin-top:10px">
-          <div class="lbl">Boxenfunk</div>
-          <div id="rennTicker"><p class="note">…Funk knistert…</p></div>
+          <div class="lbl">${t("Boxenfunk")}</div>
+          <div id="rennTicker"><p class="note">${t("…Funk knistert…")}</p></div>
         </div>
         <div class="rennbox" style="margin-top:10px">
-          <div class="lbl">Zwischenstand</div>
+          <div class="lbl">${t("Zwischenstand")}</div>
           <div id="rennStand"></div>
           <div class="rennstat">
-            <span class="chip2">🏆 Preistopf <b>${fmt(r.topf)}</b></span>
-            <span class="chip2">💰 Wettpool <b>${fmt(r.pool)}</b></span>
-            <span class="chip2" style="margin-left:auto">Auszahlung nach Zieldurchfahrt</span>
+            <span class="chip2">🏆 ${t("Preistopf")} <b>${fmt(r.topf)}</b></span>
+            <span class="chip2">💰 ${t("Wettpool")} <b>${fmt(r.pool)}</b></span>
+            <span class="chip2" style="margin-left:auto">${t("Auszahlung nach Zieldurchfahrt")}</span>
           </div>
         </div>`;
     }
@@ -5847,17 +5884,17 @@ function rennenRendern(state, myId) {
         boxBar.hidden = false;
         const knopf = document.getElementById("boxKnopf"), info = document.getElementById("boxInfo");
         if (meinTeil.boxe) {
-          knopf.disabled = true; knopf.textContent = "🔧 In der Box …";
-          info.textContent = "Reifen, Technik, raus hier!";
+          knopf.disabled = true; knopf.textContent = t("🔧 In der Box …");
+          info.textContent = t("Reifen, Technik, raus hier!");
         } else if (meinTeil.frisch) {
-          knopf.disabled = true; knopf.textContent = "✓ Frische Technik";
+          knopf.disabled = true; knopf.textContent = t("✓ Frische Technik");
           info.textContent = `Stopp erledigt — mehr Tempo-Substanz und weniger Ausfallrisiko (${meinTeil.stopps}/2).`;
         } else {
           const zu = r.rest <= 8;
           knopf.disabled = zu || meinTeil.stopps >= 2;
-          knopf.textContent = "🔧 BOX! Boxenstopp jetzt";
-          info.textContent = zu ? "Boxengasse zu — Schlussphase." :
-            "Kostet ~5 s Stillstand, bringt Frische: mehr Tempo, weniger Ausfallrisiko.";
+          knopf.textContent = t("🔧 BOX! Boxenstopp jetzt");
+          info.textContent = zu ? t("Boxengasse zu — Schlussphase.") :
+            t("Kostet ~5 s Stillstand, bringt Frische: mehr Tempo, weniger Ausfallrisiko.");
         }
       }
     }
