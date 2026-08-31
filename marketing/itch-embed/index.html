@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Capital Sandbox</title>
+<!--
+  Weiterleitungsseite für itch.io ("Kind of project: HTML").
+
+  Warum es diese Seite gibt: itch liefert bei HTML-Spielen nur statische
+  Dateien aus und kann keinen Node-Prozess betreiben. Capital Sandbox braucht
+  aber einen laufenden Server — Karte, Boerse und Rennen leben dort. Diese
+  Seite ist deshalb nur das Schaufenster im itch-Rahmen und schickt den
+  Spieler auf www.capitalsandbox.io, wo das Gateway laeuft.
+
+  Bewusst ohne externe Ressourcen (keine Schriften, keine Skripte von fremden
+  Servern): Der itch-Rahmen ist streng, und die Seite soll auch dann stehen,
+  wenn etwas blockiert wird.
+
+  Der Knopf oeffnet einen neuen Tab (target=_blank). Nicht _top verwenden —
+  das wuerde die ganze itch-Seite ersetzen, und der Besucher verliert die
+  Spielseite mitsamt Kommentaren und Zurueck-Knopf.
+-->
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{
+    font:16px/1.6 ui-sans-serif,system-ui,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    color:#e8eefb; background:#070c15;
+    display:grid; place-items:center; padding:24px; overflow:hidden;
+  }
+  .buehne{
+    position:relative; width:100%; max-width:760px;
+    border:1px solid #22344c; border-radius:16px; overflow:hidden;
+    background:#0b1220;
+    box-shadow:0 30px 80px -30px #000;
+  }
+  .bild{
+    position:absolute; inset:0;
+    background:url("titelbild.jpg") center 22% / cover no-repeat;
+    opacity:.42; filter:saturate(.85);
+  }
+  /* Verlauf nach unten, damit der Text auf jedem Bildausschnitt lesbar bleibt */
+  .schleier{position:absolute;inset:0;background:linear-gradient(180deg,rgba(7,12,21,.35) 0%,rgba(7,12,21,.82) 55%,rgba(7,12,21,.97) 100%)}
+  .inhalt{position:relative;padding:44px 40px 38px;display:flex;flex-direction:column;gap:18px}
+
+  .marke{font-size:11px;letter-spacing:.22em;text-transform:uppercase;color:#4cb2ee;font-weight:700}
+  h1{font-size:clamp(30px,6vw,46px);line-height:1.04;font-weight:800;letter-spacing:-.02em}
+  h1 span{color:#4cb2ee}
+  .pitch{font-size:17px;color:#a9bad4;max-width:52ch}
+  .pitch b{color:#e8eefb;font-weight:600}
+
+  .modi{display:flex;flex-wrap:wrap;gap:7px;margin-top:2px}
+  .modi span{font-size:12px;padding:5px 11px;border-radius:999px;border:1px solid #263a55;color:#b9c8de;background:#0e1826}
+
+  .reihe{display:flex;flex-wrap:wrap;align-items:center;gap:14px;margin-top:8px}
+  .spielen{
+    display:inline-flex;align-items:center;gap:10px;
+    background:#38bdf8;color:#06121e;text-decoration:none;
+    font-size:17px;font-weight:800;letter-spacing:.01em;
+    padding:14px 26px;border-radius:11px;
+    box-shadow:0 10px 30px -12px #38bdf8;
+    transition:transform .12s ease, box-shadow .12s ease;
+  }
+  .spielen:hover{transform:translateY(-1px);box-shadow:0 14px 34px -12px #38bdf8}
+  .spielen:focus-visible{outline:3px solid #fbbf24;outline-offset:3px}
+  .klein{font-size:13px;color:#8496b0}
+  .klein code{font-family:ui-monospace,Menlo,monospace;color:#a9bad4}
+
+  .en{margin-top:14px;padding-top:14px;border-top:1px solid #1c2c42;font-size:13.5px;color:#8496b0}
+
+  @media (prefers-reduced-motion:reduce){.spielen{transition:none}}
+  @media (max-width:560px){.inhalt{padding:30px 24px 26px}}
+</style>
+</head>
+<body>
+  <main class="buehne">
+    <div class="bild" role="presentation"></div>
+    <div class="schleier" role="presentation"></div>
+    <div class="inhalt">
+      <p class="marke">Multiplayer-Wirtschaftssimulation</p>
+      <h1>Capital <span>Sandbox</span></h1>
+      <p class="pitch">Bau dein Imperium, handle an einer echten Spieler-Börse und kauf der Konkurrenz die Anteile weg. <b>Bis zu 8 Spieler, direkt im Browser</b> — ohne Konto, ohne Installation.</p>
+
+      <div class="modi">
+        <span>Sandbox</span>
+        <span>Race Day</span>
+        <span>Planwirtschaft (DDR)</span>
+        <span>Einsteiger</span>
+      </div>
+
+      <div class="reihe">
+        <a class="spielen" href="https://www.capitalsandbox.io" target="_blank" rel="noopener">Jetzt spielen →</a>
+        <span class="klein">öffnet <code>www.capitalsandbox.io</code> in einem neuen Tab</span>
+      </div>
+
+      <p class="en">Play in your browser at <b style="color:#e8eefb">www.capitalsandbox.io</b> — up to 8 players, no account, no install. Runs on our own server, so the game lives there rather than here.</p>
+    </div>
+  </main>
+</body>
+</html>

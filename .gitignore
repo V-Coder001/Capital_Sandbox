@@ -154,3 +154,6 @@ bugreports/
 
 # Lokale Bestenliste (Spielstand-Daten)
 leaderboard.json
+
+# Fertiges itch-Upload-Paket — wird aus marketing/itch-embed/ gebaut
+marketing/capital-sandbox-itch.zip
