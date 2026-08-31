@@ -2345,7 +2345,22 @@ let myIndustry = "agrar";
  * Warteraum — dort sehen alle, wer was nimmt, und koennen sich absprechen,
  * bevor es losgeht. Statt das Markup zu doppeln, wandert der vorhandene Block
  * beim Laden hinueber: Stile und Klick-Logik bleiben damit unveraendert. */
-document.getElementById("lwBrancheSlot")?.append(document.getElementById("jind"));
+(() => {
+  const block = document.getElementById("jind");
+  const slot = document.getElementById("lwBrancheSlot");
+  if (!block || !slot) return;
+  const spalte = block.closest(".col"), trenner = spalte?.previousElementSibling;
+  slot.append(block);
+  /* Die Karte war zweispaltig, rechts stand die Branchenwahl. Ohne sie blieben
+   * eine leere Spalte und die Trennlinie stehen — beides weg, und der Rumpf
+   * wird einspaltig, sonst klafft rechts die halbe Karte leer. */
+  if (spalte && !spalte.children.length) {
+    trenner?.classList.contains("divider") && trenner.remove();
+    spalte.remove();
+    const rumpf = document.querySelector("#join .body");
+    if (rumpf) rumpf.style.gridTemplateColumns = "1fr";
+  }
+})();
 document.querySelectorAll(".indopt:not(.netopt)").forEach(b => b.addEventListener("click", () => {
   myIndustry = b.dataset.ind;
   document.querySelectorAll(".indopt:not(.netopt)").forEach(x => x.classList.toggle("on", x === b));
