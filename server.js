@@ -2593,7 +2593,12 @@ io.on("connection", socket => {
     if (!t || t.owner !== p.id || !BTYPES[t.btype]?.racing) return ack?.({ error: "Kein eigener Rennstall" });
     const a = (t.autos || []).find(a2 => a2.id === autoId);
     if (!a) return ack?.({ error: "Fahrzeug nicht gefunden" });
-    if (!a.fahrerId) return ack?.({ error: "Ohne Fahrer kein Start — erst zuweisen" });
+    /* Nicht nur "irgendeine Fahrer-ID", sondern ein Fahrer, der wirklich unter
+     * Vertrag steht. Ein entlassener Fahrer hinterliess frueher seine ID im
+     * Cockpit — der Wagen galt damit als besetzt und waere mit einem Phantom
+     * am Steuer ins Rennen gegangen. */
+    const cockpit = G.fahrer.find(x2 => x2.id === a.fahrerId && x2.teamId === p.id);
+    if (!cockpit) { a.fahrerId = null; return ack?.({ error: "Ohne Fahrer kein Start — erst zuweisen" }); }
     if (a.zustand < 25) return ack?.({ error: "Der Wagen ist zu verschlissen (unter 25 %)" });
     if (r.teilnehmer.some(x2 => x2.autoId === a.id)) return ack?.({ error: "Schon angemeldet" });
     /* Werkswagen sind Platzhalter, keine Konkurrenz um Startplaetze: Sobald ein
@@ -2606,7 +2611,7 @@ io.on("connection", socket => {
       return ack?.({ error: `Das Startfeld ist voll (${RENN_FELD_MAX} Wagen)` });
     if (p.cash < RENN_NENNGELD) return ack?.({ error: `Nenngeld fehlt (${RENN_NENNGELD.toLocaleString("de-DE")} $)` });
     p.cash -= RENN_NENNGELD;
-    const f = G.fahrer.find(x2 => x2.id === a.fahrerId);
+    const f = cockpit;
     /* Jede Startnummer bekommt eine eindeutige Lackierung — Teamfarben
      * kollidieren sonst (zwei blaue Teams = zwei ununterscheidbare Wagen). */
     const LIVREEN = ["#e74c3c", "#f5c542", "#2ecc71", "#3b9cf6", "#e67e22", "#b07cf7", "#1abc9c", "#eef2f7"];
@@ -2671,6 +2676,10 @@ io.on("connection", socket => {
     const f = G.fahrer.find(f => f.id === fahrerId && f.teamId === p.id);
     if (!f) return ack?.({ error: "Nicht dein Fahrer" });
     f.teamId = null; f.autoId = null;
+    /* Auch das Cockpit raeumen: Sonst zeigt der Wagen weiter auf einen Fahrer,
+     * der nicht mehr im Team ist — er gilt als besetzt, waehrend die Auswahl
+     * "kein Fahrer" anzeigt. */
+    for (const tt of G.map) for (const aa of tt.autos || []) if (aa.fahrerId === f.id) aa.fahrerId = null;
     logTx(p, "Motorsport", `${f.name} entlassen`, 0);
     ack?.({ ok: true });
   }));

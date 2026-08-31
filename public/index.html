@@ -4989,6 +4989,13 @@ function motorsportRendern(state, me, myId) {
   if (knopf) knopf.style.display = staelle.length ? "" : "none";
   const box = document.getElementById("motorbody");
   if (!box || !document.getElementById("p-motorsport").classList.contains("open")) return;
+  /* Nicht neu bauen, waehrend jemand ein Bedienelement benutzt. Das Panel baut
+   * sich im Sekundentakt komplett neu auf — wer die Fahrerauswahl aufklappt,
+   * dem wurde das Auswahlfeld unter der Hand ersetzt, es klappte zu, und der
+   * Fahrer liess sich nicht zuweisen. Die anderen Panels haben denselben
+   * Schutz; hier fehlte er. */
+  if (box.contains(document.activeElement)
+      && /INPUT|SELECT|TEXTAREA/.test(document.activeElement?.tagName)) return;
   if (!staelle.length) { box.innerHTML = `<div class="note">Du betreibst keinen Rennstall.</div>`; return; }
 
   const farbe = state.players[myId]?.color || "#7ad";
