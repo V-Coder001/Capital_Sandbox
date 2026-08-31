@@ -342,6 +342,24 @@ const INDUSTRIES = {
   tech:      { name: "Technologie & Elektronik", en: "Technology & electronics" },
   touristik: { name: "Touristik", en: "Tourism" },
   ruestung:  { name: "Rüstungsindustrie", en: "Armament industry" },
+  /* Nur im Renntag-Modus waehlbar: Dort gibt es keine sechs Branchen, sondern
+   * zwei Rollen — wer faehrt und wer beliefert. */
+  rennclub:      { name: "Race Club", en: "Race club" },
+  rennindustrie: { name: "Rennindustrie", en: "Racing industry" },
+};
+/* Welche Rollen im Renntag zur Wahl stehen. */
+const RENNTAG_ROLLEN = ["rennclub", "rennindustrie"];
+/* Was die beiden Rollen bauen duerfen. Laeden (bt.retail) und der Rennstall
+ * sind gesondert geregelt.
+ *
+ * Die Rennindustrie bekommt die komplette Zulieferkette, nicht nur die beiden
+ * Teile-Werke: Rennreifen brauchen Oel und Stahl, Rennsoftware Elektronik und
+ * Silizium. Ohne die Vorstufen stuenden ihre Werke still, denn im Renntag gibt
+ * es keine Agrar- oder Versorgerbranche mehr, die sie liefern koennte. */
+const RENNTAG_BAUTEN = {
+  rennclub: new Set(["rennstall", "werbeagentur"]),
+  rennindustrie: new Set(["reifenwerk", "rennlabor", "oelpumpe", "mine", "stahlwerk",
+                          "siliziummine", "chipfabrik", "ewerk", "windpark", "werbeagentur"]),
 };
 /* Baumaterial-Bedarf jedes Gebäudes: Ziegel immer, Beton ab $4.000. Elektronik
  * wird NICHT zum Bauen gebraucht, sondern zum Aufleveln bestehender Gebäude
@@ -441,6 +459,20 @@ function autoWert(a) {
     }
   return v;
 }
+/* Anzeigename eines Wagens: der selbst vergebene, sonst Gattung plus Nummer.
+ * An einer Stelle gebuendelt, damit Rennmeldung, Notizen und Finanzlog nicht
+ * auseinanderlaufen, sobald jemand seinen Wagen umtauft. */
+const autoName = a => a.name || `${GOODS[a.good].name} #${a.nr}`;
+/* Bot-Ställe tauften ihre Wagen nicht — im Startfeld standen dann "Benzin-Auto
+ * #4" neben "Ferro Tipo 12", und die Werksteams wirkten als Einzige wie echte
+ * Rennwagen. Jeder Bot-Wagen bekommt deshalb einen Namen aus diesem Pool,
+ * deterministisch nach Startnummer, damit er ueber die Runde stabil bleibt. */
+const BOT_WAGENNAMEN = [
+  "Sturmvogel", "Nordlicht", "Basilisk", "Kometa", "Wildkatze", "Zenit",
+  "Falkenauge", "Donnerkeil", "Silberdistel", "Taifun", "Mistral", "Panther",
+  "Rubin", "Vulkan", "Habicht", "Meteor", "Lawine", "Orkan",
+];
+const botWagenName = nr => BOT_WAGENNAMEN[(nr - 1) % BOT_WAGENNAMEN.length];
 function autoWerte(a) {
   const w = { ...RACE_STATS[a.good] };
   for (const [b, stufe] of Object.entries(a.tuning || {})) {
@@ -521,6 +553,53 @@ const RENN_NENNGELD = 1500;
 const RENN_GRUNDPREIS = 8000;
 const RENN_RUNDE = 900;          // Distanz einer Runde (für Runden-Anzeige und Streckengrafik)
 const WETT_RAKE = 0.1;           // Anteil des Wettpools, der in den Preistopf fließt
+const RENN_FELD_SOLL = 5;        // so viele Wagen sollen mindestens am Start stehen
+const RENN_FELD_MAX = 8;         // mehr passen nicht auf die Strecke
+
+/* ---- Werksteams ----
+ * Renntage brauchten frueher mindestens einen Spielerwagen mit Fahrer. Da ein
+ * Rennstall erst ab 200.000 $ Nettovermoegen gebaut werden darf, gab es in der
+ * ersten Stunde einer Runde ueberhaupt keinen Motorsport — und damit auch
+ * nichts zu wetten, obwohl Wetten keinen eigenen Stall voraussetzen.
+ *
+ * Jetzt tritt immer ein Feld aus Werkswagen an. Sie fahren um Ruhm, nicht um
+ * Geld: der Preistopf geht an die menschlichen Teilnehmer (siehe rennBeenden),
+ * ihre Aufgabe ist, dass es etwas zu sehen und zu wetten gibt.
+ *
+ * Sobald Spieler melden, weichen sie — Spieler haben Vorrang (siehe
+ * botWeichen). Damit loesen sich die Werksteams von selbst auf, je weiter die
+ * Runde fortschreitet. */
+const WERKS_TEAMS = [
+  { team: "Scuderia Ferro",  wagen: "Ferro Tipo 12",   land: "IT", livree: "#e74c3c" },
+  { team: "Nordstern",       wagen: "Nordstern NS-4",  land: "DE", livree: "#3b9cf6" },
+  { team: "Albion Works",    wagen: "Albion Mk III",   land: "GB", livree: "#2ecc71" },
+  { team: "Meridian",        wagen: "Meridian M7",     land: "FR", livree: "#f5c542" },
+  { team: "Kaskade Motors",  wagen: "Kaskade K2",      land: "US", livree: "#b07cf7" },
+  { team: "Tsubame",         wagen: "Tsubame Type-R",  land: "JP", livree: "#1abc9c" },
+];
+const WERKS_FAHRER = ["A. Moreau", "K. Lindqvist", "R. Okafor", "D. Halvorsen",
+                      "M. Ferrari", "S. Tanaka", "J. Brennan", "L. Vargas"];
+/* Einmal je Runde gewuerfelt, damit Form und Quoten ueber die Runde stabil
+ * bleiben — ein Wagen, der jedes Rennen andere Werte haette, waere nicht
+ * einschaetzbar, und Wetten waeren reines Raten. */
+function werksTeamsBauen() {
+  const r = (min, max) => min + Math.floor(Math.random() * (max - min + 1));
+  const basen = Object.values(RACE_STATS);
+  return WERKS_TEAMS.map((w, i) => {
+    const basis = basen[i % basen.length];
+    const form = r(-9, 9);                       // Staerke des Teams in dieser Runde
+    const werte = {};
+    for (const k of STATS)
+      werte[k] = Math.max(STAT_MIN, Math.min(STAT_MAX, basis[k] + form + r(-4, 4)));
+    /* Negative Nummern: Wagen-IDs sind sonst fortlaufende Zahlen aus id(), und
+     * der Client schickt sie als Zahl zurueck. Eine Zeichenkette wie "werk-0"
+     * wuerde dort zu NaN — dann liesse sich auf Werkswagen gar nicht wetten.
+     * id() selbst geht hier nicht: der Spielzustand wird aufgebaut, bevor die
+     * Funktion existiert. */
+    return { ...w, werte, id: -(i + 1), fahrer: WERKS_FAHRER[i % WERKS_FAHRER.length],
+             fahrerWert: 58 + form + r(-5, 5), konstanz: r(55, 88), zustand: r(82, 100) };
+  });
+}
 
 function findeAuto(autoId) {
   for (const t of G.map) for (const a of t.autos || []) if (a.id === autoId) return { t, a };
@@ -546,8 +625,126 @@ function rennQuoten(r) {
   }
   return { pool, quoten: q };
 }
+/* Freie Startplaetze mit Werkswagen fuellen. Muss bei der ANKUENDIGUNG
+ * passieren, nicht beim Start: gewettet wird waehrend der Anmeldephase, und
+ * wetteSetzen verlangt, dass der Wagen schon im Feld steht. */
+function feldAuffuellen(r) {
+  const frei = (G.werksTeams || []).filter(w => !r.teilnehmer.some(t => t.autoId === w.id));
+  for (const w of frei) {
+    if (r.teilnehmer.length >= RENN_FELD_SOLL) break;
+    r.teilnehmer.push({ autoId: w.id, bot: true, ownerId: null, team: w.team, farbe: w.livree,
+      livree: w.livree, name: w.wagen, fahrer: w.fahrer, werte: w.werte, zustand: w.zustand,
+      fahrerWert: w.fahrerWert, konstanz: w.konstanz, letztes: w.letztes || null,
+      dist: 0, ausgefallen: false });
+  }
+}
+/* Spieler haben Vorrang: Ist das Feld voll, raeumt der schwaechste Werkswagen
+ * den Platz. Wetten auf ihn werden erstattet — wer gesetzt hat, kann nichts
+ * dafuer, dass sein Wagen zurueckgezogen wird. */
+function botWeichen(r) {
+  const bots = r.teilnehmer.filter(t => t.bot);
+  if (!bots.length) return false;
+  const raus = bots.sort((a2, b2) =>
+    (a2.werte.speed + a2.fahrerWert) - (b2.werte.speed + b2.fahrerWert))[0];
+  r.teilnehmer.splice(r.teilnehmer.indexOf(raus), 1);
+  for (const w of r.wetten.filter(x => x.autoId === raus.autoId)) {
+    const p = G.players[w.playerId];
+    if (p) { p.cash += w.betrag; logTx(p, "Motorsport", `Wette erstattet — ${raus.name} zurueckgezogen`, w.betrag); }
+  }
+  r.wetten = r.wetten.filter(x => x.autoId !== raus.autoId);
+  io.emit("notice", { text: `${raus.name} (${raus.team}) macht Platz fuer einen gemeldeten Wagen.` });
+  return true;
+}
+/* ---- Sponsorgesuche ----
+ * Frueher suchte man sich selbst ein Team aus einer Liste und warf ihm Geld
+ * hinterher. Jetzt kommt die Anfrage vom Team: "Wir brauchen 4.000 $" oder
+ * "Wir brauchen 3x Rennreifen". Das gibt dem Sponsoring einen Anlass und macht
+ * die Teile aus der eigenen Produktion zu einer echten zweiten Waehrung.
+ *
+ * Der Gegenwert zaehlt wie bisher pro rata beim Preisgeld — Teile werden dafuer
+ * zum aktuellen Boersenkurs bewertet, damit Geld und Ware vergleichbar bleiben. */
+const GESUCH_ARTEN = ["geld", "rennsoftware", "rennreifen"];
+function gesuchStellen(r, team) {
+  if ((r.gesuche ??= []).some(g => g.teamId === team.id)) return;
+  const art = GESUCH_ARTEN[Math.floor(Math.random() * GESUCH_ARTEN.length)];
+  if (art === "geld") {
+    const betrag = (2 + Math.floor(Math.random() * 7)) * 1000;
+    r.gesuche.push({ id: id(), teamId: team.id, team: team.name, art, betrag, wert: betrag });
+  } else {
+    const menge = 1 + Math.floor(Math.random() * 4);
+    r.gesuche.push({ id: id(), teamId: team.id, team: team.name, art, menge,
+                     wert: Math.round(menge * MM[art].price) });
+  }
+}
+/* ---- Wettkontore ----
+ * Ohne Publikum ist der Totalisator leer: Wer als Erster setzt, bekommt bei
+ * einem Sieg fast nur den eigenen Einsatz zurueck, und die Quoten sagen
+ * nichts. Drei Kontore tragen deshalb den Markt — mit klarem Profil statt
+ * Zufall, damit sich die Quoten lesen lassen:
+ *
+ *   Sicher    setzt auf den staerksten Wagen — druekt dessen Quote
+ *   Risiko    setzt auf den schwaechsten — haelt Aussenseiterquoten hoch
+ *   Streuung  verteilt kleine Betraege auf alle
+ *
+ * Sie sind keine Spieler: Ihre Einsaetze wandern in den Pool, gewinnen aber
+ * nie etwas zurueck (G.players kennt ihre Kennung nicht). Was sie einzahlen,
+ * geht damit an die menschlichen Siegerwetten und ueber den Rake in den
+ * Preistopf — das Publikum finanziert das Rennen mit. */
+const WETTKONTORE = [
+  { id: "kontor-sicher",   name: "Kontor Sicher",   art: "favorit",      einsatz: 3000 },
+  { id: "kontor-risiko",   name: "Kontor Risiko",   art: "aussenseiter", einsatz: 2500 },
+  { id: "kontor-streuung", name: "Kontor Streuung", art: "streuung",     einsatz: 2400 },
+];
+/* Dieselbe Formel wie im Rennschritt, nur ohne Streuung und Zustand: Was ein
+ * Wagen im Mittel leisten kann. Waeren es andere Gewichte, saehen die Kontore
+ * ein anderes Rennen als das, das gefahren wird. */
+function staerkeSchaetzen(teil) {
+  if (teil.bot) {
+    const w = teil.werte;
+    return w.speed * .45 + w.beschl * .2 + w.handling * .2 + teil.fahrerWert * .45;
+  }
+  const fund = findeAuto(teil.autoId);
+  if (!fund) return 0;
+  const w = autoWerte(fund.a);
+  const f = G.fahrer.find(x => x.id === teil.fahrerId);
+  const fWert = f ? (f.speed + f.handling + f.reaktion) / 3 + f.erfahrung * .15 : 40;
+  return w.speed * .45 + w.beschl * .2 + w.handling * .2 + fWert * .45;
+}
+/* In zwei Wellen: eine Eroeffnungsquote gleich nach der Ankuendigung, der Rest
+ * kurz vor Schluss auf dem fertigen Feld. Nur spaet zu setzen hiesse, dass die
+ * Quoten die ersten 55 Sekunden auf "—" stehen — also genau dann, wenn der
+ * Spieler seine Wette ueberlegt. Nur frueh zu setzen hiesse, dass spaet
+ * gemeldete Wagen ungepreist bleiben. */
+function wettkontoreSetzen(r, welle) {
+  if (r.teilnehmer.length < 2) return;
+  if ((r.kontorWellen ??= []).includes(welle)) return;
+  r.kontorWellen.push(welle);
+  const nachStaerke = [...r.teilnehmer].sort((a, b) => staerkeSchaetzen(b) - staerkeSchaetzen(a));
+  for (const k of WETTKONTORE) {
+    const anteil = Math.round(k.einsatz / 2);
+    if (k.art === "streuung") {
+      const je = Math.max(100, Math.round(anteil / r.teilnehmer.length / 100) * 100);
+      for (const teil of r.teilnehmer) r.wetten.push({ playerId: k.id, autoId: teil.autoId, betrag: je });
+      continue;
+    }
+    const ziel = k.art === "favorit" ? nachStaerke[0] : nachStaerke[nachStaerke.length - 1];
+    if (ziel) r.wetten.push({ playerId: k.id, autoId: ziel.autoId, betrag: anteil });
+  }
+  /* Nachzuegler mitnehmen: Wer nach der Eroeffnung gemeldet hat, hatte noch
+   * kein Geld auf sich und stuende sonst bis zum Start ohne Quote da — genau
+   * die Wagen, die ein Spieler interessant faende. */
+  const streu = WETTKONTORE.find(k => k.art === "streuung");
+  for (const teil of r.teilnehmer) {
+    if (r.wetten.some(w => w.autoId === teil.autoId)) continue;
+    r.wetten.push({ playerId: streu.id, autoId: teil.autoId, betrag: 300 });
+  }
+  io.emit("notice", { text: welle === 1
+    ? "Die Wettkontore eröffnen — erste Quoten stehen."
+    : "Die Wettkontore legen nach — Schlussquoten stehen." });
+}
 function rennAnkuendigen() {
-  G.rennen = { id: id(), phase: "anmeldung", rest: RENN_ANMELDUNG, teilnehmer: [], wetten: [], sponsoren: [] };
+  G.rennen = { id: id(), phase: "anmeldung", rest: RENN_ANMELDUNG, teilnehmer: [], wetten: [], sponsoren: [], gesuche: [] };
+  feldAuffuellen(G.rennen);
   io.emit("notice", { text: `🏁 Renntag! Anmeldung, Wetten und Sponsoring sind ${RENN_ANMELDUNG} s offen — Nenngeld ${RENN_NENNGELD.toLocaleString("de-DE")} $.` });
 }
 function rennStarten() {
@@ -573,19 +770,24 @@ function rennTick() {
   const r = G.rennen;
   for (const teil of r.teilnehmer) {
     if (teil.ausgefallen) continue;
-    const fund = findeAuto(teil.autoId);
-    if (!fund) { teil.ausgefallen = true; continue; }
-    const { a } = fund;
-    const w = autoWerte(a);
-    const f = G.fahrer.find(x => x.id === teil.fahrerId);
-    const fWert = f ? (f.speed + f.handling + f.reaktion) / 3 + f.erfahrung * .15 : 40;
+    /* Werkswagen stehen auf keiner Kachel — ihre Werte haengen am Teilnehmer
+     * selbst. Sonst rechnet der Schritt fuer beide gleich. */
+    const fund = teil.bot ? null : findeAuto(teil.autoId);
+    if (!teil.bot && !fund) { teil.ausgefallen = true; continue; }
+    const a = fund?.a;
+    const w = teil.bot ? teil.werte : autoWerte(a);
+    const zustand = teil.bot ? teil.zustand : a.zustand;
+    const f = teil.bot ? null : G.fahrer.find(x => x.id === teil.fahrerId);
+    const fWert = teil.bot ? teil.fahrerWert
+      : f ? (f.speed + f.handling + f.reaktion) / 3 + f.erfahrung * .15 : 40;
+    const konstanz = teil.bot ? teil.konstanz : f?.konstanz;
     const koennen = w.speed * .45 + w.beschl * .2 + w.handling * .2 + fWert * .45;
-    const streu = 1 + (Math.random() - .5) * (f ? (1.4 - f.konstanz / 100) : .7);
-    teil.dist += koennen * streu * (a.zustand / 100 * .4 + .6) / 6;
+    const streu = 1 + (Math.random() - .5) * (konstanz ? (1.4 - konstanz / 100) : .7);
+    teil.dist += koennen * streu * (zustand / 100 * .4 + .6) / 6;
     /* Kalibrierung: Ein frischer Wagen mit Standfestigkeit 84 soll pro Rennen
      * etwa 10 % Ausfallchance haben, ein verschlissener deutlich mehr — mit
      * den ersten Werten (0.00045/0.0004) fielen im Test BEIDE Wagen aus. */
-    const risiko = (100 - w.standfest) * .00016 + (100 - a.zustand) * .00025;
+    const risiko = (100 - w.standfest) * .00016 + (100 - zustand) * .00025;
     if (Math.random() < risiko) {
       teil.ausgefallen = true;
       io.emit("notice", { text: `💥 ${teil.name} (${teil.team}) rollt aus — technischer Defekt!` });
@@ -596,13 +798,21 @@ function rennBeenden() {
   const r = G.rennen;
   const reihen = [...r.teilnehmer].sort((x, y) => (x.ausgefallen - y.ausgefallen) || (y.dist - x.dist));
   const { pool } = rennQuoten(r);
-  const topf = RENN_GRUNDPREIS + r.teilnehmer.length * RENN_NENNGELD * 2 + Math.round(pool * WETT_RAKE);
-  const anteile = r.teilnehmer.length >= 3 ? [.5, .3, .2] : [.65, .35];
+  /* Nur gemeldete Spielerwagen haben Nenngeld gezahlt — Werkswagen duerfen den
+   * Topf also nicht aufblaehen. */
+  const zahlende = r.teilnehmer.filter(t2 => !t2.bot).length;
+  const topf = RENN_GRUNDPREIS + zahlende * RENN_NENNGELD * 2 + Math.round(pool * WETT_RAKE);
+  /* Das Preisgeld geht an die menschlichen Teilnehmer, in ihrer Reihenfolge
+   * untereinander. Werkswagen fahren um Ruhm und fuer die Wetten: sie zahlen
+   * kein Nenngeld, also nehmen sie auch nichts aus dem Topf — sonst verschwaende
+   * jedes Rennen einen Teil dessen, was die Spieler eingezahlt haben. */
+  const menschen = reihen.filter(t2 => !t2.bot);
+  const anteile = menschen.length >= 3 ? [.5, .3, .2] : menschen.length === 2 ? [.65, .35] : [1];
   reihen.forEach((teil, i) => {
     teil.platz = i + 1;
-    const fund = findeAuto(teil.autoId);
+    const fund = teil.bot ? null : findeAuto(teil.autoId);
     const a = fund?.a;
-    const f = G.fahrer.find(x => x.id === teil.fahrerId);
+    const f = teil.bot ? null : G.fahrer.find(x => x.id === teil.fahrerId);
     const kmHeute = Math.round(teil.dist / 10);
     if (a) {
       a.rennen++; a.km = (a.km || 0) + kmHeute;
@@ -611,7 +821,13 @@ function rennBeenden() {
       (a.historie ??= []).push({ t: G.tick, text: `Rennen: Platz ${i + 1}${teil.ausgefallen ? " (ausgefallen)" : ""} · ${kmHeute} km`, amt: 0 });
     }
     if (f) { f.rennen++; if (i === 0 && !teil.ausgefallen) { f.siege++; f.ruf += 10; } else f.ruf += Math.max(0, 4 - i); }
-    const preis = Math.round(topf * (anteile[i] || 0));
+    /* Letztes Ergebnis festhalten, damit das Startfeld beim naechsten Renntag
+     * zeigt, wie der Wagen zuletzt abgeschnitten hat. Beim Werkswagen gehoert
+     * es ans Team, es gibt ja kein Auto auf der Karte. */
+    const ergebnis = { platz: teil.platz, aus: !!teil.ausgefallen, feld: r.teilnehmer.length };
+    if (teil.bot) { const w = (G.werksTeams || []).find(x => x.id === teil.autoId); if (w) w.letztes = ergebnis; }
+    else if (a) a.letztes = ergebnis;
+    const preis = teil.bot ? 0 : Math.round(topf * (anteile[menschen.indexOf(teil)] || 0));
     if (preis > 0) {
       const p = G.players[teil.ownerId];
       /* Sponsoren dieses Teams bekommen ihren Anteil vom Preisgeld: je mehr
@@ -643,6 +859,27 @@ function rennBeenden() {
     const p = G.players[w.playerId];
     const gewinn = Math.round(w.betrag * quote);
     if (p) { p.cash += gewinn; logTx(p, "Motorsport", `Wette gewonnen: ${sieger.name} (Quote ${quote.toFixed(2)})`, gewinn); }
+  }
+  /* Meisterschaftspunkte: nur im Renntag-Modus, nur fuer Spielerwagen —
+   * Werksteams fahren um Ruhm, nicht um den Titel. */
+  if (MODE === "renntag") {
+    let rang = 0;
+    for (const teil of reihen) {
+      if (teil.bot) continue;
+      const punkte = teil.ausgefallen ? 0 : (WM_PUNKTE[rang] || 0);
+      rang++;
+      if (punkte) G.wm[teil.ownerId] = (G.wm[teil.ownerId] || 0) + punkte;
+    }
+    G.saisonRennen++;
+    if (G.saisonRennen >= SAISON_RENNEN && !G.winner) {
+      const beste = Object.entries(G.wm).sort((a2, b2) => b2[1] - a2[1])[0];
+      const champ = beste && G.players[beste[0]];
+      if (champ) {
+        G.winner = champ.name;
+        G.report = buildReport(beste[0]);
+        io.emit("notice", { text: `Saisonende nach ${SAISON_RENNEN} Renntagen — ${champ.name} ist Meister mit ${beste[1]} Punkten!` });
+      }
+    }
   }
   r.phase = "ergebnis"; r.rest = 25;
   r.topf = topf;
@@ -871,6 +1108,14 @@ const sichereFarbe = c => /^#[0-9a-fA-F]{6}$/.test(String(c || "")) ? String(c) 
  * Beitreten fest (Auswahl im Join-Screen). Env-Override: WIN_NW=... npm start */
 let WIN_NW = +process.env.WIN_NW || 250_000;
 const WIN_CHOICES = [100_000, 250_000, 500_000, 1_000_000, 10_000_000];
+/* ---- Meisterschaft (Race Day) ----
+ * Der Renntag-Modus hatte bisher dieselbe Siegbedingung wie der Sandkasten:
+ * das hoechste Nettovermoegen. In einem Rennmodus soll aber gewinnen, wer
+ * faehrt — also Punkte je Rennen und ein Titel am Saisonende.
+ * Punkte nur fuer die ersten sechs, wie ueblich; wer ausfaellt, bekommt nichts. */
+const WM_PUNKTE = [10, 6, 4, 3, 2, 1];
+const SAISON_CHOICES = [3, 5, 8, 12];
+let SAISON_RENNEN = 5;
 
 /* ---------- Spielmodus ----------
  * "sandbox": die freie Marktwirtschaft wie bisher.
@@ -1097,6 +1342,11 @@ function buildMap(mode = "sandbox") {
   if (mode === "sandbox")
     return buildStadtMap({ w: 30, h: 30, seed: 71, ufer: "sued", sperren: true,
                            deko: 9, inseln: [[6, 27, 2.2], [21, 28, 2.8]] });
+  /* Race Day: nichts gesperrt — jeder soll sofort losfahren koennen, nicht
+   * erst Land freikaufen. */
+  if (mode === "renntag")
+    return buildStadtMap({ w: 30, h: 30, seed: 137, ufer: "ecke", sperren: false,
+                           deko: 7, inseln: [[7, 25, 2.4]] });
   MAP_W = 26; MAP_H = 26; MAP_ROUTES = null;
   /* Die Planwirtschaft spielt auf einer eigenen Fläche: andere Küstenlinie
    * (verschobenes Rauschen), engeres Straßenraster, Industrie links statt
@@ -1177,6 +1427,58 @@ function buildMap(mode = "sandbox") {
   return tiles;
 }
 
+/* ---------- Race Day: Startausruestung ----------
+ * Im Renntag-Modus faengt niemand bei null an: Rennstall, ein Startwagen und
+ * ein Fahrer gehoeren zur Grundausstattung. Sonst waere die erste Stunde
+ * dieselbe Wirtschaftsrunde wie ueberall, nur mit anderem Namen — der
+ * Rennstall kostet regulaer 30.000 $ und ist erst ab 200.000 $ Nettovermoegen
+ * ueberhaupt baubar.
+ *
+ * Der Wagen ist Stufe 1 und laesst sich wie jeder andere tunen; der Stall
+ * laesst sich ausbauen und bietet dann mehr Stellplaetze. */
+const RENNTAG_STARTWAGEN = "benzinauto";
+/* Die beiden Werke, die Rennteile herstellen. */
+const RENNTEILE_WERKE = new Set(["reifenwerk", "rennlabor"]);
+/* Ein Grundstock, damit die erste Ausbaustufe und das erste Teile-Gesuch nicht
+ * daran scheitern, dass noch niemand ein Werk gebaut hat. Bewusst knapp: er
+ * reicht fuer ein bis zwei Ausbauten, danach muss man produzieren oder kaufen. */
+const RENNTAG_STARTTEILE = { rennreifen: 6, rennsoftware: 4 };
+function renntagAusstatten(p) {
+  if (MODE !== "renntag") return;
+  /* Die Rennindustrie faehrt nicht — sie bekommt statt Stall und Wagen einen
+   * Vorrat, um sofort produzieren zu koennen, statt erst Rohstoffe zu suchen,
+   * die im Renntag niemand sonst herstellt. */
+  if (p.industry === "rennindustrie") {
+    if (p.rennstart) return;
+    p.rennstart = true;
+    for (const [g, n2] of Object.entries({ oel: 40, erze: 40, stahl: 8, silizium: 20, elektronik: 8 }))
+      p.inv[g] = (p.inv[g] || 0) + n2;
+    logTx(p, "Motorsport", "Race Day: Grundstock für die Zulieferkette", 0);
+    return;
+  }
+  if (G.map.some(t => t.owner === p.id && BTYPES[t.btype]?.racing)) return;   // hat schon einen
+  /* Platz suchen: bevorzugt in der Industriezone (dort gehoert ein Rennstall
+   * hin), sonst irgendwo frei — niemand soll ohne Stall dastehen, bloss weil
+   * die Zone voll ist. */
+  const passt = t => !t.road && !t.water && !t.park && !t.owner && !t.bank && !t.news && !t.deko;
+  const platz = G.map.find(t => passt(t) && t.zone === "industrie") || G.map.find(passt);
+  if (!platz) return;
+  Object.assign(platz, { owner: p.id, btype: "rennstall", level: 1, locked: false, unlockCost: 0 });
+  const nr = ++autoNr;
+  platz.autos = [{ id: id(), good: RENNTAG_STARTWAGEN, nr, zustand: 100, rennen: 0, siege: 0,
+    tuning: {}, fahrerId: null, km: 0, kaufpreis: 0, tuningAusgaben: 0,
+    name: p.bot ? botWagenName(nr) : null,
+    historie: [{ t: G.tick, text: "Startwagen — Race Day", amt: 0 }] }];
+  /* Ohne Fahrer kein Start. Einen aus dem Pool zuweisen, ohne Handgeld: die
+   * Ausruestung soll fahrbereit sein, nicht halb. Das Gehalt laeuft ab jetzt
+   * wie bei jedem anderen Fahrer. */
+  const f = G.fahrer.find(x => !x.teamId);
+  if (f) { f.teamId = p.id; f.autoId = platz.autos[0].id; platz.autos[0].fahrerId = f.id; }
+  for (const [g, n2] of Object.entries(RENNTAG_STARTTEILE)) p.inv[g] = (p.inv[g] || 0) + n2;
+  logTx(p, "Motorsport", `Race Day: Rennstall, ${GOODS[RENNTAG_STARTWAGEN].name} #${nr}` +
+    (f ? ` und ${f.name} am Steuer` : " (noch ohne Fahrer)"), 0);
+}
+
 /* ---------- Spielzustand ---------- */
 const G = {
   map: buildMap(),
@@ -1203,6 +1505,9 @@ const G = {
   fahrerGehaltIn: FAHRER_GEHALT_TAKT,
   rennen: null,                    // laufender Renntag (Anmeldung/Rennen/Ergebnis)
   naechstesRennenIn: RENN_INTERVALL,
+  werksTeams: werksTeamsBauen(),   // Werkswagen, die das Startfeld fuellen
+  wm: {},                          // Meisterschaftspunkte je Spieler (Race Day)
+  saisonRennen: 0,                 // gefahrene Renntage der Saison
 };
 let nextId = 1;
 const id = () => nextId++;
@@ -1812,11 +2117,16 @@ function snapshot() {
   const rankOf = Object.fromEntries(ranked.map(([pid], i) => [pid, i + 1]));
   return {
     tick: G.tick, winner: G.winner, winGoal: WIN_NW, report: G.report || null,
+    /* Countdown bis zum naechsten Renntag — ohne ihn sieht man erst bei der
+     * Ankuendigung, dass etwas ansteht, und kann nichts vorbereiten. */
+    naechstesRennen: G.rennen ? null : G.naechstesRennenIn,
+    wm: MODE === "renntag" ? G.wm : null,
+    saison: MODE === "renntag" ? { gefahren: G.saisonRennen, gesamt: SAISON_RENNEN } : null,
     tutorialEnde: !!G.tutorialEnde,
     started: G.started, hostId: G.hostId,
     mode: MODE, plan: MODE === "plan" ? G.plan : null,
     routes: MAP_ROUTES,
-    lobby: G.started ? null : { winGoal: WIN_NW, bots: botAuswahl, botLevel: botLevelKey, mode: MODE },
+    lobby: G.started ? null : { winGoal: WIN_NW, bots: botAuswahl, botLevel: botLevelKey, mode: MODE, saison: SAISON_RENNEN, saisonWahl: SAISON_CHOICES },
     map: G.map.map(t => ({ x: t.x, y: t.y, zone: t.zone, road: t.road, water: t.water,
       park: t.park, field: t.field, sand: t.sand, deep: t.deep, rock: t.rock,
       bank: t.bank, news: t.news, schwarz: t.schwarz, deko: t.deko, locked: t.locked, unlockCost: t.unlockCost, owner: t.owner, btype: t.btype, lien: t.lien, shop: t.shop, paused: t.paused, level: t.level, autos: autosDyn(t) })),
@@ -1849,10 +2159,18 @@ function snapshot() {
       return {
         phase: G.rennen.phase, rest: G.rennen.rest, pool, quoten, runde: RENN_RUNDE,
         nenngeld: RENN_NENNGELD,
-        topf: G.rennen.topf ?? (RENN_GRUNDPREIS + G.rennen.teilnehmer.length * RENN_NENNGELD * 2 + Math.round(pool * WETT_RAKE)),
+        /* Nur gemeldete Spielerwagen zahlen Nenngeld — die Vorschau muss
+         * dieselbe Rechnung benutzen wie rennBeenden, sonst verspricht sie
+         * einen Topf, den es nicht gibt. */
+        topf: G.rennen.topf ?? (RENN_GRUNDPREIS
+          + G.rennen.teilnehmer.filter(t2 => !t2.bot).length * RENN_NENNGELD * 2
+          + Math.round(pool * WETT_RAKE)),
         teilnehmer: G.rennen.teilnehmer.map(t2 => ({ autoId: t2.autoId, name: t2.name, team: t2.team,
-          farbe: t2.livree || t2.farbe, fahrer: t2.fahrer, ownerId: t2.ownerId, dist: Math.round(t2.dist), ausgefallen: t2.ausgefallen })),
-        sponsoren: G.rennen.sponsoren.map(s => ({ name: s.name, team: G.players[s.teamId]?.name, betrag: s.betrag })),
+          farbe: t2.livree || t2.farbe, fahrer: t2.fahrer, ownerId: t2.ownerId, bot: !!t2.bot,
+          letztes: t2.letztes || null,
+          dist: Math.round(t2.dist), ausgefallen: t2.ausgefallen })),
+        sponsoren: G.rennen.sponsoren.map(s => ({ name: s.name, team: G.players[s.teamId]?.name, betrag: s.betrag, was: s.was })),
+        gesuche: (G.rennen.gesuche || []).map(g => ({ ...g })),
         ergebnis: G.rennen.ergebnis || null,
       };
     })() : null,
@@ -2082,6 +2400,10 @@ io.on("connection", socket => {
     G.players[pid] = newPlayer(pid, name, sichereFarbe(color), industry, socket.id);
     /* Nur fuer die Anzeige — am Spiel aendert das Kennzeichen nichts. */
     if (botToken && botToken === BOT_TOKEN) G.players[pid].bot = true;
+    /* Wer im Renntag-Modus einer laufenden Runde beitritt, bekommt seine
+     * Startausruestung sofort — sonst saesse er ohne Wagen da, waehrend alle
+     * anderen fahren. */
+    if (MODE === "renntag" && G.started) renntagAusstatten(G.players[pid]);
     G.socketToPid[socket.id] = pid;
     socket.data.registered = true;
     if (istErster) G.hostId = pid;   // Host: darf im Warteraum einstellen und die Runde starten
@@ -2108,12 +2430,13 @@ io.on("connection", socket => {
    * Solange die Runde nicht gestartet ist, darf der Host Ziel und Bots noch
    * ändern — anders als früher, wo beides beim Registrieren festgenagelt war
    * und Mitspieler, die später dazukamen, nichts mehr davon mitbekamen. */
-  socket.on("lobbySettings", ({ winGoal, bots, botLevel, mode }, ack) => {
+  socket.on("lobbySettings", ({ winGoal, bots, botLevel, mode, saison }, ack) => {
     const pid = G.socketToPid[socket.id];
     if (!pid || pid !== G.hostId) return ack?.({ error: "Das darf nur der Host" });
     if (G.started) return ack?.({ error: "Die Runde läuft schon" });
-    if (mode === "sandbox" || mode === "plan" || mode === "einsteiger") MODE = mode;
+    if (["sandbox", "plan", "einsteiger", "renntag"].includes(mode)) MODE = mode;
     if (WIN_CHOICES.includes(+winGoal)) WIN_NW = +winGoal;
+    if (SAISON_CHOICES.includes(+saison)) SAISON_RENNEN = +saison;
     if (bots && typeof bots === "object") botAuswahl = bots;
     if (BOT_LEVELS[botLevel]) botLevelKey = botLevel;
     ack?.({ ok: true });
@@ -2145,6 +2468,17 @@ io.on("connection", socket => {
      * zuerst zugreift, hat sie. */
     if (!G.fahrer.length) G.fahrer = FAHRER_NAMEN.map((_, i) => fahrerBauen(i));
     startBots();
+    if (MODE === "renntag") {
+      /* Eigene Flaeche, dann jeder Spieler seine Startausruestung. Wie beim
+       * Plan- und Einsteiger-Modus muss die Karte danach einmal vollstaendig
+       * an alle gehen — der Kachel-Diff traegt nur veraenderliche Felder. */
+      G.map = buildMap("renntag");
+      lastTileSigs = null;
+      for (const sock of io.sockets.sockets.values()) sock.data.gotMap = false;
+      for (const sp of Object.values(G.players)) renntagAusstatten(sp);
+      /* Renntage kommen haeufiger — sie sind der Zweck des Modus, nicht Beiwerk. */
+      G.naechstesRennenIn = Math.min(G.naechstesRennenIn, 45);
+    }
     if (MODE === "einsteiger") {
       /* Einsteiger: eigene Flaeche (San Francisco, 64x64). Wie beim Plan-Modus
        * muss nach dem Kartentausch jeder Client die Karte einmal vollstaendig
@@ -2180,6 +2514,19 @@ io.on("connection", socket => {
     try { fn(p, payload || {}, ack); } catch (e) { ack?.({ error: e.message }); }
     pushState();
   };
+
+  /* --- Branche im Warteraum waehlen ---
+   * Frueher stand die Wahl am Startbildschirm, bevor man ueberhaupt wusste,
+   * wer sonst mitspielt. Jetzt entscheidet man sie im Warteraum, wo alle
+   * Branchen sichtbar sind — bis zum Start ist sie frei wechselbar, danach
+   * nicht mehr: ab da haengen Gebaeude und Rezepte daran. */
+  socket.on("brancheWaehlen", guard((p, { industry }, ack) => {
+    if (G.started) return ack?.({ error: "Die Runde läuft schon" });
+    if (!INDUSTRIES[industry]) return ack?.({ error: "Unbekannte Branche" });
+    p.industry = industry;
+    p.industries = [industry];
+    ack?.({ ok: true });
+  }));
 
   /* --- Planwirtschaft: Ware ans Planbüro abliefern ---
    * Liefert so viel wie möglich (Lagerbestand, gedeckelt aufs Restsoll) zum
@@ -2292,14 +2639,32 @@ io.on("connection", socket => {
     if (t.schwarz) return ack?.({ error: "Hier wird nur unter der Hand gehandelt" });
     if (t.owner) return ack?.({ error: "Kachel bereits belegt" });
     if (bt.zone !== t.zone) return ack?.({ error: `Nur in Zone ${bt.zone} baubar` });
-    if (bt.industry && !(p.industries || [p.industry]).includes(bt.industry))
+    /* Rennreifen kann sonst nur die Rohstoffbranche herstellen, Rennsoftware
+     * nur die Technikbranche. Spielt niemand diese Branchen, gibt es die Teile
+     * im ganzen Spiel nicht — dann laesst sich kein Wagen tunen und kein
+     * Teile-Sponsorgesuch erfuellen. Im Renntag-Modus, wo genau das der Kern
+     * ist, darf sie deshalb jede Branche bauen — wie Laeden und Rennstall. */
+    if (MODE === "renntag") {
+      /* Im Renntag zaehlt die Rolle, nicht die Branche — und Laeden gibt es
+       * hier nicht. Es produziert niemand mehr Konsumgueter, die Regale
+       * blieben leer. Gehandelt wird ausschliesslich ueber die Boerse: die
+       * Rennindustrie stellt Teile ein, die Clubs kaufen sie dort. */
+      const erlaubt = RENNTAG_BAUTEN[p.industry];
+      if (!(erlaubt && erlaubt.has(btype)))
+        return ack?.({ error: bt.retail
+          ? "Im Race Day gibt es keine Läden — gehandelt wird über die Börse"
+          : p.industry === "rennclub"
+            ? "Als Race Club baust du Rennstall und Werbung — Teile kaufst du an der Börse bei der Rennindustrie"
+            : "Als Rennindustrie baust du die Zulieferkette und die Teile-Werke — gefahren wird im Race Club" });
+    } else if (bt.industry && !(p.industries || [p.industry]).includes(bt.industry)) {
       return ack?.({ error: `Nur ${INDUSTRIES[bt.industry].name} kann das bauen` });
+    }
     /* Der Rennstall ist branchenfrei, aber auf einen je Firma begrenzt: Ohne
      * diese Grenze wäre "mehr Ställe" die beste Strategie, und der Wettpool
      * gehörte am Ende dem, der am meisten Kacheln hält. */
     if (bt.racing) {
       const nw = netWorth(p);
-      if (nw < RACING_UNLOCK_NW)
+      if (MODE !== "renntag" && nw < RACING_UNLOCK_NW)
         return ack?.({ error: `Motorsport öffnet ab ${RACING_UNLOCK_NW.toLocaleString("de-DE")} $ Nettovermögen — dir fehlen noch ${Math.round(RACING_UNLOCK_NW - nw).toLocaleString("de-DE")} $` });
       if (G.map.some(o => o.owner === p.id && BTYPES[o.btype]?.racing))
         return ack?.({ error: "Du betreibst bereits einen Rennstall — mehr als einer ist nicht erlaubt" });
@@ -2366,7 +2731,7 @@ io.on("connection", socket => {
      * Tuningausgaben laufen hier zusammen — die Akte des Wagens. */
     const kaufpreis = Math.round(MM[good].price);
     autos.push({ id: id(), good, nr, zustand: 100, rennen: 0, siege: 0, tuning: {}, fahrerId: null,
-      km: 0, kaufpreis, tuningAusgaben: 0,
+      km: 0, kaufpreis, tuningAusgaben: 0, name: p.bot ? botWagenName(nr) : null,
       historie: [{ t: G.tick, text: "In den Rennstall eingestellt", amt: -kaufpreis }] });
     gainXp(p, 15);
     logTx(p, "Motorsport", `${GOODS[good].name} #${nr} in den Rennstall eingestellt`, 0);
@@ -2401,7 +2766,7 @@ io.on("connection", socket => {
     (a.historie ??= []).push({ t: G.tick, text: `${T.name} auf Stufe ${stufe}`, amt: -(k.cash + teileWert) });
     p.stats.ausgaben += k.cash;
     gainXp(p, 20);
-    logTx(p, "Motorsport", `${GOODS[a.good].name} #${a.nr}: ${T.name} auf Stufe ${stufe}`, -k.cash);
+    logTx(p, "Motorsport", `${autoName(a)}: ${T.name} auf Stufe ${stufe}`, -k.cash);
     ack?.({ ok: true, stufe, werte: autoWerte(a) });
   }));
 
@@ -2431,7 +2796,7 @@ io.on("connection", socket => {
     p.stats.ausgaben += k.cash;
     gainXp(p, 12);
     (a.historie ??= []).push({ t: G.tick, text: `Instandsetzung ${vorher} % → 100 %`, amt: -(k.cash + teileWert) });
-    logTx(p, "Motorsport", `${GOODS[a.good].name} #${a.nr} instand gesetzt (${vorher} % → 100 %)`, -k.cash);
+    logTx(p, "Motorsport", `${autoName(a)} instand gesetzt (${vorher} % → 100 %)`, -k.cash);
     ack?.({ ok: true, zustand: 100 });
   }));
 
@@ -2443,21 +2808,46 @@ io.on("connection", socket => {
     if (!t || t.owner !== p.id || !BTYPES[t.btype]?.racing) return ack?.({ error: "Kein eigener Rennstall" });
     const a = (t.autos || []).find(a2 => a2.id === autoId);
     if (!a) return ack?.({ error: "Fahrzeug nicht gefunden" });
-    if (!a.fahrerId) return ack?.({ error: "Ohne Fahrer kein Start — erst zuweisen" });
+    /* Nicht nur "irgendeine Fahrer-ID", sondern ein Fahrer, der wirklich unter
+     * Vertrag steht. Ein entlassener Fahrer hinterliess frueher seine ID im
+     * Cockpit — der Wagen galt damit als besetzt und waere mit einem Phantom
+     * am Steuer ins Rennen gegangen. */
+    const cockpit = G.fahrer.find(x2 => x2.id === a.fahrerId && x2.teamId === p.id);
+    if (!cockpit) { a.fahrerId = null; return ack?.({ error: "Ohne Fahrer kein Start — erst zuweisen" }); }
     if (a.zustand < 25) return ack?.({ error: "Der Wagen ist zu verschlissen (unter 25 %)" });
     if (r.teilnehmer.some(x2 => x2.autoId === a.id)) return ack?.({ error: "Schon angemeldet" });
-    if (r.teilnehmer.length >= 8) return ack?.({ error: "Das Startfeld ist voll (8 Wagen)" });
+    /* Werkswagen sind Platzhalter, keine Konkurrenz um Startplaetze: Sobald ein
+     * Spieler meldet und das Feld schon die Sollgroesse hat, raeumt der
+     * schwaechste Werkswagen. So bleibt das Feld bei fuenf Wagen und wird mit
+     * jedem gemeldeten Stall menschlicher — erst wenn mehr Spieler starten
+     * wollen, waechst es bis zum Maximum. */
+    if (r.teilnehmer.length >= RENN_FELD_SOLL) botWeichen(r);
+    if (r.teilnehmer.length >= RENN_FELD_MAX)
+      return ack?.({ error: `Das Startfeld ist voll (${RENN_FELD_MAX} Wagen)` });
     if (p.cash < RENN_NENNGELD) return ack?.({ error: `Nenngeld fehlt (${RENN_NENNGELD.toLocaleString("de-DE")} $)` });
     p.cash -= RENN_NENNGELD;
-    const f = G.fahrer.find(x2 => x2.id === a.fahrerId);
+    const f = cockpit;
     /* Jede Startnummer bekommt eine eindeutige Lackierung — Teamfarben
      * kollidieren sonst (zwei blaue Teams = zwei ununterscheidbare Wagen). */
     const LIVREEN = ["#e74c3c", "#f5c542", "#2ecc71", "#3b9cf6", "#e67e22", "#b07cf7", "#1abc9c", "#eef2f7"];
     const livree = LIVREEN.find(c => !r.teilnehmer.some(x2 => x2.livree === c)) || p.color;
     r.teilnehmer.push({ autoId: a.id, fahrerId: a.fahrerId, ownerId: p.id, team: p.name, farbe: p.color, livree,
-      name: `${GOODS[a.good].name} #${a.nr}`, fahrer: f?.name || "?", dist: 0, ausgefallen: false });
-    logTx(p, "Motorsport", `Zum Rennen gemeldet: ${GOODS[a.good].name} #${a.nr}`, -RENN_NENNGELD);
-    io.emit("notice", { text: `${p.name} meldet ${GOODS[a.good].name} #${a.nr} (Fahrer: ${f?.name || "?"}) zum Rennen.` });
+      name: autoName(a), fahrer: f?.name || "?", letztes: a.letztes || null,
+      dist: 0, ausgefallen: false });
+    /* Wer meldet, sucht einen Sponsor. Ein Team fragt entweder nach Geld oder
+     * nach Teilen — Teile sind fuer den Sponsor oft der guenstigere Weg, weil
+     * er sie selbst herstellen oder billiger einkaufen kann als der Rennstall. */
+    /* Haben die Kontore schon eroeffnet, bekommt der neu gemeldete Wagen sofort
+     * einen Grundeinsatz — sonst stuende er bis zum Start ohne Quote da. Die
+     * Wellen holen Nachzuegler zwar nach, aber nach der letzten Welle meldet
+     * sich sonst niemand mehr ein. */
+    if (r.kontorWellen?.length) {
+      const streu = WETTKONTORE.find(k => k.art === "streuung");
+      r.wetten.push({ playerId: streu.id, autoId: a.id, betrag: 300 });
+    }
+    gesuchStellen(r, p);
+    logTx(p, "Motorsport", `Zum Rennen gemeldet: ${autoName(a)}`, -RENN_NENNGELD);
+    io.emit("notice", { text: `${p.name} meldet ${autoName(a)} (Fahrer: ${f?.name || "?"}) zum Rennen.` });
     ack?.({ ok: true });
   }));
   socket.on("wetteSetzen", guard((p, { autoId, betrag }, ack) => {
@@ -2514,6 +2904,10 @@ io.on("connection", socket => {
     const f = G.fahrer.find(f => f.id === fahrerId && f.teamId === p.id);
     if (!f) return ack?.({ error: "Nicht dein Fahrer" });
     f.teamId = null; f.autoId = null;
+    /* Auch das Cockpit raeumen: Sonst zeigt der Wagen weiter auf einen Fahrer,
+     * der nicht mehr im Team ist — er gilt als besetzt, waehrend die Auswahl
+     * "kein Fahrer" anzeigt. */
+    for (const tt of G.map) for (const aa of tt.autos || []) if (aa.fahrerId === f.id) aa.fahrerId = null;
     logTx(p, "Motorsport", `${f.name} entlassen`, 0);
     ack?.({ ok: true });
   }));
@@ -2530,7 +2924,73 @@ io.on("connection", socket => {
     for (const o of G.fahrer) if (o.teamId === p.id && o.autoId === autoId) o.autoId = null;
     for (const tt of G.map) for (const aa of tt.autos || []) if (aa.fahrerId === f.id) aa.fahrerId = null;
     f.autoId = autoId; a.fahrerId = f.id;
-    logTx(p, "Motorsport", `${f.name} sitzt jetzt in ${GOODS[a.good].name} #${a.nr}`, 0);
+    logTx(p, "Motorsport", `${f.name} sitzt jetzt in ${autoName(a)}`, 0);
+    ack?.({ ok: true });
+  }));
+
+  /* --- Wagen umbenennen ---
+   * Ein eigener Name statt "Benzin-Auto #2". Leerer Name setzt auf die
+   * Vorgabe zurueck. Wie Spielernamen beim Speichern maskiert, damit im
+   * Client nichts ausbrechen kann. */
+  socket.on("autoUmbenennen", guard((p, { x, y, autoId, name }, ack) => {
+    const t = tileAt(x, y);
+    if (!t || t.owner !== p.id || !BTYPES[t.btype]?.racing) return ack?.({ error: "Kein eigener Rennstall" });
+    const a = (t.autos || []).find(a2 => a2.id === autoId);
+    if (!a) return ack?.({ error: "Fahrzeug nicht gefunden" });
+    const neu = sicherText(String(name || "").trim().slice(0, 24));
+    a.name = neu || null;
+    logTx(p, "Motorsport", neu ? `Wagen umbenannt: ${neu}` : `Wagenname zurueckgesetzt (${autoName(a)})`, 0);
+    ack?.({ ok: true, name: a.name });
+  }));
+
+  /* --- Eigenes Sponsorgesuch aufgeben ---
+   * Bisher wuerfelte der Server beim Melden ein Gesuch. Wer weiss, was ihm
+   * fehlt, soll es selbst sagen duerfen — ein bestehendes wird dabei ersetzt,
+   * es bleibt bei einem Gesuch je Team. */
+  socket.on("gesuchAufgeben", guard((p, { art, menge }, ack) => {
+    const r = G.rennen;
+    if (!r || r.phase !== "anmeldung") return ack?.({ error: "Nur waehrend der Anmeldung" });
+    if (!r.teilnehmer.some(t2 => t2.ownerId === p.id))
+      return ack?.({ error: "Erst einen Wagen melden, dann Sponsoren suchen" });
+    if (!GESUCH_ARTEN.includes(art)) return ack?.({ error: "Unbekannte Art" });
+    menge = Math.floor(+menge);
+    if (art === "geld") {
+      if (!(menge >= 1000) || menge > 20000) return ack?.({ error: "Zwischen 1.000 und 20.000 $" });
+    } else if (!(menge >= 1) || menge > 10) return ack?.({ error: "Zwischen 1 und 10 Stück" });
+    r.gesuche = (r.gesuche || []).filter(g => g.teamId !== p.id);
+    r.gesuche.push(art === "geld"
+      ? { id: id(), teamId: p.id, team: p.name, art, betrag: menge, wert: menge }
+      : { id: id(), teamId: p.id, team: p.name, art, menge, wert: Math.round(menge * MM[art].price) });
+    io.emit("notice", { text: `${p.name} sucht Sponsoren: ${art === "geld"
+      ? menge.toLocaleString("de-DE") + " $" : menge + "× " + GOODS[art].name}.` });
+    ack?.({ ok: true });
+  }));
+
+  /* --- Sponsorgesuch erfuellen --- */
+  socket.on("gesuchErfuellen", guard((p, { gesuchId }, ack) => {
+    const r = G.rennen;
+    if (!r || r.phase !== "anmeldung") return ack?.({ error: "Sponsoring nur vor dem Start" });
+    const g = (r.gesuche || []).find(x2 => x2.id === gesuchId);
+    if (!g) return ack?.({ error: "Dieses Gesuch gibt es nicht mehr" });
+    if (g.teamId === p.id) return ack?.({ error: "Das eigene Team sponsert man nicht" });
+    const team = G.players[g.teamId];
+    if (!team) return ack?.({ error: "Team nicht gefunden" });
+    if (g.art === "geld") {
+      if (p.cash < g.betrag) return ack?.({ error: `Dir fehlen ${Math.ceil(g.betrag - p.cash).toLocaleString("de-DE")} $` });
+      p.cash -= g.betrag; team.cash += g.betrag;
+    } else {
+      if ((p.inv[g.art] || 0) < g.menge)
+        return ack?.({ error: `Du hast nur ${p.inv[g.art] || 0}× ${GOODS[g.art].name}, gebraucht werden ${g.menge}` });
+      p.inv[g.art] -= g.menge;
+      team.inv[g.art] = (team.inv[g.art] || 0) + g.menge;
+    }
+    const was = g.art === "geld" ? `${g.betrag.toLocaleString("de-DE")} $`
+                                 : `${g.menge}× ${GOODS[g.art].name}`;
+    r.sponsoren.push({ playerId: p.id, teamId: g.teamId, betrag: g.wert, name: p.name, was });
+    r.gesuche = r.gesuche.filter(x2 => x2.id !== g.id);
+    logTx(p, "Motorsport", `Sponsoring an ${team.name}: ${was}`, g.art === "geld" ? -g.betrag : 0);
+    logTx(team, "Motorsport", `Sponsor ${p.name}: ${was}`, g.art === "geld" ? g.betrag : 0);
+    io.emit("notice", { text: `${p.name} erfüllt das Sponsorgesuch von ${team.name} (${was}).` });
     ack?.({ ok: true });
   }));
 
@@ -2823,7 +3283,8 @@ io.on("connection", socket => {
     G.lastTrade = {};
     G.chat = Object.fromEntries(ROOMS.map(r => [r, []]));
     G.tick = 0; G.winner = null; G.report = null; G.plan = null; G.tutorialEnde = false;
-    G.rennen = null; G.naechstesRennenIn = RENN_INTERVALL;
+    G.rennen = null; G.naechstesRennenIn = RENN_INTERVALL; G.werksTeams = werksTeamsBauen();
+    G.wm = {}; G.saisonRennen = 0;
     G.started = false; G.hostId = null;   // neue Runde beginnt wieder im Warteraum
     G.groupOrder = null; G.nextGroupIn = 20;
     G.nextDividendIn = DIVIDEND_INTERVAL;
@@ -3009,11 +3470,17 @@ function runTick() {
     if (!G.rennen) {
       if (--G.naechstesRennenIn <= 0) {
         G.naechstesRennenIn = RENN_INTERVALL;
-        if (autosImSpiel().some(({ a }) => a.fahrerId)) rennAnkuendigen();
+        rennAnkuendigen();   // Werkswagen fuellen das Feld, es geht auch ohne Spielerstall
       }
     } else {
       const r = G.rennen;
       r.rest--;
+      /* 25 s nach der Ankuendigung, nicht sofort: Die Rennstaelle melden ihre
+       * Wagen erst im Lauf der Anmeldephase. Eroeffnet man zu frueh, bewerten
+       * die Kontore ein Feld aus lauter Werkswagen, und die spaeter gemeldeten
+       * bleiben ohne Quote. */
+      if (r.phase === "anmeldung" && r.rest === RENN_ANMELDUNG - 25) wettkontoreSetzen(r, 1);
+      if (r.phase === "anmeldung" && r.rest === 20) wettkontoreSetzen(r, 2);
       if (r.phase === "anmeldung" && r.rest <= 0) rennStarten();
       else if (r.phase === "laeuft") { rennTick(); if (r.rest <= 0) rennBeenden(); }
       else if (r.phase === "ergebnis" && r.rest <= 0) { G.rennen = null; G.naechstesRennenIn = RENN_INTERVALL; }
@@ -3270,7 +3737,9 @@ function runTick() {
     }
   }
   /* Siegbedingung (Sandbox: Nettovermögen — in der Planwirtschaft zählen nur Punkte) */
-  if (MODE !== "plan" && !G.winner) for (const p of Object.values(G.players)) {
+  /* Im Renntag entscheidet die Meisterschaft, nicht das Vermoegen — sonst
+   * gewaenne dort der beste Kaufmann statt des besten Rennstalls. */
+  if (MODE !== "plan" && MODE !== "renntag" && !G.winner) for (const p of Object.values(G.players)) {
     if (netWorth(p) >= WIN_NW) {
       G.winner = p.name;
       /* Auswertung genau einmal berechnen und in den Zustand legen — sie geht
@@ -3379,6 +3848,26 @@ const INDUSTRY_COVERAGE = {
  * davon zu. `plan` ist hier nur noch die ZWEITE Phase (nach vollständiger
  * Produktabdeckung): Shops, Werbung, welches Produkt zuerst verdoppelt wird.
  * Die beiden einer Branche unterscheiden sich weiterhin bewusst darin. */
+/* Bots fuer den Renntag: abwechselnd Club und Zulieferer. Die Bauplaene der
+ * normalen Bots taugen hier nicht — deren Gebaeude darf im Renntag niemand
+ * bauen, sie stuenden untaetig herum. */
+const RENNTAG_BOT_CFGS = [
+  /* Ohne Laeden: die Clubs leben von Preisgeld und Sponsoring, die Zulieferer
+   * verkaufen ueber die Boerse. Ein Laden im Plan wuerde nur Geld binden und
+   * leer stehen. */
+  { name: "Scuderia Bora",    industry: "rennclub",      color: "#e74c3c",
+    plan: ["werbeagentur"], needs: [], rennstall: true },
+  { name: "Tempo Motors",     industry: "rennindustrie", color: "#3b9cf6",
+    plan: ["reifenwerk", "mine", "stahlwerk", "ewerk"], needs: ["strom"] },
+  { name: "Vento Racing",     industry: "rennclub",      color: "#2ecc71",
+    plan: ["werbeagentur"], needs: [], rennstall: true },
+  { name: "Silizium Dynamics",industry: "rennindustrie", color: "#b07cf7",
+    plan: ["rennlabor", "siliziummine", "chipfabrik", "ewerk"], needs: ["strom"] },
+  { name: "Aurora Team",      industry: "rennclub",      color: "#f5c542",
+    plan: ["werbeagentur"], needs: [], rennstall: true },
+  { name: "Kraft & Reifen",   industry: "rennindustrie", color: "#1abc9c",
+    plan: ["reifenwerk", "oelpumpe", "stahlwerk", "mine"], needs: ["strom"] },
+];
 const BOT_CFGS = [
   { name: "AgrarGenossen",   industry: "agrar",     color: "#34d399",
     plan: ["markt", "farm", "werbeagentur", "kontor"], needs: ["wasser", "strom"], rennstall: true },
@@ -3461,11 +3950,17 @@ function startBots() {
     const n = botAuswahl ? Math.max(0, Math.min(2, Math.floor(+botAuswahl[k] || 0))) : 1;
     gewuenscht[k] = n;
   }
+  /* Im Renntag gibt es die sechs Branchen nicht — die Botauswahl im Warteraum
+   * zaehlt dort nur, WIE VIELE mitspielen. Die Rollen verteilt der Server
+   * abwechselnd, damit immer beide Seiten besetzt sind: ohne Zulieferer gaebe
+   * es keine Teile, ohne Clubs kein Rennen. */
   const genommen = {};
-  const liste = BOT_CFGS.filter(cfg => {
-    genommen[cfg.industry] = (genommen[cfg.industry] || 0) + 1;
-    return genommen[cfg.industry] <= (gewuenscht[cfg.industry] || 0);
-  });
+  const liste = MODE === "renntag"
+    ? RENNTAG_BOT_CFGS.slice(0, Object.values(gewuenscht).reduce((a2, b2) => a2 + b2, 0))
+    : BOT_CFGS.filter(cfg => {
+        genommen[cfg.industry] = (genommen[cfg.industry] || 0) + 1;
+        return genommen[cfg.industry] <= (gewuenscht[cfg.industry] || 0);
+      });
   if (!liste.length) { botsStarted = false; return; }   // ohne Bots gar nicht erst hochfahren
   const gen = ++botGen;
   console.log(`Bots: ${liste.map(c => c.name).join(", ") || "keine"} — Stufe ${lvl.name}`);

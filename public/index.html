@@ -468,7 +468,44 @@ input,select{background:var(--panel2);border:1px solid var(--line);border-radius
 @media(max-width:640px){.renngrid{grid-template-columns:1fr}}
 .rennbox{background:#0d1524;border:1px solid var(--line);border-radius:11px;padding:11px}
 .rennbox .lbl{font-size:10.5px;font-weight:700;letter-spacing:.09em;color:#5f7292;text-transform:uppercase;margin-bottom:7px}
+/* Der Wagenname traegt die Zeile — Team und Fahrer sind Beiwerk. Vorher stand
+ * alles in derselben Groesse, und der Name ging zwischen den Zusaetzen unter. */
+.rennname{font-size:14.5px;font-weight:800;letter-spacing:.2px;color:var(--fg);line-height:1.25}
+/* Herkunft der Wagen: gemeldete Spielerstaelle heben sich vom Werksfeld ab —
+ * sonst sieht ein Startfeld aus fuenf Wagen gleich aus, egal ob jemand
+ * wirklich gemeldet hat oder nur die Kulisse steht. */
+.rennteil.gemeldet{box-shadow:inset 3px 0 0 var(--accent)}
+.rennteil.selbst{box-shadow:inset 3px 0 0 #fbbf24}
+.herkunft{font-size:10px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;
+  padding:1px 5px;border-radius:5px;border:1px solid var(--line);color:var(--dim);white-space:nowrap}
+.herkunft.spieler{color:var(--accent);border-color:rgba(56,189,248,.45)}
+.herkunft.selbst{color:#fbbf24;border-color:rgba(251,191,36,.45)}
+.letztes{font-size:10.5px;opacity:.75;white-space:nowrap}
+/* Gesuchszeilen: eigener Block statt einer Textzeile mit nacktem Knopf. */
+.gesuch{display:flex;align-items:center;gap:10px;padding:8px 10px;margin:6px 0;
+  background:rgba(16,24,40,.72);border:1px solid rgba(45,60,88,.55);border-radius:10px}
+.gesuch.kann{border-color:rgba(56,189,248,.35)}
+.gesuch .was{flex:1;min-width:0}
+.gesuch .was b{font-size:13px}
+.gesuch .bedarf{font-size:12.5px;font-weight:700;color:#fbbf24}
+.gesuch button{flex:none;border-radius:8px;border:1px solid rgba(56,189,248,.45);
+  background:rgba(56,189,248,.14);color:var(--accent);font:700 11.5px var(--font);
+  padding:6px 11px;cursor:pointer}
+.gesuch button:hover:not(:disabled){background:rgba(56,189,248,.26)}
+.gesuch button:disabled{border-color:var(--line);background:transparent;color:var(--dim);cursor:not-allowed}
+.eigenesGesuch{background:rgba(251,191,36,.07);border-color:rgba(251,191,36,.35)}
+.rennteil .meta,.rennstand .meta{font-size:11px;opacity:.62}
+.rennstand .wer b{font-size:14px;letter-spacing:.2px}
+input.autoname{flex:1;min-width:0;background:transparent;border:1px solid transparent;border-radius:6px;
+  color:var(--fg);font:inherit;font-weight:700;font-size:13px;padding:2px 5px;margin:-2px -5px}
+input.autoname:hover{border-color:var(--line)}
+input.autoname:focus{border-color:var(--accent);background:var(--panel2);outline:none}
+input.autoname::placeholder{color:var(--fg);opacity:.95;font-weight:700}
 .rennteil{display:flex;align-items:center;gap:8px;padding:4px 0;font-size:12.5px}
+.rennteil.wettbar{cursor:pointer;border-radius:8px;padding:5px 7px;margin:1px -7px;transition:background .12s}
+.rennteil.wettbar:hover{background:rgba(255,255,255,.06)}
+.rennteil.gewaehlt{background:rgba(56,189,248,.15);box-shadow:inset 0 0 0 1px var(--accent)}
+.rennteil .eigen{margin-left:auto;font-size:11px;color:#8695ab}
 .rennteil .quote{margin-left:auto;font-family:var(--mono,ui-monospace);font-weight:700;color:#fbbf24}
 .rennfarb{width:10px;height:10px;border-radius:3px;flex:none}
 #rennStrecke{display:block;width:100%;border-radius:11px;border:1px solid var(--line);background:#0a1120}
@@ -493,10 +530,25 @@ input,select{background:var(--panel2);border:1px solid var(--line);border-radius
 .rennstat .chip2{display:flex;align-items:center;gap:7px;background:#0b1220;border:1px solid var(--line);
   border-radius:9px;padding:6px 12px;font-size:12px;color:var(--dim)}
 .rennstat .chip2 b{color:var(--text);font-family:var(--mono,ui-monospace)}
-.rennpodium{display:flex;gap:12px;justify-content:center;align-items:flex-end;margin:14px 0 8px}
-.rennpodium .stufe{text-align:center;flex:1;max-width:180px}
-.rennpodium .sockel{background:linear-gradient(180deg,#1e3a5a,#122540);border:1px solid var(--line);border-radius:10px 10px 0 0;
-  display:flex;flex-direction:column;justify-content:flex-start;padding:8px 6px}
+.rennpodium{display:flex;gap:14px;justify-content:center;align-items:flex-end;margin:18px 0 10px}
+.rennpodium .stufe{text-align:center;flex:1;max-width:190px}
+/* Das Podest trug frueher nur eine Zahl auf blaugrauem Kasten. Jetzt bekommt
+ * jede Stufe die Lackierung ihres Teams als Lichtsaum, einen Metallverlauf
+ * nach Rang und eine grosse Platzziffer — auf einen Blick lesbar, wer wo steht. */
+.rennpodium .sockel{border-radius:12px 12px 0 0;position:relative;overflow:hidden;
+  display:flex;align-items:center;justify-content:center;
+  border:1px solid rgba(255,255,255,.10);border-bottom:none;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.14), 0 -6px 22px -10px var(--liv,#38bdf8)}
+.rennpodium .sockel .nr{font:900 30px/1 var(--font);color:rgba(255,255,255,.92);
+  text-shadow:0 2px 10px rgba(0,0,0,.55)}
+.rennpodium .sockel::after{content:"";position:absolute;left:0;right:0;top:0;height:3px;background:var(--liv,#38bdf8)}
+.rennpodium .p1 .sockel{background:linear-gradient(180deg,#8a6d18,#3a2f0c)}
+.rennpodium .p2 .sockel{background:linear-gradient(180deg,#5c6470,#2b3038)}
+.rennpodium .p3 .sockel{background:linear-gradient(180deg,#6b4426,#33200f)}
+.rennpodium .krone{font-size:30px;line-height:1;filter:drop-shadow(0 3px 8px rgba(0,0,0,.5))}
+.rennpodium .wer2{font-size:13.5px;margin:5px 0 7px;line-height:1.35}
+.rennpodium .wer2 b{font-size:14.5px;letter-spacing:.2px}
+.wmdelta{color:#fbbf24;font-weight:800}
 .rennform{display:flex;gap:7px;flex-wrap:wrap;align-items:center;margin-top:8px}
 .rennform select,.rennform input{background:#0b1220;border:1px solid var(--line);border-radius:8px;color:var(--text);
   font-family:var(--font);font-size:12px;padding:7px 8px}
@@ -1118,12 +1170,16 @@ td:first-child{font-family:var(--font)}
     <div class="divider"></div>
 
     <div class="col">
-      <div>
-        <label class="flabel">Deine Branche</label>
-        <p style="font-size:12px">Du baust nur Gebäude deiner Branche — alles andere kaufst du bei den anderen ein.</p>
-      </div>
-
       <div id="jind">
+        <!-- Nur im Renntag sichtbar: dort ersetzen zwei Rollen die sechs Branchen. -->
+        <button type="button" data-ind="rennclub" class="indopt rennrolle" style="display:none;--ac:#38bdf8;--ac08:rgba(56,189,248,.03);--ac15:rgba(56,189,248,.08);--ac18:rgba(56,189,248,.09);--ac35:rgba(56,189,248,.21);--ac50:rgba(56,189,248,.31)">
+          <img src="assets/deko/hochhaus-1.png" alt="">
+          <span class="txt"><span class="head"><b>Race Club</b><span class="chosen">Gewählt</span></span>
+          <small>Rennstall, Wagen und Fahrer. Du fährst um Punkte, Preisgeld und den Titel — Teile kaufst du bei der Rennindustrie.</small></span></button>
+        <button type="button" data-ind="rennindustrie" class="indopt rennrolle" style="display:none;--ac:#fbbf24;--ac08:rgba(251,191,36,.03);--ac15:rgba(251,191,36,.08);--ac18:rgba(251,191,36,.09);--ac35:rgba(251,191,36,.21);--ac50:rgba(251,191,36,.31)">
+          <img src="assets/skyline/chipfabrik-0.png" alt="">
+          <span class="txt"><span class="head"><b>Rennindustrie</b><span class="chosen">Gewählt</span></span>
+          <small>Rennreifen und Rennsoftware samt Zulieferkette. Du verkaufst an die Clubs, sponserst sie — und kaufst dir an der Bank Anteile an ihnen.</small></span></button>
         <button type="button" data-ind="agrar" class="indopt on" style="--ac:#34d399;--ac08:rgba(52,211,153,.03);--ac15:rgba(52,211,153,.08);--ac18:rgba(52,211,153,.09);--ac35:rgba(52,211,153,.21);--ac50:rgba(52,211,153,.31)">
           <img src="assets/skyline/farm-0.png" alt="">
           <span class="txt"><span class="head"><b>Landwirtschaft</b><span class="chosen">Gewählt</span></span>
@@ -1195,6 +1251,11 @@ td:first-child{font-family:var(--font)}
     <div id="lwPlayers"></div>
   </div>
 
+  <div class="joinbox" id="lwBrancheBox">
+    <div class="lbl">Deine Branche</div>
+    <p style="font-size:12px;margin:2px 0 8px;color:#8695ab">Du baust nur Gebäude deiner Branche — alles andere kaufst du bei den anderen ein. Bis zum Start kannst du wechseln.</p>
+    <div id="lwBrancheSlot"></div>
+  </div>
   <div class="joinbox" id="lwSettings">
     <div class="lbl">Einstellungen</div>
     <div class="lwRow">
@@ -1203,16 +1264,31 @@ td:first-child{font-family:var(--font)}
         <button type="button" data-mode="sandbox" class="on">Sandbox</button>
         <button type="button" data-mode="plan">Planwirtschaft (DDR)</button>
         <button type="button" data-mode="einsteiger">Einsteiger</button>
+        <button type="button" data-mode="renntag">Race Day</button>
       </div>
     </div>
     <p id="lwModeHint" style="display:none;font-size:11.5px;color:#8695ab;margin:2px 0 6px">
       Planwirtschaft: Kein Vermögensziel — das Planbüro verkündet Plansolls, du lieferst zu festen
       Ankaufspreisen ab und sammelst Planpunkte. Nach 5 Planphasen (oder bei 1.000 Punkten) gewinnt
       der „Held der Arbeit".</p>
+    <p id="lwRenntagHint" style="display:none;font-size:11.5px;color:#8695ab;margin:2px 0 6px">
+      Race Day: Zwei Rollen statt sechs Branchen. <b>Race Club</b> startet mit Rennstall, Wagen und Fahrer
+      und fährt um den Titel. <b>Rennindustrie</b> baut die Zulieferkette, stellt Rennreifen und Rennsoftware
+      her und verkauft sie über die Börse — Läden gibt es hier nicht. Gewonnen wird über die Meisterschaft,
+      nicht über das Vermögen.</p>
     <p id="lwEinsteigerHint" style="display:none;font-size:11.5px;color:#8695ab;margin:2px 0 6px">
       Einsteiger: Ein geführter Durchgang durch das ganze Spiel — Bauen, Verkaufen, Börse,
       Kursticker, Nachrichten und Bank, Schritt für Schritt erklärt. Nichts ist gesperrt, die Bots
       spielen normal mit. Die Runde endet, wenn du durch bist. Karte: San Francisco.</p>
+    <div class="lwRow" id="lwSaisonRow" style="display:none">
+      <label for="lwSaison">Saison</label>
+      <select id="lwSaison">
+        <option value="3">3 Renntage · kurz</option>
+        <option value="5" selected>5 Renntage · Standard</option>
+        <option value="8">8 Renntage · lang</option>
+        <option value="12">12 Renntage · Marathon</option>
+      </select>
+    </div>
     <div class="lwRow" id="lwGoalRow">
       <label for="lwGoal">Ziel</label>
       <select id="lwGoal">
@@ -1837,7 +1913,7 @@ function bindSocketEvents(s) {
     toast(`${c.from} bietet dir ${c.qty}× ${gname(c.good)} für ${fmt(c.price)}/Stk — annehmen im Finanz-Panel? Chat-Panel → Verträge`));
   s.on("shareOffer", o =>
     toast(`${o.from} bietet dir ${o.count*25}% seiner Firma für ${fmt(o.price)} an — annehmen im Finanzen-Panel.`));
-  s.on("roundReset", () => backToLobby());
+  s.on("roundReset", () => { TUT_GESEHEN.clear(); backToLobby(); });
   s.on("disconnect", () => toast("Verbindung zum Server verloren", true));
 }
 /* Zurück in die Lobby nach dem Rundenende. Wichtig ist, dabei wirklich ALLES
@@ -2290,9 +2366,33 @@ COLORS.forEach((c, i) => { const b = document.createElement("button"); b.style.b
   b.addEventListener("click", () => { myColor = c; jc.querySelectorAll("button").forEach(x => x.classList.toggle("on", x === b)); });
   jc.append(b); });
 let myIndustry = "agrar";
+/* Die Branche wird nicht mehr am Startbildschirm gewaehlt, sondern im
+ * Warteraum — dort sehen alle, wer was nimmt, und koennen sich absprechen,
+ * bevor es losgeht. Statt das Markup zu doppeln, wandert der vorhandene Block
+ * beim Laden hinueber: Stile und Klick-Logik bleiben damit unveraendert. */
+(() => {
+  const block = document.getElementById("jind");
+  const slot = document.getElementById("lwBrancheSlot");
+  if (!block || !slot) return;
+  const spalte = block.closest(".col"), trenner = spalte?.previousElementSibling;
+  slot.append(block);
+  /* Die Karte war zweispaltig, rechts stand die Branchenwahl. Ohne sie blieben
+   * eine leere Spalte und die Trennlinie stehen — beides weg, und der Rumpf
+   * wird einspaltig, sonst klafft rechts die halbe Karte leer. */
+  if (spalte && !spalte.children.length) {
+    trenner?.classList.contains("divider") && trenner.remove();
+    spalte.remove();
+    const rumpf = document.querySelector("#join .body");
+    if (rumpf) rumpf.style.gridTemplateColumns = "1fr";
+  }
+})();
 document.querySelectorAll(".indopt:not(.netopt)").forEach(b => b.addEventListener("click", () => {
   myIndustry = b.dataset.ind;
   document.querySelectorAll(".indopt:not(.netopt)").forEach(x => x.classList.toggle("on", x === b));
+  /* Im Warteraum ist man bereits angemeldet — der Wechsel muss zum Server. */
+  if (store.get().state && !store.get().state.started)
+    socket.emit("brancheWaehlen", { industry: myIndustry },
+      res => { if (res?.error) toast(res.error, true); });
 }));
 /* Host vs. Beitreten-per-Code umschalten */
 let netMode = "host", remoteConn = null;
@@ -2363,6 +2463,11 @@ const escapeHtml = s => String(s).replace(/[&<>"']/g, c =>
 let lwBotLevel = "mittel", lwBots = { agrar: 1, rohstoff: 1, versorger: 1, tech: 1, touristik: 1, ruestung: 1 };
 let lwEigeneAenderung = 0;   // kurz nach eigener Änderung nicht vom Server überschreiben lassen
 
+/* Kurznamen der Branchen fuer die Warteraumliste — die vollen Namen aus dem
+ * Auswahlblock waeren dort zu lang. */
+const BRANCHE_NAME = { agrar: "Landwirtschaft", rohstoff: "Rohstoff & Bau", versorger: "Versorger",
+                       tech: "Technologie", touristik: "Touristik", ruestung: "Rüstung",
+                       rennclub: "Race Club", rennindustrie: "Rennindustrie" };
 function lobbyWaitZeichnen() {
   const { state, myId } = store.get();
   if (!state || !myId) return;
@@ -2381,6 +2486,9 @@ function lobbyWaitZeichnen() {
       <span>${escapeHtml(p.name)}</span>
       ${p.id === state.hostId ? '<span class="tag">Host</span>' : ""}
       ${p.id === myId ? '<span class="tag">du</span>' : ""}
+      <!-- Branche mit anzeigen: Erst dadurch bringt die Wahl im Warteraum
+           etwas — man sieht, was schon besetzt ist, und kann sich absprechen. -->
+      <span class="tag" style="margin-left:auto">${escapeHtml(BRANCHE_NAME[p.industry] || p.industry || "—")}</span>
     </div>`).join("") || '<div class="leer">Noch niemand da.</div>';
 
   /* Solange man allein wartet, ist das Teilen des Codes der nächste Schritt —
@@ -2425,25 +2533,49 @@ function lwPickerSpiegeln() {
   /* Die vier Zahlenreihen allein sagen nicht, worauf man sich einlässt —
    * diese Zeile fasst Anzahl und Spielweise in einem Satz zusammen. */
   const summe = Object.values(lwBots).reduce((a, b) => a + b, 0);
+  /* Im Renntag gibt es die sechs Branchen nicht — dort zaehlt nur, wie viele
+   * Bots mitspielen; die Rollen verteilt der Server abwechselnd. Ohne diesen
+   * Hinweis stellt man Agrar und Touristik ein und bekommt Rennstaelle. */
   document.getElementById("lwBotSum").innerHTML = summe === 0
     ? "<b>Keine Bots</b> · ihr spielt die Runde nur untereinander"
-    : `<b>${summe} ${summe === 1 ? "Bot" : "Bots"}</b> · ${LW_LEVEL_TEXT[lwBotLevel] || ""}`;
+    : lwMode === "renntag"
+      ? `<b>${summe} ${summe === 1 ? "Bot" : "Bots"}</b> · ${LW_LEVEL_TEXT[lwBotLevel] || ""} — im Race Day zählt nur die Anzahl: der Server besetzt abwechselnd Race Clubs und Rennindustrie`
+      : `<b>${summe} ${summe === 1 ? "Bot" : "Bots"}</b> · ${LW_LEVEL_TEXT[lwBotLevel] || ""}`;
 }
 function lwSettingsSenden() {
   lwEigeneAenderung = Date.now();
   socket.emit("lobbySettings", {
     winGoal: +document.getElementById("lwGoal").value,
+    saison: +document.getElementById("lwSaison").value,
     bots: lwBots, botLevel: lwBotLevel, mode: lwMode,
   });
 }
 document.getElementById("lwGoal").addEventListener("change", lwSettingsSenden);
+document.getElementById("lwSaison").addEventListener("change", lwSettingsSenden);
 let lwMode = "sandbox";
 function lwModeSpiegeln() {
   document.querySelectorAll("#lwMode button").forEach(b => b.classList.toggle("on", b.dataset.mode === lwMode));
   /* In der Planwirtschaft gibt es kein Vermögensziel — die Zeile ausblenden. */
-  document.getElementById("lwGoalRow").style.display = (lwMode === "plan" || lwMode === "einsteiger") ? "none" : "";
+  document.getElementById("lwGoalRow").style.display =
+    (lwMode === "plan" || lwMode === "einsteiger" || lwMode === "renntag") ? "none" : "";
   document.getElementById("lwModeHint").style.display = lwMode === "plan" ? "" : "none";
   document.getElementById("lwEinsteigerHint").style.display = lwMode === "einsteiger" ? "" : "none";
+  document.getElementById("lwRenntagHint").style.display = lwMode === "renntag" ? "" : "none";
+  /* Im Renntag entscheidet die Meisterschaft — das Vermoegensziel waere dort
+   * eine Angabe ohne Wirkung. */
+  document.getElementById("lwSaisonRow").style.display = lwMode === "renntag" ? "" : "none";
+  /* Im Renntag gibt es keine Branchen, sondern zwei Rollen. Beim Umschalten
+   * auch die Auswahl mitziehen — sonst bliebe man mit einer Branche zurueck,
+   * die es im Modus gar nicht gibt. */
+  const renn = lwMode === "renntag";
+  document.querySelectorAll(".indopt.rennrolle").forEach(b => b.style.display = renn ? "" : "none");
+  document.querySelectorAll(".indopt:not(.rennrolle):not(.netopt)").forEach(b => b.style.display = renn ? "none" : "");
+  const gueltig = renn ? ["rennclub", "rennindustrie"].includes(myIndustry)
+                       : !["rennclub", "rennindustrie"].includes(myIndustry);
+  if (!gueltig) {
+    const ziel = document.querySelector(`.indopt[data-ind="${renn ? "rennclub" : "agrar"}"]`);
+    ziel?.click();
+  }
 }
 document.getElementById("lwMode").addEventListener("click", e => {
   const b = e.target.closest("button[data-mode]"); if (!b) return;
@@ -2494,13 +2626,22 @@ function doRegister(name) {
  * noch nichts produziert wird. Also erst zeigen, wenn die Runde wirklich läuft. */
 function tutErstBeiRundenstart() {
   /* Im Einsteiger-Modus fuehrt die lange Strecke durch das ganze Spiel statt
-   * der kurzen Einfuehrung zur gewaehlten Branche. */
-  const waehlen = () => { if (store.get().state?.mode === "einsteiger") TUT = TUT_EINSTEIGER; };
-  if (store.get().state?.started) { waehlen(); tutShow(0); return; }
+   * der kurzen Einfuehrung zur gewaehlten Branche.
+   *
+   * Dabei muss TUT_GESEHEN geleert werden: Die vier Lese-Schritte (Boerse,
+   * Lager, Nachrichten, Finanzen) haken sich am Oeffnen des Panels ab. Ohne
+   * Leeren traegt eine zweite Runde im selben Seitenaufruf die Panels der
+   * ersten noch im Gedaechtnis — und ueberspringt vier von fuenfzehn
+   * Schritten, ohne dass der Lernende sie je gesehen hat. */
+  const vorbereiten = () => {
+    TUT_GESEHEN.clear();
+    if (store.get().state?.mode === "einsteiger") TUT = TUT_EINSTEIGER;
+  };
+  if (store.get().state?.started) { vorbereiten(); tutShow(0); return; }
   const ab = store.subscribe(() => {
     if (!store.get().state?.started) return;
     ab?.();
-    waehlen();
+    vorbereiten();
     tutShow(0);
   });
 }
@@ -4239,7 +4380,21 @@ function clickTile(e) {
     return;
   }
   const myInds = store.get().state?.players?.[myId]?.industries || [store.get().meta?.industry];
-  const opts = Object.entries(BTYPES()).filter(([,b]) => b.zone === t.zone && (!b.industry || myInds.includes(b.industry)));
+  /* Im Renntag entscheidet die Rolle, nicht die Branche — und kein Gebaeude
+   * traegt "rennclub" oder "rennindustrie" als industry. Ohne diesen Zweig
+   * fiele die Liste fuer beide Rollen leer aus: der Server erlaubt den Bau,
+   * das Menue bietet ihn nur nicht an. Dieselbe Regel wie serverseitig, damit
+   * beide Seiten dasselbe sagen. */
+  const RENNTAG_BAUTEN = {
+    rennclub: ["rennstall", "werbeagentur"],
+    rennindustrie: ["reifenwerk", "rennlabor", "oelpumpe", "mine", "stahlwerk",
+                    "siliziummine", "chipfabrik", "ewerk", "windpark", "werbeagentur"],
+  };
+  const rolleErlaubt = RENNTAG_BAUTEN[store.get().state?.players?.[store.get().myId]?.industry] || [];
+  const opts = Object.entries(BTYPES()).filter(([bid, b]) => b.zone === t.zone && (
+    store.get().state?.mode === "renntag"
+      ? rolleErlaubt.includes(bid)
+      : (!b.industry || myInds.includes(b.industry))));
   const mats = b => { const m = { ziegel: Math.ceil(b.cost / 400) };
     if (b.cost >= 4000 && b.proc?.out !== "beton") m.beton = Math.ceil(b.cost / 2000);
     return m; };
@@ -4251,13 +4406,27 @@ function clickTile(e) {
    * nirgends, ohne je zu erfahren, woran es liegt. */
   const nwSchwelle = store.get().meta?.racingUnlock ?? 200000;
   const meinNW = store.get().state?.players?.[store.get().myId]?.netWorth ?? 0;
-  const gesperrt = b => !!b.racing && meinNW < nwSchwelle;
+  /* Im Renntag ist Motorsport kein Spaetspiel-Inhalt, sondern der Zweck des
+   * Modus — dort entfaellt die Schwelle. Der Server sieht das genauso; ohne
+   * diese Zeile blieb der Knopf aber gesperrt und nannte einen Grund, den es
+   * gar nicht mehr gab. */
+  const rennModus = store.get().state?.mode === "renntag";
+  /* Mehr als einen Rennstall je Firma laesst der Server nicht zu — im Renntag
+   * hat man ihn von Anfang an. Ohne diese Zeile stuende dort ein ausgegrauter
+   * "Rennstall $30.000" mit dem Preis als einzigem Hinweis, und der Grund
+   * fuer die Sperre bliebe im Dunkeln. */
+  const hatStall = (store.get().state?.map || [])
+    .some(q => q.owner === store.get().myId && BTYPES()[q.btype]?.racing);
+  const gesperrt = b => !!b.racing && (hatStall || (!rennModus && meinNW < nwSchwelle));
   const canAfford = b => !gesperrt(b) && me.cash >= totalCost(b) && Object.entries(mats(b)).every(([g, n]) => me.inv[g] >= n);
   const lockNote = t.locked ? ` (inkl. ${fmt(t.unlockCost)} Freischaltung)` : "";
-  tm.innerHTML = `<h3>${t.locked ? "Gesperrt · " : ""}Bauen — ${t.zone}</h3>` + (opts.length ? `<div class="note">Baumaterial: Ziegel und Beton — Nachschub über die Börse. Später mit Elektronik auflevelbar.${lockNote}</div>` : `<div class="note">Deine Industrie kann hier nichts bauen — handle stattdessen an der Börse.</div>`)
+  tm.innerHTML = `<h3>${t.locked ? "Gesperrt · " : ""}Bauen — ${t.zone}</h3>` + (opts.length ? `<div class="note">Baumaterial: Ziegel und Beton — Nachschub über die Börse. Später mit Elektronik auflevelbar.${lockNote}</div>` : `<div class="note">${store.get().state?.mode === "renntag"
+        ? "Deine Rolle baut hier nichts — Teile und Rohstoffe gehen über die Börse."
+        : "Deine Industrie kann hier nichts bauen — handle stattdessen an der Börse."}</div>`)
     + opts.map(([bid, b]) => `<button class="opt" data-b="${bid}" ${canAfford(b) ? "" : "disabled"}>${b.name}<small>${
-        gesperrt(b) ? `Motorsport ab ${fmt(nwSchwelle)} Nettovermögen — dir fehlen ${fmt(nwSchwelle - meinNW)}`
-                    : `${fmt(totalCost(b))} · ${matTxt(b)}`}</small></button>`).join("");
+        !gesperrt(b) ? `${fmt(totalCost(b))} · ${matTxt(b)}`
+        : hatStall && b.racing ? "Du betreibst bereits einen Rennstall — mehr als einer ist nicht erlaubt"
+        : `Motorsport ab ${fmt(nwSchwelle)} Nettovermögen — dir fehlen ${fmt(nwSchwelle - meinNW)}`}</small></button>`).join("");
   tm.querySelectorAll(".opt").forEach(btn => btn.addEventListener("click", () => {
     act("build", { x:t.x, y:t.y, btype: btn.dataset.b }); tm.style.display = "none"; }));
 }
@@ -4788,7 +4957,10 @@ function tutShow(i) {
   const wartet = !!(s.build || s.warte);
   document.getElementById("tutNext").style.display = wartet ? "none" : "";
   document.getElementById("tutWait").style.display = wartet ? "flex" : "none";
-  if (i === TUT.length - 1) document.getElementById("tutNext").textContent = "Los geht's!";
+  /* Beschriftung immer setzen, nicht nur beim letzten Schritt: sonst traegt der
+   * Knopf in einer zweiten Runde ab Schritt 1 noch das "Los geht's!" der
+   * vorigen. */
+  document.getElementById("tutNext").textContent = t(i === TUT.length - 1 ? "Los geht's!" : "Weiter");
 }
 function tutDone() { tutIdx = -1; tutEl.style.display = "none"; try { localStorage.setItem("cs_tut_done", "1"); } catch {} }
 document.getElementById("tutNext").addEventListener("click", () => {
@@ -4967,6 +5139,13 @@ function motorsportRendern(state, me, myId) {
   if (knopf) knopf.style.display = staelle.length ? "" : "none";
   const box = document.getElementById("motorbody");
   if (!box || !document.getElementById("p-motorsport").classList.contains("open")) return;
+  /* Nicht neu bauen, waehrend jemand ein Bedienelement benutzt. Das Panel baut
+   * sich im Sekundentakt komplett neu auf — wer die Fahrerauswahl aufklappt,
+   * dem wurde das Auswahlfeld unter der Hand ersetzt, es klappte zu, und der
+   * Fahrer liess sich nicht zuweisen. Die anderen Panels haben denselben
+   * Schutz; hier fehlte er. */
+  if (box.contains(document.activeElement)
+      && /INPUT|SELECT|TEXTAREA/.test(document.activeElement?.tagName)) return;
   if (!staelle.length) { box.innerHTML = `<div class="note">Du betreibst keinen Rennstall.</div>`; return; }
 
   const farbe = state.players[myId]?.color || "#7ad";
@@ -5039,9 +5218,12 @@ function motorsportRendern(state, me, myId) {
               <i style="display:block;height:100%;width:${a.zustand}%;background:${
                 a.zustand < 25 ? "var(--down)" : a.zustand < 55 ? "#fbbf24" : "var(--up)"}"></i></div></div>
           <div style="flex:1;min-width:0">
-            <div style="display:flex;justify-content:space-between;align-items:baseline">
-              <b>${gname(a.good)} #${a.nr}</b>
-              <span style="font-size:11px;opacity:.7">Wert ${fmt(a.wert || 0)}</span>
+            <div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px">
+              <input class="autoname" data-rename="${a.id}" data-x="${a.x}" data-y="${a.y}"
+                     maxlength="24" value="${escapeHtml(a.name || "")}"
+                     placeholder="${escapeHtml(gname(a.good) + " #" + a.nr)}"
+                     title="Eigener Name — leer lassen für die Vorgabe">
+              <span style="font-size:11px;opacity:.7;flex:none">Wert ${fmt(a.wert || 0)}</span>
             </div>
             <div style="font-size:11px;opacity:.7;margin-bottom:6px">
               ${a.rennen} Rennen · ${a.siege} Siege${f ? ` · am Steuer: <b style="color:var(--accent)">${f.name}</b>` : ""}</div>
@@ -5140,7 +5322,26 @@ function motorsportRendern(state, me, myId) {
       </div>`;
   };
 
-  box.innerHTML =
+  /* Countdown und Tabelle nach oben: Wer den Rennstall oeffnet, will wissen,
+   * wie viel Zeit zum Vorbereiten bleibt und wo er in der Meisterschaft steht.
+   * Vorher sah man erst bei der Ankuendigung, dass ueberhaupt etwas ansteht. */
+  const sek = state.naechstesRennen;
+  const countdown = state.rennen
+    ? `<div class="sec">Renntag läuft — ${state.rennen.phase === "anmeldung" ? "Anmeldung offen" : state.rennen.phase === "laeuft" ? "Rennen läuft" : "Siegerehrung"}</div>`
+    : sek == null ? ""
+    : `<div class="sec">Nächster Renntag in ${Math.floor(sek / 60)}:${String(sek % 60).padStart(2, "0")}</div>
+       <div class="note" style="margin-top:-2px">Zeit für Reparatur, Tuning und Fahrerwechsel — gemeldet wird erst, wenn die Anmeldung offen ist.</div>`;
+  const wm = state.wm && state.saison ? (() => {
+    const rang = Object.entries(state.wm).sort((a2, b2) => b2[1] - a2[1]);
+    return `<div class="sec">Meisterschaft · Renntag ${state.saison.gefahren} von ${state.saison.gesamt}</div>`
+      + (rang.length
+        ? rang.map(([pid, pkt], i) => `<div class="rennteil">
+             <b style="width:20px">${i + 1}.</b>
+             <span style="flex:1">${escapeHtml(state.players[pid]?.name || "—")}${pid === myId ? ` <span class="meta" style="color:var(--accent)">· du</span>` : ""}</span>
+             <span class="quote">${pkt}</span></div>`).join("")
+        : `<div class="note">Noch keine Punkte vergeben. 10 für den Sieg, dann 6, 4, 3, 2, 1.</div>`);
+  })() : "";
+  box.innerHTML = countdown + wm +
     `<div class="note">Fahrzeuge im Rennstall sind keine handelbare Ware mehr. Teile fürs Tuning
        kaufst du an der Börse — Rennreifen und Rennsoftware stellen andere Firmen her.</div>
      <div class="sec">Garage (${alleAutos.length})</div>` +
@@ -5169,6 +5370,20 @@ function motorsportRendern(state, me, myId) {
     act("fahrerAnheuern", { fahrerId: +b.dataset.heuer })));
   box.querySelectorAll("[data-feuer]").forEach(b => b.addEventListener("click", () =>
     act("fahrerEntlassen", { fahrerId: +b.dataset.feuer })));
+  /* Wagenname: Enter oder Verlassen speichert. Leeres Feld setzt auf die
+   * Vorgabe zurueck — der Platzhalter zeigt sie dann wieder an. */
+  box.querySelectorAll("[data-rename]").forEach(inp => {
+    const senden = () => {
+      const neu = inp.value.trim();
+      if (neu === (inp.dataset.stand ?? "")) return;      // nichts geaendert
+      inp.dataset.stand = neu;
+      act("autoUmbenennen", { x: +inp.dataset.x, y: +inp.dataset.y,
+                              autoId: +inp.dataset.rename, name: neu });
+    };
+    inp.dataset.stand = inp.value.trim();
+    inp.addEventListener("blur", senden);
+    inp.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); inp.blur(); } });
+  });
   box.querySelectorAll("[data-setfahrer]").forEach(sel => sel.addEventListener("change", () => {
     const autoId = +sel.dataset.setfahrer;
     if (sel.value) return act("fahrerZuweisen", { fahrerId: +sel.value, autoId });
@@ -5187,6 +5402,11 @@ function motorsportRendern(state, me, myId) {
 let rennMinimiert = false;
 const RENN_ANIM = new Map();     // autoId -> { shown, ziel }
 function rennenRendern(state, myId) {
+  /* Die Sponsorgesuche brauchen den eigenen Bestand (Bargeld und Teile), um zu
+   * zeigen, was man erfuellen kann. Die Funktion bekommt kein me uebergeben —
+   * also hier aus dem Store holen, statt die Signatur aller Aufrufer zu
+   * aendern. */
+  const me = store.get().me || { inv: {}, cash: 0 };
   const ov = document.getElementById("rennOverlay"), chip = document.getElementById("rennChip");
   const r = state.rennen;
   if (!r) {
@@ -5212,55 +5432,134 @@ function rennenRendern(state, myId) {
   if (r.phase === "anmeldung") {
     /* Nur neu bauen, wenn sich strukturell etwas ändert und niemand tippt —
      * sonst frisst der Sekunden-Rerender die Eingaben. */
-    const sig = "a" + r.teilnehmer.length + ":" + r.pool + ":" + r.sponsoren.length + ":" + JSON.stringify(r.quoten);
+    const sig = "a" + r.teilnehmer.map(t2 => t2.autoId).join(",") + ":" + r.pool + ":" + r.sponsoren.length
+      /* Nicht nur die Anzahl der Gesuche: Wer sein eigenes ersetzt, aendert
+       * nichts an der Zahl — die Anzeige bliebe sonst auf dem alten stehen. */
+      + ":" + (r.gesuche || []).map(g => g.id + "/" + (g.betrag ?? g.menge)).join(",")
+      + ":" + JSON.stringify(r.quoten);
     const tippt = body.contains(document.activeElement) && /INPUT|SELECT/.test(document.activeElement?.tagName);
     if (rennenRendern.sig !== sig && !tippt) {
       rennenRendern.sig = sig;
-      const teilOpts = r.teilnehmer.filter(t2 => t2.ownerId !== myId)
-        .map(t2 => `<option value="${t2.autoId}">${t2.name} (${t2.team})</option>`).join("");
-      const teamIds = [...new Set(r.teilnehmer.map(t2 => t2.ownerId))].filter(id2 => id2 !== myId);
-      const teamOpts = teamIds.map(id2 => `<option value="${id2}">${state.players[id2]?.name || "?"}</option>`).join("");
+      /* Werkswagen haben keinen Besitzer — sie lassen sich weder sponsern noch
+       * in der Teamauswahl anzeigen. */
+      const wettbar = r.teilnehmer.filter(t2 => t2.ownerId !== myId);
+      /* Getroffene Wahl ueber den Neuaufbau retten — das Panel baut sich bei
+       * jeder fremden Wette neu auf, und dabei soll die Auswahl stehen
+       * bleiben. Ist der Wagen inzwischen weg (Werkswagen weicht einem
+       * gemeldeten Stall), faellt sie auf den ersten zurueck. */
+      if (!wettbar.some(t2 => t2.autoId === rennenRendern.wahl))
+        rennenRendern.wahl = wettbar[0]?.autoId ?? null;
       body.innerHTML = `
         <div class="renngrid">
           <div class="rennbox">
-            <div class="lbl">Startfeld (${r.teilnehmer.length}/8) · Quoten live</div>
-            ${r.teilnehmer.map(t2 => `<div class="rennteil">
+            <div class="lbl">Startfeld (${r.teilnehmer.length}/8) · Wagen wählen und setzen</div>
+            ${r.teilnehmer.map(t2 => {
+              const eigen = t2.ownerId === myId;
+              const gewaehlt = !eigen && t2.autoId === rennenRendern.wahl;
+              /* Woher der Wagen kommt: eigener Stall, fremder Spielerstall oder
+               * Werksteam. Vorher war das nur am Teamnamen zu erraten. */
+              const marke = eigen ? `<span class="herkunft selbst">dein Stall</span>`
+                          : t2.bot ? `<span class="herkunft">Werksteam</span>`
+                                   : `<span class="herkunft spieler">gemeldet</span>`;
+              const L = t2.letztes;
+              const letztes = L
+                ? `<span class="letztes">Zuletzt: ${L.aus ? "ausgefallen" : `${L.platz}. von ${L.feld}`}</span>`
+                : `<span class="letztes" style="opacity:.5">Erstes Rennen</span>`;
+              return `<div class="rennteil${eigen ? " selbst" : " wettbar"}${t2.bot || eigen ? "" : " gemeldet"}${gewaehlt ? " gewaehlt" : ""}"${eigen ? "" : ` data-auto="${t2.autoId}"`}>
                 <span class="rennfarb" style="background:${t2.farbe}"></span>
-                <span><b>${t2.name}</b> · ${t2.team}<br><span class="meta">Fahrer: ${t2.fahrer}</span></span>
-                <span class="quote">${r.quoten[t2.autoId] ? r.quoten[t2.autoId].toFixed(2) : "—"}</span>
-              </div>`).join("") || `<p class="note">Noch kein Wagen gemeldet. Rennställe melden über das Motorsport-Panel.</p>`}
+                <span style="flex:1;min-width:0">
+                  <span class="rennname">${escapeHtml(t2.name)}</span> ${marke}
+                  <br><span class="meta">${escapeHtml(t2.team)} · ${escapeHtml(t2.fahrer)}</span>
+                  <br>${letztes}
+                </span>
+                ${eigen ? `<span class="eigen">startet</span>`
+                        : `<span class="quote">${r.quoten[t2.autoId] ? r.quoten[t2.autoId].toFixed(2) : "—"}</span>`}
+              </div>`;
+            }).join("") || `<p class="note">Noch kein Wagen gemeldet.</p>`}
+            ${wettbar.length ? `<div class="rennform" style="margin-top:10px">
+              <input id="wettBetrag" type="number" min="100" max="20000" placeholder="Einsatz $">
+              <button id="wettSenden">Auf gewählten Wagen setzen</button>
+            </div>
+            <p class="note" style="margin-top:6px">Totalisator: Der ganze Pool (−10 % für den Preistopf) geht an die Siegerwetten — die Quote steht erst mit dem Start fest.</p>`
+            : `<p class="note" style="margin-top:8px">Keine fremden Wagen zum Wetten gemeldet.</p>`}
             <p class="note" style="margin:8px 0 0">Preistopf aktuell: <b>${fmt(r.topf)}</b> · Wettpool: <b>${fmt(r.pool)}</b></p>
           </div>
           <div class="rennbox">
-            <div class="lbl">Wettschein · Quoten nach Pool (Totalisator)</div>
-            ${teilOpts ? `<div class="rennform">
-              <select id="wettAuto">${teilOpts}</select>
-              <input id="wettBetrag" type="number" min="100" max="20000" placeholder="Einsatz $">
-              <button id="wettSenden">Wetten</button>
-            </div>
-            <p class="note" style="margin-top:6px">Der ganze Pool (−10 % für den Preistopf) geht an die Siegerwetten — die Quote steht erst mit dem Start fest.</p>`
-            : `<p class="note">Keine fremden Wagen zum Wetten gemeldet.</p>`}
-            <div class="lbl" style="margin-top:12px">Sponsoring</div>
-            ${teamOpts ? `<div class="rennform">
-              <select id="sponsTeam">${teamOpts}</select>
-              <input id="sponsBetrag" type="number" min="500" max="50000" placeholder="Summe $">
-              <button id="sponsSenden">Sponsern</button>
-            </div>
-            <p class="note" style="margin-top:6px">Das Geld geht sofort an den Rennstall — dafür bekommst du bis zu 50 % seines Preisgeldes (pro rata mit anderen Sponsoren).</p>`
-            : `<p class="note">Kein fremdes Team gemeldet.</p>`}
+            <div class="lbl">Sponsorgesuche</div>
+            ${(() => {
+              /* Die Teams fragen selbst an — nach Geld oder nach Teilen. Was
+               * fehlt, steht dabei: so sieht man sofort, ob man es erfuellen
+               * kann, ohne erst ins Lager zu wechseln. */
+              const alle = r.gesuche || [];
+              const offen = alle.filter(g => g.teamId !== myId);
+              const meins = alle.find(g => g.teamId === myId);
+              const binGemeldet = r.teilnehmer.some(t2 => t2.ownerId === myId);
+              const zeile = g => {
+                const geld = g.art === "geld";
+                const braucht = geld ? fmt(g.betrag) : `${g.menge}× ${gname(g.art)}`;
+                const habe = geld ? me.cash : (me.inv?.[g.art] || 0);
+                const reicht = habe >= (geld ? g.betrag : g.menge);
+                return `<div class="gesuch${reicht ? " kann" : ""}">
+                  <span class="was"><b>${escapeHtml(g.team)}</b> sucht <span class="bedarf">${braucht}</span>
+                    <br><span class="meta">${geld ? `du hast ${fmt(me.cash)}` : `du hast ${habe}×`} · Gegenwert ${fmt(g.wert)}</span></span>
+                  <button data-gesuch="${g.id}" ${reicht ? "" : "disabled"}>${reicht ? "Erfüllen" : "zu wenig"}</button>
+                </div>`;
+              };
+              /* Eigenes Gesuch: nur wer selbst gemeldet ist, kann Sponsoren
+               * suchen — ohne Wagen im Rennen gaebe es nichts zu sponsern. */
+              const eigenes = !binGemeldet ? "" : `
+                <div class="gesuch eigenesGesuch">
+                  <span class="was"><b>Dein Gesuch</b>
+                    <br><span class="meta">${meins
+                      ? (meins.art === "geld" ? `Du suchst ${fmt(meins.betrag)}` : `Du suchst ${meins.menge}× ${gname(meins.art)}`)
+                      : "Noch keins aufgegeben"}</span></span>
+                </div>
+                <div class="rennform">
+                  <select id="gesuchArt">
+                    <option value="geld">Geld</option>
+                    <option value="rennsoftware">Rennsoftware</option>
+                    <option value="rennreifen">Rennreifen</option>
+                  </select>
+                  <input id="gesuchMenge" type="number" min="1" placeholder="Menge">
+                  <button id="gesuchSenden">Sponsoren suchen</button>
+                </div>
+                <p class="note" style="margin:4px 0 10px">Bei Geld der Betrag (1.000–20.000 $), bei Teilen die Stückzahl (1–10). Ein neues Gesuch ersetzt dein altes.</p>`;
+              const fremd = offen.length
+                ? offen.map(zeile).join("") + `<p class="note" style="margin-top:6px">Dafür bekommst du bis zu 50 % des Preisgeldes dieses Teams (pro rata mit anderen Sponsoren). Teile werden zum Ø-Kurs bewertet.</p>`
+                : `<p class="note">Zurzeit sucht kein anderes Team einen Sponsor.</p>`;
+              return eigenes + fremd;
+            })()}
             ${r.sponsoren.length ? `<div class="lbl" style="margin-top:12px">Sponsoren</div>` +
-              r.sponsoren.map(s => `<div class="rennteil"><span>${s.name} → <b>${s.team}</b></span><span class="quote">${fmt(s.betrag)}</span></div>`).join("") : ""}
+              r.sponsoren.map(s => `<div class="rennteil"><span>${escapeHtml(s.name)} → <b>${escapeHtml(s.team || "?")}</b>${
+                s.was ? `<br><span class="meta">${escapeHtml(s.was)}</span>` : ""}</span><span class="quote">${fmt(s.betrag)}</span></div>`).join("") : ""}
           </div>
         </div>
-        <p id="rennStatus" class="note" style="margin:10px 0 0;min-height:14px"></p>`;
+`;
+      /* Wetten laeuft jetzt ueber die Liste statt ueber ein Auswahlfeld: anklicken,
+       * Einsatz eintragen, setzen. Die Auswahl wird ohne Neuaufbau markiert,
+       * sonst ginge bei jedem Klick die Eingabe im Einsatzfeld verloren. */
+      body.querySelectorAll(".rennteil.wettbar").forEach(el => el.addEventListener("click", () => {
+        rennenRendern.wahl = Number(el.dataset.auto);
+        body.querySelectorAll(".rennteil.wettbar").forEach(o => o.classList.toggle("gewaehlt", o === el));
+      }));
       document.getElementById("wettSenden")?.addEventListener("click", () => {
-        socket.emit("wetteSetzen", { autoId: +document.getElementById("wettAuto").value, betrag: +document.getElementById("wettBetrag").value },
-          res => { document.getElementById("rennStatus").textContent = res?.error || "Wette platziert — viel Glück!"; });
+        if (rennenRendern.wahl == null) return toast("Erst einen Wagen in der Liste anklicken.", true);
+        const name = r.teilnehmer.find(t2 => t2.autoId === rennenRendern.wahl)?.name || "Wagen";
+        socket.emit("wetteSetzen", { autoId: rennenRendern.wahl, betrag: +document.getElementById("wettBetrag").value },
+          /* Rueckmeldung als Toast statt in die Panelzeile: Jede Wette aendert
+           * den Pool, das Panel baut sich daraufhin neu auf — eine Meldung
+           * darin waere nach einer Sekunde wieder weg. */
+          res => toast(res?.error || `Wette steht: ${fmt(+document.getElementById("wettBetrag")?.value || 0)} auf ${name}`, !!res?.error));
       });
-      document.getElementById("sponsSenden")?.addEventListener("click", () => {
-        socket.emit("sponsern", { teamId: document.getElementById("sponsTeam").value, betrag: +document.getElementById("sponsBetrag").value },
-          res => { document.getElementById("rennStatus").textContent = res?.error || "Sponsorvertrag steht!"; });
+      document.getElementById("gesuchSenden")?.addEventListener("click", () => {
+        socket.emit("gesuchAufgeben", { art: document.getElementById("gesuchArt").value,
+                                        menge: +document.getElementById("gesuchMenge").value },
+          res => toast(res?.error || "Sponsorgesuch steht.", !!res?.error));
       });
+      body.querySelectorAll("[data-gesuch]").forEach(b => b.addEventListener("click", () => {
+        socket.emit("gesuchErfuellen", { gesuchId: +b.dataset.gesuch },
+          res => toast(res?.error || "Sponsorvertrag steht!", !!res?.error));
+      }));
     }
   } else if (r.phase === "laeuft") {
     if (rennenRendern.sig !== "live") {
@@ -5304,8 +5603,8 @@ function rennenRendern(state, myId) {
       <div class="rennstand${i === 0 && !t2.ausgefallen ? " fuehrt" : ""}${meins2 ? " meins" : ""}" style="${t2.ausgefallen ? "opacity:.45" : ""}">
         <span class="platzbadge p${i + 1}">${i + 1}</span>
         ${wagenChip(t2.farbe, t2.ausgefallen)}
-        <span class="wer"><b>${t2.name}</b>${t2.ausgefallen ? " 💥" : ""}${meins2 ? ` <span class="meta" style="color:var(--accent)">· dein Stall</span>` : ""}
-          <span class="meta">${t2.team} · ${t2.fahrer}</span></span>
+        <span class="wer"><b>${escapeHtml(t2.name)}</b>${t2.ausgefallen ? " 💥" : ""}${meins2 ? ` <span class="meta" style="color:var(--accent)">· dein Stall</span>` : ""}
+          <span class="meta">${escapeHtml(t2.team)} · ${escapeHtml(t2.fahrer)}</span></span>
         <span class="fortschritt">
           <span class="zeile"><span>R${Math.floor(t2.dist / r.runde) + 1} · ${t2.dist} m</span><span>${t2.ausgefallen ? "DNF" : rueckstand}</span></span>
           <span class="balken"><i style="width:${rundeProz}%;background:${t2.ausgefallen ? "#5a616b" : t2.farbe}"></i></span>
@@ -5320,11 +5619,19 @@ function rennenRendern(state, myId) {
       const reihenfolge = podium.length >= 3 ? [1, 0, 2] : podium.map((_, i) => i);
       body.innerHTML = `
         <div class="rennpodium">${reihenfolge.map(i => { const e = podium[i]; if (!e) return "";
-          const hoehe = [96, 128, 78][i] || 80;
-          return `<div class="stufe">
-            <div style="font-size:26px">${medaille[e.platz - 1] || ""}</div>
-            <div style="font-size:13px;margin:4px 0"><b>${e.name}</b><br><span class="meta">${e.team} · ${e.fahrer}</span></div>
-            <div class="sockel" style="height:${hoehe}px"><b style="font-size:18px">${e.platz}</b></div>
+          /* Hoehe nach PLATZ, nicht nach Schleifenindex: reihenfolge ist
+           * [1,0,2], damit der Sieger in der Mitte steht — mit dem Index als
+           * Schluessel bekam bisher der Zweite den hoechsten Sockel. */
+          const hoehe = { 1: 140, 2: 104, 3: 84 }[e.platz] || 84;
+          /* Im Renntag zeigt das Podest gleich mit, was der Platz an
+           * Meisterschaftspunkten wert war — sonst muesste man dafuer in den
+           * Rennstall wechseln. */
+          const wmp = state.mode === "renntag" ? [10, 6, 4, 3, 2, 1][e.platz - 1] : 0;
+          return `<div class="stufe p${e.platz}">
+            <div class="krone">${medaille[e.platz - 1] || ""}</div>
+            <div class="wer2"><b>${escapeHtml(e.name)}</b><br><span class="meta">${escapeHtml(e.team)} · ${escapeHtml(e.fahrer)}</span>${
+              wmp && !e.ausgefallen ? `<br><span class="wmdelta">+${wmp} Punkte</span>` : ""}</div>
+            <div class="sockel" style="height:${hoehe}px;--liv:${e.farbe}"><span class="nr">${e.platz}</span></div>
           </div>`; }).join("")}</div>
         <div class="rennbox">
           <div class="lbl">Endstand · Preistopf ${fmt(r.topf)}</div>
@@ -5335,7 +5642,24 @@ function rennenRendern(state, myId) {
             <span class="dist">${e.dist} m</span>
           </div>`).join("")}
           <p class="note" style="margin:8px 0 0">Preisgelder, Sponsoranteile und Wettgewinne sind ausgezahlt — Details im Finanzlog.</p>
-        </div>`;
+        </div>` + (state.wm && state.saison ? (() => {
+          /* Nach dem Rennen gleich die Tabelle: Im Renntag entscheidet sie die
+           * Runde, und ohne sie muesste man dafuer in den Rennstall wechseln. */
+          const rang = Object.entries(state.wm).sort((a2, b2) => b2[1] - a2[1]);
+          const rest = state.saison.gesamt - state.saison.gefahren;
+          return `<div class="rennbox" style="margin-top:10px">
+            <div class="lbl">Meisterschaft · Renntag ${state.saison.gefahren} von ${state.saison.gesamt}${
+              rest > 0 ? ` · noch ${rest}` : " · Finale"}</div>
+            ${rang.length ? rang.map(([pid, pkt], i) => `<div class="rennstand"${
+                pid === myId ? ' style="box-shadow:inset 3px 0 0 var(--accent)"' : ""}>
+                <b style="width:20px">${i + 1}.</b>
+                <span class="rennfarb" style="background:${state.players[pid]?.color || "#7ad"}"></span>
+                <span>${escapeHtml(state.players[pid]?.name || "—")}${pid === myId ? ` <span class="meta" style="color:var(--accent)">· du</span>` : ""}</span>
+                <span class="dist"><b style="color:#fbbf24">${pkt}</b> Punkte</span>
+              </div>`).join("")
+              : `<p class="note">Noch keine Punkte vergeben.</p>`}
+          </div>`;
+        })() : "");
     }
   }
 }
