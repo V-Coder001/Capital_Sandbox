@@ -2822,6 +2822,10 @@ io.on("connection", socket => {
      * diese Grenze wäre "mehr Ställe" die beste Strategie, und der Wettpool
      * gehörte am Ende dem, der am meisten Kacheln hält. */
     if (bt.racing) {
+      /* Planwirtschaft: keine Renntage, kein Wettpool — ein Rennstall wäre
+       * ein totes Gebäude mit laufenden Fahrergehältern. */
+      if (MODE === "plan")
+        return ack?.({ error: "In der Planwirtschaft gibt es keinen Motorsport" });
       const nw = netWorth(p);
       if (MODE !== "renntag" && nw < RACING_UNLOCK_NW)
         return ack?.({ error: `Motorsport öffnet ab ${RACING_UNLOCK_NW.toLocaleString("de-DE")} $ Nettovermögen — dir fehlen noch ${Math.round(RACING_UNLOCK_NW - nw).toLocaleString("de-DE")} $` });
