@@ -5719,6 +5719,167 @@ function rennwagenZeichnen(g, farbe, kaputt) {
   g.beginPath(); g.roundRect(-7.5, 11, 15, 3, 1.4); g.fill();
   g.globalAlpha = 1;
 }
+/* ---- Der Kurs ----
+ * Kein Oval mehr, sondern ein richtiger Grand-Prix-Kurs: eine geschlossene
+ * Catmull-Rom-Kurve durch handgesetzte Kontrollpunkte — lange Zielgerade,
+ * weite Bögen, eine Haarnadel und eine Schikane. Die Kurve wird einmal fein
+ * abgetastet (Position, Tangente, Krümmung, Bogenlänge); Wagen fahren exakt
+ * auf der Kurve, Randsteine liegen nur in den Kurven. */
+const RENN_KURS_PUNKTE = [
+  [150, 262], [86, 232], [58, 170], [82, 104], [160, 64], [252, 76], [312, 118],
+  [368, 96], [420, 56], [500, 44], [576, 62], [640, 108], [676, 168],
+  [652, 224], [584, 250], [520, 226], [462, 246], [400, 226], [330, 252], [240, 268],
+];
+let KURS = null, KURS_BG = null;
+function kursBauen() {
+  const P = RENN_KURS_PUNKTE, n = P.length, pts = [];
+  const cm = (p0, p1, p2, p3, t) => {
+    const t2 = t * t, t3 = t2 * t;
+    return .5 * ((2 * p1) + (-p0 + p2) * t + (2 * p0 - 5 * p1 + 4 * p2 - p3) * t2 + (-p0 + 3 * p1 - 3 * p2 + p3) * t3);
+  };
+  for (let i = 0; i < n; i++) for (let s2 = 0; s2 < 26; s2++) {
+    const t = s2 / 26;
+    const p0 = P[(i - 1 + n) % n], p1 = P[i], p2 = P[(i + 1) % n], p3 = P[(i + 2) % n];
+    pts.push({ x: cm(p0[0], p1[0], p2[0], p3[0], t), y: cm(p0[1], p1[1], p2[1], p3[1], t) });
+  }
+  let laenge = 0;
+  for (let i = 0; i < pts.length; i++) {
+    const a = pts[i], b = pts[(i + 1) % pts.length];
+    a.len = laenge; a.seg = Math.hypot(b.x - a.x, b.y - a.y); laenge += a.seg;
+  }
+  for (let i = 0; i < pts.length; i++) {
+    const prev = pts[(i - 1 + pts.length) % pts.length], next = pts[(i + 1) % pts.length];
+    const dx = next.x - prev.x, dy = next.y - prev.y, l = Math.hypot(dx, dy) || 1;
+    pts[i].tx = dx / l; pts[i].ty = dy / l;
+  }
+  for (let i = 0; i < pts.length; i++) {
+    const a = pts[(i - 7 + pts.length) % pts.length], b = pts[(i + 7) % pts.length];
+    let dw = Math.atan2(b.ty, b.tx) - Math.atan2(a.ty, a.tx);
+    while (dw > Math.PI) dw -= 2 * Math.PI;
+    while (dw < -Math.PI) dw += 2 * Math.PI;
+    pts[i].kruemmung = Math.abs(dw);
+  }
+  KURS = { pts, laenge };
+}
+function kursPunkt(d) {
+  const pts = KURS.pts;
+  d = ((d % KURS.laenge) + KURS.laenge) % KURS.laenge;
+  let lo = 0, hi = pts.length - 1;
+  while (lo < hi) { const mid = (lo + hi + 1) >> 1; if (pts[mid].len <= d) lo = mid; else hi = mid - 1; }
+  const a = pts[lo], b = pts[(lo + 1) % pts.length], f = a.seg ? (d - a.len) / a.seg : 0;
+  return { x: a.x + (b.x - a.x) * f, y: a.y + (b.y - a.y) * f, tx: a.tx, ty: a.ty };
+}
+/* Die Kulisse ändert sich nie — einmal in einen Offscreen-Puffer rendern
+ * (Rasen, Kies, Randsteine, Bahn, Tribünen, Bäume, Startportal) und danach
+ * pro Frame nur noch kopieren. */
+function kursKulisseBauen(dpr) {
+  if (!KURS) kursBauen();
+  const c = document.createElement("canvas");
+  c.width = 740 * dpr; c.height = 320 * dpr;
+  const g = c.getContext("2d");
+  g.scale(dpr, dpr);
+  const pts = KURS.pts;
+  const pfad = () => { g.beginPath(); g.moveTo(pts[0].x, pts[0].y);
+    for (const p of pts) g.lineTo(p.x, p.y); g.closePath(); };
+  /* Rasen mit Flecken */
+  const gras = g.createRadialGradient(370, 160, 40, 370, 160, 460);
+  gras.addColorStop(0, "#17371f"); gras.addColorStop(1, "#0b2012");
+  g.fillStyle = gras; g.fillRect(0, 0, 740, 320);
+  for (let i = 0; i < 90; i++) {
+    const fx = (i * 137.5) % 740, fy = (i * 89.7) % 320;
+    g.fillStyle = i % 2 ? "rgba(255,255,255,.02)" : "rgba(0,0,0,.05)";
+    g.beginPath(); g.arc(fx, fy, 9 + (i % 4) * 5, 0, Math.PI * 2); g.fill();
+  }
+  /* Kiesbetten: nur außen an den wirklich scharfen Ecken, dezent */
+  for (let i = 0; i < pts.length; i += 5) {
+    const p = pts[i];
+    if (p.kruemmung < .5) continue;
+    g.fillStyle = "rgba(96,86,58,.8)";
+    g.beginPath(); g.arc(p.x - p.ty * 24, p.y + p.tx * 24, 13, 0, Math.PI * 2); g.fill();
+    g.fillStyle = "rgba(255,255,255,.05)";
+    g.beginPath(); g.arc(p.x - p.ty * 24 - 2, p.y + p.tx * 24 - 2, 8, 0, Math.PI * 2); g.fill();
+  }
+  /* Bahnschulter + Asphalt */
+  g.lineJoin = "round"; g.lineCap = "round";
+  pfad(); g.strokeStyle = "#3a4048"; g.lineWidth = 40; g.stroke();
+  pfad(); g.strokeStyle = "#23272e"; g.lineWidth = 34; g.stroke();
+  /* Fahrbahn-Textur: hauchfeine dunkle Fahrspur und heller Schleier */
+  pfad(); g.strokeStyle = "rgba(0,0,0,.25)"; g.lineWidth = 12; g.stroke();
+  pfad(); g.strokeStyle = "rgba(255,255,255,.03)"; g.lineWidth = 26; g.stroke();
+  /* Randsteine: rot-weiße Ticks quer zur Bahn, nur wo die Kurve eng ist */
+  for (let i = 0; i < pts.length; i += 3) {
+    const p = pts[i];
+    if (p.kruemmung < .27) continue;
+    g.strokeStyle = (i / 3) % 2 ? "#d43a31" : "#e9edf4";
+    g.lineWidth = 4.6;
+    for (const seite of [1, -1]) {
+      const ax = p.x - p.ty * seite * 15.5, ay = p.y + p.tx * seite * 15.5;
+      g.beginPath();
+      g.moveTo(ax - p.tx * 3.4, ay - p.ty * 3.4);
+      g.lineTo(ax + p.tx * 3.4, ay + p.ty * 3.4);
+      g.stroke();
+    }
+  }
+  /* weiße Begrenzungslinien */
+  for (const seite of [1, -1]) {
+    g.beginPath();
+    for (let i = 0; i <= pts.length; i++) {
+      const p = pts[i % pts.length];
+      const x2 = p.x - p.ty * seite * 15.5, y2 = p.y + p.tx * seite * 15.5;
+      i ? g.lineTo(x2, y2) : g.moveTo(x2, y2);
+    }
+    g.strokeStyle = "rgba(235,240,248,.4)"; g.lineWidth = 1.2; g.stroke();
+  }
+  /* Start-Ziel: Zielflaggen-Band und Portal quer über die Bahn */
+  const s0 = kursPunkt(0);
+  g.save();
+  g.translate(s0.x, s0.y); g.rotate(Math.atan2(s0.ty, s0.tx));
+  for (let i = 0; i < 3; i++) for (let j = 0; j < 6; j++) {
+    g.fillStyle = (i + j) % 2 ? "#e9edf4" : "#14171d";
+    g.fillRect(-7 + i * 5, -15 + j * 5, 5, 5);
+  }
+  /* Portal: zwei Pfeiler + Balken mit Schriftzug */
+  g.fillStyle = "#1b2330";
+  g.fillRect(-3, -26, 6, 9); g.fillRect(-3, 17, 6, 9);
+  g.fillStyle = "rgba(20,28,42,.92)"; g.fillRect(-11, -24, 8, 48);
+  g.fillStyle = "#fbbf24"; g.font = "800 5.5px sans-serif"; g.textAlign = "center";
+  g.save(); g.translate(-7, 0); g.rotate(-Math.PI / 2); g.fillText("START · FINISH", 0, 2); g.restore();
+  g.restore();
+  /* Tribünen mit Publikum */
+  const tribuene = (tx2, ty2, w2, drehung) => {
+    g.save(); g.translate(tx2, ty2); g.rotate(drehung);
+    g.fillStyle = "#1a2434"; g.fillRect(-w2 / 2, 0, w2, 18);
+    g.fillStyle = "#26344a"; g.fillRect(-w2 / 2, 0, w2, 4);
+    const farben = ["#e0b17c", "#c9d4e4", "#e78d8d", "#9ad0a8", "#b7a3e0"];
+    for (let rj = 0; rj < 3; rj++) for (let ci = 0; ci < Math.floor(w2 / 5); ci++) {
+      g.fillStyle = farben[(rj * 7 + ci * 3) % farben.length];
+      g.globalAlpha = .8;
+      g.beginPath(); g.arc(-w2 / 2 + 3 + ci * 5, 7 + rj * 4.4, 1.5, 0, Math.PI * 2); g.fill();
+    }
+    g.globalAlpha = 1;
+    g.restore();
+  };
+  /* Positionen mit Abstand zur Bahn: unten an der Boxengasse, oben in der
+   * Lücke zwischen den beiden Bögen. */
+  tribuene(200, 296, 170, 0);
+  tribuene(448, 2, 110, 0);
+  /* Bäume rund um den Platz — nie auf der Bahn */
+  for (let i = 0; i < 26; i++) {
+    const bx = (i * 251.3) % 740, by = (i * 157.9) % 320;
+    let frei = true;
+    for (let k2 = 0; k2 < pts.length; k2 += 10) {
+      if (Math.hypot(pts[k2].x - bx, pts[k2].y - by) < 34) { frei = false; break; }
+    }
+    if (!frei) continue;
+    g.fillStyle = "rgba(0,0,0,.3)";
+    g.beginPath(); g.ellipse(bx + 2, by + 3, 6, 3, 0, 0, Math.PI * 2); g.fill();
+    g.fillStyle = i % 3 ? "#1d4a28" : "#25562f";
+    g.beginPath(); g.arc(bx, by, 5 + (i % 3) * 2, 0, Math.PI * 2); g.fill();
+    g.fillStyle = "rgba(255,255,255,.10)";
+    g.beginPath(); g.arc(bx - 2, by - 2, 2.5, 0, Math.PI * 2); g.fill();
+  }
+  return c;
+}
 function rennStreckeZeichnen() {
   const cvR = document.getElementById("rennStrecke");
   if (!cvR || document.getElementById("rennOverlay").hidden) return;
@@ -5730,47 +5891,22 @@ function rennStreckeZeichnen() {
     cvR.dataset.dpr = dpr;
     cvR.width = 740 * dpr; cvR.height = 320 * dpr;
     cvR.style.width = "100%"; cvR.style.aspectRatio = "740/320";
+    KURS_BG = null;
   }
+  if (!KURS) kursBauen();
+  if (!KURS_BG) KURS_BG = kursKulisseBauen(dpr);
   const g = cvR.getContext("2d");
   g.setTransform(dpr, 0, 0, dpr, 0, 0);
-  const W = 740, H = 320, cxm = W / 2, cym = H / 2;
-  const rx = W * .40, ry = H * .335;
   const jetzt = performance.now();
-  /* Nachthimmel-Rasen mit Vignette */
-  const gras = g.createRadialGradient(cxm, cym, 40, cxm, cym, W * .62);
-  gras.addColorStop(0, "#14301d"); gras.addColorStop(1, "#0a1a10");
-  g.fillStyle = gras; g.fillRect(0, 0, W, H);
-  /* Randsteine: rot-weiß gestrichelt (zwei versetzte Strichellinien) */
-  g.lineWidth = 52;
-  g.setLineDash([12, 12]); g.lineDashOffset = 0;
-  g.strokeStyle = "#b8362f";
-  g.beginPath(); g.ellipse(cxm, cym, rx, ry, 0, 0, Math.PI * 2); g.stroke();
-  g.lineDashOffset = 12; g.strokeStyle = "#dfe5ee";
-  g.beginPath(); g.ellipse(cxm, cym, rx, ry, 0, 0, Math.PI * 2); g.stroke();
-  g.setLineDash([]);
-  /* Asphalt mit leichtem Verlauf */
-  const asphalt = g.createLinearGradient(0, cym - ry, 0, cym + ry);
-  asphalt.addColorStop(0, "#2c313a"); asphalt.addColorStop(.5, "#23272f"); asphalt.addColorStop(1, "#1d2128");
-  g.strokeStyle = asphalt; g.lineWidth = 46;
-  g.beginPath(); g.ellipse(cxm, cym, rx, ry, 0, 0, Math.PI * 2); g.stroke();
-  /* weiße Begrenzungslinien */
-  g.strokeStyle = "rgba(235,240,248,.5)"; g.lineWidth = 1.5;
-  for (const d of [-22, 22]) {
-    g.beginPath(); g.ellipse(cxm, cym, rx + d, ry + d * ry / rx, 0, 0, Math.PI * 2); g.stroke();
-  }
+  g.drawImage(KURS_BG, 0, 0, 740, 320);
   /* Mittellinie wandert mit — verkauft Tempo auch ohne Bezugspunkt */
-  g.setLineDash([10, 14]); g.lineDashOffset = -(jetzt / 40) % 24;
-  g.strokeStyle = "rgba(255,255,255,.30)"; g.lineWidth = 2;
-  g.beginPath(); g.ellipse(cxm, cym, rx, ry, 0, 0, Math.PI * 2); g.stroke();
+  g.beginPath();
+  g.moveTo(KURS.pts[0].x, KURS.pts[0].y);
+  for (const p of KURS.pts) g.lineTo(p.x, p.y);
+  g.closePath();
+  g.setLineDash([8, 14]); g.lineDashOffset = -(jetzt / 40) % 22;
+  g.strokeStyle = "rgba(255,255,255,.28)"; g.lineWidth = 1.6; g.stroke();
   g.setLineDash([]); g.lineDashOffset = 0;
-  /* Start-Ziel: Zielflaggen-Band quer über die Bahn rechts */
-  g.save();
-  g.translate(cxm + rx, cym); g.rotate(Math.PI / 2);
-  for (let i = 0; i < 6; i++) for (let j = 0; j < 3; j++) {
-    g.fillStyle = (i + j) % 2 ? "#e8ecf3" : "#14171d";
-    g.fillRect(-24 + i * 8, -12 + j * 8, 8, 8);
-  }
-  g.restore();
   /* Wagen: Dead Reckoning — mit der geschätzten Geschwindigkeit weiterfahren
    * und sanft auf den echten Serverstand einschwenken. */
   const teil = r.teilnehmer;
@@ -5779,20 +5915,19 @@ function rennStreckeZeichnen() {
     const zielJetzt = t2.ausgefallen ? anim.ziel : anim.ziel + anim.speed * Math.min(1.2, (jetzt - anim.seit) / 1000);
     anim.shown += (zielJetzt - anim.shown) * .12;
     RENN_ANIM.set(t2.autoId, anim);
-    const u = (anim.shown % r.runde) / r.runde;
-    const wink = u * Math.PI * 2;
-    /* Spurabstand möglichst eine Wagenbreite — sonst verschmelzen zwei
-     * gleichauf liegende Wagen zu einem Klumpen; bei vollem Startfeld
-     * enger, damit niemand neben der Bahn fährt. */
-    const abstand = Math.min(14, 42 / Math.max(2, teil.length));
+    /* Meter der Runde auf die Kursbogenlänge abbilden */
+    const u = ((anim.shown % r.runde) + r.runde) % r.runde / r.runde;
+    const kp = kursPunkt(u * KURS.laenge);
+    /* Spurversatz quer zur Fahrtrichtung — eng genug für die Bahnbreite */
+    const abstand = Math.min(11, 26 / Math.max(1, teil.length - 1));
     const spur = (i - (teil.length - 1) / 2) * abstand;
-    const px2 = cxm + (rx + spur) * Math.cos(wink);
-    const py2 = cym + (ry + spur * ry / rx) * Math.sin(wink);
-    /* Fahrtrichtung: Tangente an die Ellipse */
-    const heading = Math.atan2(ry * Math.cos(wink), -rx * Math.sin(wink));
+    const px2 = kp.x - kp.ty * spur;
+    const py2 = kp.y + kp.tx * spur;
+    const heading = Math.atan2(kp.ty, kp.tx);
     g.save();
     g.translate(px2, py2);
     g.rotate(heading + Math.PI / 2);
+    g.scale(.82, .82);   /* Wagen etwas kleiner — die Bahn ist schmaler als das alte Oval */
     rennwagenZeichnen(g, t2.farbe, t2.ausgefallen);
     g.restore();
     /* Rauch beim Ausfall */
