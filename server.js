@@ -1307,6 +1307,12 @@ function buildMap(mode = "sandbox") {
  * Der Wagen ist Stufe 1 und laesst sich wie jeder andere tunen; der Stall
  * laesst sich ausbauen und bietet dann mehr Stellplaetze. */
 const RENNTAG_STARTWAGEN = "benzinauto";
+/* Die beiden Werke, die Rennteile herstellen. */
+const RENNTEILE_WERKE = new Set(["reifenwerk", "rennlabor"]);
+/* Ein Grundstock, damit die erste Ausbaustufe und das erste Teile-Gesuch nicht
+ * daran scheitern, dass noch niemand ein Werk gebaut hat. Bewusst knapp: er
+ * reicht fuer ein bis zwei Ausbauten, danach muss man produzieren oder kaufen. */
+const RENNTAG_STARTTEILE = { rennreifen: 6, rennsoftware: 4 };
 function renntagAusstatten(p) {
   if (MODE !== "renntag") return;
   if (G.map.some(t => t.owner === p.id && BTYPES[t.btype]?.racing)) return;   // hat schon einen
@@ -1326,6 +1332,7 @@ function renntagAusstatten(p) {
    * wie bei jedem anderen Fahrer. */
   const f = G.fahrer.find(x => !x.teamId);
   if (f) { f.teamId = p.id; f.autoId = platz.autos[0].id; platz.autos[0].fahrerId = f.id; }
+  for (const [g, n2] of Object.entries(RENNTAG_STARTTEILE)) p.inv[g] = (p.inv[g] || 0) + n2;
   logTx(p, "Motorsport", `Race Day: Rennstall, ${GOODS[RENNTAG_STARTWAGEN].name} #${nr}` +
     (f ? ` und ${f.name} am Steuer` : " (noch ohne Fahrer)"), 0);
 }
@@ -2468,7 +2475,13 @@ io.on("connection", socket => {
     if (t.schwarz) return ack?.({ error: "Hier wird nur unter der Hand gehandelt" });
     if (t.owner) return ack?.({ error: "Kachel bereits belegt" });
     if (bt.zone !== t.zone) return ack?.({ error: `Nur in Zone ${bt.zone} baubar` });
-    if (bt.industry && !(p.industries || [p.industry]).includes(bt.industry))
+    /* Rennreifen kann sonst nur die Rohstoffbranche herstellen, Rennsoftware
+     * nur die Technikbranche. Spielt niemand diese Branchen, gibt es die Teile
+     * im ganzen Spiel nicht — dann laesst sich kein Wagen tunen und kein
+     * Teile-Sponsorgesuch erfuellen. Im Renntag-Modus, wo genau das der Kern
+     * ist, darf sie deshalb jede Branche bauen — wie Laeden und Rennstall. */
+    const rennteilWerk = MODE === "renntag" && RENNTEILE_WERKE.has(btype);
+    if (bt.industry && !rennteilWerk && !(p.industries || [p.industry]).includes(bt.industry))
       return ack?.({ error: `Nur ${INDUSTRIES[bt.industry].name} kann das bauen` });
     /* Der Rennstall ist branchenfrei, aber auf einen je Firma begrenzt: Ohne
      * diese Grenze wäre "mehr Ställe" die beste Strategie, und der Wettpool

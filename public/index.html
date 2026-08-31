@@ -468,6 +468,11 @@ input,select{background:var(--panel2);border:1px solid var(--line);border-radius
 @media(max-width:640px){.renngrid{grid-template-columns:1fr}}
 .rennbox{background:#0d1524;border:1px solid var(--line);border-radius:11px;padding:11px}
 .rennbox .lbl{font-size:10.5px;font-weight:700;letter-spacing:.09em;color:#5f7292;text-transform:uppercase;margin-bottom:7px}
+/* Der Wagenname traegt die Zeile — Team und Fahrer sind Beiwerk. Vorher stand
+ * alles in derselben Groesse, und der Name ging zwischen den Zusaetzen unter. */
+.rennname{font-size:14.5px;font-weight:800;letter-spacing:.2px;color:var(--fg);line-height:1.25}
+.rennteil .meta,.rennstand .meta{font-size:11px;opacity:.62}
+.rennstand .wer b{font-size:14px;letter-spacing:.2px}
 input.autoname{flex:1;min-width:0;background:transparent;border:1px solid transparent;border-radius:6px;
   color:var(--fg);font:inherit;font-weight:700;font-size:13px;padding:2px 5px;margin:-2px -5px}
 input.autoname:hover{border-color:var(--line)}
@@ -5286,7 +5291,11 @@ function rennenRendern(state, myId) {
               const gewaehlt = !eigen && t2.autoId === rennenRendern.wahl;
               return `<div class="rennteil${eigen ? "" : " wettbar"}${gewaehlt ? " gewaehlt" : ""}"${eigen ? "" : ` data-auto="${t2.autoId}"`}>
                 <span class="rennfarb" style="background:${t2.farbe}"></span>
-                <span><b>${t2.name}</b> · ${t2.team}<br><span class="meta">Fahrer: ${t2.fahrer}</span></span>
+                <span style="flex:1;min-width:0">
+                  <span class="rennname">${escapeHtml(t2.name)}</span>
+                  <span class="meta"> · ${escapeHtml(t2.team)}</span>
+                  <br><span class="meta">${escapeHtml(t2.fahrer)}</span>
+                </span>
                 ${eigen ? `<span class="eigen">dein Wagen</span>`
                         : `<span class="quote">${r.quoten[t2.autoId] ? r.quoten[t2.autoId].toFixed(2) : "—"}</span>`}
               </div>`;
@@ -5390,8 +5399,8 @@ function rennenRendern(state, myId) {
       <div class="rennstand${i === 0 && !t2.ausgefallen ? " fuehrt" : ""}${meins2 ? " meins" : ""}" style="${t2.ausgefallen ? "opacity:.45" : ""}">
         <span class="platzbadge p${i + 1}">${i + 1}</span>
         ${wagenChip(t2.farbe, t2.ausgefallen)}
-        <span class="wer"><b>${t2.name}</b>${t2.ausgefallen ? " 💥" : ""}${meins2 ? ` <span class="meta" style="color:var(--accent)">· dein Stall</span>` : ""}
-          <span class="meta">${t2.team} · ${t2.fahrer}</span></span>
+        <span class="wer"><b>${escapeHtml(t2.name)}</b>${t2.ausgefallen ? " 💥" : ""}${meins2 ? ` <span class="meta" style="color:var(--accent)">· dein Stall</span>` : ""}
+          <span class="meta">${escapeHtml(t2.team)} · ${escapeHtml(t2.fahrer)}</span></span>
         <span class="fortschritt">
           <span class="zeile"><span>R${Math.floor(t2.dist / r.runde) + 1} · ${t2.dist} m</span><span>${t2.ausgefallen ? "DNF" : rueckstand}</span></span>
           <span class="balken"><i style="width:${rundeProz}%;background:${t2.ausgefallen ? "#5a616b" : t2.farbe}"></i></span>
