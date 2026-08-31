@@ -2634,13 +2634,17 @@ io.on("connection", socket => {
      * Teile-Sponsorgesuch erfuellen. Im Renntag-Modus, wo genau das der Kern
      * ist, darf sie deshalb jede Branche bauen — wie Laeden und Rennstall. */
     if (MODE === "renntag") {
-      /* Im Renntag zaehlt die Rolle, nicht die Branche. Laeden darf wie ueberall
-       * jeder — sie sind der gemeinsame Weg, Ware zu Geld zu machen. */
+      /* Im Renntag zaehlt die Rolle, nicht die Branche — und Laeden gibt es
+       * hier nicht. Es produziert niemand mehr Konsumgueter, die Regale
+       * blieben leer. Gehandelt wird ausschliesslich ueber die Boerse: die
+       * Rennindustrie stellt Teile ein, die Clubs kaufen sie dort. */
       const erlaubt = RENNTAG_BAUTEN[p.industry];
-      if (!bt.retail && !(erlaubt && erlaubt.has(btype)))
-        return ack?.({ error: p.industry === "rennclub"
-          ? "Als Race Club baust du Rennstall, Werbung und Läden — Teile kaufst du bei der Rennindustrie"
-          : "Als Rennindustrie baust du die Zulieferkette, die Teile-Werke und Läden — gefahren wird im Race Club" });
+      if (!(erlaubt && erlaubt.has(btype)))
+        return ack?.({ error: bt.retail
+          ? "Im Race Day gibt es keine Läden — gehandelt wird über die Börse"
+          : p.industry === "rennclub"
+            ? "Als Race Club baust du Rennstall und Werbung — Teile kaufst du an der Börse bei der Rennindustrie"
+            : "Als Rennindustrie baust du die Zulieferkette und die Teile-Werke — gefahren wird im Race Club" });
     } else if (bt.industry && !(p.industries || [p.industry]).includes(bt.industry)) {
       return ack?.({ error: `Nur ${INDUSTRIES[bt.industry].name} kann das bauen` });
     }
@@ -3837,18 +3841,21 @@ const INDUSTRY_COVERAGE = {
  * normalen Bots taugen hier nicht — deren Gebaeude darf im Renntag niemand
  * bauen, sie stuenden untaetig herum. */
 const RENNTAG_BOT_CFGS = [
+  /* Ohne Laeden: die Clubs leben von Preisgeld und Sponsoring, die Zulieferer
+   * verkaufen ueber die Boerse. Ein Laden im Plan wuerde nur Geld binden und
+   * leer stehen. */
   { name: "Scuderia Bora",    industry: "rennclub",      color: "#e74c3c",
-    plan: ["markt", "kontor", "werbeagentur"], needs: [], rennstall: true },
+    plan: ["werbeagentur"], needs: [], rennstall: true },
   { name: "Tempo Motors",     industry: "rennindustrie", color: "#3b9cf6",
-    plan: ["reifenwerk", "mine", "stahlwerk", "kontor"], needs: ["strom"] },
+    plan: ["reifenwerk", "mine", "stahlwerk", "ewerk"], needs: ["strom"] },
   { name: "Vento Racing",     industry: "rennclub",      color: "#2ecc71",
-    plan: ["markt", "werbeagentur", "kontor"], needs: [], rennstall: true },
+    plan: ["werbeagentur"], needs: [], rennstall: true },
   { name: "Silizium Dynamics",industry: "rennindustrie", color: "#b07cf7",
-    plan: ["rennlabor", "siliziummine", "chipfabrik", "kontor"], needs: ["strom"] },
+    plan: ["rennlabor", "siliziummine", "chipfabrik", "ewerk"], needs: ["strom"] },
   { name: "Aurora Team",      industry: "rennclub",      color: "#f5c542",
-    plan: ["kontor", "markt"], needs: [], rennstall: true },
+    plan: ["werbeagentur"], needs: [], rennstall: true },
   { name: "Kraft & Reifen",   industry: "rennindustrie", color: "#1abc9c",
-    plan: ["reifenwerk", "oelpumpe", "stahlwerk", "markt"], needs: ["strom"] },
+    plan: ["reifenwerk", "oelpumpe", "stahlwerk", "mine"], needs: ["strom"] },
 ];
 const BOT_CFGS = [
   { name: "AgrarGenossen",   industry: "agrar",     color: "#34d399",
