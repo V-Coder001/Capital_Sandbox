@@ -606,7 +606,8 @@ function feldAuffuellen(r) {
     if (r.teilnehmer.length >= RENN_FELD_SOLL) break;
     r.teilnehmer.push({ autoId: w.id, bot: true, ownerId: null, team: w.team, farbe: w.livree,
       livree: w.livree, name: w.wagen, fahrer: w.fahrer, werte: w.werte, zustand: w.zustand,
-      fahrerWert: w.fahrerWert, konstanz: w.konstanz, dist: 0, ausgefallen: false });
+      fahrerWert: w.fahrerWert, konstanz: w.konstanz, letztes: w.letztes || null,
+      dist: 0, ausgefallen: false });
   }
 }
 /* Spieler haben Vorrang: Ist das Feld voll, raeumt der schwaechste Werkswagen
@@ -726,6 +727,12 @@ function rennBeenden() {
       (a.historie ??= []).push({ t: G.tick, text: `Rennen: Platz ${i + 1}${teil.ausgefallen ? " (ausgefallen)" : ""} · ${kmHeute} km`, amt: 0 });
     }
     if (f) { f.rennen++; if (i === 0 && !teil.ausgefallen) { f.siege++; f.ruf += 10; } else f.ruf += Math.max(0, 4 - i); }
+    /* Letztes Ergebnis festhalten, damit das Startfeld beim naechsten Renntag
+     * zeigt, wie der Wagen zuletzt abgeschnitten hat. Beim Werkswagen gehoert
+     * es ans Team, es gibt ja kein Auto auf der Karte. */
+    const ergebnis = { platz: teil.platz, aus: !!teil.ausgefallen, feld: r.teilnehmer.length };
+    if (teil.bot) { const w = (G.werksTeams || []).find(x => x.id === teil.autoId); if (w) w.letztes = ergebnis; }
+    else if (a) a.letztes = ergebnis;
     const preis = teil.bot ? 0 : Math.round(topf * (anteile[menschen.indexOf(teil)] || 0));
     if (preis > 0) {
       const p = G.players[teil.ownerId];
@@ -2018,6 +2025,7 @@ function snapshot() {
           + Math.round(pool * WETT_RAKE)),
         teilnehmer: G.rennen.teilnehmer.map(t2 => ({ autoId: t2.autoId, name: t2.name, team: t2.team,
           farbe: t2.livree || t2.farbe, fahrer: t2.fahrer, ownerId: t2.ownerId, bot: !!t2.bot,
+          letztes: t2.letztes || null,
           dist: Math.round(t2.dist), ausgefallen: t2.ausgefallen })),
         sponsoren: G.rennen.sponsoren.map(s => ({ name: s.name, team: G.players[s.teamId]?.name, betrag: s.betrag, was: s.was })),
         gesuche: (G.rennen.gesuche || []).map(g => ({ ...g })),
@@ -2656,7 +2664,8 @@ io.on("connection", socket => {
     const LIVREEN = ["#e74c3c", "#f5c542", "#2ecc71", "#3b9cf6", "#e67e22", "#b07cf7", "#1abc9c", "#eef2f7"];
     const livree = LIVREEN.find(c => !r.teilnehmer.some(x2 => x2.livree === c)) || p.color;
     r.teilnehmer.push({ autoId: a.id, fahrerId: a.fahrerId, ownerId: p.id, team: p.name, farbe: p.color, livree,
-      name: autoName(a), fahrer: f?.name || "?", dist: 0, ausgefallen: false });
+      name: autoName(a), fahrer: f?.name || "?", letztes: a.letztes || null,
+      dist: 0, ausgefallen: false });
     /* Wer meldet, sucht einen Sponsor. Ein Team fragt entweder nach Geld oder
      * nach Teilen — Teile sind fuer den Sponsor oft der guenstigere Weg, weil
      * er sie selbst herstellen oder billiger einkaufen kann als der Rennstall. */

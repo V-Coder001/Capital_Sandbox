@@ -471,6 +471,16 @@ input,select{background:var(--panel2);border:1px solid var(--line);border-radius
 /* Der Wagenname traegt die Zeile — Team und Fahrer sind Beiwerk. Vorher stand
  * alles in derselben Groesse, und der Name ging zwischen den Zusaetzen unter. */
 .rennname{font-size:14.5px;font-weight:800;letter-spacing:.2px;color:var(--fg);line-height:1.25}
+/* Herkunft der Wagen: gemeldete Spielerstaelle heben sich vom Werksfeld ab —
+ * sonst sieht ein Startfeld aus fuenf Wagen gleich aus, egal ob jemand
+ * wirklich gemeldet hat oder nur die Kulisse steht. */
+.rennteil.gemeldet{box-shadow:inset 3px 0 0 var(--accent)}
+.rennteil.selbst{box-shadow:inset 3px 0 0 #fbbf24}
+.herkunft{font-size:10px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;
+  padding:1px 5px;border-radius:5px;border:1px solid var(--line);color:var(--dim);white-space:nowrap}
+.herkunft.spieler{color:var(--accent);border-color:rgba(56,189,248,.45)}
+.herkunft.selbst{color:#fbbf24;border-color:rgba(251,191,36,.45)}
+.letztes{font-size:10.5px;opacity:.75;white-space:nowrap}
 .rennteil .meta,.rennstand .meta{font-size:11px;opacity:.62}
 .rennstand .wer b{font-size:14px;letter-spacing:.2px}
 input.autoname{flex:1;min-width:0;background:transparent;border:1px solid transparent;border-radius:6px;
@@ -5243,6 +5253,11 @@ function motorsportRendern(state, me, myId) {
 let rennMinimiert = false;
 const RENN_ANIM = new Map();     // autoId -> { shown, ziel }
 function rennenRendern(state, myId) {
+  /* Die Sponsorgesuche brauchen den eigenen Bestand (Bargeld und Teile), um zu
+   * zeigen, was man erfuellen kann. Die Funktion bekommt kein me uebergeben —
+   * also hier aus dem Store holen, statt die Signatur aller Aufrufer zu
+   * aendern. */
+  const me = store.get().me || { inv: {}, cash: 0 };
   const ov = document.getElementById("rennOverlay"), chip = document.getElementById("rennChip");
   const r = state.rennen;
   if (!r) {
@@ -5268,7 +5283,7 @@ function rennenRendern(state, myId) {
   if (r.phase === "anmeldung") {
     /* Nur neu bauen, wenn sich strukturell etwas ändert und niemand tippt —
      * sonst frisst der Sekunden-Rerender die Eingaben. */
-    const sig = "a" + r.teilnehmer.length + ":" + r.pool + ":" + r.sponsoren.length
+    const sig = "a" + r.teilnehmer.map(t2 => t2.autoId).join(",") + ":" + r.pool + ":" + r.sponsoren.length
       + ":" + (r.gesuche || []).length + ":" + JSON.stringify(r.quoten);
     const tippt = body.contains(document.activeElement) && /INPUT|SELECT/.test(document.activeElement?.tagName);
     if (rennenRendern.sig !== sig && !tippt) {
@@ -5289,14 +5304,23 @@ function rennenRendern(state, myId) {
             ${r.teilnehmer.map(t2 => {
               const eigen = t2.ownerId === myId;
               const gewaehlt = !eigen && t2.autoId === rennenRendern.wahl;
-              return `<div class="rennteil${eigen ? "" : " wettbar"}${gewaehlt ? " gewaehlt" : ""}"${eigen ? "" : ` data-auto="${t2.autoId}"`}>
+              /* Woher der Wagen kommt: eigener Stall, fremder Spielerstall oder
+               * Werksteam. Vorher war das nur am Teamnamen zu erraten. */
+              const marke = eigen ? `<span class="herkunft selbst">dein Stall</span>`
+                          : t2.bot ? `<span class="herkunft">Werksteam</span>`
+                                   : `<span class="herkunft spieler">gemeldet</span>`;
+              const L = t2.letztes;
+              const letztes = L
+                ? `<span class="letztes">Zuletzt: ${L.aus ? "ausgefallen" : `${L.platz}. von ${L.feld}`}</span>`
+                : `<span class="letztes" style="opacity:.5">Erstes Rennen</span>`;
+              return `<div class="rennteil${eigen ? " selbst" : " wettbar"}${t2.bot || eigen ? "" : " gemeldet"}${gewaehlt ? " gewaehlt" : ""}"${eigen ? "" : ` data-auto="${t2.autoId}"`}>
                 <span class="rennfarb" style="background:${t2.farbe}"></span>
                 <span style="flex:1;min-width:0">
-                  <span class="rennname">${escapeHtml(t2.name)}</span>
-                  <span class="meta"> · ${escapeHtml(t2.team)}</span>
-                  <br><span class="meta">${escapeHtml(t2.fahrer)}</span>
+                  <span class="rennname">${escapeHtml(t2.name)}</span> ${marke}
+                  <br><span class="meta">${escapeHtml(t2.team)} · ${escapeHtml(t2.fahrer)}</span>
+                  <br>${letztes}
                 </span>
-                ${eigen ? `<span class="eigen">dein Wagen</span>`
+                ${eigen ? `<span class="eigen">startet</span>`
                         : `<span class="quote">${r.quoten[t2.autoId] ? r.quoten[t2.autoId].toFixed(2) : "—"}</span>`}
               </div>`;
             }).join("") || `<p class="note">Noch kein Wagen gemeldet.</p>`}
