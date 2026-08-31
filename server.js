@@ -682,20 +682,37 @@ function staerkeSchaetzen(teil) {
   const fWert = f ? (f.speed + f.handling + f.reaktion) / 3 + f.erfahrung * .15 : 40;
   return w.speed * .45 + w.beschl * .2 + w.handling * .2 + fWert * .45;
 }
-function wettkontoreSetzen(r) {
-  if (r.kontoreGesetzt || r.teilnehmer.length < 2) return;
-  r.kontoreGesetzt = true;
+/* In zwei Wellen: eine Eroeffnungsquote gleich nach der Ankuendigung, der Rest
+ * kurz vor Schluss auf dem fertigen Feld. Nur spaet zu setzen hiesse, dass die
+ * Quoten die ersten 55 Sekunden auf "—" stehen — also genau dann, wenn der
+ * Spieler seine Wette ueberlegt. Nur frueh zu setzen hiesse, dass spaet
+ * gemeldete Wagen ungepreist bleiben. */
+function wettkontoreSetzen(r, welle) {
+  if (r.teilnehmer.length < 2) return;
+  if ((r.kontorWellen ??= []).includes(welle)) return;
+  r.kontorWellen.push(welle);
   const nachStaerke = [...r.teilnehmer].sort((a, b) => staerkeSchaetzen(b) - staerkeSchaetzen(a));
   for (const k of WETTKONTORE) {
+    const anteil = Math.round(k.einsatz / 2);
     if (k.art === "streuung") {
-      const je = Math.max(100, Math.round(k.einsatz / r.teilnehmer.length / 100) * 100);
+      const je = Math.max(100, Math.round(anteil / r.teilnehmer.length / 100) * 100);
       for (const teil of r.teilnehmer) r.wetten.push({ playerId: k.id, autoId: teil.autoId, betrag: je });
       continue;
     }
     const ziel = k.art === "favorit" ? nachStaerke[0] : nachStaerke[nachStaerke.length - 1];
-    if (ziel) r.wetten.push({ playerId: k.id, autoId: ziel.autoId, betrag: k.einsatz });
+    if (ziel) r.wetten.push({ playerId: k.id, autoId: ziel.autoId, betrag: anteil });
   }
-  io.emit("notice", { text: "Die Wettkontore haben gesetzt — die Quoten stehen." });
+  /* Nachzuegler mitnehmen: Wer nach der Eroeffnung gemeldet hat, hatte noch
+   * kein Geld auf sich und stuende sonst bis zum Start ohne Quote da — genau
+   * die Wagen, die ein Spieler interessant faende. */
+  const streu = WETTKONTORE.find(k => k.art === "streuung");
+  for (const teil of r.teilnehmer) {
+    if (r.wetten.some(w => w.autoId === teil.autoId)) continue;
+    r.wetten.push({ playerId: streu.id, autoId: teil.autoId, betrag: 300 });
+  }
+  io.emit("notice", { text: welle === 1
+    ? "Die Wettkontore eröffnen — erste Quoten stehen."
+    : "Die Wettkontore legen nach — Schlussquoten stehen." });
 }
 function rennAnkuendigen() {
   G.rennen = { id: id(), phase: "anmeldung", rest: RENN_ANMELDUNG, teilnehmer: [], wetten: [], sponsoren: [], gesuche: [] };
@@ -2718,6 +2735,14 @@ io.on("connection", socket => {
     /* Wer meldet, sucht einen Sponsor. Ein Team fragt entweder nach Geld oder
      * nach Teilen — Teile sind fuer den Sponsor oft der guenstigere Weg, weil
      * er sie selbst herstellen oder billiger einkaufen kann als der Rennstall. */
+    /* Haben die Kontore schon eroeffnet, bekommt der neu gemeldete Wagen sofort
+     * einen Grundeinsatz — sonst stuende er bis zum Start ohne Quote da. Die
+     * Wellen holen Nachzuegler zwar nach, aber nach der letzten Welle meldet
+     * sich sonst niemand mehr ein. */
+    if (r.kontorWellen?.length) {
+      const streu = WETTKONTORE.find(k => k.art === "streuung");
+      r.wetten.push({ playerId: streu.id, autoId: a.id, betrag: 300 });
+    }
     gesuchStellen(r, p);
     logTx(p, "Motorsport", `Zum Rennen gemeldet: ${autoName(a)}`, -RENN_NENNGELD);
     io.emit("notice", { text: `${p.name} meldet ${autoName(a)} (Fahrer: ${f?.name || "?"}) zum Rennen.` });
@@ -3347,9 +3372,12 @@ function runTick() {
     } else {
       const r = G.rennen;
       r.rest--;
-      /* Erst kurz vor Schluss, damit die Kontore das fertige Feld bewerten —
-       * wer frueh setzt, kennt die spaeter gemeldeten Wagen noch nicht. */
-      if (r.phase === "anmeldung" && r.rest === 20) wettkontoreSetzen(r);
+      /* 25 s nach der Ankuendigung, nicht sofort: Die Rennstaelle melden ihre
+       * Wagen erst im Lauf der Anmeldephase. Eroeffnet man zu frueh, bewerten
+       * die Kontore ein Feld aus lauter Werkswagen, und die spaeter gemeldeten
+       * bleiben ohne Quote. */
+      if (r.phase === "anmeldung" && r.rest === RENN_ANMELDUNG - 25) wettkontoreSetzen(r, 1);
+      if (r.phase === "anmeldung" && r.rest === 20) wettkontoreSetzen(r, 2);
       if (r.phase === "anmeldung" && r.rest <= 0) rennStarten();
       else if (r.phase === "laeuft") { rennTick(); if (r.rest <= 0) rennBeenden(); }
       else if (r.phase === "ergebnis" && r.rest <= 0) { G.rennen = null; G.naechstesRennenIn = RENN_INTERVALL; }
