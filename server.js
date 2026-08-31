@@ -832,6 +832,27 @@ function rennBeenden() {
     const gewinn = Math.round(w.betrag * quote);
     if (p) { p.cash += gewinn; logTx(p, "Motorsport", `Wette gewonnen: ${sieger.name} (Quote ${quote.toFixed(2)})`, gewinn); }
   }
+  /* Meisterschaftspunkte: nur im Renntag-Modus, nur fuer Spielerwagen —
+   * Werksteams fahren um Ruhm, nicht um den Titel. */
+  if (MODE === "renntag") {
+    let rang = 0;
+    for (const teil of reihen) {
+      if (teil.bot) continue;
+      const punkte = teil.ausgefallen ? 0 : (WM_PUNKTE[rang] || 0);
+      rang++;
+      if (punkte) G.wm[teil.ownerId] = (G.wm[teil.ownerId] || 0) + punkte;
+    }
+    G.saisonRennen++;
+    if (G.saisonRennen >= SAISON_RENNEN && !G.winner) {
+      const beste = Object.entries(G.wm).sort((a2, b2) => b2[1] - a2[1])[0];
+      const champ = beste && G.players[beste[0]];
+      if (champ) {
+        G.winner = champ.name;
+        G.report = buildReport(beste[0]);
+        io.emit("notice", { text: `Saisonende nach ${SAISON_RENNEN} Renntagen — ${champ.name} ist Meister mit ${beste[1]} Punkten!` });
+      }
+    }
+  }
   r.phase = "ergebnis"; r.rest = 25;
   r.topf = topf;
   r.ergebnis = reihen.map(t2 => ({ platz: t2.platz, name: t2.name, team: t2.team, farbe: t2.livree || t2.farbe,
@@ -1059,6 +1080,14 @@ const sichereFarbe = c => /^#[0-9a-fA-F]{6}$/.test(String(c || "")) ? String(c) 
  * Beitreten fest (Auswahl im Join-Screen). Env-Override: WIN_NW=... npm start */
 let WIN_NW = +process.env.WIN_NW || 250_000;
 const WIN_CHOICES = [100_000, 250_000, 500_000, 1_000_000, 10_000_000];
+/* ---- Meisterschaft (Race Day) ----
+ * Der Renntag-Modus hatte bisher dieselbe Siegbedingung wie der Sandkasten:
+ * das hoechste Nettovermoegen. In einem Rennmodus soll aber gewinnen, wer
+ * faehrt — also Punkte je Rennen und ein Titel am Saisonende.
+ * Punkte nur fuer die ersten sechs, wie ueblich; wer ausfaellt, bekommt nichts. */
+const WM_PUNKTE = [10, 6, 4, 3, 2, 1];
+const SAISON_CHOICES = [3, 5, 8, 12];
+let SAISON_RENNEN = 5;
 
 /* ---------- Spielmodus ----------
  * "sandbox": die freie Marktwirtschaft wie bisher.
@@ -1437,6 +1466,8 @@ const G = {
   rennen: null,                    // laufender Renntag (Anmeldung/Rennen/Ergebnis)
   naechstesRennenIn: RENN_INTERVALL,
   werksTeams: werksTeamsBauen(),   // Werkswagen, die das Startfeld fuellen
+  wm: {},                          // Meisterschaftspunkte je Spieler (Race Day)
+  saisonRennen: 0,                 // gefahrene Renntage der Saison
 };
 let nextId = 1;
 const id = () => nextId++;
@@ -2046,11 +2077,16 @@ function snapshot() {
   const rankOf = Object.fromEntries(ranked.map(([pid], i) => [pid, i + 1]));
   return {
     tick: G.tick, winner: G.winner, winGoal: WIN_NW, report: G.report || null,
+    /* Countdown bis zum naechsten Renntag — ohne ihn sieht man erst bei der
+     * Ankuendigung, dass etwas ansteht, und kann nichts vorbereiten. */
+    naechstesRennen: G.rennen ? null : G.naechstesRennenIn,
+    wm: MODE === "renntag" ? G.wm : null,
+    saison: MODE === "renntag" ? { gefahren: G.saisonRennen, gesamt: SAISON_RENNEN } : null,
     tutorialEnde: !!G.tutorialEnde,
     started: G.started, hostId: G.hostId,
     mode: MODE, plan: MODE === "plan" ? G.plan : null,
     routes: MAP_ROUTES,
-    lobby: G.started ? null : { winGoal: WIN_NW, bots: botAuswahl, botLevel: botLevelKey, mode: MODE },
+    lobby: G.started ? null : { winGoal: WIN_NW, bots: botAuswahl, botLevel: botLevelKey, mode: MODE, saison: SAISON_RENNEN, saisonWahl: SAISON_CHOICES },
     map: G.map.map(t => ({ x: t.x, y: t.y, zone: t.zone, road: t.road, water: t.water,
       park: t.park, field: t.field, sand: t.sand, deep: t.deep, rock: t.rock,
       bank: t.bank, news: t.news, schwarz: t.schwarz, deko: t.deko, locked: t.locked, unlockCost: t.unlockCost, owner: t.owner, btype: t.btype, lien: t.lien, shop: t.shop, paused: t.paused, level: t.level, autos: autosDyn(t) })),
@@ -2354,12 +2390,13 @@ io.on("connection", socket => {
    * Solange die Runde nicht gestartet ist, darf der Host Ziel und Bots noch
    * ändern — anders als früher, wo beides beim Registrieren festgenagelt war
    * und Mitspieler, die später dazukamen, nichts mehr davon mitbekamen. */
-  socket.on("lobbySettings", ({ winGoal, bots, botLevel, mode }, ack) => {
+  socket.on("lobbySettings", ({ winGoal, bots, botLevel, mode, saison }, ack) => {
     const pid = G.socketToPid[socket.id];
     if (!pid || pid !== G.hostId) return ack?.({ error: "Das darf nur der Host" });
     if (G.started) return ack?.({ error: "Die Runde läuft schon" });
     if (["sandbox", "plan", "einsteiger", "renntag"].includes(mode)) MODE = mode;
     if (WIN_CHOICES.includes(+winGoal)) WIN_NW = +winGoal;
+    if (SAISON_CHOICES.includes(+saison)) SAISON_RENNEN = +saison;
     if (bots && typeof bots === "object") botAuswahl = bots;
     if (BOT_LEVELS[botLevel]) botLevelKey = botLevel;
     ack?.({ ok: true });
@@ -3182,6 +3219,7 @@ io.on("connection", socket => {
     G.chat = Object.fromEntries(ROOMS.map(r => [r, []]));
     G.tick = 0; G.winner = null; G.report = null; G.plan = null; G.tutorialEnde = false;
     G.rennen = null; G.naechstesRennenIn = RENN_INTERVALL; G.werksTeams = werksTeamsBauen();
+    G.wm = {}; G.saisonRennen = 0;
     G.started = false; G.hostId = null;   // neue Runde beginnt wieder im Warteraum
     G.groupOrder = null; G.nextGroupIn = 20;
     G.nextDividendIn = DIVIDEND_INTERVAL;
@@ -3634,7 +3672,9 @@ function runTick() {
     }
   }
   /* Siegbedingung (Sandbox: Nettovermögen — in der Planwirtschaft zählen nur Punkte) */
-  if (MODE !== "plan" && !G.winner) for (const p of Object.values(G.players)) {
+  /* Im Renntag entscheidet die Meisterschaft, nicht das Vermoegen — sonst
+   * gewaenne dort der beste Kaufmann statt des besten Rennstalls. */
+  if (MODE !== "plan" && MODE !== "renntag" && !G.winner) for (const p of Object.values(G.players)) {
     if (netWorth(p) >= WIN_NW) {
       G.winner = p.name;
       /* Auswertung genau einmal berechnen und in den Zustand legen — sie geht

@@ -1255,6 +1255,15 @@ td:first-child{font-family:var(--font)}
       Einsteiger: Ein geführter Durchgang durch das ganze Spiel — Bauen, Verkaufen, Börse,
       Kursticker, Nachrichten und Bank, Schritt für Schritt erklärt. Nichts ist gesperrt, die Bots
       spielen normal mit. Die Runde endet, wenn du durch bist. Karte: San Francisco.</p>
+    <div class="lwRow" id="lwSaisonRow" style="display:none">
+      <label for="lwSaison">Saison</label>
+      <select id="lwSaison">
+        <option value="3">3 Renntage · kurz</option>
+        <option value="5" selected>5 Renntage · Standard</option>
+        <option value="8">8 Renntage · lang</option>
+        <option value="12">12 Renntage · Marathon</option>
+      </select>
+    </div>
     <div class="lwRow" id="lwGoalRow">
       <label for="lwGoal">Ziel</label>
       <select id="lwGoal">
@@ -2475,18 +2484,24 @@ function lwSettingsSenden() {
   lwEigeneAenderung = Date.now();
   socket.emit("lobbySettings", {
     winGoal: +document.getElementById("lwGoal").value,
+    saison: +document.getElementById("lwSaison").value,
     bots: lwBots, botLevel: lwBotLevel, mode: lwMode,
   });
 }
 document.getElementById("lwGoal").addEventListener("change", lwSettingsSenden);
+document.getElementById("lwSaison").addEventListener("change", lwSettingsSenden);
 let lwMode = "sandbox";
 function lwModeSpiegeln() {
   document.querySelectorAll("#lwMode button").forEach(b => b.classList.toggle("on", b.dataset.mode === lwMode));
   /* In der Planwirtschaft gibt es kein Vermögensziel — die Zeile ausblenden. */
-  document.getElementById("lwGoalRow").style.display = (lwMode === "plan" || lwMode === "einsteiger") ? "none" : "";
+  document.getElementById("lwGoalRow").style.display =
+    (lwMode === "plan" || lwMode === "einsteiger" || lwMode === "renntag") ? "none" : "";
   document.getElementById("lwModeHint").style.display = lwMode === "plan" ? "" : "none";
   document.getElementById("lwEinsteigerHint").style.display = lwMode === "einsteiger" ? "" : "none";
   document.getElementById("lwRenntagHint").style.display = lwMode === "renntag" ? "" : "none";
+  /* Im Renntag entscheidet die Meisterschaft — das Vermoegensziel waere dort
+   * eine Angabe ohne Wirkung. */
+  document.getElementById("lwSaisonRow").style.display = lwMode === "renntag" ? "" : "none";
 }
 document.getElementById("lwMode").addEventListener("click", e => {
   const b = e.target.closest("button[data-mode]"); if (!b) return;
@@ -5205,7 +5220,26 @@ function motorsportRendern(state, me, myId) {
       </div>`;
   };
 
-  box.innerHTML =
+  /* Countdown und Tabelle nach oben: Wer den Rennstall oeffnet, will wissen,
+   * wie viel Zeit zum Vorbereiten bleibt und wo er in der Meisterschaft steht.
+   * Vorher sah man erst bei der Ankuendigung, dass ueberhaupt etwas ansteht. */
+  const sek = state.naechstesRennen;
+  const countdown = state.rennen
+    ? `<div class="sec">Renntag läuft — ${state.rennen.phase === "anmeldung" ? "Anmeldung offen" : state.rennen.phase === "laeuft" ? "Rennen läuft" : "Siegerehrung"}</div>`
+    : sek == null ? ""
+    : `<div class="sec">Nächster Renntag in ${Math.floor(sek / 60)}:${String(sek % 60).padStart(2, "0")}</div>
+       <div class="note" style="margin-top:-2px">Zeit für Reparatur, Tuning und Fahrerwechsel — gemeldet wird erst, wenn die Anmeldung offen ist.</div>`;
+  const wm = state.wm && state.saison ? (() => {
+    const rang = Object.entries(state.wm).sort((a2, b2) => b2[1] - a2[1]);
+    return `<div class="sec">Meisterschaft · Renntag ${state.saison.gefahren} von ${state.saison.gesamt}</div>`
+      + (rang.length
+        ? rang.map(([pid, pkt], i) => `<div class="rennteil">
+             <b style="width:20px">${i + 1}.</b>
+             <span style="flex:1">${escapeHtml(state.players[pid]?.name || "—")}${pid === myId ? ` <span class="meta" style="color:var(--accent)">· du</span>` : ""}</span>
+             <span class="quote">${pkt}</span></div>`).join("")
+        : `<div class="note">Noch keine Punkte vergeben. 10 für den Sieg, dann 6, 4, 3, 2, 1.</div>`);
+  })() : "";
+  box.innerHTML = countdown + wm +
     `<div class="note">Fahrzeuge im Rennstall sind keine handelbare Ware mehr. Teile fürs Tuning
        kaufst du an der Börse — Rennreifen und Rennsoftware stellen andere Firmen her.</div>
      <div class="sec">Garage (${alleAutos.length})</div>` +
