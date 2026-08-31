@@ -530,6 +530,54 @@ input.autoname::placeholder{color:var(--fg);opacity:.95;font-weight:700}
 .rennstat .chip2{display:flex;align-items:center;gap:7px;background:#0b1220;border:1px solid var(--line);
   border-radius:9px;padding:6px 12px;font-size:12px;color:var(--dim)}
 .rennstat .chip2 b{color:var(--text);font-family:var(--mono,ui-monospace)}
+/* Start-Ampel: fünf rote Lichter über der Strecke, dann grün */
+#rennAmpel{position:absolute;top:9%;left:50%;transform:translateX(-50%);display:flex;gap:9px;
+  background:rgba(10,14,22,.9);border:1px solid #2a3550;border-radius:12px;padding:10px 14px;
+  box-shadow:0 8px 26px rgba(0,0,0,.55);z-index:3}
+#rennAmpel[hidden]{display:none}
+#rennAmpel .licht{width:22px;height:22px;border-radius:50%;background:#241418;border:1px solid #3a2026;
+  transition:all .12s}
+#rennAmpel .licht.rot{background:radial-gradient(circle at 35% 35%,#ff8d85,#d81f14);border-color:#ff5348;
+  box-shadow:0 0 14px rgba(230,50,40,.75)}
+#rennAmpel .licht.gruen{background:radial-gradient(circle at 35% 35%,#a5f2b8,#17a34a);border-color:#3ade79;
+  box-shadow:0 0 16px rgba(50,220,110,.8)}
+#rennAmpel .go{align-self:center;font:800 14px var(--font);color:#3ade79;letter-spacing:.1em;padding:0 4px}
+.funkzeile{font-size:12.5px;padding:2px 0;font-family:var(--mono,ui-monospace)}
+.funkzeile:first-child{color:#fbbf24}
+/* Anmeldephase: Kopfleiste mit Countdown-Balken und Pool-Chips */
+.phasenkopf{margin-bottom:12px}
+.phasenbalken{height:6px;background:#0b1220;border-radius:4px;overflow:hidden;border:1px solid rgba(45,60,88,.6)}
+.phasenbalken i{display:block;height:100%;background:linear-gradient(90deg,#38bdf8,#fbbf24);transition:width 1s linear}
+/* Startfeld-Zeilen als Karten */
+.startzeile{display:flex;align-items:center;gap:10px;padding:8px 10px;margin:6px 0;font-size:12.5px;
+  background:rgba(16,24,40,.75);border:1px solid rgba(45,60,88,.55);border-radius:10px;transition:all .15s}
+.startzeile.wettbar{cursor:pointer}
+.startzeile.wettbar:hover{border-color:rgba(56,189,248,.5);background:rgba(22,32,52,.85)}
+.startzeile.gewaehlt{border-color:var(--accent);background:linear-gradient(90deg,rgba(56,189,248,.12),rgba(16,24,40,.8) 60%);
+  box-shadow:0 0 0 1px rgba(56,189,248,.35)}
+.startzeile.selbst{border-color:rgba(251,191,36,.45);box-shadow:inset 3px 0 0 #fbbf24}
+.startzeile .wer b{font-size:13px}
+.startnr{width:22px;height:22px;flex:none;border-radius:6px;display:grid;place-items:center;
+  font:800 11px var(--font);background:#1a2438;color:#8ea0bd;border:1px solid rgba(90,110,150,.4)}
+.quotepill{margin-left:auto;flex:none;font:700 12px var(--mono,ui-monospace);color:#fbbf24;
+  background:#0b1220;border:1px solid rgba(251,191,36,.35);border-radius:8px;padding:5px 10px}
+.quotepill.an{background:rgba(251,191,36,.16)}
+.quotepill.selbstpill{color:#8ea0bd;border-color:var(--line)}
+/* Wettschein */
+.wettschein{background:#0b1322;border:1px solid rgba(45,60,88,.6);border-radius:11px;padding:11px}
+.wettwahl{display:flex;align-items:center;gap:10px;min-height:34px;padding-bottom:9px;border-bottom:1px dashed var(--line)}
+.artwahl{display:flex;gap:0;margin-top:9px;background:#0a1120;border:1px solid var(--line);border-radius:9px;padding:2px}
+.artwahl button{flex:1;background:none;border:0;border-radius:7px;color:#5f7292;font:600 12px var(--font);
+  padding:7px 0;cursor:pointer;transition:all .15s}
+.artwahl button:hover{color:#9fb2cd}
+.artwahl button.an{background:linear-gradient(135deg,#1e3a5a,#164060);color:var(--accent)}
+.rennform .schnell{border:1px solid var(--line);background:#0a1120;color:var(--dim);border-radius:8px;
+  font:600 11px var(--font);padding:7px 9px;cursor:pointer}
+.rennform .schnell:hover{color:var(--accent);border-color:rgba(56,189,248,.4)}
+.wettknopf{width:100%;border-radius:9px;border:1px solid rgba(56,189,248,.5);
+  background:linear-gradient(135deg,rgba(56,189,248,.22),rgba(56,189,248,.10));color:var(--accent);
+  font:700 13px var(--font);padding:10px 0;cursor:pointer;transition:all .15s}
+.wettknopf:hover{background:linear-gradient(135deg,rgba(56,189,248,.32),rgba(56,189,248,.16))}
 .rennpodium{display:flex;gap:14px;justify-content:center;align-items:flex-end;margin:18px 0 10px}
 .rennpodium .stufe{text-align:center;flex:1;max-width:190px}
 /* Das Podest trug frueher nur eine Zahl auf blaugrauem Kasten. Jetzt bekommt
@@ -1628,6 +1676,7 @@ td:first-child{font-family:var(--font)}
     </div>
     <div id="rennBody"></div>
   </div>
+  <div id="rennAmpel" hidden></div>
 </div>
 <button id="rennChip" type="button" hidden>🏁 <span id="rennChipText">Rennen</span></button>
 
@@ -5418,6 +5467,81 @@ function motorsportRendern(state, me, myId) {
  * die Wagen flüssig fahren statt zu springen. */
 let rennMinimiert = false;
 const RENN_ANIM = new Map();     // autoId -> { shown, ziel }
+/* ---- Renn-Sounds (WebAudio, synthetisch — keine Dateien nötig) ----
+ * Respektiert den Stummschalter der Musik. Kurzer Piep je Ampellicht,
+ * Motor-Anlass-Sweep beim Start, Jubel (geformtes Rauschen) im Ziel. */
+const rennAudio = {};
+function rennTon(freq, dauer, typ = "sine", vol = .1, sweepZu = null) {
+  try {
+    if (typeof MUSIC !== "undefined" && MUSIC.istStumm()) return;
+    const ctx = rennAudio.ctx ??= new (window.AudioContext || window.webkitAudioContext)();
+    const o = ctx.createOscillator(), g2 = ctx.createGain();
+    o.type = typ; o.frequency.setValueAtTime(freq, ctx.currentTime);
+    if (sweepZu) o.frequency.exponentialRampToValueAtTime(sweepZu, ctx.currentTime + dauer);
+    g2.gain.setValueAtTime(vol, ctx.currentTime);
+    g2.gain.exponentialRampToValueAtTime(.001, ctx.currentTime + dauer);
+    o.connect(g2); g2.connect(ctx.destination);
+    o.start(); o.stop(ctx.currentTime + dauer);
+  } catch {}
+}
+function rennJubel() {
+  try {
+    if (typeof MUSIC !== "undefined" && MUSIC.istStumm()) return;
+    const ctx = rennAudio.ctx ??= new (window.AudioContext || window.webkitAudioContext)();
+    const puffer = ctx.createBuffer(1, ctx.sampleRate * 1.6, ctx.sampleRate);
+    const d = puffer.getChannelData(0);
+    for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / d.length, 1.4);
+    const q = ctx.createBufferSource(); q.buffer = puffer;
+    const filter = ctx.createBiquadFilter(); filter.type = "bandpass"; filter.frequency.value = 1100; filter.Q.value = .6;
+    const g2 = ctx.createGain(); g2.gain.value = .16;
+    q.connect(filter); filter.connect(g2); g2.connect(ctx.destination);
+    q.start();
+    [523, 659, 784].forEach((f2, i) => setTimeout(() => rennTon(f2, .35, "triangle", .07), 120 + i * 140));
+  } catch {}
+}
+/* Kleine Wagen-Silhouette (Seitenansicht) für Listen — Livree-Farbe rein. */
+function wagenChipHtml(farbe, kaputt = false) {
+  return `<svg width="30" height="16" viewBox="0 0 30 16" style="flex:none;${kaputt ? "filter:grayscale(.8)" : ""}">
+    <rect x="3" y="2" width="4" height="4" rx="1.4" fill="#0c0f14"/><rect x="3" y="10" width="4" height="4" rx="1.4" fill="#0c0f14"/>
+    <rect x="21" y="2" width="4" height="4" rx="1.4" fill="#0c0f14"/><rect x="21" y="10" width="4" height="4" rx="1.4" fill="#0c0f14"/>
+    <path d="M2 8c0-3 2-5.5 7-5.5h12c4 0 7 2.5 7 5.5s-3 5.5-7 5.5H9C4 13.5 2 11 2 8Z" fill="${farbe}" stroke="rgba(0,0,0,.35)"/>
+    <ellipse cx="14" cy="8" rx="4" ry="2.6" fill="#0e1420"/>
+    <rect x="1" y="4.6" width="2.6" height="6.8" rx="1" fill="#12161d"/>
+  </svg>`;
+}
+/* Ampel: in den letzten 5 Sekunden der Anmeldung geht je Sekunde ein rotes
+ * Licht an; mit dem Start springen alle auf Grün ("lights out and away we go"). */
+function rennAmpelRendern(r) {
+  const ampel = document.getElementById("rennAmpel");
+  if (!ampel) return;
+  const countdown = r && r.phase === "anmeldung" && r.rest <= 5;
+  const gestartet = r && r.phase === "laeuft" && (RENN_ANIM.gruenBis || 0) > performance.now();
+  if (r && r.phase === "laeuft" && rennAmpelRendern.warCountdown) {
+    /* Übergang Anmeldung -> Rennen: grüne Phase 2,5 s zeigen + Motorsound */
+    RENN_ANIM.gruenBis = performance.now() + 2500;
+    rennTon(90, 1.4, "sawtooth", .12, 480);
+    rennTon(60, 1.4, "square", .06, 240);
+    rennAmpelRendern.warCountdown = false;
+  }
+  if (countdown) {
+    rennAmpelRendern.warCountdown = true;
+    const an = Math.max(0, Math.min(5, 6 - r.rest));
+    if (rennAmpelRendern.stufe !== an) {
+      rennAmpelRendern.stufe = an;
+      rennTon(440, .12, "square", .08);
+    }
+    ampel.hidden = false;
+    ampel.innerHTML = Array.from({ length: 5 }, (_, i) =>
+      `<span class="licht${i < an ? " rot" : ""}"></span>`).join("");
+  } else if (gestartet) {
+    ampel.hidden = false;
+    ampel.innerHTML = Array.from({ length: 5 }, () => `<span class="licht gruen"></span>`).join("") +
+      `<span class="go">GO!</span>`;
+  } else {
+    ampel.hidden = true;
+    if (!r || r.phase !== "anmeldung") rennAmpelRendern.stufe = -1;
+  }
+}
 function rennenRendern(state, myId) {
   /* Die Sponsorgesuche brauchen den eigenen Bestand (Bargeld und Teile), um zu
    * zeigen, was man erfuellen kann. Die Funktion bekommt kein me uebergeben —
@@ -5433,9 +5557,13 @@ function rennenRendern(state, myId) {
     return;
   }
   /* Bei jedem Phasenwechsel wieder aufklappen — den Start will niemand verpassen. */
-  if (rennenRendern.phase !== r.phase) { rennenRendern.phase = r.phase; rennMinimiert = false; rennenRendern.sig = ""; }
+  if (rennenRendern.phase !== r.phase) {
+    if (r.phase === "ergebnis" && rennenRendern.phase === "laeuft") rennJubel();
+    rennenRendern.phase = r.phase; rennMinimiert = false; rennenRendern.sig = "";
+  }
   ov.hidden = rennMinimiert;
   chip.hidden = !rennMinimiert;
+  rennAmpelRendern(r);
   document.getElementById("rennChipText").textContent =
     r.phase === "anmeldung" ? `Anmeldung ${r.rest}s` : r.phase === "laeuft" ? "RENNEN LÄUFT" : "Siegerehrung";
   if (rennMinimiert) return;
@@ -5466,47 +5594,70 @@ function rennenRendern(state, myId) {
        * gemeldeten Stall), faellt sie auf den ersten zurueck. */
       if (!wettbar.some(t2 => t2.autoId === rennenRendern.wahl))
         rennenRendern.wahl = wettbar[0]?.autoId ?? null;
+      /* Countdown-Balken: wie viel der Anmeldephase schon verstrichen ist. */
+      const phaseProz = Math.round((1 - r.rest / 75) * 100);
+      const gewaehlter = r.teilnehmer.find(t2 => t2.autoId === rennenRendern.wahl);
+      const artWahl = rennenRendern.wettArt || "sieg";
       body.innerHTML = `
+        <div class="phasenkopf">
+          <div class="phasenbalken"><i id="phasenFuell" style="width:${phaseProz}%"></i></div>
+          <div class="rennstat" style="margin-top:8px">
+            <span class="chip2">🏆 Preistopf <b>${fmt(r.topf)}</b></span>
+            <span class="chip2">Sieg-Pool <b>${fmt(r.pools?.sieg || 0)}</b></span>
+            <span class="chip2">Podium-Pool <b>${fmt(r.pools?.podium || 0)}</b></span>
+            <span class="chip2">Ausfall-Pool <b>${fmt(r.pools?.ausfall || 0)}</b></span>
+          </div>
+        </div>
         <div class="renngrid">
           <div class="rennbox">
-            <div class="lbl">Startfeld (${r.teilnehmer.length}/8) · Wagen wählen und setzen</div>
-            ${r.teilnehmer.map(t2 => {
+            <div class="lbl">Startfeld · ${r.teilnehmer.length}/8 Wagen</div>
+            ${r.teilnehmer.map((t2, i) => {
               const eigen = t2.ownerId === myId;
               const gewaehlt = !eigen && t2.autoId === rennenRendern.wahl;
-              /* Woher der Wagen kommt: eigener Stall, fremder Spielerstall oder
-               * Werksteam. Vorher war das nur am Teamnamen zu erraten. */
               const marke = eigen ? `<span class="herkunft selbst">dein Stall</span>`
                           : t2.bot ? `<span class="herkunft">Werksteam</span>`
                                    : `<span class="herkunft spieler">gemeldet</span>`;
               const L = t2.letztes;
               const letztes = L
-                ? `<span class="letztes">Zuletzt: ${L.aus ? "ausgefallen" : `${L.platz}. von ${L.feld}`}</span>`
-                : `<span class="letztes" style="opacity:.5">Erstes Rennen</span>`;
-              return `<div class="rennteil${eigen ? " selbst" : " wettbar"}${t2.bot || eigen ? "" : " gemeldet"}${gewaehlt ? " gewaehlt" : ""}"${eigen ? "" : ` data-auto="${t2.autoId}"`}>
-                <span class="rennfarb" style="background:${t2.farbe}"></span>
-                <span style="flex:1;min-width:0">
-                  <span class="rennname">${escapeHtml(t2.name)}</span> ${marke}
-                  <br><span class="meta">${escapeHtml(t2.team)} · ${escapeHtml(t2.fahrer)}</span>
-                  <br>${letztes}
+                ? `Zuletzt: ${L.aus ? "ausgefallen" : `${L.platz}. von ${L.feld}`}`
+                : "Erstes Rennen";
+              return `<div class="startzeile${eigen ? " selbst" : " wettbar rennteil"}${gewaehlt ? " gewaehlt" : ""}"${eigen ? "" : ` data-auto="${t2.autoId}"`}>
+                <span class="startnr">${i + 1}</span>
+                ${wagenChipHtml(t2.farbe)}
+                <span class="wer" style="flex:1;min-width:0">
+                  <b>${escapeHtml(t2.name)}</b> ${marke}
+                  <span class="meta" style="display:block">${escapeHtml(t2.team)} · ${escapeHtml(t2.fahrer)} · ${letztes}</span>
                 </span>
-                ${eigen ? `<span class="eigen">startet</span>`
-                        : `<span class="quote">${r.quoten[t2.autoId] ? r.quoten[t2.autoId].toFixed(2) : "—"}</span>`}
+                ${eigen ? `<span class="quotepill selbstpill">startet</span>`
+                        : `<span class="quotepill${gewaehlt ? " an" : ""}">${r.quoten[t2.autoId] ? r.quoten[t2.autoId].toFixed(2) : "—"}</span>`}
               </div>`;
-            }).join("") || `<p class="note">Noch kein Wagen gemeldet.</p>`}
-            ${wettbar.length ? `<div class="rennform" style="margin-top:10px">
-              <input id="wettBetrag" type="number" min="100" max="20000" placeholder="Einsatz $">
-              <button id="wettSenden">Auf gewählten Wagen setzen</button>
-            </div>
-            <p class="note" style="margin-top:6px">Totalisator: Der ganze Pool (−10 % für den Preistopf) geht an die Siegerwetten — die Quote steht erst mit dem Start fest.</p>`
-            : `<p class="note" style="margin-top:8px">Keine fremden Wagen zum Wetten gemeldet.</p>`}
-            <p class="note" style="margin:8px 0 0">Preistopf aktuell: <b>${fmt(r.topf)}</b> · Wettpool: <b>${fmt(r.pool)}</b></p>
+            }).join("") || `<p class="note">Noch kein Wagen gemeldet — Rennställe melden im Motorsport-Panel.</p>`}
           </div>
           <div class="rennbox">
-            <div class="lbl">Sponsorgesuche</div>
+            ${wettbar.length ? `
+            <div class="lbl">Wettschein</div>
+            <div class="wettschein">
+              <div class="wettwahl">
+                ${gewaehlter ? `${wagenChipHtml(gewaehlter.farbe)}<span><b>${escapeHtml(gewaehlter.name)}</b>
+                    <span class="meta" style="display:block">${escapeHtml(gewaehlter.team)} · ${escapeHtml(gewaehlter.fahrer)}</span></span>`
+                  : `<span class="note">Wagen links in der Liste anklicken</span>`}
+              </div>
+              <div class="artwahl">
+                ${[["sieg", "Sieg"], ["podium", "Podium"], ["ausfall", "Ausfall"]].map(([k2, l2]) =>
+                  `<button type="button" data-wettart="${k2}" class="${artWahl === k2 ? "an" : ""}">${l2}</button>`).join("")}
+              </div>
+              <div class="rennform" style="margin-top:8px">
+                <input id="wettBetrag" type="number" min="100" max="20000" placeholder="Einsatz $">
+                ${[500, 1000, 5000].map(b2 => `<button type="button" class="schnell" data-einsatz="${b2}">${b2 >= 1000 ? (b2 / 1000) + "k" : b2}</button>`).join("")}
+              </div>
+              <p class="note" id="wettVorschau" style="margin:7px 0"></p>
+              <button id="wettSenden" class="wettknopf">Wette platzieren</button>
+              <p class="note" style="margin-top:7px"><b>Sieg</b>: Quote live · <b>Podium</b>: zahlt für Top 3 ·
+                <b>Ausfall</b>: zahlt bei Defekt. Je Markt ein Totalisator-Pool (−10 % in den Preistopf);
+                ohne Gewinner gibt es den Einsatz zurück.</p>
+            </div>` : `<div class="lbl">Wettschein</div><p class="note">Keine fremden Wagen zum Wetten gemeldet.</p>`}
+            <div class="lbl" style="margin-top:14px">Sponsorgesuche</div>
             ${(() => {
-              /* Die Teams fragen selbst an — nach Geld oder nach Teilen. Was
-               * fehlt, steht dabei: so sieht man sofort, ob man es erfuellen
-               * kann, ohne erst ins Lager zu wechseln. */
               const alle = r.gesuche || [];
               const offen = alle.filter(g => g.teamId !== myId);
               const meins = alle.find(g => g.teamId === myId);
@@ -5522,8 +5673,6 @@ function rennenRendern(state, myId) {
                   <button data-gesuch="${g.id}" ${reicht ? "" : "disabled"}>${reicht ? "Erfüllen" : "zu wenig"}</button>
                 </div>`;
               };
-              /* Eigenes Gesuch: nur wer selbst gemeldet ist, kann Sponsoren
-               * suchen — ohne Wagen im Rennen gaebe es nichts zu sponsern. */
               const eigenes = !binGemeldet ? "" : `
                 <div class="gesuch eigenesGesuch">
                   <span class="was"><b>Dein Gesuch</b>
@@ -5546,26 +5695,49 @@ function rennenRendern(state, myId) {
                 : `<p class="note">Zurzeit sucht kein anderes Team einen Sponsor.</p>`;
               return eigenes + fremd;
             })()}
-            ${r.sponsoren.length ? `<div class="lbl" style="margin-top:12px">Sponsoren</div>` +
-              r.sponsoren.map(s => `<div class="rennteil"><span>${escapeHtml(s.name)} → <b>${escapeHtml(s.team || "?")}</b>${
-                s.was ? `<br><span class="meta">${escapeHtml(s.was)}</span>` : ""}</span><span class="quote">${fmt(s.betrag)}</span></div>`).join("") : ""}
+            ${r.sponsoren.length ? `<div class="lbl" style="margin-top:12px">Sponsoren an Bord</div>` +
+              r.sponsoren.map(s => `<div class="gesuch" style="padding:6px 10px"><span class="was">${escapeHtml(s.name)} → <b>${escapeHtml(s.team || "?")}</b>${
+                s.was ? `<br><span class="meta">${escapeHtml(s.was)}</span>` : ""}</span><span class="quotepill">${fmt(s.betrag)}</span></div>`).join("") : ""}
           </div>
         </div>
 `;
-      /* Wetten laeuft jetzt ueber die Liste statt ueber ein Auswahlfeld: anklicken,
-       * Einsatz eintragen, setzen. Die Auswahl wird ohne Neuaufbau markiert,
-       * sonst ginge bei jedem Klick die Eingabe im Einsatzfeld verloren. */
-      body.querySelectorAll(".rennteil.wettbar").forEach(el => el.addEventListener("click", () => {
+      /* Wagen wählen: Markierung + Wettschein-Kopf ohne kompletten Neuaufbau
+       * nachziehen, sonst ginge die Eingabe im Einsatzfeld verloren. */
+      body.querySelectorAll(".startzeile.wettbar").forEach(el => el.addEventListener("click", () => {
         rennenRendern.wahl = Number(el.dataset.auto);
-        body.querySelectorAll(".rennteil.wettbar").forEach(o => o.classList.toggle("gewaehlt", o === el));
+        rennenRendern.sig = "";           // beim nächsten Zustands-Push neu aufbauen
+        body.querySelectorAll(".startzeile.wettbar").forEach(o => {
+          o.classList.toggle("gewaehlt", o === el);
+          o.querySelector(".quotepill")?.classList.toggle("an", o === el);
+        });
+        aktualisiereVorschau();
       }));
+      const aktualisiereVorschau = () => {
+        const v = document.getElementById("wettVorschau");
+        if (!v) return;
+        const art2 = rennenRendern.wettArt || "sieg";
+        const einsatz = +document.getElementById("wettBetrag")?.value || 0;
+        const q2 = rennenRendern.wahl != null ? r.quoten[rennenRendern.wahl] : null;
+        if (art2 === "sieg" && q2 && einsatz) v.innerHTML = `Mögliche Auszahlung: <b>${fmt(Math.round(einsatz * q2))}</b> (Quote ${q2.toFixed(2)}, ändert sich bis zum Start)`;
+        else if (art2 === "sieg") v.textContent = "Quote erscheint, sobald jemand auf diesen Wagen setzt.";
+        else v.textContent = "Die Quote dieses Markts steht erst mit der Zielflagge fest.";
+      };
+      body.querySelectorAll("[data-wettart]").forEach(b => b.addEventListener("click", () => {
+        rennenRendern.wettArt = b.dataset.wettart;
+        body.querySelectorAll("[data-wettart]").forEach(o => o.classList.toggle("an", o === b));
+        aktualisiereVorschau();
+      }));
+      body.querySelectorAll("[data-einsatz]").forEach(b => b.addEventListener("click", () => {
+        const feld = document.getElementById("wettBetrag");
+        if (feld) { feld.value = b.dataset.einsatz; aktualisiereVorschau(); }
+      }));
+      document.getElementById("wettBetrag")?.addEventListener("input", aktualisiereVorschau);
+      aktualisiereVorschau();
       document.getElementById("wettSenden")?.addEventListener("click", () => {
         if (rennenRendern.wahl == null) return toast("Erst einen Wagen in der Liste anklicken.", true);
         const name = r.teilnehmer.find(t2 => t2.autoId === rennenRendern.wahl)?.name || "Wagen";
-        socket.emit("wetteSetzen", { autoId: rennenRendern.wahl, betrag: +document.getElementById("wettBetrag").value },
-          /* Rueckmeldung als Toast statt in die Panelzeile: Jede Wette aendert
-           * den Pool, das Panel baut sich daraufhin neu auf — eine Meldung
-           * darin waere nach einer Sekunde wieder weg. */
+        socket.emit("wetteSetzen", { autoId: rennenRendern.wahl, betrag: +document.getElementById("wettBetrag").value,
+            art: rennenRendern.wettArt || "sieg" },
           res => toast(res?.error || `Wette steht: ${fmt(+document.getElementById("wettBetrag")?.value || 0)} auf ${name}`, !!res?.error));
       });
       document.getElementById("gesuchSenden")?.addEventListener("click", () => {
@@ -5578,11 +5750,18 @@ function rennenRendern(state, myId) {
           res => toast(res?.error || "Sponsorvertrag steht!", !!res?.error));
       }));
     }
+    /* Der Countdown-Balken läuft auch ohne Neuaufbau jede Sekunde weiter. */
+    const fuell = document.getElementById("phasenFuell");
+    if (fuell) fuell.style.width = Math.round((1 - r.rest / 75) * 100) + "%";
   } else if (r.phase === "laeuft") {
     if (rennenRendern.sig !== "live") {
       rennenRendern.sig = "live";
       body.innerHTML = `
         <canvas id="rennStrecke" width="740" height="320"></canvas>
+        <div class="rennbox" id="rennFunkBox" style="margin-top:10px">
+          <div class="lbl">Boxenfunk</div>
+          <div id="rennTicker"><p class="note">…Funk knistert…</p></div>
+        </div>
         <div class="rennbox" style="margin-top:10px">
           <div class="lbl">Zwischenstand</div>
           <div id="rennStand"></div>
@@ -5592,6 +5771,11 @@ function rennenRendern(state, myId) {
             <span class="chip2" style="margin-left:auto">Auszahlung nach Zieldurchfahrt</span>
           </div>
         </div>`;
+    }
+    /* Boxenfunk aktualisieren — neueste Meldung oben, leicht verblassend. */
+    if (r.ticker?.length) {
+      document.getElementById("rennTicker").innerHTML = r.ticker.slice(0, 4).map((m, i) =>
+        `<div class="funkzeile" style="opacity:${1 - i * .22}">${m.text}</div>`).join("");
     }
     for (const t2 of r.teilnehmer) {
       /* Dead-Reckoning-Daten: Aus zwei Server-Ständen die Geschwindigkeit
