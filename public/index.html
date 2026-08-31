@@ -3319,8 +3319,11 @@ for (const [b, n] of Object.entries(SPRITE_VARIANTS)) {
 const ENTITAETEN = { "&amp;": "&", "&lt;": "<", "&gt;": ">", "&quot;": '"', "&#39;": "'" };
 const rohText = v => String(v ?? "").replace(/&(?:amp|lt|gt|quot|#39);/g, e => ENTITAETEN[e]);
 
+/* Gebaeude ohne eigenes Sprite leihen sich eins. Der Fan-Hub ist ein
+ * Vermarktungsgebaeude wie die Werbeagentur und sieht auch so aus. */
+const SPRITE_LEIHE = { fanhub: "werbeagentur" };
 const spriteFor = (btype, x, y) => {
-  const arr = SPRITES[btype];
+  const arr = SPRITES[btype] || SPRITES[SPRITE_LEIHE[btype]];
   return arr?.length ? arr[(x * 7 + y * 13) % arr.length] : null;
 };
 /* Natur-Deko (Kenney Nature Kit, CC0): Bäume, Palmen, Felsen, Getreidefelder */
@@ -4386,7 +4389,7 @@ function clickTile(e) {
    * das Menue bietet ihn nur nicht an. Dieselbe Regel wie serverseitig, damit
    * beide Seiten dasselbe sagen. */
   const RENNTAG_BAUTEN = {
-    rennclub: ["rennstall", "werbeagentur"],
+    rennclub: ["rennstall", "werbeagentur", "fanhub"],
     rennindustrie: ["reifenwerk", "rennlabor", "oelpumpe", "mine", "stahlwerk",
                     "siliziummine", "chipfabrik", "ewerk", "windpark", "werbeagentur"],
   };
@@ -5331,6 +5334,20 @@ function motorsportRendern(state, me, myId) {
     : sek == null ? ""
     : `<div class="sec">Nächster Renntag in ${Math.floor(sek / 60)}:${String(sek % 60).padStart(2, "0")}</div>
        <div class="note" style="margin-top:-2px">Zeit für Reparatur, Tuning und Fahrerwechsel — gemeldet wird erst, wenn die Anmeldung offen ist.</div>`;
+  /* Fanbasis sichtbar machen: Sie ist im Renntag eine laufende Einnahme, und
+   * ohne Anzeige waere nicht erkennbar, dass sie zwischen den Rennen zerfaellt. */
+  const fanZeile = state.mode === "renntag" ? (() => {
+    const fans = me.fans || 0, hubs = me.fanHubs || 0;
+    if (!fans && !hubs) return "";
+    const proMin = Math.round(fans * 0.01 * 60 * (hubs ? Math.min(1.5, 1 + .25 * (hubs - 1)) : 0));
+    return `<div class="sec">Fanbasis</div>
+      <div class="rennteil"><span style="flex:1"><b>${fans.toLocaleString("de-DE")}</b> Fans${
+        hubs ? ` · ${hubs} Fan-Hub${hubs > 1 ? "s" : ""}` : ""}</span>
+        <span class="quote">${hubs ? `${fmt(proMin)}/min` : "kein Hub"}</span></div>
+      <div class="note" style="margin-top:-2px">${hubs
+        ? "Zahlt alle 30 Sekunden aus. Die Basis zerfällt langsam — wer nicht fährt, verliert sie."
+        : "Bau einen Fan-Hub im Zentrum, um die Fans zu Geld zu machen."}</div>`;
+  })() : "";
   const wm = state.wm && state.saison ? (() => {
     const rang = Object.entries(state.wm).sort((a2, b2) => b2[1] - a2[1]);
     return `<div class="sec">Meisterschaft · Renntag ${state.saison.gefahren} von ${state.saison.gesamt}</div>`
@@ -5341,7 +5358,7 @@ function motorsportRendern(state, me, myId) {
              <span class="quote">${pkt}</span></div>`).join("")
         : `<div class="note">Noch keine Punkte vergeben. 10 für den Sieg, dann 6, 4, 3, 2, 1.</div>`);
   })() : "";
-  box.innerHTML = countdown + wm +
+  box.innerHTML = countdown + fanZeile + wm +
     `<div class="note">Fahrzeuge im Rennstall sind keine handelbare Ware mehr. Teile fürs Tuning
        kaufst du an der Börse — Rennreifen und Rennsoftware stellen andere Firmen her.</div>
      <div class="sec">Garage (${alleAutos.length})</div>` +

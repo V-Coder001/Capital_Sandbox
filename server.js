@@ -357,7 +357,7 @@ const RENNTAG_ROLLEN = ["rennclub", "rennindustrie"];
  * Silizium. Ohne die Vorstufen stuenden ihre Werke still, denn im Renntag gibt
  * es keine Agrar- oder Versorgerbranche mehr, die sie liefern koennte. */
 const RENNTAG_BAUTEN = {
-  rennclub: new Set(["rennstall", "werbeagentur"]),
+  rennclub: new Set(["rennstall", "werbeagentur", "fanhub"]),
   rennindustrie: new Set(["reifenwerk", "rennlabor", "oelpumpe", "mine", "stahlwerk",
                           "siliziummine", "chipfabrik", "ewerk", "windpark", "werbeagentur"]),
 };
@@ -851,6 +851,18 @@ function rennBeenden() {
     /* Letztes Ergebnis festhalten, damit das Startfeld beim naechsten Renntag
      * zeigt, wie der Wagen zuletzt abgeschnitten hat. Beim Werkswagen gehoert
      * es ans Team, es gibt ja kein Auto auf der Karte. */
+    /* Fans nach Ergebnis — auch ein Zieleinlauf ohne Podest bringt welche, und
+     * selbst ein Ausfall ein wenig: angetreten ist angetreten. */
+    if (MODE === "renntag" && !teil.bot) {
+      const club = G.players[teil.ownerId];
+      if (club) {
+        const zu = teil.ausgefallen ? FAN_GEWINN.aus
+          : teil.platz === 1 ? FAN_GEWINN.sieg
+          : teil.platz === 2 ? FAN_GEWINN.zwei
+          : teil.platz === 3 ? FAN_GEWINN.drei : FAN_GEWINN.ziel;
+        club.fans = (club.fans || 0) + zu;
+      }
+    }
     const ergebnis = { platz: teil.platz, aus: !!teil.ausgefallen, feld: r.teilnehmer.length };
     if (teil.bot) { const w = (G.werksTeams || []).find(x => x.id === teil.autoId); if (w) w.letztes = ergebnis; }
     else if (a) a.letztes = ergebnis;
@@ -1040,6 +1052,10 @@ const BTYPES = {
    * Kampagnen frei, die den Preis anheben, den die Kundschaft in den EIGENEN
    * Läden ohne Tempoverlust akzeptiert. Darf jede Industrie bauen. */
   werbeagentur: { name: "Werbeagentur", en: "Ad agency",     cost: 3500, out: null, rate: 0, zone: "zentrum",   ad: true },
+  /* Nur im Renntag und nur fuer Race Clubs (siehe RENNTAG_BAUTEN). Erzeugt als
+   * einziges Gebaeude im Spiel direkt Bargeld — der Ertrag laeuft deshalb
+   * ueber addRevenue, damit Umsatz, Firmenwert und Rangliste stimmig bleiben. */
+  fanhub:       { name: "Fan-Hub", en: "Fan hub",            cost: 4500, out: null, rate: 0, zone: "zentrum",   fanhub: true },
 };
 /* Verkaufstempo eines Shops: (Ø-Kurs / eigener Preis)² — gedeckelt bei ×2 */
 /* Verkaufstempo eines Shops: (Ø-Kurs / eigener Preis)² — gedeckelt bei ×2.
@@ -1064,6 +1080,22 @@ const retailFlow = good => Math.min(10, Math.max(0.30, Math.pow(RETAIL_REF / BAS
  * auf, ohne Nachschub ist er nach gut zwei Minuten praktisch weg und die Preise
  * fallen auf den Ø-Kurs zurück. Wie hoch der Aufschlag maximal reichen kann,
  * hängt an der Zahl der eigenen Werbeagenturen — ohne Agentur wirkt gar nichts. */
+/* ---- Fanbasis (Race Day) ----
+ * Sportlicher Erfolg wird zu Fans, Fans werden im Fan-Hub zu laufendem Geld.
+ * Aufgebaut wie die Werbereichweite (adReach): eine Zahl je Spieler, die
+ * jeden Tick zerfaellt und deren Ertrag an der Zahl der Gebaeude haengt.
+ *
+ * Der Zerfall ist der Kern: Ohne ihn truege ein frueher Sieg die ganze Runde.
+ * Halbwertszeit rund acht Minuten — viel langsamer als Werbung (57 s), eine
+ * Fanbasis ist kein Werbespot, aber wer aufhoert zu fahren, verliert sie. */
+const FAN_ZERFALL = 0.99856;          // je Tick ≈ 8 min Halbwertszeit
+const FAN_GEWINN = { sieg: 400, zwei: 250, drei: 160, ziel: 80, aus: 30 };
+const FAN_ERTRAG = 0.01;              // $ je Fan und Sekunde (0,6 $/Fan/Minute)
+const FAN_TAKT = 30;                  // Auszahlung alle 30 s, sonst flutet es das Finanzlog
+/* Mehrere Hubs mit abnehmendem Ertrag, gedeckelt — wie bei den Werbeagenturen. */
+const fanHubs = p => G.map.filter(t => t.owner === p.id && BTYPES[t.btype]?.fanhub);
+const fanFaktor = n => n <= 0 ? 0 : Math.min(1.5, 1 + 0.25 * (n - 1));
+
 const AD_DECAY = 0.988;          // je Tick, entspricht ~1,2 %/s (Halbwertszeit ~57 s)
 /* Preise gegen den tatsächlichen Nutzen gerechnet: eine volle Reichweite wirkt
  * wegen des Zerfalls wie rund 83 Sekunden Vollaufschlag. Bei 20 % Aufschlag
@@ -1543,6 +1575,7 @@ const G = {
   naechstesRennenIn: RENN_INTERVALL,
   werksTeams: werksTeamsBauen(),   // Werkswagen, die das Startfeld fuellen
   wm: {},                          // Meisterschaftspunkte je Spieler (Race Day)
+  fanAuszahlungIn: FAN_TAKT,       // Ticks bis zur naechsten Fan-Hub-Auszahlung
   saisonRennen: 0,                 // gefahrene Renntage der Saison
 };
 let nextId = 1;
@@ -1580,6 +1613,7 @@ function newPlayer(pid, name, color, industry, socketId) {
     nwHist: [],        // Nettovermögens-Verlauf für den Chart
     equity: { [pid]: 4 },   // Cap-Table: holderId -> Anzahl 25%-Anteile (Summe immer 4)
     adReach: 0,        // Werbe-Reichweite 0–100, zerfällt laufend (siehe AD_DECAY)
+    fans: 0,           // Fanbasis (Race Day), zerfällt laufend (siehe FAN_ZERFALL)
     revenue: 0,        // Erlös seit letzter Dividendenausschüttung (Handel/Shop/Großaufträge)
     /* Rollendes Umsatzfenster: ein Eimer je Minute, für die Firmenbewertung an
      * der Bank. p.revenue allein taugt dafür nicht — das wird alle 10 min auf 0
@@ -2249,6 +2283,7 @@ function privateState(p) {
   return { cash: p.cash, inv: p.inv, xp: p.xp, lvl: p.lvl,
     quests: p.quests,
     tx: p.tx, sales: p.sales, fin: p.fin, nwHist: p.nwHist,
+    fans: Math.round(p.fans || 0), fanHubs: fanHubs(p).length,
     ad: { reach: Math.round(p.adReach || 0), boost: +adBoost(p).toFixed(3),
           agenturen: adAgenturen(p), cap: adCap(adAgenturen(p)), pakete: AD_PACKAGES },
     ownPct: (p.equity[p.id] || 0) * 25, portfolio, revenue: Math.round(p.revenue),
@@ -2729,7 +2764,7 @@ io.on("connection", socket => {
     const t = tileAt(x, y), bt = t?.btype ? BTYPES[t.btype] : null;
     /* Der Rennstall produziert nichts, wird aber ausgebaut — jede Stufe ist
      * ein zusätzlicher Stellplatz statt +30 % Ausstoß. */
-    if (!t || t.owner !== p.id || !(bt?.out || bt?.proc || bt?.racing))
+    if (!t || t.owner !== p.id || !(bt?.out || bt?.proc || bt?.racing || bt?.fanhub))
       return ack?.({ error: "Kein eigenes Produktions- oder Rennstallgebäude" });
     const level = t.level || 1;
     if (level >= LEVEL_MAX) return ack?.({ error: `Bereits auf Höchststufe ${LEVEL_MAX}` });
@@ -3329,7 +3364,7 @@ io.on("connection", socket => {
     G.chat = Object.fromEntries(ROOMS.map(r => [r, []]));
     G.tick = 0; G.winner = null; G.report = null; G.plan = null; G.tutorialEnde = false;
     G.rennen = null; G.naechstesRennenIn = RENN_INTERVALL; G.werksTeams = werksTeamsBauen();
-    G.wm = {}; G.saisonRennen = 0;
+    G.wm = {}; G.saisonRennen = 0; G.fanAuszahlungIn = FAN_TAKT;
     G.started = false; G.hostId = null;   // neue Runde beginnt wieder im Warteraum
     G.groupOrder = null; G.nextGroupIn = 20;
     G.nextDividendIn = DIVIDEND_INTERVAL;
@@ -3711,6 +3746,29 @@ function runTick() {
    * zahlen kann, verliert den Fahrer — er geht zurück in den Pool und steht
    * den Mitbewerbern offen. Genau deshalb ist ein Spitzenfahrer eine Wette
    * auf das eigene Preisgeld und nicht einfach eine Ausgabe. */
+  /* Fanbasis: zerfaellt jeden Tick, zahlt alle FAN_TAKT Sekunden aus. Gebuendelt,
+   * weil eine Buchung je Sekunde das Finanzlog unlesbar machen wuerde. */
+  if (MODE === "renntag") {
+    for (const p of Object.values(G.players)) {
+      if (!p.fans) continue;
+      p.fans *= FAN_ZERFALL;
+      if (p.fans < 1) p.fans = 0;
+    }
+    if (--G.fanAuszahlungIn <= 0) {
+      G.fanAuszahlungIn = FAN_TAKT;
+      for (const p of Object.values(G.players)) {
+        const hubs = fanHubs(p);
+        if (!hubs.length || !p.fans) continue;
+        /* Ausbaustufen wirken wie ueberall: je Stufe 30 % mehr. */
+        const stufen = hubs.reduce((sum, t) => sum + levelMult(t.level), 0) / hubs.length;
+        const betrag = Math.round(p.fans * FAN_ERTRAG * FAN_TAKT * fanFaktor(hubs.length) * stufen);
+        if (betrag <= 0) continue;
+        p.cash += betrag;
+        addRevenue(p, betrag);
+        logTx(p, "Motorsport", `Fan-Hub: ${Math.round(p.fans).toLocaleString("de-DE")} Fans`, betrag);
+      }
+    }
+  }
   if (--G.fahrerGehaltIn <= 0) {
     G.fahrerGehaltIn = FAHRER_GEHALT_TAKT;
     for (const f of G.fahrer) {
