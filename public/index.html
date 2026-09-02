@@ -269,12 +269,40 @@ input,select{background:var(--panel2);border:1px solid var(--line);border-radius
 .lwRow>label{flex:none;width:52px;font-size:11px;color:#4a6080;font-weight:600;
   text-transform:uppercase;letter-spacing:.06em}
 #lwGoal{flex:1;min-width:0}
-#lwBotLevel,#lwMode{display:inline-flex;padding:2px;background:#050810;border:1px solid #1a2535;border-radius:9px}
-#lwBotLevel button,#lwMode button{padding:4px 12px;border:none;background:none;border-radius:7px;font-size:11px;
+#lwBotLevel{display:inline-flex;padding:2px;background:#050810;border:1px solid #1a2535;border-radius:9px}
+#lwBotLevel button{padding:4px 12px;border:none;background:none;border-radius:7px;font-size:11px;
   font-weight:600;color:#4a6080;cursor:pointer;font-family:var(--font);transition:all .16s}
-#lwBotLevel button:hover,#lwMode button:hover{color:#7e97b8}
-#lwBotLevel button.on,#lwMode button.on{background:linear-gradient(135deg,#1e3a5a 0%,#164060 100%);color:var(--accent);
+#lwBotLevel button:hover{color:#7e97b8}
+#lwBotLevel button.on{background:linear-gradient(135deg,#1e3a5a 0%,#164060 100%);color:var(--accent);
   box-shadow:0 0 12px rgba(56,189,248,.18), inset 0 1px 0 rgba(56,189,248,.15)}
+
+/* ---- Modus-Auswahl als Plakate ----
+ * Die Zeile bricht um, statt zu schrumpfen: Bei fünf Kacheln nebeneinander
+ * wären die Plakate auf einem schmalen Fenster nur noch Farbflächen. Das Raster
+ * legt eine Mindestbreite fest und setzt um, was nicht mehr passt. */
+.lwModeRow{display:block}
+.lwModeRow>label{display:block;margin-bottom:7px}
+#lwMode{display:grid;grid-template-columns:repeat(auto-fit,minmax(78px,1fr));gap:6px}
+#lwMode button{padding:0;border:1px solid #1a2535;background:#050810;border-radius:10px;overflow:hidden;
+  cursor:pointer;font-family:var(--font);transition:border-color .16s,box-shadow .16s,transform .16s;
+  display:flex;flex-direction:column;text-align:left}
+#lwMode button img{display:block;width:100%;aspect-ratio:1587/2245;object-fit:cover;
+  /* Unausgewählte Plakate treten zurück — sonst kämpfen fünf Poster gleichzeitig
+   * um die Aufmerksamkeit und die getroffene Wahl geht darin unter. */
+  filter:saturate(.55) brightness(.62);transition:filter .16s}
+
+/* Die Beschriftung darf umbrechen statt abzureissen: "Planwirtschaft" passt
+ * knapp, die englische Fassung "Planned economy" nicht mehr — und die naechste
+ * Uebersetzung ist wieder anders lang. Da alle Kacheln einer Zeile ohnehin auf
+ * gleiche Hoehe gezogen werden, kostet die zweite Zeile keine Ordnung. */
+#lwMode button>span:last-child{padding:6px 6px 7px;font-size:10.5px;font-weight:600;color:#4a6080;
+  transition:color .16s;line-height:1.25;flex:1}
+#lwMode button:hover{border-color:#26405e;transform:translateY(-1px)}
+#lwMode button:hover img{filter:saturate(.8) brightness(.82)}
+#lwMode button:hover>span:last-child{color:#7e97b8}
+#lwMode button.on{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent),0 4px 16px rgba(56,189,248,.22)}
+#lwMode button.on img{filter:none}
+#lwMode button.on>span:last-child{color:var(--accent);background:linear-gradient(135deg,#1e3a5a 0%,#164060 100%)}
 #lwBotCounts{display:grid;grid-template-columns:1fr 1fr;gap:7px 14px}
 #lwBotCounts .botrow{justify-content:space-between;gap:9px}
 #lwBotCounts .botrow>span{font-size:11.5px;color:#8695ab}
@@ -1337,14 +1365,23 @@ td:first-child{font-family:var(--font)}
   </div>
   <div class="joinbox" id="lwSettings">
     <div class="lbl">Einstellungen</div>
-    <div class="lwRow">
+    <!-- Modus-Auswahl als Plakate. Der Modusname steht im Bild, die Bildunterschrift
+         wiederholt ihn trotzdem: die Plakate sind auf Deutsch beschriftet und im
+         Miniaturformat nicht immer sicher lesbar — beim Einsteiger steht der Name
+         ausserdem auf Englisch im Bild. -->
+    <div class="lwRow lwModeRow">
       <label>Modus</label>
       <div id="lwMode">
-        <button type="button" data-mode="sandbox" class="on">Sandbox</button>
-        <button type="button" data-mode="plan">Planwirtschaft (DDR)</button>
-        <button type="button" data-mode="einsteiger">Einsteiger</button>
-        <button type="button" data-mode="renntag">Race Day</button>
-        <button type="button" data-mode="kartell">Kartellwirtschaft</button>
+        <button type="button" data-mode="sandbox" class="on">
+          <img src="assets/modi/sandbox.jpg" alt="" loading="lazy"><span>Sandbox</span></button>
+        <button type="button" data-mode="plan">
+          <img src="assets/modi/plan.jpg" alt="" loading="lazy"><span>Planwirtschaft</span></button>
+        <button type="button" data-mode="einsteiger">
+          <img src="assets/modi/einsteiger.jpg" alt="" loading="lazy"><span>Einsteiger</span></button>
+        <button type="button" data-mode="renntag">
+          <img src="assets/modi/renntag.jpg" alt="" loading="lazy"><span>Race Day</span></button>
+        <button type="button" data-mode="kartell">
+          <img src="assets/modi/kartell.jpg" alt="" loading="lazy"><span>Kartell</span></button>
       </div>
     </div>
     <p id="lwModeHint" style="display:none;font-size:11.5px;color:#8695ab;margin:2px 0 6px">
@@ -2387,6 +2424,11 @@ const EN = {
   "Rundencode für deine Mitspieler": "Round code for your fellow players",
   "Einstellungen": "Settings", "Modus": "Mode", "Ziel": "Target",
   "Planwirtschaft (DDR)": "Planned economy (GDR)",
+  /* Bildunterschriften der Modus-Plakate. Die Plakate selbst sind auf Deutsch
+     beschriftet — die Unterschrift ist damit der einzige Teil, der uebersetzt
+     werden kann. */
+  "Planwirtschaft": "Planned economy", "Einsteiger": "Beginner", "Kartell": "Cartel",
+  "Kartellwirtschaft": "Cartel economy",
   "Agrar": "Agriculture", "Rohstoff": "Raw materials", "Versorger": "Utilities", "Technik": "Technology",
   "$100.000 · etwa 1 Stunde": "$100,000 · about 1 hour",
   "$250.000 · etwa 2 Stunden": "$250,000 · about 2 hours",
