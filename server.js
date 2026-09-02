@@ -1299,7 +1299,11 @@ let SAISON_RENNEN = 5;
  * "plan": Planwirtschaft im DDR-Stil — kein Vermögensziel, sondern Plansolls
  * vom Planbüro. Spieler liefern Waren zu festen Ankaufspreisen ab und sammeln
  * Planpunkte; nach fünf Planphasen (oder beim Punkteziel) gewinnt der
- * "Held der Arbeit". Der Host wählt den Modus im Warteraum. */
+ * "Held der Arbeit".
+ * "kartell": Kartellwirtschaft — dasselbe Vermögensziel wie im Sandkasten, aber
+ * Spieler dürfen sich zu Kartellen zusammenschließen und den Markt unter sich
+ * ausmachen, solange das Kartellamt ihnen nichts nachweisen kann.
+ * Der Host wählt den Modus im Warteraum. */
 let MODE = "sandbox";
 const PLAN_PHASEN = 5;
 const PLAN_DAUER = 8 * 60;      // Sekunden je Planphase
@@ -1670,6 +1674,7 @@ const G = {
   firmHist: {},         // pid  -> Firmenwert-Verlauf, gleiche Taktung
   chat: Object.fromEntries(ROOMS.map(r => [r, []])),
   contracts: [],        // {id, fromId, toId, good, qty, price, status}
+  cartels: [],          // Kartellmodus: {id, name, kopfId, mitglieder[], einladungen[], verdacht, gegruendet}
   tick: 0, winner: null, report: null,
   /* Warteraum: die Runde läuft erst, wenn der Host sie startet — bis dahin
    * sammeln sich die Mitspieler, ohne dass Produktion oder Bots anlaufen. */
@@ -2281,6 +2286,109 @@ function planPhaseAuswerten() {
   io.emit("notice", { text: `Planphase ${G.plan.phase} abgeschlossen — Punkte vergeben, die Solls werden angepasst (Basiseffekt).` });
 }
 
+/* ---------- Kartellmodus ----------
+ * Das Gegenstück zur Planwirtschaft: Nicht der Staat lenkt den Markt, sondern
+ * die Firmen tun es unter sich. Mehrere Spieler schließen sich zu einem Kartell
+ * zusammen, sprechen Preise ab und teilen den Markt auf — solange das
+ * Kartellamt ihnen nichts nachweisen kann.
+ *
+ * Diese erste Stufe legt nur das Fundament: gründen, einladen, beitreten,
+ * verlassen. Preisabsprache, Verdacht/Ermittlung und Kronzeugenregelung setzen
+ * darauf auf.
+ *
+ * Bewusste Entscheidungen:
+ * - MEHRERE Kartelle je Runde. Ein einziges wäre entweder eine
+ *   Zwangsgemeinschaft aller oder ein Zweiklassenspiel; konkurrierende Kartelle
+ *   halten den Markt in Bewegung.
+ * - Der Verdachtswert geht NUR an Mitglieder (privateState, nicht snapshot).
+ *   Von außen sieht man, DASS es ein Kartell gibt, aber nicht, wie dicht das
+ *   Kartellamt ihm schon auf den Fersen ist — sonst wüsste jeder Außenstehende
+ *   genau, wann sich das Zuschlagen lohnt.
+ * - Die Mitgliedschaft steht AUSSCHLIESSLICH im Kartell (k.mitglieder), nicht
+ *   zusätzlich am Spieler. Zwei Listen, die dasselbe wissen müssten, laufen
+ *   früher oder später auseinander — bei Austritt, Auflösung oder wenn ein
+ *   Spieler endgültig aus der Sitzung fliegt. */
+const KARTELL_MAX = 4;          // Mitglieder je Kartell — sind alle drin, richtet es sich gegen niemanden
+const KARTELL_NAME_MAX = 28;
+
+const kartellVon = p => G.cartels.find(k => k.mitglieder.includes(p.id)) || null;
+const kartellFinden = kid => G.cartels.find(k => k.id === kid) || null;
+
+/* Ein Kartell ohne Mitglieder ist eine Karteileiche — es hielte sonst seinen
+ * Namen und (später) seine Absprachen bis zum Rundenende besetzt. */
+function kartellAufloesen(k, grund) {
+  const i = G.cartels.indexOf(k);
+  if (i >= 0) G.cartels.splice(i, 1);
+  if (grund) io.emit("notice", { text: `Kartell „${k.name}“ ${grund}.` });
+}
+
+/* Austritt an EINER Stelle, damit jeder Weg hinaus dieselbe Aufräumarbeit
+ * macht: freiwillig, oder weil jemand endgültig aus der Sitzung geflogen ist.
+ * Verlässt der Kopf das Kartell, rückt das dienstälteste verbliebene Mitglied
+ * nach — sonst hinge das Kartell führungslos fest, genau wie früher der
+ * Warteraum, wenn der Host ging. */
+function kartellVerlassen(p) {
+  const k = kartellVon(p);
+  if (!k) return null;
+  k.mitglieder = k.mitglieder.filter(mid => mid !== p.id);
+  if (!k.mitglieder.length) { kartellAufloesen(k, "hat sich aufgelöst"); return k; }
+  if (k.kopfId === p.id) {
+    k.kopfId = k.mitglieder[0];
+    io.emit("notice", { text: `${G.players[k.kopfId]?.name ?? "—"} führt jetzt das Kartell „${k.name}“.` });
+  }
+  return k;
+}
+
+/* Öffentliche Sicht: Name, Kopf und Mitglieder eines Kartells sind bekannt —
+ * ein Kartell, von dem niemand weiß, könnte man auch nicht bekämpfen. Was NICHT
+ * hier steht: der Verdachtswert und die internen Absprachen. */
+const kartellPublic = k => ({
+  id: k.id, name: k.name, kopfId: k.kopfId,
+  mitglieder: k.mitglieder.map(mid => ({ id: mid, name: G.players[mid]?.name ?? "—" })),
+  gegruendet: k.gegruendet,
+});
+
+/* ---------- Preisabsprache ----------
+ * Der Kern des Modus: Das Kartell legt Mindestpreise fest, unter denen kein
+ * Mitglied verkaufen darf. Der Gewinn entsteht nicht durch eine Prämie vom
+ * Server, sondern dadurch, dass mehrere Anbieter gleichzeitig aufhören, sich
+ * gegenseitig zu unterbieten — genau wie im Echten.
+ *
+ * Die Absprache gilt für JEDEN Weg, auf dem Ware gegen Geld das Lager verlässt:
+ * Börsenorder, Direktvertrag und Ladenpreis. Bliebe auch nur einer davon offen,
+ * wäre die Absprache in zehn Sekunden umgangen — und zwar von dem Mitglied, das
+ * als Erstes darauf kommt. Der Laden zählt ausdrücklich mit: Wer dort billig
+ * abgibt, verkauft zwar an die Stadt, drückt über noteSold aber den
+ * Durchschnittspreis, an dem die Absprache der anderen hängt.
+ *
+ * Geprüft wird ausschließlich die VERKAUFSseite. Ein Nachfragekartell, das
+ * Höchsteinkaufspreise durchsetzt, wäre ein eigenes System mit eigener
+ * Verdachtslogik — nicht dieselbe Regel mit umgedrehtem Vergleich. */
+const kartellMindestpreis = (p, good) => {
+  const k = MODE === "kartell" ? kartellVon(p) : null;
+  return k?.minPreise?.[good] ?? null;
+};
+/* Gibt den Ablehnungstext zurück, sonst null. Text statt Boolean, damit an
+ * jeder der vier Aufrufstellen dieselbe Begründung ankommt. */
+function kartellPreisVerstoss(p, good, preis) {
+  const min = kartellMindestpreis(p, good);
+  if (min == null || preis >= min) return null;
+  return `Kartellabsprache: ${GOODS[good].name} nicht unter ${min} $ verkaufen`;
+}
+/* Eine neue Absprache zieht laufende Ladenpreise mit hoch. Ohne das könnte man
+ * erst billige Verkaufsslots einrichten und danach dem Kartell beitreten — die
+ * Absprache bände dann nur noch künftige Entscheidungen und wäre wertlos. */
+function kartellLaedenAngleichen(k, good, min) {
+  let angehoben = 0;
+  for (const t of G.map) {
+    if (!t.btype || !k.mitglieder.includes(t.owner) || !t.shop) continue;
+    for (const slot of t.shop) {
+      if (slot?.good === good && slot.price < min) { slot.price = min; angehoben++; }
+    }
+  }
+  return angehoben;
+}
+
 function logTx(p, cat, text, amt) {
   p.tx.unshift({ t: G.tick, cat, text, amt: Math.round(amt * 100) / 100 });
   if (p.tx.length > 60) p.tx.pop();
@@ -2298,12 +2406,17 @@ function snapshot() {
     tick: G.tick, winner: G.winner, winGoal: WIN_NW, report: G.report || null,
     /* Countdown bis zum naechsten Renntag — ohne ihn sieht man erst bei der
      * Ankuendigung, dass etwas ansteht, und kann nichts vorbereiten. */
-    naechstesRennen: G.rennen ? null : G.naechstesRennenIn,
+    /* Im Kartellmodus zählt der Countdown gar nicht mehr herunter — ihn trotzdem
+     * zu senden hieße, eine eingefrorene Uhr anzuzeigen. */
+    naechstesRennen: (G.rennen || MODE === "kartell") ? null : G.naechstesRennenIn,
     wm: MODE === "renntag" ? G.wm : null,
     saison: MODE === "renntag" ? { gefahren: G.saisonRennen, gesamt: SAISON_RENNEN } : null,
     tutorialEnde: !!G.tutorialEnde,
     started: G.started, hostId: G.hostId,
     mode: MODE, plan: MODE === "plan" ? G.plan : null,
+    /* Wer mit wem gemeinsame Sache macht, ist öffentlich; wie heiß es dem
+     * Kartell unter den Füßen wird, erfahren nur seine Mitglieder (privateState). */
+    cartels: MODE === "kartell" ? G.cartels.map(kartellPublic) : null,
     hof: HOF,
     routes: MAP_ROUTES,
     lobby: G.started ? null : { winGoal: WIN_NW, bots: botAuswahl, botLevel: botLevelKey, mode: MODE, saison: SAISON_RENNEN, saisonWahl: SAISON_CHOICES },
@@ -2392,7 +2505,17 @@ function privateState(p) {
       blockPrice: blockPrice(other), value: blockPrice(other) * other.equity[p.id],
       einstand: Math.round((p.equityAvg[other.id] || 0) * other.equity[p.id]),
       marketValue: Math.round(companyValue(other)), rev10: Math.round(rev10(other)) }));
+  /* Kartell-Innensicht: der Verdachtswert und die offenen Einladungen gehen
+   * ausschließlich an Mitglieder — und die eigenen offenen Einladungen an den,
+   * der sie bekommen hat. Beides hat im öffentlichen Snapshot nichts verloren. */
+  const eigenesKartell = MODE === "kartell" ? kartellVon(p) : null;
   return { cash: p.cash, inv: p.inv, xp: p.xp, lvl: p.lvl,
+    kartell: eigenesKartell ? { ...kartellPublic(eigenesKartell),
+      verdacht: Math.round(eigenesKartell.verdacht),
+      minPreise: eigenesKartell.minPreise,
+      einladungen: eigenesKartell.einladungen.map(mid => ({ id: mid, name: G.players[mid]?.name ?? "—" })) } : null,
+    kartellEinladungen: MODE === "kartell" && !eigenesKartell
+      ? G.cartels.filter(k => k.einladungen.includes(p.id)).map(kartellPublic) : [],
     quests: p.quests,
     tx: p.tx, sales: p.sales, fin: p.fin, nwHist: p.nwHist,
     fans: Math.round(p.fans || 0), fanHubs: fanHubs(p).length,
@@ -2617,7 +2740,7 @@ io.on("connection", socket => {
     const pid = G.socketToPid[socket.id];
     if (!pid || pid !== G.hostId) return ack?.({ error: "Das darf nur der Host" });
     if (G.started) return ack?.({ error: "Die Runde läuft schon" });
-    if (["sandbox", "plan", "einsteiger", "renntag"].includes(mode)) MODE = mode;
+    if (["sandbox", "plan", "einsteiger", "renntag", "kartell"].includes(mode)) MODE = mode;
     if (WIN_CHOICES.includes(+winGoal)) WIN_NW = +winGoal;
     if (SAISON_CHOICES.includes(+saison)) SAISON_RENNEN = +saison;
     if (bots && typeof bots === "object") botAuswahl = bots;
@@ -2811,6 +2934,129 @@ io.on("connection", socket => {
     ack?.({ ok: true });
   }));
 
+  /* --- Kartellmodus: gründen, einladen, beitreten, verlassen ---
+   * Beitritt ausschließlich auf Einladung. Ein Kartell, dem man ungefragt
+   * beitreten könnte, wäre kein Kartell, sondern ein Marktplatz — und ein
+   * Konkurrent könnte sich hineinsetzen, nur um die Absprachen mitzulesen. */
+  const kartellModus = ack => {
+    if (MODE !== "kartell") { ack?.({ error: "Kartelle gibt es nur in der Kartellwirtschaft" }); return false; }
+    if (!G.started) { ack?.({ error: "Erst wenn die Runde läuft" }); return false; }
+    return true;
+  };
+
+  socket.on("kartellGruenden", guard((p, { name }, ack) => {
+    if (!kartellModus(ack)) return;
+    if (kartellVon(p)) return ack?.({ error: "Du bist schon in einem Kartell" });
+    /* Wie beim Firmennamen: erst kürzen, dann entschärfen. Der Kartellname geht
+     * an alle Clients und landet dort in Mitgliederlisten — ungefiltert wäre er
+     * der direkte Weg, jedem Mitspieler eigenes Markup unterzuschieben. */
+    name = sicherText(String(name || "").trim().slice(0, KARTELL_NAME_MAX));
+    if (name.length < 3) return ack?.({ error: "Name zu kurz (mindestens 3 Zeichen)" });
+    if (G.cartels.some(k => k.name.toLowerCase() === name.toLowerCase()))
+      return ack?.({ error: "Diesen Namen gibt es schon" });
+    const k = { id: id(), name, kopfId: p.id, mitglieder: [p.id], einladungen: [],
+      minPreise: {}, verdacht: 0, gegruendet: G.tick };
+    G.cartels.push(k);
+    logTx(p, "Kartell", `Kartell „${name}“ gegründet`, 0);
+    /* Die Gründung ist öffentlich: Ein Zusammenschluss lässt sich nicht
+     * verbergen, nur das, was drinnen besprochen wird. */
+    io.emit("notice", { text: `${p.name} gründet das Kartell „${name}“.` });
+    ack?.({ ok: true, kartellId: k.id });
+  }));
+
+  socket.on("kartellEinladen", guard((p, { toId }, ack) => {
+    if (!kartellModus(ack)) return;
+    const k = kartellVon(p);
+    if (!k) return ack?.({ error: "Du bist in keinem Kartell" });
+    if (k.kopfId !== p.id) return ack?.({ error: "Nur der Kopf des Kartells lädt ein" });
+    const ziel = G.players[toId];
+    if (!ziel || ziel.id === p.id) return ack?.({ error: "Unbekannter Spieler" });
+    if (k.mitglieder.length >= KARTELL_MAX) return ack?.({ error: `Höchstens ${KARTELL_MAX} Mitglieder` });
+    if (kartellVon(ziel)) return ack?.({ error: `${ziel.name} ist schon in einem Kartell` });
+    if (k.einladungen.includes(ziel.id)) return ack?.({ error: "Einladung läuft bereits" });
+    k.einladungen.push(ziel.id);
+    /* Die Einladung geht privat raus — wer sie bekommt, soll selbst entscheiden
+     * können, ohne dass der Rest der Stadt zusieht. */
+    emitTo(ziel.id, "notice", { text: `${p.name} lädt dich ins Kartell „${k.name}“ ein.` });
+    ack?.({ ok: true });
+  }));
+
+  socket.on("kartellBeitreten", guard((p, { kartellId }, ack) => {
+    if (!kartellModus(ack)) return;
+    if (kartellVon(p)) return ack?.({ error: "Du bist schon in einem Kartell" });
+    const k = kartellFinden(kartellId);
+    if (!k) return ack?.({ error: "Kartell gibt es nicht mehr" });
+    if (!k.einladungen.includes(p.id)) return ack?.({ error: "Ohne Einladung geht das nicht" });
+    /* Zwischen Einladung und Beitritt kann das Kartell vollgelaufen sein — die
+     * Einladung allein garantiert keinen Platz. */
+    if (k.mitglieder.length >= KARTELL_MAX) {
+      k.einladungen = k.einladungen.filter(mid => mid !== p.id);
+      return ack?.({ error: "Das Kartell ist inzwischen voll" });
+    }
+    k.einladungen = k.einladungen.filter(mid => mid !== p.id);
+    k.mitglieder.push(p.id);
+    logTx(p, "Kartell", `Kartell „${k.name}“ beigetreten`, 0);
+    io.emit("notice", { text: `${p.name} gehört jetzt zum Kartell „${k.name}“.` });
+    ack?.({ ok: true });
+  }));
+
+  socket.on("kartellAblehnen", guard((p, { kartellId }, ack) => {
+    if (!kartellModus(ack)) return;
+    const k = kartellFinden(kartellId);
+    if (!k) return ack?.({ ok: true });          // schon weg — für den Ablehnenden dasselbe Ergebnis
+    k.einladungen = k.einladungen.filter(mid => mid !== p.id);
+    emitTo(k.kopfId, "notice", { text: `${p.name} lehnt die Einladung ins Kartell „${k.name}“ ab.` });
+    ack?.({ ok: true });
+  }));
+
+  socket.on("kartellVerlassen", guard((p, _payload, ack) => {
+    if (!kartellModus(ack)) return;
+    const k = kartellVon(p);
+    if (!k) return ack?.({ error: "Du bist in keinem Kartell" });
+    kartellVerlassen(p);
+    logTx(p, "Kartell", `Kartell „${k.name}“ verlassen`, 0);
+    io.emit("notice", { text: `${p.name} verlässt das Kartell „${k.name}“.` });
+    ack?.({ ok: true });
+  }));
+
+  /* --- Kartellmodus: Preisabsprache ---
+   * Wie beim Einladen entscheidet der Kopf. Eine Abstimmung unter Mitgliedern
+   * klänge demokratischer, brächte aber nur eine Warteschlange offener
+   * Vorschläge — die Spannung des Modus liegt nicht in der Beschlussfassung,
+   * sondern darin, ob sich alle daran halten. */
+  socket.on("kartellPreisSetzen", guard((p, { good, price }, ack) => {
+    if (!kartellModus(ack)) return;
+    const k = kartellVon(p);
+    if (!k) return ack?.({ error: "Du bist in keinem Kartell" });
+    if (k.kopfId !== p.id) return ack?.({ error: "Nur der Kopf des Kartells legt Preise fest" });
+    if (!GOODS[good]) return ack?.({ error: "Unbekannte Ware" });
+    price = Math.round(+price * 100) / 100;
+    if (!(price > 0) || !Number.isFinite(price)) return ack?.({ error: "Preis > 0 nötig" });
+    k.minPreise[good] = price;
+    const angehoben = kartellLaedenAngleichen(k, good, price);
+    /* Die Absprache bleibt unter den Mitgliedern — nach außen sieht man nur die
+     * Preise, die sich daraus ergeben, nicht die Abmachung selbst. */
+    for (const mid of k.mitglieder) {
+      emitTo(mid, "notice", { text: `Kartellabsprache: ${GOODS[good].name} ab sofort nicht unter ${price} $` +
+        (angehoben ? ` — ${angehoben} Ladenpreis${angehoben === 1 ? "" : "e"} angehoben.` : ".") });
+    }
+    logTx(p, "Kartell", `Mindestpreis ${GOODS[good].name}: ${price} $`, 0);
+    ack?.({ ok: true });
+  }));
+
+  socket.on("kartellPreisAufheben", guard((p, { good }, ack) => {
+    if (!kartellModus(ack)) return;
+    const k = kartellVon(p);
+    if (!k) return ack?.({ error: "Du bist in keinem Kartell" });
+    if (k.kopfId !== p.id) return ack?.({ error: "Nur der Kopf des Kartells legt Preise fest" });
+    if (k.minPreise[good] == null) return ack?.({ error: "Für diese Ware gibt es keine Absprache" });
+    delete k.minPreise[good];
+    for (const mid of k.mitglieder) {
+      emitTo(mid, "notice", { text: `Kartellabsprache für ${GOODS[good].name} aufgehoben.` });
+    }
+    ack?.({ ok: true });
+  }));
+
   /* --- Karte: Bauen (schaltet gesperrte Kacheln atomar mit frei) / Abriss --- */
   socket.on("build", guard((p, { x, y, btype }, ack) => {
     const t = tileAt(x, y), bt = BTYPES[btype];
@@ -2846,10 +3092,12 @@ io.on("connection", socket => {
      * diese Grenze wäre "mehr Ställe" die beste Strategie, und der Wettpool
      * gehörte am Ende dem, der am meisten Kacheln hält. */
     if (bt.racing) {
-      /* Planwirtschaft: keine Renntage, kein Wettpool — ein Rennstall wäre
-       * ein totes Gebäude mit laufenden Fahrergehältern. */
+      /* Planwirtschaft und Kartellmodus: keine Renntage, kein Wettpool — ein
+       * Rennstall wäre ein totes Gebäude mit laufenden Fahrergehältern. */
       if (MODE === "plan")
         return ack?.({ error: "In der Planwirtschaft gibt es keinen Motorsport" });
+      if (MODE === "kartell")
+        return ack?.({ error: "In der Kartellwirtschaft gibt es keinen Motorsport — hier zählen die Warenmärkte" });
       const nw = netWorth(p);
       if (MODE !== "renntag" && nw < RACING_UNLOCK_NW)
         return ack?.({ error: `Motorsport öffnet ab ${RACING_UNLOCK_NW.toLocaleString("de-DE")} $ Nettovermögen — dir fehlen noch ${Math.round(RACING_UNLOCK_NW - nw).toLocaleString("de-DE")} $` });
@@ -3235,6 +3483,10 @@ io.on("connection", socket => {
     if (!(qty > 0) || !(price > 0)) return ack?.({ error: "Menge/Preis > 0 nötig" });
     if (side === "sell" && p.inv[good] < qty) return ack?.({ error: "Nicht genug Ware im Lager" });
     if (side === "buy" && p.cash < qty * price) return ack?.({ error: "Zu wenig Kapital" });
+    if (side === "sell") {
+      const verstoss = kartellPreisVerstoss(p, good, price);
+      if (verstoss) return ack?.({ error: verstoss });
+    }
     const order = { id: id(), side, good, qty, price, playerId: p.id, player: p.name, ts: Date.now() };
     escrowForOrder(p, order);
     questProg(p, "order");
@@ -3262,6 +3514,10 @@ io.on("connection", socket => {
       settleTrade(o.good, qty, o.price, p.id, o.playerId);
     } else {
       if (p.inv[o.good] < qty) return ack?.({ error: "Nicht genug Ware" });
+      /* Hier verkauft man in eine fremde Kaufofferte hinein — der Preis kommt
+       * von der Gegenseite, unterschreitet die eigene Absprache aber genauso. */
+      const verstoss = kartellPreisVerstoss(p, o.good, o.price);
+      if (verstoss) return ack?.({ error: verstoss });
       p.inv[o.good] -= qty;
       settleTrade(o.good, qty, o.price, o.playerId, p.id);
     }
@@ -3281,6 +3537,11 @@ io.on("connection", socket => {
     price = Math.round(+price * 100) / 100;
     if (!bt.retail.goods.includes(good)) return ack?.({ error: "Ware hier nicht verkäuflich" });
     if (!(price > 0)) return ack?.({ error: "Preis > 0 nötig" });
+    /* Der Laden verkauft an die Stadt, nicht an Mitspieler — die Absprache gilt
+     * hier trotzdem: Billig abgeben drückt über noteSold den Durchschnittspreis,
+     * an dem die Absprache der anderen Mitglieder hängt. */
+    const verstoss = kartellPreisVerstoss(p, good, price);
+    if (verstoss) return ack?.({ error: verstoss });
     qty = Math.floor(+qty);
     if (qty <= 0 || !Number.isFinite(qty)) qty = null;   // leer = unbegrenzt verkaufen
     t.shop[slot] = { good, price, qty };
@@ -3610,6 +3871,10 @@ io.on("connection", socket => {
     qty = Math.floor(+qty); price = +price;
     if (!to || toId === p.id || !GOODS[good] || !(qty > 0) || !(price > 0)) return ack?.({ error: "Ungültig" });
     if (p.inv[good] < qty) return ack?.({ error: "Nicht genug Ware für dieses Angebot" });
+    /* Der Direktvertrag geht an der Börse vorbei — die Absprache gilt trotzdem,
+     * sonst wäre er der bequemste Weg, sie zu unterlaufen. */
+    const verstoss = kartellPreisVerstoss(p, good, price);
+    if (verstoss) return ack?.({ error: verstoss });
     const c = { id: id(), fromId: p.id, from: p.name, toId, good, qty, price, status: "open", ttl: CONTRACT_TTL };
     G.contracts.push(c);
     emitTo(toId, "contractOffer", c);
@@ -3681,8 +3946,11 @@ function runTick() {
   G.tick++;
   /* Rundenende: die Bestenliste genau einmal fortschreiben. */
   if (G.winner && !G.hofGespeichert) { G.hofGespeichert = true; hofSpeichern(); }
-  /* --- Renntage (nur Marktwirtschaft) --- */
-  if (MODE !== "plan" && !G.winner) {
+  /* --- Renntage (nicht in Planwirtschaft und Kartellmodus) ---
+   * In der Kartellwirtschaft geht es um Absprachen auf den Warenmärkten. Ein
+   * Renntag mit eigenem Wettpool wäre ein zweites Spiel daneben, das von der
+   * einzigen Frage ablenkt, die den Modus trägt: Hält sich das Kartell? */
+  if (MODE !== "plan" && MODE !== "kartell" && !G.winner) {
     if (!G.rennen) {
       if (--G.naechstesRennenIn <= 0) {
         G.naechstesRennenIn = RENN_INTERVALL;
@@ -4013,6 +4281,11 @@ function runTick() {
       for (const a of G.auctions) {
         if (a.bestBidder === pid) { a.bestBidder = null; a.bestBid = 0; }
       }
+      /* Kartellmitgliedschaft und offene Einladungen mitnehmen — sonst stünde
+       * ein Geist auf der Mitgliederliste, und ein Kartell, dessen Kopf gegangen
+       * ist, könnte niemanden mehr einladen. */
+      kartellVerlassen(p);
+      for (const k of G.cartels) k.einladungen = k.einladungen.filter(mid => mid !== pid);
       delete G.players[pid];
       io.emit("notice", { text: `${p.name} hat die Sitzung endgültig verlassen.` });
     }
@@ -4284,7 +4557,7 @@ async function spawnBot(cfg, lvl = BOT_LEVELS[BOT_LEVEL_DEFAULT]) {
       }
       /* --- Motorsport: Bots bestücken ihren Stall, tunen, melden, wetten
        * und sponsern — alles nur, wenn die Kasse es hergibt. --- */
-      if (st.mode !== "plan" && lvl.rennen) {
+      if (st.mode !== "plan" && st.mode !== "kartell" && lvl.rennen) {
         const meinStall = st.map.find(t2 => t2.owner === myId && t2.btype === "rennstall");
         const meineAutos = meinStall?.autos || [];
         if (meinStall) {
@@ -4457,7 +4730,11 @@ async function spawnBot(cfg, lvl = BOT_LEVELS[BOT_LEVEL_DEFAULT]) {
       /* Bots unterliegen derselben Schwelle wie Menschen — sonst stünden im
        * Frühspiel Bot-Ställe herum, während kein Spieler einen bauen darf. */
       const meinNW = st.players[myId]?.netWorth ?? 0;
+      /* Im Kartellmodus lehnt der Server den Rennstall ab — ohne diese Zeile
+       * liefe der Bot bis zum Rundenende gegen dieselbe Absage an, statt das
+       * Geld in Produktion zu stecken. */
       const baueRennstall = !!cfg.rennstall && lvl.rennen && !cfg.planLoop
+        && st.mode !== "kartell"
         && meinNW >= (botMeta?.racingUnlock ?? 200000);
       const gesamtplan = cfg.planLoop ? cfg.plan
         : [...(INDUSTRY_COVERAGE[cfg.industry] || []), ...(baueRennstall ? ["rennstall"] : []), ...cfg.plan];
