@@ -1344,6 +1344,7 @@ td:first-child{font-family:var(--font)}
         <button type="button" data-mode="plan">Planwirtschaft (DDR)</button>
         <button type="button" data-mode="einsteiger">Einsteiger</button>
         <button type="button" data-mode="renntag">Race Day</button>
+        <button type="button" data-mode="kartell">Kartellwirtschaft</button>
       </div>
     </div>
     <p id="lwModeHint" style="display:none;font-size:11.5px;color:#8695ab;margin:2px 0 6px">
@@ -1355,6 +1356,11 @@ td:first-child{font-family:var(--font)}
       und fährt um den Titel. <b>Rennindustrie</b> baut die Zulieferkette, stellt Rennreifen und Rennsoftware
       her und verkauft sie über die Börse — Läden gibt es hier nicht. Gewonnen wird über die Meisterschaft,
       nicht über das Vermögen.</p>
+    <p id="lwKartellHint" style="display:none;font-size:11.5px;color:#8695ab;margin:2px 0 6px">
+      Kartellwirtschaft: Dasselbe Vermögensziel wie im Sandkasten — aber ihr dürft euch zu
+      <b>Kartellen</b> zusammenschließen (bis zu 4 Firmen), Preise absprechen und den Markt unter euch
+      aufteilen. Das Kartellamt schaut zu: Wie dicht es einem Kartell auf den Fersen ist, sehen nur
+      dessen Mitglieder.</p>
     <p id="lwEinsteigerHint" style="display:none;font-size:11.5px;color:#8695ab;margin:2px 0 6px">
       Einsteiger: Ein geführter Durchgang durch das ganze Spiel — Bauen, Verkaufen, Börse,
       Kursticker, Nachrichten und Bank, Schritt für Schritt erklärt. Nichts ist gesperrt, die Bots
@@ -2678,6 +2684,9 @@ function lwModeSpiegeln() {
   document.getElementById("lwModeHint").style.display = lwMode === "plan" ? "" : "none";
   document.getElementById("lwEinsteigerHint").style.display = lwMode === "einsteiger" ? "" : "none";
   document.getElementById("lwRenntagHint").style.display = lwMode === "renntag" ? "" : "none";
+  /* Die Kartellwirtschaft behält das Vermögensziel — hier wird nur erklärt,
+   * was zusätzlich erlaubt ist. */
+  document.getElementById("lwKartellHint").style.display = lwMode === "kartell" ? "" : "none";
   /* Im Renntag entscheidet die Meisterschaft — das Vermoegensziel waere dort
    * eine Angabe ohne Wirkung. */
   document.getElementById("lwSaisonRow").style.display = lwMode === "renntag" ? "" : "none";
@@ -3045,7 +3054,7 @@ async function oeffentlicheLaden() {
     if (sig === hofSig) { box.style.display = ""; return; }
     hofSig = sig;
     box.style.display = "";
-    const modusName = { sandbox: "Sandbox", plan: "Planwirtschaft", renntag: "Race Day", einsteiger: "Einsteiger" };
+    const modusName = { sandbox: "Sandbox", plan: "Planwirtschaft", renntag: "Race Day", einsteiger: "Einsteiger", kartell: "Kartellwirtschaft" };
     document.getElementById("hofListe").innerHTML = hof.slice(0, 5).map((e, i) => `
       <div class="hofzeile">
         <span class="hofplatz p${i + 1}">${i + 1}</span>

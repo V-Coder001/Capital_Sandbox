@@ -1299,7 +1299,11 @@ let SAISON_RENNEN = 5;
  * "plan": Planwirtschaft im DDR-Stil — kein Vermögensziel, sondern Plansolls
  * vom Planbüro. Spieler liefern Waren zu festen Ankaufspreisen ab und sammeln
  * Planpunkte; nach fünf Planphasen (oder beim Punkteziel) gewinnt der
- * "Held der Arbeit". Der Host wählt den Modus im Warteraum. */
+ * "Held der Arbeit".
+ * "kartell": Kartellwirtschaft — dasselbe Vermögensziel wie im Sandkasten, aber
+ * Spieler dürfen sich zu Kartellen zusammenschließen und den Markt unter sich
+ * ausmachen, solange das Kartellamt ihnen nichts nachweisen kann.
+ * Der Host wählt den Modus im Warteraum. */
 let MODE = "sandbox";
 const PLAN_PHASEN = 5;
 const PLAN_DAUER = 8 * 60;      // Sekunden je Planphase
@@ -1670,6 +1674,7 @@ const G = {
   firmHist: {},         // pid  -> Firmenwert-Verlauf, gleiche Taktung
   chat: Object.fromEntries(ROOMS.map(r => [r, []])),
   contracts: [],        // {id, fromId, toId, good, qty, price, status}
+  cartels: [],          // Kartellmodus: {id, name, kopfId, mitglieder[], einladungen[], verdacht, gegruendet}
   tick: 0, winner: null, report: null,
   /* Warteraum: die Runde läuft erst, wenn der Host sie startet — bis dahin
    * sammeln sich die Mitspieler, ohne dass Produktion oder Bots anlaufen. */
@@ -2281,6 +2286,68 @@ function planPhaseAuswerten() {
   io.emit("notice", { text: `Planphase ${G.plan.phase} abgeschlossen — Punkte vergeben, die Solls werden angepasst (Basiseffekt).` });
 }
 
+/* ---------- Kartellmodus ----------
+ * Das Gegenstück zur Planwirtschaft: Nicht der Staat lenkt den Markt, sondern
+ * die Firmen tun es unter sich. Mehrere Spieler schließen sich zu einem Kartell
+ * zusammen, sprechen Preise ab und teilen den Markt auf — solange das
+ * Kartellamt ihnen nichts nachweisen kann.
+ *
+ * Diese erste Stufe legt nur das Fundament: gründen, einladen, beitreten,
+ * verlassen. Preisabsprache, Verdacht/Ermittlung und Kronzeugenregelung setzen
+ * darauf auf.
+ *
+ * Bewusste Entscheidungen:
+ * - MEHRERE Kartelle je Runde. Ein einziges wäre entweder eine
+ *   Zwangsgemeinschaft aller oder ein Zweiklassenspiel; konkurrierende Kartelle
+ *   halten den Markt in Bewegung.
+ * - Der Verdachtswert geht NUR an Mitglieder (privateState, nicht snapshot).
+ *   Von außen sieht man, DASS es ein Kartell gibt, aber nicht, wie dicht das
+ *   Kartellamt ihm schon auf den Fersen ist — sonst wüsste jeder Außenstehende
+ *   genau, wann sich das Zuschlagen lohnt.
+ * - Die Mitgliedschaft steht AUSSCHLIESSLICH im Kartell (k.mitglieder), nicht
+ *   zusätzlich am Spieler. Zwei Listen, die dasselbe wissen müssten, laufen
+ *   früher oder später auseinander — bei Austritt, Auflösung oder wenn ein
+ *   Spieler endgültig aus der Sitzung fliegt. */
+const KARTELL_MAX = 4;          // Mitglieder je Kartell — sind alle drin, richtet es sich gegen niemanden
+const KARTELL_NAME_MAX = 28;
+
+const kartellVon = p => G.cartels.find(k => k.mitglieder.includes(p.id)) || null;
+const kartellFinden = kid => G.cartels.find(k => k.id === kid) || null;
+
+/* Ein Kartell ohne Mitglieder ist eine Karteileiche — es hielte sonst seinen
+ * Namen und (später) seine Absprachen bis zum Rundenende besetzt. */
+function kartellAufloesen(k, grund) {
+  const i = G.cartels.indexOf(k);
+  if (i >= 0) G.cartels.splice(i, 1);
+  if (grund) io.emit("notice", { text: `Kartell „${k.name}“ ${grund}.` });
+}
+
+/* Austritt an EINER Stelle, damit jeder Weg hinaus dieselbe Aufräumarbeit
+ * macht: freiwillig, oder weil jemand endgültig aus der Sitzung geflogen ist.
+ * Verlässt der Kopf das Kartell, rückt das dienstälteste verbliebene Mitglied
+ * nach — sonst hinge das Kartell führungslos fest, genau wie früher der
+ * Warteraum, wenn der Host ging. */
+function kartellVerlassen(p) {
+  const k = kartellVon(p);
+  if (!k) return null;
+  k.mitglieder = k.mitglieder.filter(mid => mid !== p.id);
+  if (!k.mitglieder.length) { kartellAufloesen(k, "hat sich aufgelöst"); return k; }
+  if (k.kopfId === p.id) {
+    k.kopfId = k.mitglieder[0];
+    io.emit("notice", { text: `${G.players[k.kopfId]?.name ?? "—"} führt jetzt das Kartell „${k.name}“.` });
+  }
+  return k;
+}
+
+/* Öffentliche Sicht: Name, Kopf und Mitglieder eines Kartells sind bekannt —
+ * ein Kartell, von dem niemand weiß, könnte man auch nicht bekämpfen. Was NICHT
+ * hier steht: der Verdachtswert und die internen Absprachen. */
+const kartellPublic = k => ({
+  id: k.id, name: k.name, kopfId: k.kopfId,
+  mitglieder: k.mitglieder.map(mid => ({ id: mid, name: G.players[mid]?.name ?? "—" })),
+  gegruendet: k.gegruendet,
+});
+
 function logTx(p, cat, text, amt) {
   p.tx.unshift({ t: G.tick, cat, text, amt: Math.round(amt * 100) / 100 });
   if (p.tx.length > 60) p.tx.pop();
@@ -2304,6 +2371,9 @@ function snapshot() {
     tutorialEnde: !!G.tutorialEnde,
     started: G.started, hostId: G.hostId,
     mode: MODE, plan: MODE === "plan" ? G.plan : null,
+    /* Wer mit wem gemeinsame Sache macht, ist öffentlich; wie heiß es dem
+     * Kartell unter den Füßen wird, erfahren nur seine Mitglieder (privateState). */
+    cartels: MODE === "kartell" ? G.cartels.map(kartellPublic) : null,
     hof: HOF,
     routes: MAP_ROUTES,
     lobby: G.started ? null : { winGoal: WIN_NW, bots: botAuswahl, botLevel: botLevelKey, mode: MODE, saison: SAISON_RENNEN, saisonWahl: SAISON_CHOICES },
@@ -2392,7 +2462,16 @@ function privateState(p) {
       blockPrice: blockPrice(other), value: blockPrice(other) * other.equity[p.id],
       einstand: Math.round((p.equityAvg[other.id] || 0) * other.equity[p.id]),
       marketValue: Math.round(companyValue(other)), rev10: Math.round(rev10(other)) }));
+  /* Kartell-Innensicht: der Verdachtswert und die offenen Einladungen gehen
+   * ausschließlich an Mitglieder — und die eigenen offenen Einladungen an den,
+   * der sie bekommen hat. Beides hat im öffentlichen Snapshot nichts verloren. */
+  const eigenesKartell = MODE === "kartell" ? kartellVon(p) : null;
   return { cash: p.cash, inv: p.inv, xp: p.xp, lvl: p.lvl,
+    kartell: eigenesKartell ? { ...kartellPublic(eigenesKartell),
+      verdacht: Math.round(eigenesKartell.verdacht),
+      einladungen: eigenesKartell.einladungen.map(mid => ({ id: mid, name: G.players[mid]?.name ?? "—" })) } : null,
+    kartellEinladungen: MODE === "kartell" && !eigenesKartell
+      ? G.cartels.filter(k => k.einladungen.includes(p.id)).map(kartellPublic) : [],
     quests: p.quests,
     tx: p.tx, sales: p.sales, fin: p.fin, nwHist: p.nwHist,
     fans: Math.round(p.fans || 0), fanHubs: fanHubs(p).length,
@@ -2617,7 +2696,7 @@ io.on("connection", socket => {
     const pid = G.socketToPid[socket.id];
     if (!pid || pid !== G.hostId) return ack?.({ error: "Das darf nur der Host" });
     if (G.started) return ack?.({ error: "Die Runde läuft schon" });
-    if (["sandbox", "plan", "einsteiger", "renntag"].includes(mode)) MODE = mode;
+    if (["sandbox", "plan", "einsteiger", "renntag", "kartell"].includes(mode)) MODE = mode;
     if (WIN_CHOICES.includes(+winGoal)) WIN_NW = +winGoal;
     if (SAISON_CHOICES.includes(+saison)) SAISON_RENNEN = +saison;
     if (bots && typeof bots === "object") botAuswahl = bots;
@@ -2808,6 +2887,88 @@ io.on("connection", socket => {
       kaderEintrag(p, G.plan.spieler[p.id] ??= { punkte: 0 });
       kaderEintrag(anbieter, G.plan.spieler[anbieter.id] ??= { punkte: 0 });
     }
+    ack?.({ ok: true });
+  }));
+
+  /* --- Kartellmodus: gründen, einladen, beitreten, verlassen ---
+   * Beitritt ausschließlich auf Einladung. Ein Kartell, dem man ungefragt
+   * beitreten könnte, wäre kein Kartell, sondern ein Marktplatz — und ein
+   * Konkurrent könnte sich hineinsetzen, nur um die Absprachen mitzulesen. */
+  const kartellModus = ack => {
+    if (MODE !== "kartell") { ack?.({ error: "Kartelle gibt es nur in der Kartellwirtschaft" }); return false; }
+    if (!G.started) { ack?.({ error: "Erst wenn die Runde läuft" }); return false; }
+    return true;
+  };
+
+  socket.on("kartellGruenden", guard((p, { name }, ack) => {
+    if (!kartellModus(ack)) return;
+    if (kartellVon(p)) return ack?.({ error: "Du bist schon in einem Kartell" });
+    name = String(name || "").trim().slice(0, KARTELL_NAME_MAX);
+    if (name.length < 3) return ack?.({ error: "Name zu kurz (mindestens 3 Zeichen)" });
+    if (G.cartels.some(k => k.name.toLowerCase() === name.toLowerCase()))
+      return ack?.({ error: "Diesen Namen gibt es schon" });
+    const k = { id: id(), name, kopfId: p.id, mitglieder: [p.id], einladungen: [],
+      verdacht: 0, gegruendet: G.tick };
+    G.cartels.push(k);
+    logTx(p, "Kartell", `Kartell „${name}“ gegründet`, 0);
+    /* Die Gründung ist öffentlich: Ein Zusammenschluss lässt sich nicht
+     * verbergen, nur das, was drinnen besprochen wird. */
+    io.emit("notice", { text: `${p.name} gründet das Kartell „${name}“.` });
+    ack?.({ ok: true, kartellId: k.id });
+  }));
+
+  socket.on("kartellEinladen", guard((p, { toId }, ack) => {
+    if (!kartellModus(ack)) return;
+    const k = kartellVon(p);
+    if (!k) return ack?.({ error: "Du bist in keinem Kartell" });
+    if (k.kopfId !== p.id) return ack?.({ error: "Nur der Kopf des Kartells lädt ein" });
+    const ziel = G.players[toId];
+    if (!ziel || ziel.id === p.id) return ack?.({ error: "Unbekannter Spieler" });
+    if (k.mitglieder.length >= KARTELL_MAX) return ack?.({ error: `Höchstens ${KARTELL_MAX} Mitglieder` });
+    if (kartellVon(ziel)) return ack?.({ error: `${ziel.name} ist schon in einem Kartell` });
+    if (k.einladungen.includes(ziel.id)) return ack?.({ error: "Einladung läuft bereits" });
+    k.einladungen.push(ziel.id);
+    /* Die Einladung geht privat raus — wer sie bekommt, soll selbst entscheiden
+     * können, ohne dass der Rest der Stadt zusieht. */
+    emitTo(ziel.id, "notice", { text: `${p.name} lädt dich ins Kartell „${k.name}“ ein.` });
+    ack?.({ ok: true });
+  }));
+
+  socket.on("kartellBeitreten", guard((p, { kartellId }, ack) => {
+    if (!kartellModus(ack)) return;
+    if (kartellVon(p)) return ack?.({ error: "Du bist schon in einem Kartell" });
+    const k = kartellFinden(kartellId);
+    if (!k) return ack?.({ error: "Kartell gibt es nicht mehr" });
+    if (!k.einladungen.includes(p.id)) return ack?.({ error: "Ohne Einladung geht das nicht" });
+    /* Zwischen Einladung und Beitritt kann das Kartell vollgelaufen sein — die
+     * Einladung allein garantiert keinen Platz. */
+    if (k.mitglieder.length >= KARTELL_MAX) {
+      k.einladungen = k.einladungen.filter(mid => mid !== p.id);
+      return ack?.({ error: "Das Kartell ist inzwischen voll" });
+    }
+    k.einladungen = k.einladungen.filter(mid => mid !== p.id);
+    k.mitglieder.push(p.id);
+    logTx(p, "Kartell", `Kartell „${k.name}“ beigetreten`, 0);
+    io.emit("notice", { text: `${p.name} gehört jetzt zum Kartell „${k.name}“.` });
+    ack?.({ ok: true });
+  }));
+
+  socket.on("kartellAblehnen", guard((p, { kartellId }, ack) => {
+    if (!kartellModus(ack)) return;
+    const k = kartellFinden(kartellId);
+    if (!k) return ack?.({ ok: true });          // schon weg — für den Ablehnenden dasselbe Ergebnis
+    k.einladungen = k.einladungen.filter(mid => mid !== p.id);
+    emitTo(k.kopfId, "notice", { text: `${p.name} lehnt die Einladung ins Kartell „${k.name}“ ab.` });
+    ack?.({ ok: true });
+  }));
+
+  socket.on("kartellVerlassen", guard((p, _payload, ack) => {
+    if (!kartellModus(ack)) return;
+    const k = kartellVon(p);
+    if (!k) return ack?.({ error: "Du bist in keinem Kartell" });
+    kartellVerlassen(p);
+    logTx(p, "Kartell", `Kartell „${k.name}“ verlassen`, 0);
+    io.emit("notice", { text: `${p.name} verlässt das Kartell „${k.name}“.` });
     ack?.({ ok: true });
   }));
 
@@ -4013,6 +4174,11 @@ function runTick() {
       for (const a of G.auctions) {
         if (a.bestBidder === pid) { a.bestBidder = null; a.bestBid = 0; }
       }
+      /* Kartellmitgliedschaft und offene Einladungen mitnehmen — sonst stünde
+       * ein Geist auf der Mitgliederliste, und ein Kartell, dessen Kopf gegangen
+       * ist, könnte niemanden mehr einladen. */
+      kartellVerlassen(p);
+      for (const k of G.cartels) k.einladungen = k.einladungen.filter(mid => mid !== pid);
       delete G.players[pid];
       io.emit("notice", { text: `${p.name} hat die Sitzung endgültig verlassen.` });
     }
