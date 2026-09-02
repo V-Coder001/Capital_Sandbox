@@ -2348,6 +2348,47 @@ const kartellPublic = k => ({
   gegruendet: k.gegruendet,
 });
 
+/* ---------- Preisabsprache ----------
+ * Der Kern des Modus: Das Kartell legt Mindestpreise fest, unter denen kein
+ * Mitglied verkaufen darf. Der Gewinn entsteht nicht durch eine Prämie vom
+ * Server, sondern dadurch, dass mehrere Anbieter gleichzeitig aufhören, sich
+ * gegenseitig zu unterbieten — genau wie im Echten.
+ *
+ * Die Absprache gilt für JEDEN Weg, auf dem Ware gegen Geld das Lager verlässt:
+ * Börsenorder, Direktvertrag und Ladenpreis. Bliebe auch nur einer davon offen,
+ * wäre die Absprache in zehn Sekunden umgangen — und zwar von dem Mitglied, das
+ * als Erstes darauf kommt. Der Laden zählt ausdrücklich mit: Wer dort billig
+ * abgibt, verkauft zwar an die Stadt, drückt über noteSold aber den
+ * Durchschnittspreis, an dem die Absprache der anderen hängt.
+ *
+ * Geprüft wird ausschließlich die VERKAUFSseite. Ein Nachfragekartell, das
+ * Höchsteinkaufspreise durchsetzt, wäre ein eigenes System mit eigener
+ * Verdachtslogik — nicht dieselbe Regel mit umgedrehtem Vergleich. */
+const kartellMindestpreis = (p, good) => {
+  const k = MODE === "kartell" ? kartellVon(p) : null;
+  return k?.minPreise?.[good] ?? null;
+};
+/* Gibt den Ablehnungstext zurück, sonst null. Text statt Boolean, damit an
+ * jeder der vier Aufrufstellen dieselbe Begründung ankommt. */
+function kartellPreisVerstoss(p, good, preis) {
+  const min = kartellMindestpreis(p, good);
+  if (min == null || preis >= min) return null;
+  return `Kartellabsprache: ${GOODS[good].name} nicht unter ${min} $ verkaufen`;
+}
+/* Eine neue Absprache zieht laufende Ladenpreise mit hoch. Ohne das könnte man
+ * erst billige Verkaufsslots einrichten und danach dem Kartell beitreten — die
+ * Absprache bände dann nur noch künftige Entscheidungen und wäre wertlos. */
+function kartellLaedenAngleichen(k, good, min) {
+  let angehoben = 0;
+  for (const t of G.map) {
+    if (!t.btype || !k.mitglieder.includes(t.owner) || !t.shop) continue;
+    for (const slot of t.shop) {
+      if (slot?.good === good && slot.price < min) { slot.price = min; angehoben++; }
+    }
+  }
+  return angehoben;
+}
+
 function logTx(p, cat, text, amt) {
   p.tx.unshift({ t: G.tick, cat, text, amt: Math.round(amt * 100) / 100 });
   if (p.tx.length > 60) p.tx.pop();
@@ -2469,6 +2510,7 @@ function privateState(p) {
   return { cash: p.cash, inv: p.inv, xp: p.xp, lvl: p.lvl,
     kartell: eigenesKartell ? { ...kartellPublic(eigenesKartell),
       verdacht: Math.round(eigenesKartell.verdacht),
+      minPreise: eigenesKartell.minPreise,
       einladungen: eigenesKartell.einladungen.map(mid => ({ id: mid, name: G.players[mid]?.name ?? "—" })) } : null,
     kartellEinladungen: MODE === "kartell" && !eigenesKartell
       ? G.cartels.filter(k => k.einladungen.includes(p.id)).map(kartellPublic) : [],
@@ -2908,7 +2950,7 @@ io.on("connection", socket => {
     if (G.cartels.some(k => k.name.toLowerCase() === name.toLowerCase()))
       return ack?.({ error: "Diesen Namen gibt es schon" });
     const k = { id: id(), name, kopfId: p.id, mitglieder: [p.id], einladungen: [],
-      verdacht: 0, gegruendet: G.tick };
+      minPreise: {}, verdacht: 0, gegruendet: G.tick };
     G.cartels.push(k);
     logTx(p, "Kartell", `Kartell „${name}“ gegründet`, 0);
     /* Die Gründung ist öffentlich: Ein Zusammenschluss lässt sich nicht
@@ -2969,6 +3011,44 @@ io.on("connection", socket => {
     kartellVerlassen(p);
     logTx(p, "Kartell", `Kartell „${k.name}“ verlassen`, 0);
     io.emit("notice", { text: `${p.name} verlässt das Kartell „${k.name}“.` });
+    ack?.({ ok: true });
+  }));
+
+  /* --- Kartellmodus: Preisabsprache ---
+   * Wie beim Einladen entscheidet der Kopf. Eine Abstimmung unter Mitgliedern
+   * klänge demokratischer, brächte aber nur eine Warteschlange offener
+   * Vorschläge — die Spannung des Modus liegt nicht in der Beschlussfassung,
+   * sondern darin, ob sich alle daran halten. */
+  socket.on("kartellPreisSetzen", guard((p, { good, price }, ack) => {
+    if (!kartellModus(ack)) return;
+    const k = kartellVon(p);
+    if (!k) return ack?.({ error: "Du bist in keinem Kartell" });
+    if (k.kopfId !== p.id) return ack?.({ error: "Nur der Kopf des Kartells legt Preise fest" });
+    if (!GOODS[good]) return ack?.({ error: "Unbekannte Ware" });
+    price = Math.round(+price * 100) / 100;
+    if (!(price > 0) || !Number.isFinite(price)) return ack?.({ error: "Preis > 0 nötig" });
+    k.minPreise[good] = price;
+    const angehoben = kartellLaedenAngleichen(k, good, price);
+    /* Die Absprache bleibt unter den Mitgliedern — nach außen sieht man nur die
+     * Preise, die sich daraus ergeben, nicht die Abmachung selbst. */
+    for (const mid of k.mitglieder) {
+      emitTo(mid, "notice", { text: `Kartellabsprache: ${GOODS[good].name} ab sofort nicht unter ${price} $` +
+        (angehoben ? ` — ${angehoben} Ladenpreis${angehoben === 1 ? "" : "e"} angehoben.` : ".") });
+    }
+    logTx(p, "Kartell", `Mindestpreis ${GOODS[good].name}: ${price} $`, 0);
+    ack?.({ ok: true });
+  }));
+
+  socket.on("kartellPreisAufheben", guard((p, { good }, ack) => {
+    if (!kartellModus(ack)) return;
+    const k = kartellVon(p);
+    if (!k) return ack?.({ error: "Du bist in keinem Kartell" });
+    if (k.kopfId !== p.id) return ack?.({ error: "Nur der Kopf des Kartells legt Preise fest" });
+    if (k.minPreise[good] == null) return ack?.({ error: "Für diese Ware gibt es keine Absprache" });
+    delete k.minPreise[good];
+    for (const mid of k.mitglieder) {
+      emitTo(mid, "notice", { text: `Kartellabsprache für ${GOODS[good].name} aufgehoben.` });
+    }
     ack?.({ ok: true });
   }));
 
@@ -3396,6 +3476,10 @@ io.on("connection", socket => {
     if (!(qty > 0) || !(price > 0)) return ack?.({ error: "Menge/Preis > 0 nötig" });
     if (side === "sell" && p.inv[good] < qty) return ack?.({ error: "Nicht genug Ware im Lager" });
     if (side === "buy" && p.cash < qty * price) return ack?.({ error: "Zu wenig Kapital" });
+    if (side === "sell") {
+      const verstoss = kartellPreisVerstoss(p, good, price);
+      if (verstoss) return ack?.({ error: verstoss });
+    }
     const order = { id: id(), side, good, qty, price, playerId: p.id, player: p.name, ts: Date.now() };
     escrowForOrder(p, order);
     questProg(p, "order");
@@ -3423,6 +3507,10 @@ io.on("connection", socket => {
       settleTrade(o.good, qty, o.price, p.id, o.playerId);
     } else {
       if (p.inv[o.good] < qty) return ack?.({ error: "Nicht genug Ware" });
+      /* Hier verkauft man in eine fremde Kaufofferte hinein — der Preis kommt
+       * von der Gegenseite, unterschreitet die eigene Absprache aber genauso. */
+      const verstoss = kartellPreisVerstoss(p, o.good, o.price);
+      if (verstoss) return ack?.({ error: verstoss });
       p.inv[o.good] -= qty;
       settleTrade(o.good, qty, o.price, o.playerId, p.id);
     }
@@ -3442,6 +3530,11 @@ io.on("connection", socket => {
     price = Math.round(+price * 100) / 100;
     if (!bt.retail.goods.includes(good)) return ack?.({ error: "Ware hier nicht verkäuflich" });
     if (!(price > 0)) return ack?.({ error: "Preis > 0 nötig" });
+    /* Der Laden verkauft an die Stadt, nicht an Mitspieler — die Absprache gilt
+     * hier trotzdem: Billig abgeben drückt über noteSold den Durchschnittspreis,
+     * an dem die Absprache der anderen Mitglieder hängt. */
+    const verstoss = kartellPreisVerstoss(p, good, price);
+    if (verstoss) return ack?.({ error: verstoss });
     qty = Math.floor(+qty);
     if (qty <= 0 || !Number.isFinite(qty)) qty = null;   // leer = unbegrenzt verkaufen
     t.shop[slot] = { good, price, qty };
@@ -3771,6 +3864,10 @@ io.on("connection", socket => {
     qty = Math.floor(+qty); price = +price;
     if (!to || toId === p.id || !GOODS[good] || !(qty > 0) || !(price > 0)) return ack?.({ error: "Ungültig" });
     if (p.inv[good] < qty) return ack?.({ error: "Nicht genug Ware für dieses Angebot" });
+    /* Der Direktvertrag geht an der Börse vorbei — die Absprache gilt trotzdem,
+     * sonst wäre er der bequemste Weg, sie zu unterlaufen. */
+    const verstoss = kartellPreisVerstoss(p, good, price);
+    if (verstoss) return ack?.({ error: verstoss });
     const c = { id: id(), fromId: p.id, from: p.name, toId, good, qty, price, status: "open", ttl: CONTRACT_TTL };
     G.contracts.push(c);
     emitTo(toId, "contractOffer", c);
