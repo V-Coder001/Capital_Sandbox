@@ -1473,6 +1473,20 @@ td:first-child{font-family:var(--font)}
   </div>
 </div>
 
+<!-- Kartell (nur im Kartellmodus). Drei Zustände in einem Panel: kein Kartell
+     (gründen + wer sich sonst zusammengetan hat), Einladung offen (annehmen
+     oder ablehnen), Mitglied (Absprachen, Verdacht, Mitglieder). -->
+<div class="panel" id="p-kartell">
+  <div class="phead"><h2>Kartell</h2><button class="x" data-close>✕</button></div>
+  <div class="pbody">
+    <div id="kartellInhalt"></div>
+    <div class="joinbox" style="margin-top:12px">
+      <div class="lbl">Kartelle in der Stadt</div>
+      <div id="kartellFremde">—</div>
+    </div>
+  </div>
+</div>
+
 <!-- Schwarzmarkt-Baracke (Planwirtschaft): steht auf der Karte, wo sonst die
      Stadtbank ist — das Panel öffnet sich per Klick aufs Gebäude. -->
 <div class="panel" id="p-schwarz">
@@ -4550,7 +4564,12 @@ function clickTile(e) {
                     "siliziummine", "chipfabrik", "ewerk", "windpark", "werbeagentur"],
   };
   const rolleErlaubt = RENNTAG_BAUTEN[store.get().state?.players?.[store.get().myId]?.industry] || [];
-  const opts = Object.entries(BTYPES()).filter(([bid, b]) => b.zone === t.zone && (
+  /* In der Kartellwirtschaft gibt es keine Renntage — der Rennstall fliegt hier
+   * ganz aus dem Menü, statt gesperrt dazustehen. Ein Knopf, dessen Sperre man
+   * nie aufheben kann, erklärt nichts; er sieht nur nach einem Ziel aus. */
+  const kartellModus = store.get().state?.mode === "kartell";
+  const opts = Object.entries(BTYPES()).filter(([bid, b]) => b.zone === t.zone
+    && !(kartellModus && b.racing) && (
     store.get().state?.mode === "renntag"
       ? rolleErlaubt.includes(bid)
       : (!b.industry || myInds.includes(b.industry))));
@@ -4679,12 +4698,14 @@ addEventListener("keydown", e => {
 });
 
 /* ---- Dock & Panels ---- */
-const DOCK = [["karte","Karte"],["plan","Planbüro"],["lager","Lager"],["boerse","Börse"],["bonds","Finanzen"],["firma","Firma"],["motorsport","Motorsport"],["lexikon","Lexikon"],["chat","Chat"]];
+const DOCK = [["karte","Karte"],["plan","Planbüro"],["kartell","Kartell"],["lager","Lager"],["boerse","Börse"],["bonds","Finanzen"],["firma","Firma"],["motorsport","Motorsport"],["lexikon","Lexikon"],["chat","Chat"]];
 const dock = document.getElementById("dock");
 DOCK.forEach(([pid, label]) => { const b = document.createElement("button");
   b.className = "dockbtn"; b.dataset.p = pid; b.textContent = label;
   /* Das Planbüro gibt es nur im Planwirtschafts-Modus — render() blendet es ein. */
   if (pid === "plan") { b.id = "dockPlan"; b.style.display = "none"; }
+  /* Dasselbe für das Kartell: nur in der Kartellwirtschaft. */
+  if (pid === "kartell") { b.id = "dockKartell"; b.style.display = "none"; }
   /* Motorsport erscheint erst mit dem ersten eigenen Rennstall — vorher wäre
    * es ein Knopf, hinter dem nichts steht. */
   if (pid === "motorsport") { b.id = "dockMotor"; b.style.display = "none"; }
@@ -6391,6 +6412,158 @@ document.getElementById("p-plan").addEventListener("click", e => {
   if (!b) return;
   act("planDeliver", { good: b.dataset.plandeliver });
 });
+
+/* ---------- Kartell (Kartellmodus) ----------
+ * Ein Panel, drei Zustände — kein Kartell, Einladung offen, Mitglied. Getrennte
+ * Panels dafür wären dreimal dieselbe Mitgliederliste; der Zustand wechselt hier
+ * ohnehin höchstens zweimal pro Runde.
+ *
+ * Der Verdachtsbalken steht bewusst NUR hier drin und nicht in der Kopfzeile:
+ * Er kommt aus dem privaten Zustand, und ein Mitspieler, der einem über die
+ * Schulter schaut, soll ihn nicht nebenbei mitlesen. */
+function kartellRendern(state, me, myId) {
+  const knopf = document.getElementById("dockKartell");
+  const aktiv = state.mode === "kartell";
+  if (knopf) knopf.style.display = aktiv ? "" : "none";
+  if (!aktiv) return;
+  const k = me.kartell;
+  const inhalt = document.getElementById("kartellInhalt");
+  /* Nicht neu zeichnen, während jemand in einem Feld tippt — sonst wäre der
+   * Kartellname nach dem ersten Buchstaben wieder weg (1×/s State-Push). */
+  if (inhalt.contains(document.activeElement) &&
+      /INPUT|SELECT/.test(document.activeElement.tagName)) return;
+  /* Spieler- und Kartellnamen kommen bereits vom Server entschärft (sicherText)
+   * und werden hier deshalb unverändert eingesetzt. Kein rohText(): das dekodiert
+   * die Entitäten wieder und machte aus der Absicherung ein Einfallstor. */
+
+  if (k) {
+    const binKopf = k.kopfId === myId;
+    const absprachen = Object.entries(k.minPreise || {});
+    const warenOpts = Object.keys(GOODS()).map(g => `<option value="${g}">${gname(g)}</option>`).join("");
+    /* Wen man noch einladen kann: alle, die weder im eigenen Kartell sind noch
+     * schon eingeladen wurden. Ob jemand in einem FREMDEN Kartell sitzt, weiß
+     * der Client aus state.cartels — das ist öffentlich. */
+    const drin = new Set((state.cartels || []).flatMap(c => c.mitglieder.map(m => m.id)));
+    const eingeladen = new Set((k.einladungen || []).map(e => e.id));
+    const frei = Object.values(state.players)
+      .filter(p => p.id !== myId && !drin.has(p.id) && !eingeladen.has(p.id));
+    inhalt.innerHTML = `
+      <div class="joinbox" style="margin-bottom:12px">
+        <div class="lbl">Dein Kartell</div>
+        <div style="font-size:15px;font-weight:600;margin-bottom:8px">${k.name}</div>
+        ${k.mitglieder.map(m => `<div style="display:flex;gap:9px;align-items:center;margin:5px 0">
+          <span style="width:10px;height:10px;border-radius:3px;background:${state.players[m.id]?.color || "#666"}"></span>
+          <span style="flex:1">${m.name}${m.id === k.kopfId ? ` <span class="meta">· Kopf</span>` : ""}${m.id === myId ? ` <span class="meta">· du</span>` : ""}</span>
+        </div>`).join("")}
+        ${(k.einladungen || []).length ? `<div class="note" style="margin-top:7px">Eingeladen, noch nicht entschieden: ${k.einladungen.map(e => e.name).join(", ")}</div>` : ""}
+        <div style="margin-top:10px">
+          <div style="display:flex;justify-content:space-between;font-size:12px">
+            <span>Verdacht des Kartellamts</span><span class="meta">${k.verdacht} %</span></div>
+          <div style="height:6px;background:#0b1220;border-radius:4px;overflow:hidden;margin-top:4px">
+            <div style="width:${Math.min(100, k.verdacht)}%;height:100%;background:${k.verdacht >= 66 ? "#fb7185" : k.verdacht >= 33 ? "#fbbf24" : "#34d399"}"></div></div>
+          <div class="note" style="margin-top:3px">Nur ihr seht diesen Wert — von außen ist er nicht ablesbar.</div>
+        </div>
+      </div>
+      <div class="joinbox" style="margin-bottom:12px">
+        <div class="lbl">Preisabsprachen</div>
+        <p class="note" style="margin:0 0 8px">Unter diesen Preisen verkauft kein Mitglied — weder an der
+          Börse noch per Direktvertrag noch im eigenen Laden.</p>
+        ${absprachen.length ? absprachen.map(([g, preis]) => `
+          <div style="display:flex;gap:9px;align-items:center;margin:5px 0">
+            <span style="flex:1">${gname(g)}</span>
+            <b>${preis} $</b>
+            ${binKopf ? `<button class="mini" data-kartellpreisweg="${g}">Aufheben</button>` : ""}
+          </div>`).join("") : `<p class="note">Noch keine Absprache — jeder verkauft, wie er will.</p>`}
+        ${binKopf ? `<div class="formrow" style="margin-top:9px">
+          <select id="kartellGood">${warenOpts}</select>
+          <input id="kartellPreis" type="number" min="0" step="0.01" placeholder="Mindestpreis" style="width:110px">
+          <button class="buyb" id="kartellPreisBtn">Festlegen</button>
+        </div>
+        <p id="kartellPreisStatus" class="note" style="margin:6px 0 0"></p>`
+        : `<p class="note" style="margin-top:8px">Absprachen ändert nur der Kopf des Kartells.</p>`}
+      </div>
+      ${binKopf ? `<div class="joinbox" style="margin-bottom:12px">
+        <div class="lbl">Einladen</div>
+        ${frei.length ? `<div class="formrow">
+          <select id="kartellZiel">${frei.map(p => `<option value="${p.id}">${p.name}</option>`).join("")}</select>
+          <button class="buyb" id="kartellEinladenBtn">Einladen</button>
+        </div><p id="kartellEinladenStatus" class="note" style="margin:6px 0 0"></p>`
+        : `<p class="note">Niemand mehr frei — alle sind schon in einem Kartell oder eingeladen.</p>`}
+      </div>` : ""}
+      <button class="mini" id="kartellRaus">Kartell verlassen</button>`;
+    return;
+  }
+
+  const offene = me.kartellEinladungen || [];
+  inhalt.innerHTML = `
+    ${offene.length ? `<div class="joinbox" style="margin-bottom:12px">
+      <div class="lbl">Einladungen an dich</div>
+      ${offene.map(e => `<div style="display:flex;gap:9px;align-items:center;margin:6px 0">
+        <span style="flex:1">${e.name} <span class="meta">· ${e.mitglieder.map(m => m.name).join(", ")}</span></span>
+        <button class="buyb" data-kartellja="${e.id}">Beitreten</button>
+        <button class="mini" data-kartellnein="${e.id}">Ablehnen</button>
+      </div>`).join("")}
+    </div>` : ""}
+    <div class="joinbox">
+      <div class="lbl">Eigenes Kartell gründen</div>
+      <p class="note" style="margin:0 0 8px">Bis zu vier Firmen sprechen Mindestpreise ab und hören auf,
+        sich gegenseitig zu unterbieten. Wer beitritt, entscheidest du — aber jedes Mitglied kann
+        jederzeit wieder gehen.</p>
+      <div class="formrow">
+        <input id="kartellName" maxlength="28" placeholder="Name des Kartells" style="flex:1">
+        <button class="buyb" id="kartellGruendenBtn">Gründen</button>
+      </div>
+      <p id="kartellGruendenStatus" class="note" style="margin:6px 0 0"></p>
+    </div>`;
+}
+/* Die fremden Kartelle stehen außerhalb von kartellInhalt, damit sie auch
+ * sichtbar bleiben, während man im eigenen Panel gerade tippt. */
+function kartellFremdeRendern(state, myId) {
+  if (state.mode !== "kartell") return;
+  const meins = (state.cartels || []).find(c => c.mitglieder.some(m => m.id === myId));
+  const fremde = (state.cartels || []).filter(c => c !== meins);
+  document.getElementById("kartellFremde").innerHTML = fremde.length ? fremde.map(c =>
+    `<div style="margin:6px 0">
+      <div style="font-weight:600">${c.name}</div>
+      <div class="meta">${c.mitglieder.map(m => m.name).join(", ")}</div>
+    </div>`).join("")
+    : `<p class="note">Sonst hat sich niemand zusammengetan${meins ? "" : " — noch ist der Markt frei"}.</p>`;
+}
+
+document.getElementById("p-kartell").addEventListener("click", e => {
+  const status = t => { const s = document.getElementById(t); return s || { textContent: "" }; };
+  const gruenden = e.target.closest("#kartellGruendenBtn");
+  if (gruenden) {
+    const name = document.getElementById("kartellName").value.trim();
+    return socket.emit("kartellGruenden", { name }, res => {
+      status("kartellGruendenStatus").textContent = res?.error || "";
+    });
+  }
+  const preis = e.target.closest("#kartellPreisBtn");
+  if (preis) {
+    const good = document.getElementById("kartellGood").value;
+    const p = +document.getElementById("kartellPreis").value;
+    if (!(p > 0)) { status("kartellPreisStatus").textContent = "Bitte einen Preis über 0 eingeben."; return; }
+    return socket.emit("kartellPreisSetzen", { good, price: p }, res => {
+      status("kartellPreisStatus").textContent = res?.error || "";
+      if (!res?.error) document.getElementById("kartellPreis").value = "";
+    });
+  }
+  const einladen = e.target.closest("#kartellEinladenBtn");
+  if (einladen) {
+    const toId = document.getElementById("kartellZiel").value;
+    return socket.emit("kartellEinladen", { toId }, res => {
+      status("kartellEinladenStatus").textContent = res?.error || "Einladung ist raus.";
+    });
+  }
+  const weg = e.target.closest("button[data-kartellpreisweg]");
+  if (weg) return act("kartellPreisAufheben", { good: weg.dataset.kartellpreisweg });
+  const ja = e.target.closest("button[data-kartellja]");
+  if (ja) return act("kartellBeitreten", { kartellId: +ja.dataset.kartellja });
+  const nein = e.target.closest("button[data-kartellnein]");
+  if (nein) return act("kartellAblehnen", { kartellId: +nein.dataset.kartellnein });
+  if (e.target.closest("#kartellRaus")) return act("kartellVerlassen", {});
+});
 document.getElementById("p-schwarz").addEventListener("click", e => {
   const acceptBtn = e.target.closest("button[data-smaccept]");
   const cancelBtn = e.target.closest("button[data-smcancel]");
@@ -6432,6 +6605,8 @@ function render({ state, me, myId, chat, room }) {
   tutCheck(state, myId);
   kapitalmarktHinweis(state, myId);
   planRendern(state, myId);
+  kartellRendern(state, me, myId);
+  kartellFremdeRendern(state, myId);
   rennenRendern(state, myId);
   motorsportRendern(state, me, myId);
   /* Tipp-Schutz: Panel nicht neu rendern, während man in einem seiner Felder tippt */

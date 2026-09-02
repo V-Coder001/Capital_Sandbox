@@ -2406,7 +2406,9 @@ function snapshot() {
     tick: G.tick, winner: G.winner, winGoal: WIN_NW, report: G.report || null,
     /* Countdown bis zum naechsten Renntag — ohne ihn sieht man erst bei der
      * Ankuendigung, dass etwas ansteht, und kann nichts vorbereiten. */
-    naechstesRennen: G.rennen ? null : G.naechstesRennenIn,
+    /* Im Kartellmodus zählt der Countdown gar nicht mehr herunter — ihn trotzdem
+     * zu senden hieße, eine eingefrorene Uhr anzuzeigen. */
+    naechstesRennen: (G.rennen || MODE === "kartell") ? null : G.naechstesRennenIn,
     wm: MODE === "renntag" ? G.wm : null,
     saison: MODE === "renntag" ? { gefahren: G.saisonRennen, gesamt: SAISON_RENNEN } : null,
     tutorialEnde: !!G.tutorialEnde,
@@ -2945,7 +2947,10 @@ io.on("connection", socket => {
   socket.on("kartellGruenden", guard((p, { name }, ack) => {
     if (!kartellModus(ack)) return;
     if (kartellVon(p)) return ack?.({ error: "Du bist schon in einem Kartell" });
-    name = String(name || "").trim().slice(0, KARTELL_NAME_MAX);
+    /* Wie beim Firmennamen: erst kürzen, dann entschärfen. Der Kartellname geht
+     * an alle Clients und landet dort in Mitgliederlisten — ungefiltert wäre er
+     * der direkte Weg, jedem Mitspieler eigenes Markup unterzuschieben. */
+    name = sicherText(String(name || "").trim().slice(0, KARTELL_NAME_MAX));
     if (name.length < 3) return ack?.({ error: "Name zu kurz (mindestens 3 Zeichen)" });
     if (G.cartels.some(k => k.name.toLowerCase() === name.toLowerCase()))
       return ack?.({ error: "Diesen Namen gibt es schon" });
@@ -3087,10 +3092,12 @@ io.on("connection", socket => {
      * diese Grenze wäre "mehr Ställe" die beste Strategie, und der Wettpool
      * gehörte am Ende dem, der am meisten Kacheln hält. */
     if (bt.racing) {
-      /* Planwirtschaft: keine Renntage, kein Wettpool — ein Rennstall wäre
-       * ein totes Gebäude mit laufenden Fahrergehältern. */
+      /* Planwirtschaft und Kartellmodus: keine Renntage, kein Wettpool — ein
+       * Rennstall wäre ein totes Gebäude mit laufenden Fahrergehältern. */
       if (MODE === "plan")
         return ack?.({ error: "In der Planwirtschaft gibt es keinen Motorsport" });
+      if (MODE === "kartell")
+        return ack?.({ error: "In der Kartellwirtschaft gibt es keinen Motorsport — hier zählen die Warenmärkte" });
       const nw = netWorth(p);
       if (MODE !== "renntag" && nw < RACING_UNLOCK_NW)
         return ack?.({ error: `Motorsport öffnet ab ${RACING_UNLOCK_NW.toLocaleString("de-DE")} $ Nettovermögen — dir fehlen noch ${Math.round(RACING_UNLOCK_NW - nw).toLocaleString("de-DE")} $` });
@@ -3939,8 +3946,11 @@ function runTick() {
   G.tick++;
   /* Rundenende: die Bestenliste genau einmal fortschreiben. */
   if (G.winner && !G.hofGespeichert) { G.hofGespeichert = true; hofSpeichern(); }
-  /* --- Renntage (nur Marktwirtschaft) --- */
-  if (MODE !== "plan" && !G.winner) {
+  /* --- Renntage (nicht in Planwirtschaft und Kartellmodus) ---
+   * In der Kartellwirtschaft geht es um Absprachen auf den Warenmärkten. Ein
+   * Renntag mit eigenem Wettpool wäre ein zweites Spiel daneben, das von der
+   * einzigen Frage ablenkt, die den Modus trägt: Hält sich das Kartell? */
+  if (MODE !== "plan" && MODE !== "kartell" && !G.winner) {
     if (!G.rennen) {
       if (--G.naechstesRennenIn <= 0) {
         G.naechstesRennenIn = RENN_INTERVALL;
@@ -4547,7 +4557,7 @@ async function spawnBot(cfg, lvl = BOT_LEVELS[BOT_LEVEL_DEFAULT]) {
       }
       /* --- Motorsport: Bots bestücken ihren Stall, tunen, melden, wetten
        * und sponsern — alles nur, wenn die Kasse es hergibt. --- */
-      if (st.mode !== "plan" && lvl.rennen) {
+      if (st.mode !== "plan" && st.mode !== "kartell" && lvl.rennen) {
         const meinStall = st.map.find(t2 => t2.owner === myId && t2.btype === "rennstall");
         const meineAutos = meinStall?.autos || [];
         if (meinStall) {
@@ -4720,7 +4730,11 @@ async function spawnBot(cfg, lvl = BOT_LEVELS[BOT_LEVEL_DEFAULT]) {
       /* Bots unterliegen derselben Schwelle wie Menschen — sonst stünden im
        * Frühspiel Bot-Ställe herum, während kein Spieler einen bauen darf. */
       const meinNW = st.players[myId]?.netWorth ?? 0;
+      /* Im Kartellmodus lehnt der Server den Rennstall ab — ohne diese Zeile
+       * liefe der Bot bis zum Rundenende gegen dieselbe Absage an, statt das
+       * Geld in Produktion zu stecken. */
       const baueRennstall = !!cfg.rennstall && lvl.rennen && !cfg.planLoop
+        && st.mode !== "kartell"
         && meinNW >= (botMeta?.racingUnlock ?? 200000);
       const gesamtplan = cfg.planLoop ? cfg.plan
         : [...(INDUSTRY_COVERAGE[cfg.industry] || []), ...(baueRennstall ? ["rennstall"] : []), ...cfg.plan];
