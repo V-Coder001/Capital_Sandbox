@@ -6528,7 +6528,19 @@ function kartellRendern(state, me, myId) {
             <span>Verdacht des Kartellamts</span><span class="meta">${k.verdacht} %</span></div>
           <div style="height:6px;background:#0b1220;border-radius:4px;overflow:hidden;margin-top:4px">
             <div style="width:${Math.min(100, k.verdacht)}%;height:100%;background:${k.verdacht >= 66 ? "#fb7185" : k.verdacht >= 33 ? "#fbbf24" : "#34d399"}"></div></div>
-          <div class="note" style="margin-top:3px">Nur ihr seht diesen Wert — von außen ist er nicht ablesbar.</div>
+          <div class="note" style="margin-top:3px">Nur ihr seht diesen Wert — von außen ist er nicht ablesbar.
+            Er steigt, solange mehrere von euch dieselbe Ware sichtbar zum abgesprochenen Preis anbieten,
+            und faellt wieder, sobald die Absprache weg ist.</div>
+          ${k.ermittlung ? `<div style="margin-top:9px;padding:8px 10px;border:1px solid rgba(251,113,133,.5);border-radius:8px;color:#fb7185">
+            <b>Ermittlung laeuft</b> — Bescheid in ${Math.floor(k.ermittlung.rest / 60)}:${String(k.ermittlung.rest % 60).padStart(2, "0")} min.
+            <div class="note" style="color:#fb7185;margin-top:2px">Die ganze Stadt weiss davon. Was ihr bis dahin
+              noch unter der Absprache verdient, erhoeht das Bussgeld.</div>
+          </div>` : ""}
+          <div style="display:flex;justify-content:space-between;margin-top:9px;font-size:12px">
+            <span>Umsatz unter Absprache</span><b>${fp(k.umsatz || 0)}</b></div>
+          <div style="display:flex;justify-content:space-between;font-size:12px">
+            <span class="meta">Bussgeld bei einem Bescheid</span>
+            <b style="color:${(k.risiko || 0) > 0 ? "#fb7185" : "var(--dim)"}">${fp(k.risiko || 0)}</b></div>
         </div>
       </div>
       <div class="joinbox" style="margin-bottom:12px">
@@ -6591,7 +6603,8 @@ function kartellFremdeRendern(state, myId) {
   const fremde = (state.cartels || []).filter(c => c !== meins);
   document.getElementById("kartellFremde").innerHTML = fremde.length ? fremde.map(c =>
     `<div style="margin:6px 0">
-      <div style="font-weight:600">${c.name}</div>
+      <div style="font-weight:600">${c.name}${c.ermittlung
+        ? ` <span style="color:#fb7185;font-weight:600">· Kartellamt ermittelt</span>` : ""}</div>
       <div class="meta">${c.mitglieder.map(m => m.name).join(", ")}</div>
     </div>`).join("")
     : `<p class="note">Sonst hat sich niemand zusammengetan${meins ? "" : " — noch ist der Markt frei"}.</p>`;

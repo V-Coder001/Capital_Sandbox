@@ -1745,7 +1745,7 @@ const G = {
   firmHist: {},         // pid  -> Firmenwert-Verlauf, gleiche Taktung
   chat: Object.fromEntries(ROOMS.map(r => [r, []])),
   contracts: [],        // {id, fromId, toId, good, qty, price, status}
-  cartels: [],          // Kartellmodus: {id, name, kopfId, mitglieder[], einladungen[], verdacht, gegruendet}
+  cartels: [],          // Kartellmodus: {id, name, kopfId, mitglieder[], einladungen[], minPreise, verdacht, ermittlung, umsatz, gegruendet}
   tick: 0, winner: null, report: null,
   /* Warteraum: die Runde läuft erst, wenn der Host sie startet — bis dahin
    * sammeln sich die Mitspieler, ohne dass Produktion oder Bots anlaufen. */
@@ -1933,7 +1933,8 @@ function settleTrade(good, qty, price, buyerId, sellerId) {
     const summe = qty * price;
     if (!seller.stats.besterHandel || summe > seller.stats.besterHandel.summe)
       seller.stats.besterHandel = { good, qty, price, summe, partner: buyer?.name ?? "?" };
-    logTx(seller, "Verkauf", `Verkauf ${qty}× ${gname} an ${buyer?.name ?? "?"}`, qty * price); }
+    logTx(seller, "Verkauf", `Verkauf ${qty}× ${gname} an ${buyer?.name ?? "?"}`, qty * price);
+    kartellUmsatzMerken(seller, good, qty * price); }
   G.lastTrade[good] = price;
   io.emit("trade", { good, qty, price, buyer: buyer?.name, seller: seller?.name });
 }
@@ -2415,6 +2416,10 @@ function kartellVerlassen(p) {
  * hier steht: der Verdachtswert und die internen Absprachen. */
 const kartellPublic = k => ({
   id: k.id, name: k.name, kopfId: k.kopfId,
+  /* Eine laufende Ermittlung ist oeffentlich — genau das ist der Preis des
+   * Auffliegens: Die Konkurrenz kann sich darauf einstellen. Der Verdachtswert
+   * davor bleibt privat. */
+  ermittlung: k.ermittlung ? { rest: k.ermittlung.rest } : null,
   mitglieder: k.mitglieder.map(mid => ({ id: mid, name: G.players[mid]?.name ?? "—" })),
   gegruendet: k.gegruendet,
 });
@@ -2458,6 +2463,140 @@ function kartellLaedenAngleichen(k, good, min) {
     }
   }
   return angehoben;
+}
+
+
+/* ---------- Das Kartellamt ----------
+ * Der Gegenspieler des Modus. Entscheidend ist, WORAUS der Verdacht entsteht:
+ * nicht daraus, DASS ein Kartell besteht — das ist oeffentlich und fuer sich
+ * genommen harmlos —, sondern daraus, dass die Absprache am Markt sichtbar
+ * wirkt. Sonst waere der Verdacht nur ein Zeitgeber, der einen dafuer bestraft,
+ * die Spielmechanik ueberhaupt zu benutzen.
+ *
+ * Das Amt sieht genau das, was jeder sieht: Abschlusspreise, das Orderbuch und
+ * die Ladenpreise auf der Karte. Daraus liest es zwei Dinge:
+ *
+ * 1. GLEICHFOERMIGKEIT — verkaufen mehrere Mitglieder dieselbe Ware zum selben
+ *    Preis, ist das das klassische Kartellzeichen. Ein einzelnes Mitglied, das
+ *    teuer verkauft, ist ein teurer Anbieter; drei, die auf den Cent genau
+ *    gleich anbieten, sind eine Absprache.
+ * 2. HEBUNG — wie weit der abgesprochene Preis ueber dem liegt, was die Ware
+ *    sonst kostet. Ein Mindestpreis UNTER dem Marktpreis faellt niemandem auf,
+ *    weil er nichts veraendert: Er kostet nichts und bringt nichts.
+ *
+ * Daraus folgt das Spiel: Eine Absprache knapp ueber Marktpreis bleibt lange
+ * unentdeckt und traegt wenig; eine, die den Preis verdoppelt, traegt sofort
+ * viel und fliegt schnell auf. Der Verdacht faellt wieder, sobald die Absprache
+ * aufgehoben ist — Stillhalten ist ein gangbarer Zug. */
+/* Ueberschreibbar wie die uebrigen Stellschrauben des Spiels (RENN_INTERVALL,
+ * GROUP_VALUE, START_CASH): Wie schnell ein Kartell auffliegen soll, laesst
+ * sich nur am laufenden Spiel herausfinden, nicht am Schreibtisch. */
+const VERDACHT_TEMPO = +process.env.VERDACHT_TEMPO || 0.55;   // Punkte/s bei voller Auffaelligkeit
+const VERDACHT_ABBAU = +process.env.VERDACHT_ABBAU || 0.35;   // Punkte/s ohne wirksame Absprache
+const ERMITTLUNG_DAUER = +process.env.ERMITTLUNG_DAUER || 90; // Sekunden bis zum Bescheid
+const BUSSGELD_ANTEIL = +process.env.BUSSGELD_ANTEIL || 0.55; // Anteil des Umsatzes unter Absprache
+
+/* Umsatz, der unter einer laufenden Absprache entstanden ist. Das Bussgeld
+ * haengt daran und nicht am Vermoegen: Bestraft wird, was die Absprache
+ * eingebracht hat, nicht wer ohnehin gross ist. Wer eine Absprache beschliesst
+ * und dann nichts verkauft, zahlt fast nichts — zu Recht. */
+function kartellUmsatzMerken(p, good, betrag) {
+  if (MODE !== "kartell" || !(betrag > 0)) return;
+  const k = kartellVon(p);
+  if (!k || k.minPreise[good] == null) return;
+  k.umsatz[p.id] = (k.umsatz[p.id] || 0) + betrag;
+}
+
+/* Wie auffaellig ist die Ware gerade? 0 = niemand merkt etwas, 1 = das Amt
+ * muesste blind sein. */
+function kartellAuffaelligkeit(k, good, min) {
+  const markt = MM[good]?.price || BASEP[good] || min;
+  /* Hebung: erst ab einem Fuenftel ueber Marktpreis faellt es ins Gewicht,
+   * voll ausgereizt beim Doppelten. Darunter ist die Absprache Kosmetik. */
+  const hebung = Math.max(0, Math.min(1, (min / markt - 1.2) / 0.8));
+  if (hebung <= 0) return 0;
+  /* Gleichfoermigkeit: Wie viele Mitglieder bieten diese Ware sichtbar zum
+   * abgesprochenen Preis an — im Orderbuch oder im eigenen Laden? Bei einem
+   * allein gibt es nichts zu vergleichen, ab zwei wird es ein Muster. */
+  const bietetAn = mid => {
+    if (G.orders.some(o => o.playerId === mid && o.side === "sell" && o.good === good && o.price <= min * 1.02)) return true;
+    return G.map.some(t => t.owner === mid && t.shop?.some(sl => sl?.good === good && sl.price <= min * 1.02));
+  };
+  const zahl = k.mitglieder.filter(bietetAn).length;
+  if (zahl < 2) return 0;
+  const gleich = Math.min(1, (zahl - 1) / 3);   // 2 Mitglieder = 0,33 … 4 = 1
+  return hebung * gleich;
+}
+
+function kartellamtTick() {
+  if (MODE !== "kartell") return;
+  for (const k of [...G.cartels]) {
+    if (k.ermittlung) {
+      k.ermittlung.rest--;
+      if (k.ermittlung.rest <= 0) kartellBescheid(k);
+      continue;
+    }
+    /* Die auffaelligste Ware zaehlt, nicht die Summe: Zehn harmlose Absprachen
+     * sind kein Kartell, eine dreiste schon. */
+    let spitze = 0;
+    for (const [good, min] of Object.entries(k.minPreise))
+      spitze = Math.max(spitze, kartellAuffaelligkeit(k, good, min));
+    k.verdacht = Math.max(0, Math.min(100,
+      k.verdacht + (spitze > 0 ? spitze * VERDACHT_TEMPO : -VERDACHT_ABBAU)));
+
+    if (k.verdacht >= 100) kartellErmittlungStarten(k);
+    else if (k.verdacht >= 60 && !k.gewarnt) {
+      /* Eine Warnung, damit die Entscheidung eine ist: weitermachen und mehr
+       * verdienen, oder aufhoeren und behalten, was man hat. Ohne sie stuende
+       * die Ermittlung ohne Vorwarnung im Raum. */
+      k.gewarnt = true;
+      for (const mid of k.mitglieder)
+        emitTo(mid, "notice", { text: `Das Kartellamt stellt Fragen zu „${k.name}“. Noch ist nichts bewiesen.` });
+    } else if (k.verdacht < 40) k.gewarnt = false;
+  }
+}
+
+function kartellErmittlungStarten(k) {
+  k.ermittlung = { rest: ERMITTLUNG_DAUER };
+  k.verdacht = 100;
+  /* Oeffentlich: Ab hier weiss der ganze Markt Bescheid. Das ist der Preis des
+   * Auffliegens — die Konkurrenz kann sich darauf einstellen, bevor der
+   * Bescheid da ist. */
+  /* Nicht ERMITTLUNG_DAUER/60: Bei den voreingestellten 90 Sekunden stuende da
+   * "1.5 Minuten". Sekunden unter zwei Minuten, darueber gerundete Minuten. */
+  const frist = ERMITTLUNG_DAUER < 120
+    ? `${ERMITTLUNG_DAUER} Sekunden`
+    : `${Math.round(ERMITTLUNG_DAUER / 60)} Minuten`;
+  io.emit("notice", { text: `KARTELLAMT: Ermittlungen gegen „${k.name}“ eröffnet — Bescheid in ${frist}.` });
+}
+
+function kartellBescheid(k) {
+  const zeilen = [];
+  for (const mid of k.mitglieder) {
+    const p = G.players[mid];
+    if (!p) continue;
+    const umsatz = k.umsatz[mid] || 0;
+    /* Gedeckelt am Bargeld: Ein Bussgeld, das die Firma ins Minus reisst,
+     * beendet die Runde fuer den Betroffenen — bestraft werden soll der
+     * Gewinn aus der Absprache, nicht die Teilnahme am Spiel. */
+    const busse = Math.min(Math.round(umsatz * BUSSGELD_ANTEIL), Math.max(0, Math.round(p.cash)));
+    if (busse > 0) {
+      p.cash -= busse;
+      logTx(p, "Kartellamt", `Bußgeld wegen Preisabsprache („${k.name}“)`, -busse);
+    }
+    emitTo(mid, "notice", { text: busse > 0
+      ? `Bußgeld: ${busse.toLocaleString("de-DE")} $ — die Absprachen von „${k.name}“ sind aufgehoben.`
+      : `Verfahren gegen „${k.name}“ eingestellt — unter der Absprache wurde nichts verdient.` });
+    zeilen.push(`${p.name}: ${busse.toLocaleString("de-DE")} $`);
+  }
+  io.emit("notice", { text: `KARTELLAMT: Bescheid gegen „${k.name}“ — ${zeilen.join(", ") || "keine Bußgelder"}.` });
+  /* Die Absprachen fallen, das Kartell bleibt. Es aufzuloesen waere die
+   * haertere Strafe, naehme dem Modus aber seinen zweiten Akt: Wer einmal
+   * erwischt wurde, soll es wieder versuchen duerfen — vorsichtiger diesmal. */
+  k.minPreise = {}; k.umsatz = {}; k.ermittlung = null; k.gewarnt = false;
+  /* Nicht auf null: Wer einmal aufgefallen ist, steht weiter unter Beobachtung
+   * und hat beim naechsten Mal weniger Anlauf. */
+  k.verdacht = 35;
 }
 
 function logTx(p, cat, text, amt) {
@@ -2584,6 +2723,11 @@ function privateState(p) {
     kartell: eigenesKartell ? { ...kartellPublic(eigenesKartell),
       verdacht: Math.round(eigenesKartell.verdacht),
       minPreise: eigenesKartell.minPreise,
+      /* Was die Absprache bisher eingebracht hat — und damit, woran das
+       * Bussgeld haengen wuerde. Wer das sieht, kann abwaegen, statt zu raten. */
+      ermittlung: eigenesKartell.ermittlung,
+      umsatz: Math.round(eigenesKartell.umsatz[p.id] || 0),
+      risiko: Math.round((eigenesKartell.umsatz[p.id] || 0) * BUSSGELD_ANTEIL),
       einladungen: eigenesKartell.einladungen.map(mid => ({ id: mid, name: G.players[mid]?.name ?? "—" })) } : null,
     kartellEinladungen: MODE === "kartell" && !eigenesKartell
       ? G.cartels.filter(k => k.einladungen.includes(p.id)).map(kartellPublic) : [],
@@ -3073,7 +3217,7 @@ io.on("connection", socket => {
     if (G.cartels.some(k => k.name.toLowerCase() === name.toLowerCase()))
       return ack?.({ error: "Diesen Namen gibt es schon" });
     const k = { id: id(), name, kopfId: p.id, mitglieder: [p.id], einladungen: [],
-      minPreise: {}, verdacht: 0, gegruendet: G.tick };
+      minPreise: {}, verdacht: 0, ermittlung: null, umsatz: {}, gegruendet: G.tick };
     G.cartels.push(k);
     logTx(p, "Kartell", `Kartell „${name}“ gegründet`, 0);
     /* Die Gründung ist öffentlich: Ein Zusammenschluss lässt sich nicht
@@ -4088,6 +4232,8 @@ function runTick() {
       else if (r.phase === "ergebnis" && r.rest <= 0) { G.rennen = null; G.naechstesRennenIn = RENN_INTERVALL; }
     }
   }
+  /* Das Kartellamt schaut jede Sekunde auf den Markt. */
+  if (!G.winner) kartellamtTick();
   /* Stromabschaltung (Planwirtschaft): Wurde das Volkswirtschaftsziel der
    * Vorphase verfehlt, läuft jede Produktion nur mit halber Kraft. */
   const SPERR = (MODE === "plan" && G.plan?.stromsperre) ? 0.5 : 1;
@@ -4108,6 +4254,7 @@ function runTick() {
         p.inv[slot.good] -= q;
         p.cash += q * slot.price; addRevenue(p, q * slot.price);
         const r = salesRec(p, slot.good); r.botQty += q; r.botRev += q * slot.price;
+        kartellUmsatzMerken(p, slot.good, q * slot.price);
         noteSold(slot.good, q);
         if (slot.qty != null) {
           slot.qty -= q;
