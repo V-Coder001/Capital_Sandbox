@@ -162,28 +162,99 @@ app.post("/admin/logout", (_req, res) => {
 });
 /* Eingriffe. Bewusst nur additiv (Geld/Ware geben, auch negativ) — nichts,
  * was den Rundenzustand strukturell zerlegen koennte. */
-app.post("/admin/eingriff", express.json(), (req, res) => {
-  if (!adminOk(req)) return res.status(403).json({ error: "nicht angemeldet" });
-  const p = G.players[String(req.body?.pid || "")];
-  if (!p) return res.status(404).json({ error: "Spieler unbekannt" });
-  const art = String(req.body?.art || "");
+/* Der eigentliche Eingriff liegt in einer Funktion, nicht im HTTP-Handler:
+ * Dieselbe Aktion kommt ueber zwei Wege herein — das Adminpanel im Browser und
+ * das eingebaute Panel im Spiel. Zwei Kopien derselben Regeln wuerden
+ * frueher oder spaeter auseinanderlaufen, und zwar genau bei der Pruefung, die
+ * man in der einen Fassung nachtraegt und in der anderen vergisst. */
+function adminEingriff({ pid, art, betrag, good, menge }) {
+  const p = G.players[String(pid || "")];
+  if (!p) return { status: 404, error: "Spieler unbekannt" };
   if (art === "geld") {
-    const betrag = Math.round(+req.body.betrag || 0);
-    if (!betrag) return res.status(400).json({ error: "Betrag fehlt" });
+    betrag = Math.round(+betrag || 0);
+    if (!betrag) return { status: 400, error: "Betrag fehlt" };
     p.cash = Math.max(0, p.cash + betrag);
     logTx(p, "Admin", betrag > 0 ? "Gutschrift durch die Verwaltung" : "Abbuchung durch die Verwaltung", betrag);
     io.emit("notice", { text: `Verwaltung: ${p.name} ${betrag > 0 ? "erhält" : "verliert"} ${Math.abs(betrag).toLocaleString("de-DE")} $.` });
   } else if (art === "ware") {
-    const good = String(req.body.good || "");
-    const menge = Math.round(+req.body.menge || 0);
-    if (!GOODS[good]) return res.status(400).json({ error: "Ware unbekannt" });
-    if (!menge) return res.status(400).json({ error: "Menge fehlt" });
+    good = String(good || "");
+    menge = Math.round(+menge || 0);
+    if (!GOODS[good]) return { status: 400, error: "Ware unbekannt" };
+    if (!menge) return { status: 400, error: "Menge fehlt" };
     p.inv[good] = Math.max(0, (p.inv[good] || 0) + menge);
     logTx(p, "Admin", `${menge > 0 ? "+" : ""}${menge} ${GOODS[good].name} durch die Verwaltung`, 0);
-  } else return res.status(400).json({ error: "Unbekannte Aktion" });
+  } else return { status: 400, error: "Unbekannte Aktion" };
   pushState();
-  res.json({ ok: true, cash: Math.round(p.cash) });
+  return { ok: true, cash: Math.round(p.cash) };
+}
+
+app.post("/admin/eingriff", express.json(), (req, res) => {
+  if (!adminOk(req)) return res.status(403).json({ error: "nicht angemeldet" });
+  const r = adminEingriff(req.body || {});
+  if (r.error) return res.status(r.status).json({ error: r.error });
+  res.json(r);
 });
+
+/* ---------- Schutz gegen Durchprobieren des Schluessels ----------
+ * Der Schluessel ist zwoelf Hexzeichen. Ueber HTTP war das kaum angreifbar,
+ * weil jeder Versuch eine eigene Anfrage kostet — ueber eine offene
+ * Socket-Verbindung lassen sich dagegen Tausende Versuche pro Sekunde
+ * durchjagen. Nach fuenf Fehlversuchen ist die Adresse eine Minute gesperrt.
+ *
+ * Gezaehlt wird je IP, nicht je Verbindung: Wer sich nach jedem Fehlversuch neu
+ * verbindet, bekaeme sonst jedes Mal fuenf frische Versuche geschenkt. */
+const ADMIN_MAX_FEHL = 5, ADMIN_SPERRE_MS = 60_000;
+const adminVersuche = new Map();   // ip -> { fehl, bis }
+/* Hinter dem Gateway ist die Gegenstelle immer der Proxy (127.0.0.1) — ohne
+ * X-Forwarded-For teilten sich ALLE Spieler einen Zaehler, und fuenf
+ * Fehlversuche eines Fremden sperrten den Wirt aus seinem eigenen Panel aus.
+ * Das Gateway setzt den Kopf (xfwd), der erste Eintrag ist der urspruengliche
+ * Client.
+ *
+ * Der Kopf ist faelschbar, wer den Server direkt erreicht, kann sich also einen
+ * frischen Zaehler verschaffen. Das nimmt der Sperre etwas von ihrer Wirkung,
+ * aber die Alternative waere eine Sperre, die zuverlaessig den Falschen trifft. */
+function adminIp(sock) {
+  const kopf = sock.handshake?.headers?.["x-forwarded-for"];
+  const erster = String(kopf || "").split(",")[0].trim();
+  return erster || sock.handshake?.address || "?";
+}
+function adminGesperrtBis(ip) {
+  const v = adminVersuche.get(ip);
+  if (!v?.bis) return 0;
+  const rest = Math.ceil((v.bis - Date.now()) / 1000);
+  return rest > 0 ? rest : 0;
+}
+function adminFehlversuch(ip) {
+  const v = adminVersuche.get(ip) || { fehl: 0, bis: 0 };
+  v.fehl++;
+  if (v.fehl >= ADMIN_MAX_FEHL) { v.bis = Date.now() + ADMIN_SPERRE_MS; v.fehl = 0; }
+  adminVersuche.set(ip, v);
+  console.warn(`Adminpanel: Fehlversuch von ${ip}${v.bis ? " — jetzt gesperrt" : ""}`);
+}
+const adminVersucheLoeschen = ip => adminVersuche.delete(ip);
+
+/* Die Sicht des Adminpanels auf die Runde. Bots stehen mit drin: Wenn eine
+ * Runde sich festfaehrt, liegt es oft an ihnen, und dann will man sehen, wie
+ * sie dastehen — eingreifen kann man bei ihnen genauso. */
+function adminUebersicht() {
+  return {
+    runde: {
+      modus: MODE, gestartet: G.started, sieger: G.winner, tick: G.tick,
+      ziel: WIN_NW, hostId: G.hostId,
+      /* Der Schluessel selbst geht NIE an den Client — er steht schon im
+       * Serverprotokoll und im Adminpanel-Link, das reicht. */
+    },
+    spieler: Object.values(G.players).map(p => ({
+      id: p.id, name: p.name, farbe: p.color, bot: !!p.bot,
+      branche: INDUSTRIES[p.industry]?.name || p.industry,
+      online: !!p.socketId, weg: !!p.disconnected,
+      cash: Math.round(p.cash), nw: Math.round(netWorth(p)), rating: rating(p),
+      gebaeude: G.map.filter(t => t.owner === p.id && t.btype).length,
+    })).sort((a, b) => b.nw - a.nw),
+    waren: Object.entries(GOODS).map(([k, g]) => ({ k, name: g.name })),
+  };
+}
 /* Kurzfassung fuer die Rundenuebersicht im Gateway — es fragt jeden
  * Kindprozess einmal ab, statt selbst Spielzustand zu fuehren. */
 app.get("/admin/api/kurz", (req, res) => {
@@ -2820,6 +2891,53 @@ io.on("connection", socket => {
     try { fn(p, payload || {}, ack); } catch (e) { ack?.({ error: e.message }); }
     pushState();
   };
+
+  /* ---------- Adminpanel im Spiel ----------
+   * Dasselbe wie /admin, aber ohne den Browser zu wechseln: Der Wirt oeffnet es
+   * mitten in der laufenden Runde. Bewusst NICHT ueber guard():
+   * - guard() verlangt einen registrierten Spieler; das Panel soll aber auch
+   *   im Warteraum aufgehen.
+   * - guard() sperrt alles ab, sobald G.winner steht ("Spiel beendet") — genau
+   *   dann will man aber noch nachsehen koennen, wie die Runde ausging.
+   *
+   * Die Anmeldung haengt an der VERBINDUNG (socket.data.admin), nicht an einem
+   * Feld, das der Client mitschickt. Ein Client, der sich einfach
+   * "istAdmin: true" in seinen Zustand schreibt, kommt damit keinen Schritt
+   * weiter — jedes Ereignis prueft die serverseitige Sitzung neu. */
+  const adminNurAngemeldet = ack => {
+    if (!socket.data.admin) { ack?.({ error: "Nicht angemeldet" }); return false; }
+    return true;
+  };
+
+  socket.on("adminLogin", ({ key } = {}, ack) => {
+    const ip = adminIp(socket);
+    const sperre = adminGesperrtBis(ip);
+    if (sperre) return ack?.({ error: `Zu viele Fehlversuche — noch ${sperre} s gesperrt` });
+    if (!ADMINKEY || String(key || "") !== ADMINKEY) {
+      adminFehlversuch(ip);
+      /* Absichtlich dieselbe Meldung, egal ob der Schluessel falsch ist oder
+       * gar keiner gesetzt wurde: Sonst verraet die Antwort, ob es ueberhaupt
+       * etwas zu erraten gibt. */
+      return ack?.({ error: "Falscher Schlüssel" });
+    }
+    adminVersucheLoeschen(ip);
+    socket.data.admin = true;
+    console.log(`Adminpanel: Anmeldung von ${ip}`);
+    ack?.({ ok: true });
+  });
+
+  socket.on("adminLogout", (_p, ack) => { socket.data.admin = false; ack?.({ ok: true }); });
+
+  socket.on("adminUebersicht", (_p, ack) => {
+    if (!adminNurAngemeldet(ack)) return;
+    ack?.({ ok: true, ...adminUebersicht() });
+  });
+
+  socket.on("adminEingriff", (payload, ack) => {
+    if (!adminNurAngemeldet(ack)) return;
+    const r = adminEingriff(payload || {});
+    ack?.(r.error ? { error: r.error } : { ok: true, ...adminUebersicht() });
+  });
 
   /* --- Branche im Warteraum waehlen ---
    * Frueher stand die Wahl am Startbildschirm, bevor man ueberhaupt wusste,
