@@ -2495,6 +2495,10 @@ const VERDACHT_TEMPO = +process.env.VERDACHT_TEMPO || 0.55;   // Punkte/s bei vo
 const VERDACHT_ABBAU = +process.env.VERDACHT_ABBAU || 0.35;   // Punkte/s ohne wirksame Absprache
 const ERMITTLUNG_DAUER = +process.env.ERMITTLUNG_DAUER || 90; // Sekunden bis zum Bescheid
 const BUSSGELD_ANTEIL = +process.env.BUSSGELD_ANTEIL || 0.55; // Anteil des Umsatzes unter Absprache
+/* Wird das Kartell angezeigt, zahlen die uebrigen mehr. Die Anzeige bringt dem
+ * Amt den Beweis frei Haus — und ohne Aufschlag waere sie fuer die anderen
+ * folgenlos, der Verrat also ohne Gewicht. */
+const BUSSGELD_KRONZEUGE = +process.env.BUSSGELD_KRONZEUGE || 0.85;
 
 /* Umsatz, der unter einer laufenden Absprache entstanden ist. Das Bussgeld
  * haengt daran und nicht am Vermoegen: Bestraft wird, was die Absprache
@@ -2570,16 +2574,25 @@ function kartellErmittlungStarten(k) {
   io.emit("notice", { text: `KARTELLAMT: Ermittlungen gegen „${k.name}“ eröffnet — Bescheid in ${frist}.` });
 }
 
-function kartellBescheid(k) {
+/* kronzeugeId gesetzt = das Kartell wurde von innen angezeigt. Der Kronzeuge
+ * zahlt nichts und behaelt, was er unter der Absprache verdient hat; die
+ * uebrigen zahlen den hoeheren Satz. */
+function kartellBescheid(k, kronzeugeId = null) {
   const zeilen = [];
+  const satz = kronzeugeId ? BUSSGELD_KRONZEUGE : BUSSGELD_ANTEIL;
   for (const mid of k.mitglieder) {
     const p = G.players[mid];
     if (!p) continue;
+    if (mid === kronzeugeId) {
+      logTx(p, "Kartellamt", `Kronzeuge: straffrei („${k.name}“)`, 0);
+      zeilen.push(`${p.name}: straffrei`);
+      continue;
+    }
     const umsatz = k.umsatz[mid] || 0;
     /* Gedeckelt am Bargeld: Ein Bussgeld, das die Firma ins Minus reisst,
      * beendet die Runde fuer den Betroffenen — bestraft werden soll der
      * Gewinn aus der Absprache, nicht die Teilnahme am Spiel. */
-    const busse = Math.min(Math.round(umsatz * BUSSGELD_ANTEIL), Math.max(0, Math.round(p.cash)));
+    const busse = Math.min(Math.round(umsatz * satz), Math.max(0, Math.round(p.cash)));
     if (busse > 0) {
       p.cash -= busse;
       logTx(p, "Kartellamt", `Bußgeld wegen Preisabsprache („${k.name}“)`, -busse);
@@ -2589,7 +2602,13 @@ function kartellBescheid(k) {
       : `Verfahren gegen „${k.name}“ eingestellt — unter der Absprache wurde nichts verdient.` });
     zeilen.push(`${p.name}: ${busse.toLocaleString("de-DE")} $`);
   }
-  io.emit("notice", { text: `KARTELLAMT: Bescheid gegen „${k.name}“ — ${zeilen.join(", ") || "keine Bußgelder"}.` });
+  const wer = kronzeugeId ? G.players[kronzeugeId]?.name ?? "Ein Mitglied" : null;
+  io.emit("notice", { text: wer
+    /* Der Name des Kronzeugen ist oeffentlich. Ein Verrat, den niemand
+     * bemerkt, waere folgenlos — und der Modus lebt davon, dass man weiss,
+     * wem man beim naechsten Mal nicht mehr schreibt. */
+    ? `KARTELLAMT: „${k.name}“ wurde von ${wer} angezeigt — ${zeilen.join(", ")}.`
+    : `KARTELLAMT: Bescheid gegen „${k.name}“ — ${zeilen.join(", ") || "keine Bußgelder"}.` });
   /* Die Absprachen fallen, das Kartell bleibt. Es aufzuloesen waere die
    * haertere Strafe, naehme dem Modus aber seinen zweiten Akt: Wer einmal
    * erwischt wurde, soll es wieder versuchen duerfen — vorsichtiger diesmal. */
@@ -3303,6 +3322,38 @@ io.on("connection", socket => {
         (angehoben ? ` — ${angehoben} Ladenpreis${angehoben === 1 ? "" : "e"} angehoben.` : ".") });
     }
     logTx(p, "Kartell", `Mindestpreis ${GOODS[good].name}: ${price} $`, 0);
+    ack?.({ ok: true });
+  }));
+
+  /* --- Kronzeugenregelung ---
+   * Der Zug, der aus der Absprache ein Misstrauensspiel macht: Jedes Mitglied
+   * kann das eigene Kartell anzeigen, auch der Kopf. Wer anzeigt, geht
+   * straffrei aus und behaelt, was er unter der Absprache verdient hat — die
+   * uebrigen zahlen den hoeheren Satz.
+   *
+   * Moeglich, solange eine Absprache laeuft, also auch vorbeugend, bevor
+   * ueberhaupt Verdacht besteht. Damit haengt die Drohung dauerhaft ueber jeder
+   * Absprache und nicht erst in den Minuten vor einem Bescheid.
+   *
+   * Der Kronzeuge verlaesst das Kartell dabei. In einem Kartell zu bleiben, das
+   * man gerade verraten hat, waere unglaubwuerdig — und die anderen wissen es
+   * ohnehin, der Name steht in der Meldung. */
+  socket.on("kartellAnzeigen", guard((p, _payload, ack) => {
+    if (!kartellModus(ack)) return;
+    const k = kartellVon(p);
+    if (!k) return ack?.({ error: "Du bist in keinem Kartell" });
+    /* Ohne laufende Absprache gibt es nichts anzuzeigen — ein Zusammenschluss
+     * allein ist nicht verboten. */
+    if (!Object.keys(k.minPreise).length)
+      return ack?.({ error: "Ohne laufende Preisabsprache gibt es nichts anzuzeigen" });
+
+    emitTo(p.id, "notice", { text: `Du hast „${k.name}“ angezeigt — für dich bleibt es folgenlos.` });
+    /* Erst den Bescheid, dann den Austritt: Der Bescheid geht die
+     * Mitgliederliste durch, und der Kronzeuge muss darin noch vorkommen,
+     * damit er als straffrei ausgewiesen wird statt einfach zu fehlen. */
+    kartellBescheid(k, p.id);
+    kartellVerlassen(p);
+    logTx(p, "Kartell", `Kartell „${k.name}“ angezeigt und verlassen`, 0);
     ack?.({ ok: true });
   }));
 

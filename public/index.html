@@ -6569,6 +6569,16 @@ function kartellRendern(state, me, myId) {
         </div><p id="kartellEinladenStatus" class="note" style="margin:6px 0 0"></p>`
         : `<p class="note">Niemand mehr frei — alle sind schon in einem Kartell oder eingeladen.</p>`}
       </div>` : ""}
+      ${absprachen.length ? `<div class="joinbox" style="margin-bottom:12px;border-color:rgba(251,113,133,.35)">
+        <div class="lbl" style="color:#fb7185">Kronzeugenregelung</div>
+        <p class="note" style="margin:0 0 8px">Zeigst du „${k.name}" an, zahlst du <b>nichts</b> und behältst,
+          was du unter der Absprache verdient hast. Die anderen zahlen den höheren Satz — und erfahren,
+          dass du es warst. Du verlässt das Kartell damit.</p>
+        <button class="mini" id="kartellPetzen" style="border-color:rgba(251,113,133,.5);color:#fb7185">Kartell anzeigen</button>
+        <span id="kartellPetzFrage" style="display:none;margin-left:8px;font-size:12px">
+          Sicher? <button class="mini" id="kartellPetzJa" style="border-color:rgba(251,113,133,.5);color:#fb7185">Ja, anzeigen</button>
+          <button class="mini" id="kartellPetzNein">Abbrechen</button></span>
+      </div>` : ""}
       <button class="mini" id="kartellRaus">Kartell verlassen</button>`;
     return;
   }
@@ -6642,6 +6652,19 @@ document.getElementById("p-kartell").addEventListener("click", e => {
   if (ja) return act("kartellBeitreten", { kartellId: +ja.dataset.kartellja });
   const nein = e.target.closest("button[data-kartellnein]");
   if (nein) return act("kartellAblehnen", { kartellId: +nein.dataset.kartellnein });
+  /* Zweistufig, weil der Zug endgueltig ist und die Runde fuer alle anderen
+   * spuerbar veraendert — ein Fehlklick waere nicht zurueckzunehmen. */
+  if (e.target.closest("#kartellPetzen")) {
+    document.getElementById("kartellPetzen").style.display = "none";
+    document.getElementById("kartellPetzFrage").style.display = "";
+    return;
+  }
+  if (e.target.closest("#kartellPetzNein")) {
+    document.getElementById("kartellPetzFrage").style.display = "none";
+    document.getElementById("kartellPetzen").style.display = "";
+    return;
+  }
+  if (e.target.closest("#kartellPetzJa")) return act("kartellAnzeigen", {});
   if (e.target.closest("#kartellRaus")) return act("kartellVerlassen", {});
 });
 
