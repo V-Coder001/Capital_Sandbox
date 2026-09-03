@@ -276,6 +276,23 @@ input,select{background:var(--panel2);border:1px solid var(--line);border-radius
 #lwBotLevel button.on{background:linear-gradient(135deg,#1e3a5a 0%,#164060 100%);color:var(--accent);
   box-shadow:0 0 12px rgba(56,189,248,.18), inset 0 1px 0 rgba(56,189,248,.15)}
 
+/* Das Adminpanel liegt ueber dem Warteraum (z-index 99). Alle anderen Panels
+ * gehoeren zum Spielbildschirm und duerfen darunter bleiben — dieses eine soll
+ * sich auch dann oeffnen lassen, wenn die Runde noch gar nicht laeuft. */
+#p-admin{z-index:110}
+
+/* ---- Adminpanel: eine Zeile je Firma ----
+ * Drei Bloecke nebeneinander (wer, Zahlen, Eingriff), die bei schmalem Panel
+ * untereinander rutschen. Eine Tabelle waere hier falsch: Die Eingriffsspalte
+ * enthaelt Formulare, keine Werte, und wuerde jede Zeile auseinanderziehen. */
+.adminZeile{display:flex;flex-wrap:wrap;gap:9px;align-items:center;
+  padding:8px 0;border-bottom:1px solid rgba(36,48,68,.5)}
+.adminZeile:last-of-type{border-bottom:0}
+.adminWer{display:flex;gap:8px;align-items:center;flex:1 1 150px;min-width:0}
+.adminZahlen{display:flex;gap:14px;font-family:var(--mono);font-size:12px;text-align:right}
+.adminTun{display:flex;gap:7px;flex-wrap:wrap}
+.adminTun select{max-width:118px}
+
 /* ---- Modus-Auswahl als Plakate ----
  * Die Zeile bricht um, statt zu schrumpfen: Bei fünf Kacheln nebeneinander
  * wären die Plakate auf einem schmalen Fenster nur noch Farbflächen. Das Raster
@@ -1340,7 +1357,7 @@ td:first-child{font-family:var(--font)}
 
 <div id="lobbyWait"><div class="card">
   <div id="lwHead">
-    <h2>Warteraum</h2>
+    <h2 id="lwTitel">Warteraum</h2>
     <span id="lwPulse"><span class="pulse"><i></i><b></b></span><span id="lwPulseText">wartet</span></span>
   </div>
   <p class="sub" id="lwSub">Sobald alle da sind, startet der Host die Runde.</p>
@@ -1522,6 +1539,14 @@ td:first-child{font-family:var(--font)}
       <div id="kartellFremde">—</div>
     </div>
   </div>
+</div>
+
+<!-- Adminpanel im Spiel. Kein Eintrag im Dock und kein eigener Link: Es geht
+     nur ueber die versteckte Geste auf dem Firmenlogo auf (siehe adminGeste).
+     Bis zur Anmeldung steht hier nichts als das Schluesselfeld. -->
+<div class="panel" id="p-admin">
+  <div class="phead"><h2>Verwaltung</h2><button class="x" data-close>✕</button></div>
+  <div class="pbody"><div id="adminInhalt"></div></div>
 </div>
 
 <!-- Schwarzmarkt-Baracke (Planwirtschaft): steht auf der Karte, wo sonst die
@@ -6606,6 +6631,197 @@ document.getElementById("p-kartell").addEventListener("click", e => {
   if (nein) return act("kartellAblehnen", { kartellId: +nein.dataset.kartellnein });
   if (e.target.closest("#kartellRaus")) return act("kartellVerlassen", {});
 });
+
+/* ---------- Adminpanel im Spiel ----------
+ * Der Wirt einer Runde soll eingreifen koennen, ohne den Browser zu wechseln:
+ * nachsehen, wer mitspielt, und jemandem aushelfen, der festhaengt.
+ *
+ * Versteckt statt gesperrt: Es gibt keinen Knopf im Dock und keinen Link. Man
+ * kommt nur hinein, wenn man die Geste kennt — fuenfmal aufs eigene Firmenlogo
+ * oben links. Das ist absichtlich nichts, worauf man beim Herumklicken stoesst,
+ * aber auch nichts, was man sich aufschreiben muss.
+ *
+ * Die Geste allein oeffnet nur das Schluesselfeld. Alles Weitere haengt an der
+ * Anmeldung, und die prueft der Server bei JEDEM Ereignis neu — die Geste ist
+ * Bequemlichkeit, nicht die Absicherung. Wer sie kennt, aber den Schluessel
+ * nicht hat, sieht genau so viel wie jeder andere: nichts. */
+let adminAn = false, adminDaten = null, adminPoll = null, adminRunden = null;
+
+const adminGeste = (() => {
+  let zaehler = 0, letzter = 0;
+  return () => {
+    const jetzt = Date.now();
+    /* Die Klicks muessen zusammenhaengen. Ohne dieses Fenster wuerde sich die
+     * Geste ueber eine ganze Runde hinweg aus zufaelligen Logo-Klicks von
+     * selbst zusammensetzen. */
+    zaehler = jetzt - letzter < 1500 ? zaehler + 1 : 1;
+    letzter = jetzt;
+    if (zaehler >= 5) { zaehler = 0; adminOeffnen(); }
+  };
+})();
+/* Zwei Stellen, eine Geste: im Spiel das Firmenlogo, im Warteraum die
+ * Ueberschrift. Der Warteraum ist ein eigener Bildschirm ohne Logo — ohne
+ * diesen zweiten Anker waere das Panel genau dann unerreichbar, wenn man am
+ * ehesten nachsehen will, wer eigentlich alles da ist. */
+for (const id of ["mylogo", "lwTitel"])
+  document.getElementById(id)?.addEventListener("click", adminGeste);
+
+function adminOeffnen() {
+  openPanel("admin");
+  adminRendern();
+  /* Angemeldet bleibt die Uebersicht aktuell, solange das Panel offen ist —
+   * Bargeld und Vermoegen bewegen sich schliesslich weiter, waehrend man
+   * hinschaut. Zu bleibt der Zeitgeber stehen; niemand braucht Abfragen fuer
+   * ein Panel, das keiner sieht. */
+  clearInterval(adminPoll);
+  adminPoll = setInterval(() => {
+    if (!document.getElementById("p-admin").classList.contains("open") || !adminAn) return;
+    socket.emit("adminUebersicht", {}, r => { if (r?.ok) { adminDaten = r; adminRendern(); } });
+  }, 2000);
+}
+
+function adminAbfragen() {
+  socket.emit("adminUebersicht", {}, r => {
+    if (r?.error) { adminAn = false; adminRendern(r.error); return; }
+    adminDaten = r; adminRendern();
+  });
+  /* Andere Runden gibt es nur hinter dem Gateway — im Einzelbetrieb haelt der
+   * Prozess genau eine, und die steht ohnehin schon vollstaendig da. */
+  if (MULTIROOM) fetch("/api/rooms/public").then(r => r.json())
+    .then(d => { adminRunden = d; adminRendern(); }).catch(() => {});
+}
+
+function adminRendern(fehler) {
+  const el = document.getElementById("adminInhalt");
+  if (!el) return;
+  const tippt = el.contains(document.activeElement) && /INPUT|SELECT/.test(document.activeElement.tagName);
+  if (tippt) return;   // nicht unter den Fingern neu zeichnen
+
+  if (!adminAn) {
+    el.innerHTML = `
+      <div class="joinbox">
+        <div class="lbl">Anmeldung</div>
+        <p class="note" style="margin:0 0 8px">Der Schlüssel steht im Serverprotokoll beim Start
+          (<code>Bugreports (Admin)</code>) und in <code>bugreports/.key</code>.</p>
+        <div class="formrow">
+          <input id="adminKey" type="password" placeholder="Schlüssel" autocomplete="off" style="flex:1">
+          <button class="buyb" id="adminLoginBtn">Anmelden</button>
+        </div>
+        ${fehler ? `<p class="note" style="margin:6px 0 0;color:var(--down)">${fehler}</p>` : ""}
+      </div>`;
+    return;
+  }
+  if (!adminDaten) { el.innerHTML = `<p class="note">Lade …</p>`; return; }
+
+  const { runde, spieler, waren } = adminDaten;
+  const geld = n => "$" + Math.round(n).toLocaleString("de-DE");
+  const min = Math.floor(runde.tick / 60), sek = runde.tick % 60;
+  const warenOpts = waren.map(w => `<option value="${w.k}">${w.name}</option>`).join("");
+
+  el.innerHTML = `
+    <div class="joinbox" style="margin-bottom:12px">
+      <div class="lbl">Diese Runde</div>
+      <div style="font-size:12.5px;line-height:1.7">
+        <span class="pill">${runde.gestartet ? "läuft" : "Warteraum"}</span>
+        <span class="pill">Modus ${runde.modus}</span>
+        <span class="pill">${min}:${String(sek).padStart(2, "0")} min</span>
+        <span class="pill">Ziel ${geld(runde.ziel)}</span>
+        <span class="pill">${spieler.length} Firmen</span>
+        ${runde.sieger ? `<span class="pill" style="color:var(--up)">beendet · ${runde.sieger}</span>` : ""}
+      </div>
+    </div>
+
+    <div class="joinbox" style="margin-bottom:12px">
+      <div class="lbl">Firmen</div>
+      <p class="note" style="margin:0 0 8px">Beträge dürfen negativ sein — dann wird abgezogen.
+        Jeder Eingriff steht im Kontobuch der Firma.</p>
+      ${spieler.map(p => `
+        <div class="adminZeile">
+          <div class="adminWer">
+            <span style="width:10px;height:10px;border-radius:3px;background:${p.farbe};flex:none"></span>
+            <div style="min-width:0">
+              <div style="font-weight:600;overflow:hidden;text-overflow:ellipsis">${p.name}</div>
+              <div class="meta">${p.branche} · ${p.gebaeude} Geb. · ${p.rating}
+                ${p.bot ? '· <span style="color:var(--dim)">Bot</span>'
+                        : p.online ? '· <span style="color:var(--up)">verbunden</span>'
+                                   : '· <span style="color:var(--down)">offline</span>'}</div>
+            </div>
+          </div>
+          <div class="adminZahlen">
+            <div>${geld(p.cash)}<div class="meta">Bargeld</div></div>
+            <div>${geld(p.nw)}<div class="meta">Vermögen</div></div>
+          </div>
+          <div class="adminTun">
+            <div class="formrow" style="margin:0">
+              <input type="number" step="1000" value="10000" data-geldfeld="${p.id}" style="width:88px">
+              <button class="mini" data-geld="${p.id}">Geld</button>
+            </div>
+            <div class="formrow" style="margin:0">
+              <select data-warefeld="${p.id}">${warenOpts}</select>
+              <input type="number" step="1" value="10" data-mengefeld="${p.id}" style="width:60px">
+              <button class="mini" data-ware="${p.id}">Ware</button>
+            </div>
+          </div>
+        </div>`).join("") || `<p class="note">Noch niemand in dieser Runde.</p>`}
+      <p id="adminStatus" class="note" style="margin:8px 0 0"></p>
+    </div>
+
+    ${MULTIROOM ? `<div class="joinbox" style="margin-bottom:12px">
+      <div class="lbl">Andere Runden auf diesem Server</div>
+      ${adminRunden === null ? `<p class="note">Lade …</p>`
+        : adminRunden.length ? adminRunden.map(r => `
+          <div style="display:flex;gap:9px;align-items:center;margin:5px 0;font-size:12.5px">
+            <b style="font-family:var(--mono);letter-spacing:.08em">${r.code}</b>
+            <span style="flex:1">${r.host || "—"} <span class="meta">${(r.namen || []).join(", ")}</span></span>
+            <span class="meta">${r.spieler}/${r.max}${r.bots ? ` +${r.bots} Bots` : ""} ·
+              ${r.beendet ? "beendet" : r.gestartet ? "läuft" : "Warteraum"}</span>
+          </div>`).join("")
+        : `<p class="note">Keine weiteren öffentlichen Runden.</p>`}
+      <p class="note" style="margin:8px 0 0">Eingreifen kannst du nur in deiner eigenen Runde —
+        jede andere läuft in einem eigenen Prozess.</p>
+    </div>` : ""}
+
+    <button class="mini" id="adminLogoutBtn">Abmelden</button>`;
+}
+
+document.getElementById("p-admin").addEventListener("click", e => {
+  const status = t => { const s = document.getElementById("adminStatus"); if (s) s.textContent = t; };
+
+  if (e.target.closest("#adminLoginBtn")) {
+    const feld = document.getElementById("adminKey");
+    return socket.emit("adminLogin", { key: feld.value }, r => {
+      if (r?.error) { feld.value = ""; adminRendern(r.error); return; }
+      adminAn = true; adminRendern(); adminAbfragen();
+    });
+  }
+  if (e.target.closest("#adminLogoutBtn")) {
+    return socket.emit("adminLogout", {}, () => {
+      adminAn = false; adminDaten = null; adminRendern();
+    });
+  }
+  const g = e.target.closest("button[data-geld]");
+  if (g) {
+    const pid = g.dataset.geld;
+    const betrag = +document.querySelector(`[data-geldfeld="${pid}"]`).value;
+    if (!betrag) return status("Bitte einen Betrag ungleich 0 eingeben.");
+    return socket.emit("adminEingriff", { pid, art: "geld", betrag }, r => {
+      if (r?.error) return status(r.error);
+      adminDaten = r; adminRendern(); status("");
+    });
+  }
+  const w = e.target.closest("button[data-ware]");
+  if (w) {
+    const pid = w.dataset.ware;
+    const good = document.querySelector(`[data-warefeld="${pid}"]`).value;
+    const menge = +document.querySelector(`[data-mengefeld="${pid}"]`).value;
+    if (!menge) return status("Bitte eine Menge ungleich 0 eingeben.");
+    return socket.emit("adminEingriff", { pid, art: "ware", good, menge }, r => {
+      if (r?.error) return status(r.error);
+      adminDaten = r; adminRendern(); status("");
+    });
+  }
+});
+
 document.getElementById("p-schwarz").addEventListener("click", e => {
   const acceptBtn = e.target.closest("button[data-smaccept]");
   const cancelBtn = e.target.closest("button[data-smcancel]");
