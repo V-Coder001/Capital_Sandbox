@@ -318,6 +318,14 @@ input,select{background:var(--panel2);border:1px solid var(--line);border-radius
 #lwMode button:hover img{filter:saturate(.8) brightness(.82)}
 #lwMode button:hover>span:last-child{color:#7e97b8}
 #lwMode button.on{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent),0 4px 16px rgba(56,189,248,.22)}
+/* Familienwahl im Warteraum (Kartellmodus) */
+#lwFamilie{display:grid;grid-template-columns:1fr 1fr;gap:6px;width:100%}
+#lwFamilie button{padding:8px 10px;border:1px solid #1a2535;background:#050810;border-radius:9px;
+  color:#8695ab;font:600 12px var(--font);cursor:pointer;text-align:left;transition:all .15s;
+  border-left:3px solid var(--fc)}
+#lwFamilie button:hover{color:var(--text);border-color:#26405e;border-left-color:var(--fc)}
+#lwFamilie button.on{color:var(--text);background:#0d1524;border-color:var(--fc);
+  box-shadow:0 0 10px color-mix(in srgb, var(--fc) 35%, transparent)}
 #lwMode button.on img{filter:none}
 #lwMode button.on>span:last-child{color:var(--accent);background:linear-gradient(135deg,#1e3a5a 0%,#164060 100%)}
 #lwBotCounts{display:grid;grid-template-columns:1fr 1fr;gap:7px 14px}
@@ -1415,6 +1423,21 @@ td:first-child{font-family:var(--font)}
       <b>Kartellen</b> zusammenschließen (bis zu 4 Firmen), Preise absprechen und den Markt unter euch
       aufteilen. Das Kartellamt schaut zu: Wie dicht es einem Kartell auf den Fersen ist, sehen nur
       dessen Mitglieder.</p>
+    <!-- Familienwahl (Kartellmodus): vier feste Familien mit je einem
+         illegalen Produkt. Wer nichts wählt, wird beim Start zugeteilt. -->
+    <div class="lwRow" id="lwFamilieRow" style="display:none">
+      <label>Familie</label>
+      <div id="lwFamilie">
+        <button type="button" data-familie="famiglia" style="--fc:#e74c3c">La Famiglia</button>
+        <button type="button" data-familie="syndikat" style="--fc:#a78bfa">Das Syndikat</button>
+        <button type="button" data-familie="bratwa" style="--fc:#f5c542">Die Bratwa</button>
+        <button type="button" data-familie="triade" style="--fc:#2ecc71">Die Triade</button>
+      </div>
+    </div>
+    <p id="lwFamilieHint" style="display:none;font-size:11.5px;color:#8695ab;margin:2px 0 6px">
+      Jede Familie hat ein eigenes illegales Produkt (Schwarzgebrannter, Falschgeld, Goldbarren,
+      Schmuggelzigaretten) samt Gebäude, das nur sie bauen kann. Verkauft wird beim Hehler —
+      das bringt der Familie <b>Respekt</b>. Wer keine Familie wählt, wird beim Start zugeteilt.</p>
     <p id="lwEinsteigerHint" style="display:none;font-size:11.5px;color:#8695ab;margin:2px 0 6px">
       Einsteiger: Ein geführter Durchgang durch das ganze Spiel — Bauen, Verkaufen, Börse,
       Kursticker, Nachrichten und Bank, Schritt für Schritt erklärt. Nichts ist gesperrt, die Bots
@@ -2768,6 +2791,8 @@ function lwModeSpiegeln() {
   /* Die Kartellwirtschaft behält das Vermögensziel — hier wird nur erklärt,
    * was zusätzlich erlaubt ist. */
   document.getElementById("lwKartellHint").style.display = lwMode === "kartell" ? "" : "none";
+  document.getElementById("lwFamilieRow").style.display = lwMode === "kartell" ? "" : "none";
+  document.getElementById("lwFamilieHint").style.display = lwMode === "kartell" ? "" : "none";
   /* Im Renntag entscheidet die Meisterschaft — das Vermoegensziel waere dort
    * eine Angabe ohne Wirkung. */
   document.getElementById("lwSaisonRow").style.display = lwMode === "renntag" ? "" : "none";
@@ -2791,6 +2816,13 @@ document.getElementById("lwMode").addEventListener("click", e => {
 document.getElementById("lwBotLevel").addEventListener("click", e => {
   const b = e.target.closest("button[data-lvl]"); if (!b) return;
   lwBotLevel = b.dataset.lvl; lwPickerSpiegeln(); lwSettingsSenden();
+});
+document.getElementById("lwFamilie").addEventListener("click", e => {
+  const b = e.target.closest("button[data-familie]"); if (!b) return;
+  socket.emit("familieWaehlen", { fid: b.dataset.familie }, res => {
+    if (res?.error) { toast(res.error, true); return; }
+    document.querySelectorAll("#lwFamilie button").forEach(o => o.classList.toggle("on", o === b));
+  });
 });
 document.getElementById("lwBotCounts").addEventListener("click", e => {
   const b = e.target.closest("button[data-n]"); if (!b) return;
@@ -4635,8 +4667,11 @@ function clickTile(e) {
    * ganz aus dem Menü, statt gesperrt dazustehen. Ein Knopf, dessen Sperre man
    * nie aufheben kann, erklärt nichts; er sieht nur nach einem Ziel aus. */
   const kartellModus = store.get().state?.mode === "kartell";
+  const meineFamilie = store.get().state?.players?.[store.get().myId]?.familie;
   const opts = Object.entries(BTYPES()).filter(([bid, b]) => b.zone === t.zone
-    && !(kartellModus && b.racing) && (
+    && !(kartellModus && b.racing)
+    /* Familien-Gebäude: nur das der eigenen Familie, und nur im Kartellmodus */
+    && !(b.familie && (!kartellModus || b.familie !== meineFamilie)) && (
     store.get().state?.mode === "renntag"
       ? rolleErlaubt.includes(bid)
       : (!b.industry || myInds.includes(b.industry))));
@@ -6492,7 +6527,16 @@ function kartellRendern(state, me, myId) {
   const knopf = document.getElementById("dockKartell");
   const aktiv = state.mode === "kartell";
   if (knopf) knopf.style.display = aktiv ? "" : "none";
-  if (!aktiv) return;
+  /* HUD-Chip: Familie und Respekt neben dem Nettovermögen. */
+  const alterHud = document.getElementById("mafiaHud");
+  if (!aktiv) { alterHud?.remove(); return; }
+  const hudFam = (state.familien || []).find(f => f.id === state.players[myId]?.familie);
+  const nwEl = document.getElementById("networth");
+  if (nwEl && hudFam) {
+    let hud = alterHud;
+    if (!hud) { hud = document.createElement("span"); hud.id = "mafiaHud"; nwEl.after(hud); }
+    hud.innerHTML = ` · <b style="color:${hudFam.farbe}">${hudFam.name}</b> <span class="meta">${hudFam.respekt} R</span>`;
+  } else alterHud?.remove();
   const k = me.kartell;
   const inhalt = document.getElementById("kartellInhalt");
   /* Nicht neu zeichnen, während jemand in einem Feld tippt — sonst wäre der
@@ -6502,6 +6546,37 @@ function kartellRendern(state, me, myId) {
   /* Spieler- und Kartellnamen kommen bereits vom Server entschärft (sicherText)
    * und werden hier deshalb unverändert eingesetzt. Kein rohText(): das dekodiert
    * die Entitäten wieder und machte aus der Absicherung ein Einfallstor. */
+
+  /* --- Die vier Familien: Rangliste nach Respekt + Hehler für heiße Ware --- */
+  const meineFamilieId = state.players[myId]?.familie;
+  const meineFam = (state.familien || []).find(f => f.id === meineFamilieId);
+  const illegale = Object.entries(GOODS()).filter(([, g]) => g.cat === "Illegal").map(([g2]) => g2);
+  const hehlerZeilen = illegale
+    .filter(g => Math.floor(me.inv?.[g] || 0) > 0)
+    .map(g => `<div style="display:flex;gap:9px;align-items:center;margin:5px 0">
+        <span style="flex:1">${gname(g)}</span>
+        <span class="meta">${Math.floor(me.inv[g])} Stück · ${fmt(state.avg?.[g] || 0)}/Stk</span>
+        <button class="buyb" data-hehler="${g}">Alles verkaufen</button>
+      </div>`).join("");
+  const familienHtml = !state.familien ? "" : `
+    <div class="joinbox" style="margin-bottom:12px">
+      <div class="lbl">Die vier Familien</div>
+      ${[...state.familien].sort((a, b) => b.respekt - a.respekt).map((f, i) => `
+        <div style="display:flex;gap:9px;align-items:center;margin:6px 0">
+          <span class="meta">${i + 1}.</span>
+          <span style="width:10px;height:10px;border-radius:3px;background:${f.farbe};flex:none"></span>
+          <span style="flex:1;${f.id === meineFamilieId ? "font-weight:600" : ""}">${f.name}${f.id === meineFamilieId ? ` <span class="meta" style="color:var(--accent)">· deine Familie</span>` : ""}
+            <span class="meta" style="display:block">${f.mitglieder.join(", ") || "—"} · Ware: ${gname(f.produkt)}</span></span>
+          <b>${f.respekt} R</b>
+        </div>`).join("")}
+    </div>
+    <div class="joinbox" style="margin-bottom:12px">
+      <div class="lbl">Hehler · heiße Ware zu Geld machen</div>
+      ${meineFam ? `<p class="note" style="margin:0 0 8px">Deine Familie stellt <b>${gname(meineFam.produkt)}</b> her —
+        baue dafür die <b>${BTYPES()[meineFam.gebaeude]?.name || meineFam.gebaeude}</b> (kann nur deine Familie).
+        Der Hehler zahlt bar; jeder Verkauf bringt <b>1 Respekt je 100 $</b>.</p>` : ""}
+      ${hehlerZeilen || `<p class="note">Noch keine heiße Ware im Lager.</p>`}
+    </div>`;
 
   if (k) {
     const binKopf = k.kopfId === myId;
@@ -6514,7 +6589,7 @@ function kartellRendern(state, me, myId) {
     const eingeladen = new Set((k.einladungen || []).map(e => e.id));
     const frei = Object.values(state.players)
       .filter(p => p.id !== myId && !drin.has(p.id) && !eingeladen.has(p.id));
-    inhalt.innerHTML = `
+    inhalt.innerHTML = familienHtml + `
       <div class="joinbox" style="margin-bottom:12px">
         <div class="lbl">Dein Kartell</div>
         <div style="font-size:15px;font-weight:600;margin-bottom:8px">${k.name}</div>
@@ -6562,7 +6637,7 @@ function kartellRendern(state, me, myId) {
   }
 
   const offene = me.kartellEinladungen || [];
-  inhalt.innerHTML = `
+  inhalt.innerHTML = familienHtml + `
     ${offene.length ? `<div class="joinbox" style="margin-bottom:12px">
       <div class="lbl">Einladungen an dich</div>
       ${offene.map(e => `<div style="display:flex;gap:9px;align-items:center;margin:6px 0">
@@ -6599,6 +6674,13 @@ function kartellFremdeRendern(state, myId) {
 
 document.getElementById("p-kartell").addEventListener("click", e => {
   const status = t => { const s = document.getElementById(t); return s || { textContent: "" }; };
+  /* Hehler: kompletten Bestand einer illegalen Ware zu Geld machen. */
+  const hehler = e.target.closest("button[data-hehler]");
+  if (hehler) {
+    socket.emit("hehlerVerkauf", { good: hehler.dataset.hehler },
+      res => toast(res?.error || `Der Hehler zahlt ${fmt(res.erloes)} — ohne Fragen.`, !!res?.error));
+    return;
+  }
   const gruenden = e.target.closest("#kartellGruendenBtn");
   if (gruenden) {
     const name = document.getElementById("kartellName").value.trim();

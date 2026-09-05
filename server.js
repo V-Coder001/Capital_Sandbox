@@ -401,7 +401,14 @@ export const GOODS = {
   eauto:      { name: "Elektro-Auto", en: "Electric car", cat: "Fahrzeuge", catEn: "Vehicles" },
   rennreifen:   { name: "Rennreifen", en: "Racing tyres",      cat: "Motorsport", catEn: "Motorsport" },
   rennsoftware: { name: "Rennsoftware", en: "Racing software", cat: "Motorsport", catEn: "Motorsport" },
+  /* Illegale Waren (Kartellmodus): je Familie ein Produkt. Sie gehören weder
+   * an die Börse noch in Läden — der einzige Absatzweg ist der Hehler. */
+  schnaps:    { name: "Schwarzgebrannter", en: "Moonshine",             cat: "Illegal", catEn: "Illegal" },
+  falschgeld: { name: "Falschgeld", en: "Counterfeit money",            cat: "Illegal", catEn: "Illegal" },
+  goldbarren: { name: "Goldbarren", en: "Gold bars",                    cat: "Illegal", catEn: "Illegal" },
+  zigaretten: { name: "Schmuggelzigaretten", en: "Contraband cigarettes", cat: "Illegal", catEn: "Illegal" },
 };
+const ILLEGAL = ["schnaps", "falschgeld", "goldbarren", "zigaretten"];
 /* Fahrzeuge sind Endprodukte: hoher Stückwert, dafür langsame Fertigung und ein
  * eigener Absatzweg (Autohaus). Am Handelskontor wären sie mit dessen hoher
  * Grundrate ein Gelddrucker, deshalb sind sie dort ausgenommen. */
@@ -423,7 +430,23 @@ const BASEP = { strom: 1.8, wasser: 1.4, oel: 8, obst: 7, erze: 16, kannabis: 45
                  * ersten Minuten einer Runde steht noch kein Rennstall, ohne Absatzweg
                  * wäre die Linie so lange tot. Ihr Stückwert liegt ohnehin in derselben
                  * Liga wie Stahl (115) und Medikamente (140), die dort seit jeher laufen. */
-                rennreifen: 165, rennsoftware: 210 };
+                rennreifen: 165, rennsoftware: 210,
+                /* Illegale Ware: hoher Stückwert — der Reiz des Risikos. Der
+                 * Hehler zahlt genau diesen Basispreis, ohne Marktdynamik. */
+                schnaps: 90, falschgeld: 130, goldbarren: 260, zigaretten: 75 };
+
+/* ---------- Kartellmodus: die vier Familien ----------
+ * Feste Familien statt frei gegründeter Banden: Jede hat Farbe, EIN illegales
+ * Produkt und EIN Produktionsgebäude, das nur ihre Mitglieder bauen können.
+ * Die Familie wird im Warteraum gewählt; wer keine wählt (auch Bots), wird
+ * beim Rundenstart reihum zugeteilt. Hehler-Verkäufe bringen der Familie
+ * Respekt — die Währung des Modus. */
+const FAMILIEN = {
+  famiglia: { name: "La Famiglia",  farbe: "#e74c3c", produkt: "schnaps",    gebaeude: "destille" },
+  syndikat: { name: "Das Syndikat", farbe: "#a78bfa", produkt: "falschgeld", gebaeude: "druckerei" },
+  bratwa:   { name: "Die Bratwa",   farbe: "#f5c542", produkt: "goldbarren", gebaeude: "goldschmelze" },
+  triade:   { name: "Die Triade",   farbe: "#2ecc71", produkt: "zigaretten", gebaeude: "schmuggellager" },
+};
 
 /* Industrien: jeder Spieler wählt beim Beitritt EINE — nur deren Gebäude sind
  * baubar (Shops kann jeder). Erzwingt Handel: Agrar braucht Wasser/Strom von
@@ -1186,7 +1209,7 @@ const BTYPES = {
   markt:      { name: "Marktstand", en: "Market stall",        cost: 1000, out: null, rate: 0, zone: "zentrum",   retail: { slots: 1, base: 0.5, goods: ["obst", "saft", "honig", "gebaeck"] } },
   bauhandel:  { name: "Baustoffhandel", en: "Builders merchant",    cost: 2800, out: null, rate: 0, zone: "industrie", retail: { slots: 1, base: 0.8, goods: ["erze", "oel", "stahl", "ziegel", "beton", "diesel", "silizium", "elektronik"] } },
   laden:      { name: "Grüner Laden", en: "Green store",      cost: 4500, out: null, rate: 0, zone: "zentrum",   retail: { slots: 1, base: 0.3, goods: ["kannabis", "medizin"] } },
-  kontor:     { name: "Handelskontor", en: "Trading house",     cost: 3500, out: null, rate: 0, zone: "zentrum",   retail: { slots: 2, base: 0.7, goods: Object.keys(GOODS).filter(g => !VEHICLES.includes(g) && !WEAPONS.includes(g)) } },
+  kontor:     { name: "Handelskontor", en: "Trading house",     cost: 3500, out: null, rate: 0, zone: "zentrum",   retail: { slots: 2, base: 0.7, goods: Object.keys(GOODS).filter(g => !VEHICLES.includes(g) && !WEAPONS.includes(g) && !ILLEGAL.includes(g)) } },
   autohaus:   { name: "Autohaus", en: "Car dealership",           cost: 5000, out: null, rate: 0, zone: "zentrum",   retail: { slots: 2, base: 0.30, goods: VEHICLES } },
   /* ---- Rüstungsindustrie ----
    * Die Branche am Ende der Kette: Sie verarbeitet, was Rohstoff und
@@ -1228,6 +1251,18 @@ const BTYPES = {
    * entsprechend: Stufe 2 kostet 12 Elektronik und 10.500 $, Stufe 5 dann
    * 60 Elektronik und 52.500 $. */
   rennstall:  { name: "Rennstall", en: "Racing stable", cost: 30000, out: null, rate: 0, zone: "industrie", racing: true },
+  /* Familien-Gebäude (Kartellmodus): je eines pro Familie, nur von deren
+   * Mitgliedern baubar. Die Zutaten kommen aus der legalen Wirtschaft —
+   * die Fassade ernährt das Geschäft. Raten so gesetzt, dass jede Familie
+   * nach Abzug der Zutaten in derselben Gewinnliga spielt (~15–25 $/s). */
+  destille:       { name: "Destille", en: "Moonshine still",              cost: 3200, out: null, rate: 0, zone: "agrar",     familie: "famiglia",
+                    proc: { in: { obst: 2, wasser: 1 },   out: "schnaps",    rate: .35 } },
+  druckerei:      { name: "Falschgeld-Druckerei", en: "Counterfeit shop", cost: 4200, out: null, rate: 0, zone: "zentrum",   familie: "syndikat",
+                    proc: { in: { strom: 2, elektronik: .04 }, out: "falschgeld", rate: .2 } },
+  goldschmelze:   { name: "Goldschmelze", en: "Gold smelter",             cost: 4800, out: null, rate: 0, zone: "industrie", familie: "bratwa",
+                    proc: { in: { erze: 3, strom: 1 },    out: "goldbarren", rate: .3 } },
+  schmuggellager: { name: "Schmuggellager", en: "Smuggling depot",        cost: 3600, out: null, rate: 0, zone: "kueste",    familie: "triade",
+                    proc: { in: { kannabis: .5 },         out: "zigaretten", rate: .6 } },
   /* Werbeagentur: produziert nichts und verkauft nichts. Sie schaltet
    * Kampagnen frei, die den Preis anheben, den die Kundschaft in den EIGENEN
    * Läden ohne Tempoverlust akzeptiert. Darf jede Industrie bauen. */
@@ -1746,6 +1781,7 @@ const G = {
   chat: Object.fromEntries(ROOMS.map(r => [r, []])),
   contracts: [],        // {id, fromId, toId, good, qty, price, status}
   cartels: [],          // Kartellmodus: {id, name, kopfId, mitglieder[], einladungen[], verdacht, gegruendet}
+  familienRespekt: {},  // Kartellmodus: Respekt je Familie (famiglia/syndikat/bratwa/triade)
   tick: 0, winner: null, report: null,
   /* Warteraum: die Runde läuft erst, wenn der Host sie startet — bis dahin
    * sammeln sich die Mitspieler, ohne dass Produktion oder Bots anlaufen. */
@@ -1780,7 +1816,8 @@ function newPlayer(pid, name, color, industry, socketId) {
   /* Testhilfe (nur per Umgebungsvariable): TEST_GARAGE=1 legt jedem neuen
    * Spieler Fahrzeuge, Tuningteile und Baumaterial ins Lager — zum schnellen
    * Durchspielen des Renntags, ohne die Produktionskette hochzuziehen. */
-  if (process.env.TEST_GARAGE) { inv.eauto = 2; inv.benzinauto = 1; inv.rennreifen = 12; inv.rennsoftware = 12; inv.ziegel = 200; inv.beton = 40; }
+  if (process.env.TEST_GARAGE) { inv.eauto = 2; inv.benzinauto = 1; inv.rennreifen = 12; inv.rennsoftware = 12; inv.ziegel = 200; inv.beton = 40;
+    inv.obst = 150; inv.wasser = 150; inv.erze = 150; inv.kannabis = 80; inv.strom = 200; inv.elektronik = 20; }
   return { id: pid, name, color, industry, industries: [industry], cash: START_CASH, xp: 0, lvl: 1,
     inv,
     equityAvg: {},     // companyId -> Ø-Einstand je 25-%-Block (Durchschnittsmethode)
@@ -2488,6 +2525,11 @@ function snapshot() {
     /* Wer mit wem gemeinsame Sache macht, ist öffentlich; wie heiß es dem
      * Kartell unter den Füßen wird, erfahren nur seine Mitglieder (privateState). */
     cartels: MODE === "kartell" ? G.cartels.map(kartellPublic) : null,
+    familien: MODE === "kartell" ? Object.entries(FAMILIEN).map(([fid, f]) => ({
+      id: fid, name: f.name, farbe: f.farbe, produkt: f.produkt, gebaeude: f.gebaeude,
+      respekt: Math.round(G.familienRespekt[fid] || 0),
+      mitglieder: Object.values(G.players).filter(p2 => p2.familie === fid).map(p2 => p2.name),
+    })) : null,
     hof: HOF,
     routes: MAP_ROUTES,
     lobby: G.started ? null : { winGoal: WIN_NW, bots: botAuswahl, botLevel: botLevelKey, mode: MODE, saison: SAISON_RENNEN, saisonWahl: SAISON_CHOICES },
@@ -2496,6 +2538,7 @@ function snapshot() {
       bank: t.bank, news: t.news, schwarz: t.schwarz, deko: t.deko, locked: t.locked, unlockCost: t.unlockCost, owner: t.owner, btype: t.btype, lien: t.lien, shop: t.shop, paused: t.paused, level: t.level, autos: autosDyn(t) })),
     players: Object.fromEntries(Object.entries(G.players).map(([sid, p]) =>
       [sid, { id: sid, name: p.name, color: p.color, lvl: p.lvl, xp: p.xp, industry: p.industry, industries: p.industries,
+              familie: p.familie || null,
               netWorth: Math.round(netWorth(p)), rating: rating(p), rank: rankOf[sid],
               /* Kennzahlen für den Aktienhandel an der Bank */
               marketValue: Math.round(companyValue(p)), blockPrice: blockPrice(p), rev10: Math.round(rev10(p)),
@@ -2791,6 +2834,16 @@ io.on("connection", socket => {
       ps.soll = planSollFuer(G.players[pid], G.plan.phase - 1);
       ps.budget = planBudgetFuer(ps);
     }
+    /* Kartellmodus: Wer nach dem Start dazukommt (auch die Bots — sie
+     * registrieren sich asynchron NACH startRound), landet sofort in der
+     * jeweils kleinsten Familie. */
+    if (MODE === "kartell" && G.started && !G.players[pid].familie) {
+      const fids = Object.keys(FAMILIEN);
+      G.players[pid].familie = fids.slice().sort((a, b) =>
+        Object.values(G.players).filter(x => x.familie === a).length -
+        Object.values(G.players).filter(x => x.familie === b).length)[0];
+      io.emit("notice", { text: `${name} schwört der ${FAMILIEN[G.players[pid].familie].name} die Treue.` });
+    }
     io.emit("notice", { text: `${name} ist der Sitzung beigetreten.` + (Object.keys(G.players).length === 1 ? ` Rundenziel: ${WIN_NW.toLocaleString("de-DE")} $` : "") });
     ack?.({ ok: true, goods: GOODS, btypes: BTYPES, rooms: ROOMS, you: pid, winGoal: WIN_NW, questDefs: QUESTS, industry, industries: INDUSTRIES,
       /* Dieselben Motorsport-Daten wie beim Wiederverbinden weiter oben. Fehlten
@@ -2845,6 +2898,20 @@ io.on("connection", socket => {
      * zuerst zugreift, hat sie. */
     if (!G.fahrer.length) G.fahrer = FAHRER_NAMEN.map((_, i) => fahrerBauen(i));
     startBots();
+    if (MODE === "kartell") {
+      /* Familien auffüllen: Wer keine gewählt hat (auch Bots), kommt reihum in
+       * die jeweils kleinste Familie — vier lebende Familien sind der Modus. */
+      const fids = Object.keys(FAMILIEN);
+      for (const sp of Object.values(G.players)) {
+        if (sp.familie) continue;
+        const kleinste = fids.slice().sort((a, b) =>
+          Object.values(G.players).filter(x => x.familie === a).length -
+          Object.values(G.players).filter(x => x.familie === b).length)[0];
+        sp.familie = kleinste;
+      }
+      for (const f of fids) G.familienRespekt[f] ??= 0;
+      io.emit("notice", { text: "Die vier Familien teilen die Stadt unter sich auf — Respekt entscheidet, wer das Sagen hat." });
+    }
     if (MODE === "renntag") {
       /* Eigene Flaeche, dann jeder Spieler seine Startausruestung. Wie beim
        * Plan- und Einsteiger-Modus muss die Karte danach einmal vollstaendig
@@ -3062,6 +3129,36 @@ io.on("connection", socket => {
     return true;
   };
 
+  /* --- Familie wählen (vor dem Start; danach ist der Schwur bindend) --- */
+  socket.on("familieWaehlen", guard((p, { fid }, ack) => {
+    if (MODE !== "kartell") return ack?.({ error: "Familien gibt es nur in der Kartellwirtschaft" });
+    if (!FAMILIEN[fid]) return ack?.({ error: "Diese Familie kennt hier niemand" });
+    if (G.started && p.familie) return ack?.({ error: "Der Familie schwört man nur einmal — ein Wechsel wäre Verrat" });
+    p.familie = fid;
+    io.emit("notice", { text: `${p.name} schwört der ${FAMILIEN[fid].name} die Treue.` });
+    ack?.({ ok: true });
+  }));
+
+  /* --- Hehler: der einzige Absatzweg für illegale Ware ---
+   * Fester Ankaufspreis, bar auf die Hand — und jeder verkaufte Posten
+   * bringt der Familie Respekt (1 Punkt je 100 $ Warenwert). */
+  socket.on("hehlerVerkauf", guard((p, { good, qty }, ack) => {
+    if (MODE !== "kartell") return ack?.({ error: "Der Hehler arbeitet nur in der Kartellwirtschaft" });
+    if (!ILLEGAL.includes(good)) return ack?.({ error: "Der Hehler nimmt nur heiße Ware" });
+    qty = Math.floor(+qty) || Math.floor(p.inv[good] || 0);
+    qty = Math.min(qty, Math.floor(p.inv[good] || 0));
+    if (qty <= 0) return ack?.({ error: `Kein ${GOODS[good].name} im Lager` });
+    const erloes = qty * BASEP[good];
+    p.inv[good] -= qty;
+    p.cash += erloes;
+    p.stats.umsatz = (p.stats.umsatz || 0) + erloes;
+    const respekt = erloes / 100;
+    if (p.familie) G.familienRespekt[p.familie] = (G.familienRespekt[p.familie] || 0) + respekt;
+    gainXp(p, Math.min(30, Math.round(respekt)));
+    logTx(p, "Kartell", `Hehler: ${qty}× ${GOODS[good].name} verkauft (+${Math.round(respekt)} Respekt)`, erloes);
+    ack?.({ ok: true, erloes });
+  }));
+
   socket.on("kartellGruenden", guard((p, { name }, ack) => {
     if (!kartellModus(ack)) return;
     if (kartellVon(p)) return ack?.({ error: "Du bist schon in einem Kartell" });
@@ -3209,6 +3306,12 @@ io.on("connection", socket => {
     /* Der Rennstall ist branchenfrei, aber auf einen je Firma begrenzt: Ohne
      * diese Grenze wäre "mehr Ställe" die beste Strategie, und der Wettpool
      * gehörte am Ende dem, der am meisten Kacheln hält. */
+    /* Familien-Gebäude: nur im Kartellmodus, nur von der eigenen Familie. */
+    if (bt.familie) {
+      if (MODE !== "kartell") return ack?.({ error: "Solche Geschäfte gibt es nur in der Kartellwirtschaft" });
+      if (p.familie !== bt.familie)
+        return ack?.({ error: `Die ${FAMILIEN[bt.familie].name} lässt sich nicht in die Karten schauen — nur ihre Mitglieder bauen ${bt.name}` });
+    }
     if (bt.racing) {
       /* Planwirtschaft und Kartellmodus: keine Renntage, kein Wettpool — ein
        * Rennstall wäre ein totes Gebäude mit laufenden Fahrergehältern. */
@@ -3596,6 +3699,8 @@ io.on("connection", socket => {
   socket.on("placeOrder", guard((p, { side, good, qty, price }, ack) => {
     /* Planwirtschaft: freien Handel gibt es offiziell nicht. */
     if (MODE === "plan") return ack?.({ error: "In der Planwirtschaft gibt es keine freie Börse — nutze die Zuteilung oder den Schwarzmarkt im Planbüro." });
+    /* Illegale Ware taucht in keinem Orderbuch auf. */
+    if (ILLEGAL.includes(good)) return ack?.({ error: "Heiße Ware gehört nicht an die Börse — der Hehler zahlt bar und fragt nicht" });
     qty = Math.floor(+qty); price = Math.round(+price * 100) / 100;
     if (!GOODS[good] || !["sell", "buy"].includes(side)) return ack?.({ error: "Ungültig" });
     if (!(qty > 0) || !(price > 0)) return ack?.({ error: "Menge/Preis > 0 nötig" });
@@ -3878,6 +3983,7 @@ io.on("connection", socket => {
     G.rennen = null; G.naechstesRennenIn = RENN_INTERVALL; G.werksTeams = werksTeamsBauen();
     G.wm = {}; G.saisonRennen = 0; G.fanAuszahlungIn = FAN_TAKT;
     G.hofGespeichert = false;
+    G.cartels = []; G.familienRespekt = {};
     G.started = false; G.hostId = null;   // neue Runde beginnt wieder im Warteraum
     G.groupOrder = null; G.nextGroupIn = 20;
     G.nextDividendIn = DIVIDEND_INTERVAL;
