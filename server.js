@@ -14,6 +14,47 @@ import { fileURLToPath } from "url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
+
+/* ---------- Fremde Herkunft zulassen ----------
+ * Wird das Spiel von einem Portal ausgeliefert (die hosten nur die Dateien,
+ * der Server bleibt unserer), kommt die Verbindung von deren Domain. Ohne
+ * Freigabe weist Socket.io sie ab — es laesst von Haus aus nur dieselbe
+ * Herkunft zu.
+ *
+ * Geprueft wird per MUSTER, nicht per Liste: CrazyGames laeuft unter Dutzenden
+ * Laenderdomains (crazygames.com, .fr, .com.br, .co.id …) und legt neue nach.
+ * Eine ausgeschriebene Liste waere am Tag ihrer Entstehung unvollstaendig und
+ * faellt erst auf, wenn Spieler aus dem falschen Land nicht mehr hereinkommen.
+ *
+ * Kein "*": Mit Wildcard duerfte jede beliebige Seite im Netz eine Verbindung
+ * zu diesem Spielserver aufbauen. Zusaetzliche Adressen (eigene Domain,
+ * Testumgebung) kommen ueber CORS_EXTRA, kommagetrennt. */
+const CORS_EXTRA = String(process.env.CORS_EXTRA || "").split(",").map(s => s.trim()).filter(Boolean);
+/* crazygames.<tld> und beliebige Unterdomains davon; die TLD darf zweiteilig
+ * sein (.com.br). Dazu die WebView der iOS-App, die eine capacitor-Herkunft hat. */
+const PORTAL = /^https?:\/\/([a-z0-9-]+\.)*crazygames\.[a-z]{2,}(\.[a-z]{2,})?$/i;
+function herkunftErlaubt(origin) {
+  /* Ohne Origin-Kopf: gleiche Herkunft oder ein Client ohne Browser (unsere
+   * Bots, Testskripte). Beides ist der bisherige, normale Fall. */
+  if (!origin) return true;
+  if (PORTAL.test(origin)) return true;
+  if (origin === "capacitor://app.crazygames.com") return true;
+  return CORS_EXTRA.includes(origin);
+}
+/* Dieselbe Regel fuer die /api-Aufrufe — der Client holt darueber Rundenliste,
+ * Einladungslink und Bestenliste, und die laufen nicht ueber Socket.io. */
+app.use((req, res, next) => {
+  const o = req.headers.origin;
+  if (o && herkunftErlaubt(o)) {
+    res.setHeader("Access-Control-Allow-Origin", o);
+    res.setHeader("Vary", "Origin");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+    res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
+    if (req.method === "OPTIONS") return res.sendStatus(204);
+  }
+  next();
+});
+
 /* Vom Standort dieser Datei aus, nicht vom Arbeitsverzeichnis: Sonst liefert
  * der Server stillschweigend nichts aus, sobald er von woanders gestartet wird
  * — genau das ist beim Dev-Server passiert. */
@@ -366,7 +407,9 @@ function hofSpeichern() {
 }
 
 const httpServer = http.createServer(app);
-const io = new Server(httpServer);
+const io = new Server(httpServer, {
+  cors: { origin: (origin, cb) => cb(null, herkunftErlaubt(origin)), credentials: false },
+});
 
 /* ---------- Stammdaten ---------- */
 /* Produktionsschema:

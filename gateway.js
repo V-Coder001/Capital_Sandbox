@@ -48,6 +48,35 @@ const CODE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";          // ohne verwechs
 const GATEWAY_BOOT_ID = crypto.randomUUID();
 
 const app = express();
+
+/* ---------- Fremde Herkunft zulassen ----------
+ * Dieselbe Regel wie in server.js. Sie muss hier stehen, weil die Runden-
+ * verwaltung (/api/mode, /api/rooms, /api/stats) am Gateway haengt: Wird das
+ * Spiel von einem Portal ausgeliefert, fragt der Client zuerst hier an — und
+ * ohne Freigabe scheitert er, bevor er ueberhaupt eine Runde findet.
+ *
+ * Geprueft wird per Muster statt per Liste: CrazyGames laeuft unter Dutzenden
+ * Laenderdomains und legt neue nach. Kein "*", sonst duerfte jede Seite im Netz
+ * Runden auf diesem Server aufmachen. */
+const CORS_EXTRA = String(process.env.CORS_EXTRA || "").split(",").map(x => x.trim()).filter(Boolean);
+const PORTAL = /^https?:\/\/([a-z0-9-]+\.)*crazygames\.[a-z]{2,}(\.[a-z]{2,})?$/i;
+function herkunftErlaubt(origin) {
+  if (!origin) return true;                                   // gleiche Herkunft oder kein Browser
+  if (PORTAL.test(origin)) return true;
+  if (origin === "capacitor://app.crazygames.com") return true;
+  return CORS_EXTRA.includes(origin);
+}
+app.use((req, res, next) => {
+  const o = req.headers.origin;
+  if (o && herkunftErlaubt(o)) {
+    res.setHeader("Access-Control-Allow-Origin", o);
+    res.setHeader("Vary", "Origin");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+    res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
+    if (req.method === "OPTIONS") return res.sendStatus(204);
+  }
+  next();
+});
 app.use(express.static(path.join(__dirname, "public")));   // vom Dateistandort, nicht vom Arbeitsverzeichnis
 app.get("/api/mode", (_req, res) => res.json({ multiroom: true, maxRooms: MAX_ROOMS, bootId: GATEWAY_BOOT_ID }));
 /* Wie viele Runden gerade laufen — der Startbildschirm zeigt das an, damit
