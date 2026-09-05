@@ -481,6 +481,10 @@ function bezirkeBerechnen() {
       kontrolle = reihen[0][0];
     return { id: i, name: BEZIRK_NAMEN[i], kontrolle, staerken: s };
   });
+  /* Mafia-Auftrag „Bezirk kontrollieren“: zählt für jedes Familienmitglied,
+   * sobald die Familie irgendeinen Bezirk hält (questProg ignoriert Erledigte). */
+  for (const b of G.bezirke) if (b.kontrolle)
+    for (const m of Object.values(G.players)) if (m.familie === b.kontrolle) questProg(m, "bezirk");
   /* Pate: die meisten Bezirke, eindeutig — sonst bleibt der Stuhl leer. */
   const zaehl = {};
   for (const b of G.bezirke) if (b.kontrolle) zaehl[b.kontrolle] = (zaehl[b.kontrolle] || 0) + 1;
@@ -2360,8 +2364,20 @@ const QUESTS = [
   { id: "upgrade", text: "Level ein Gebäude mit Elektronik auf Stufe 2", en: "Upgrade a building to level 2 using electronics",  target: 1,    reward: 1500 },
   { id: "shares",  text: "Kaufe an der Stadtbank Anteile einer Firma", en: "Buy shares in a company at the city bank",    target: 1,    reward: 1800 },
 ];
+/* Im Kartellmodus führen MAFIA-AUFTRÄGE durchs Spiel statt der Börsen-Basics:
+ * Sie zeigen dem Spieler genau die Schleife, um die sich der Modus dreht —
+ * Familienbetrieb, Hehler, Bezirk, Überfall, Sperre, Schutzgeld. */
+const KARTELL_QUESTS = [
+  { id: "familiebau", text: "Baue den Betrieb deiner Familie", en: "Build your family's business",            target: 1, reward: 1500 },
+  { id: "hehler",     text: "Verkaufe heiße Ware beim Hehler", en: "Sell hot goods to the fence",             target: 1, reward: 1000 },
+  { id: "bezirk",     text: "Kontrolliere mit deiner Familie einen Bezirk", en: "Control a district with your family", target: 1, reward: 2000 },
+  { id: "ueberfall",  text: "Wage einen Überfall auf einen Werttransport", en: "Attempt a heist on a transport",  target: 1, reward: 800 },
+  { id: "sperre",     text: "Errichte eine Straßensperre", en: "Set up a road block",                          target: 1, reward: 800 },
+  { id: "schutzgeld", text: "Kassiere Schutzgeld aus einem Bezirk", en: "Collect protection money",            target: 1, reward: 600 },
+];
+const QUESTSET = () => MODE === "kartell" ? KARTELL_QUESTS : QUESTS;
 function questProg(p, id, n = 1) {
-  const def = QUESTS.find(q => q.id === id);
+  const def = QUESTSET().find(q => q.id === id);
   const q = p.quests[id] ??= { n: 0, done: false };
   if (!def || q.done) return;
   q.n += n;
@@ -2614,6 +2630,10 @@ function snapshot() {
     saison: MODE === "renntag" ? { gefahren: G.saisonRennen, gesamt: SAISON_RENNEN } : null,
     tutorialEnde: !!G.tutorialEnde,
     winGrund: G.winGrund || null,
+    /* Immer mitschicken: Die Aufgaben hängen am Modus, und der kann sich nach
+     * der Registrierung noch ändern (Lobby-Wahl) — die Liste aus dem
+     * Register-Ack wäre dann veraltet. */
+    questDefs: QUESTSET(),
     started: G.started, hostId: G.hostId,
     mode: MODE, plan: MODE === "plan" ? G.plan : null,
     /* Wer mit wem gemeinsame Sache macht, ist öffentlich; wie heiß es dem
@@ -2897,7 +2917,7 @@ io.on("connection", socket => {
     socket.data.registered = true;
     io.emit("notice", { text: `${p.name} ist wieder da.` });
     ack?.({ ok: true, goods: GOODS, btypes: BTYPES, rooms: ROOMS, you: token, winGoal: WIN_NW,
-      questDefs: QUESTS, industry: p.industry, industries: INDUSTRIES, racingUnlock: RACING_UNLOCK_NW,
+      questDefs: QUESTSET(), industry: p.industry, industries: INDUSTRIES, racingUnlock: RACING_UNLOCK_NW,
       tuning: TUNING, tuningMax: TUNING_MAX, raceStats: RACE_STATS, stats: STATS,
       botLevels: Object.fromEntries(Object.entries(BOT_LEVELS).map(([k, v]) => [k, v.name])),
       retailFlow: Object.fromEntries(Object.keys(GOODS).map(k => [k, +retailFlow(k).toFixed(3)])),
@@ -2945,10 +2965,13 @@ io.on("connection", socket => {
       G.players[pid].familie = fids.slice().sort((a, b) =>
         Object.values(G.players).filter(x => x.familie === a).length -
         Object.values(G.players).filter(x => x.familie === b).length)[0];
+      /* Späteinsteiger bekommen dasselbe Familien-Startkapital wie alle. */
+      G.players[pid].cash += 8000;
+      logTx(G.players[pid], "Kartell", "Startkapital der Familie", 8000);
       io.emit("notice", { text: `${name} schwört „${FAMILIEN[G.players[pid].familie].name}“ die Treue.` });
     }
     io.emit("notice", { text: `${name} ist der Sitzung beigetreten.` + (Object.keys(G.players).length === 1 ? ` Rundenziel: ${WIN_NW.toLocaleString("de-DE")} $` : "") });
-    ack?.({ ok: true, goods: GOODS, btypes: BTYPES, rooms: ROOMS, you: pid, winGoal: WIN_NW, questDefs: QUESTS, industry, industries: INDUSTRIES,
+    ack?.({ ok: true, goods: GOODS, btypes: BTYPES, rooms: ROOMS, you: pid, winGoal: WIN_NW, questDefs: QUESTSET(), industry, industries: INDUSTRIES,
       /* Dieselben Motorsport-Daten wie beim Wiederverbinden weiter oben. Fehlten
        * sie hier, stünde beim frisch beigetretenen Spieler im Panel überall
        * "undefined" — genau das war beim ersten Blick auf die Oberfläche zu sehen. */
@@ -3013,6 +3036,14 @@ io.on("connection", socket => {
         sp.familie = kleinste;
       }
       for (const f of fids) G.familienRespekt[f] ??= 0;
+      /* Weicher Einstieg: Startkapital der Familie obendrauf — der Betrieb
+       * soll in Minute zwei stehen, nicht erst nach einer Börsenlehre.
+       * Hier statt in newPlayer, weil die Registrierung VOR der Moduswahl
+       * in der Lobby passiert. */
+      for (const sp of Object.values(G.players)) {
+        sp.cash += 8000;
+        logTx(sp, "Kartell", "Startkapital der Familie", 8000);
+      }
       io.emit("notice", { text: "Die vier Familien teilen die Stadt unter sich auf — Respekt entscheidet, wer das Sagen hat." });
     }
     if (MODE === "renntag") {
@@ -3271,6 +3302,7 @@ io.on("connection", socket => {
       }
     }
     gainXp(p, Math.min(30, Math.round(respekt)));
+    questProg(p, "hehler");
     logTx(p, "Kartell", `Hehler: ${qty}× ${GOODS[good].name} verkauft (+${Math.round(respekt)} Respekt)`, erloes);
     ack?.({ ok: true, erloes, abgabe });
   }));
@@ -3288,6 +3320,7 @@ io.on("connection", socket => {
     if (p.ueberfallSperre && p.ueberfallSperre > G.tick)
       return ack?.({ error: `Zu heiß — warte noch ${p.ueberfallSperre - G.tick} s` });
     p.ueberfallSperre = G.tick + UEBERFALL_COOLDOWN;
+    questProg(p, "ueberfall");   // der Versuch zählt — Mut wird belohnt
     const pistolen = Math.floor(p.inv.pistole || 0);
     const chance = 0.5 + Math.min(0.3, pistolen * 0.06) + (tr.gestoppt ? 0.25 : 0)
       - Math.min(0.25, (G.fahndung[p.familie] || 0) / 400);
@@ -3336,6 +3369,7 @@ io.on("connection", socket => {
     p.cash -= SPERRE_KOSTEN;
     t.sperre = { familie: p.familie, bis: G.tick + SPERRE_DAUER };
     G.fahndung[p.familie] = (G.fahndung[p.familie] || 0) + 5;
+    questProg(p, "sperre");
     logTx(p, "Kartell", `Straßensperre errichtet (${BEZIRK_NAMEN[bezirkVon(x, y)]})`, -SPERRE_KOSTEN);
     io.emit("notice", { text: `🚧 ${FAMILIEN[p.familie].name} sperrt eine Straße im ${BEZIRK_NAMEN[bezirkVon(x, y)]}.` });
     ack?.({ ok: true });
@@ -3613,6 +3647,7 @@ io.on("connection", socket => {
     for (const [g, n] of Object.entries(mats)) p.inv[g] -= n;
     if (t.locked) { t.locked = false; gainXp(p, 30); }
     if (bt.out || bt.proc) questProg(p, "build");
+    if (bt.familie) questProg(p, "familiebau");
     p.cash -= bt.cost + unlockCost; t.owner = p.id; t.btype = btype; t.level = 1; gainXp(p, 20);
     p.stats.gebaut++; p.stats.ausgaben += bt.cost + unlockCost;
     if (bt.retail) t.shop = Array.from({ length: bt.retail.slots }, () => null);
@@ -4482,6 +4517,7 @@ function runTick() {
         const teil = Math.round(SCHUTZGELD_JE_BEZIRK / mitglieder.length);
         for (const m of mitglieder) {
           m.cash += teil;
+          questProg(m, "schutzgeld");
           logTx(m, "Kartell", `Schutzgeld aus dem ${b.name}`, teil);
         }
         G.familienRespekt[b.kontrolle] = (G.familienRespekt[b.kontrolle] || 0) + 2;
@@ -4834,7 +4870,9 @@ function runTick() {
   /* Siegbedingung (Sandbox: Nettovermögen — in der Planwirtschaft zählen nur Punkte) */
   /* Im Renntag entscheidet die Meisterschaft, nicht das Vermoegen — sonst
    * gewaenne dort der beste Kaufmann statt des besten Rennstalls. */
-  if (MODE !== "plan" && MODE !== "renntag" && !G.winner) for (const p of Object.values(G.players)) {
+  /* Im Kartellmodus zählt nicht das Konto, sondern die Straße: Dort gewinnt
+   * ausschließlich, wer die Bezirke beherrscht — kein Vermögenssieg. */
+  if (MODE !== "plan" && MODE !== "renntag" && MODE !== "kartell" && !G.winner) for (const p of Object.values(G.players)) {
     if (netWorth(p) >= WIN_NW) {
       G.winner = p.name;
       /* Auswertung genau einmal berechnen und in den Zustand legen — sie geht

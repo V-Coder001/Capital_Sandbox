@@ -6699,10 +6699,18 @@ function kartellRendern(state, me, myId) {
   if (!aktiv) { alterHud?.remove(); return; }
   const hudFam = (state.familien || []).find(f => f.id === state.players[myId]?.familie);
   const nwEl = document.getElementById("networth");
+  /* Im Kartellmodus zählt die Straße, nicht das Konto: Die Vermögensanzeige
+   * weicht dem Familienstand — Respekt-Rang und Bezirke bis zum Stadtsieg.
+   * Nur ausgeblendet, nie umgebaut (die Kinder nwv/goalv braucht render()). */
+  if (nwEl) nwEl.style.display = hudFam ? "none" : "";
   if (nwEl && hudFam) {
     let hud = alterHud;
     if (!hud) { hud = document.createElement("span"); hud.id = "mafiaHud"; nwEl.after(hud); }
-    hud.innerHTML = ` · <b style="color:${hudFam.farbe}">${state.pate === hudFam.id ? "👑 " : ""}${hudFam.name}</b> <span class="meta">${hudFam.respekt} R</span>`;
+    const sortiert = [...state.familien].sort((a, b) => b.respekt - a.respekt);
+    const rang = sortiert.findIndex(f => f.id === hudFam.id) + 1;
+    const bezirke = (state.bezirke || []).filter(b => b.kontrolle === hudFam.id).length;
+    hud.innerHTML = `<b style="color:${hudFam.farbe}">${state.pate === hudFam.id ? "👑 " : ""}${hudFam.name}</b>
+      <span class="meta"> · ${hudFam.respekt} Respekt · Rang ${rang}/4 · Bezirke <b style="color:${bezirke >= 4 ? "var(--accent2)" : "inherit"}">${bezirke}/6</b></span>`;
   } else alterHud?.remove();
   const k = me.kartell;
   const inhalt = document.getElementById("kartellInhalt");
@@ -7184,9 +7192,13 @@ function render({ state, me, myId, chat, room }) {
   if (state.winGoal) document.getElementById("goalv").textContent = fmt(state.winGoal);
 
   /* Starter-Aufgaben-Widget: offene Aufgaben mit Fortschritt, fertig = ausgeblendet */
-  const qdefs = store.get().meta?.questDefs || [];
+  const qdefs = state.questDefs || store.get().meta?.questDefs || [];
   const open = qdefs.filter(d => !me.quests?.[d.id]?.done);
   const qEl = document.getElementById("quests");
+  /* Im Kartellmodus heißen die Aufgaben, was sie sind. */
+  qEl.firstElementChild.textContent = state.mode === "kartell"
+    ? (SPRACHE === "en" ? "MOB CONTRACTS" : "Mafia-Aufträge")
+    : (SPRACHE === "en" ? "STARTER TASKS" : "Starter-Aufgaben");
   /* Die Starter-Aufgaben führen zu Börse und Stadtbank — beides gibt es in
    * der Planwirtschaft nicht, dort bleibt das Widget aus. */
   if (open.length && !state.winner && state.mode !== "plan") {
