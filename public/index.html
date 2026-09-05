@@ -4335,6 +4335,37 @@ function draw() {
     if (t.locked) { cx.fillStyle="rgba(4,10,18,.26)"; cx.fill();
       drawLock(sx, sy + TH / 2 - 1); }
   }
+  /* Territorium (Kartellmodus): Kacheln kontrollierter Bezirke bekommen einen
+   * hauchdünnen Schleier in Familienfarbe, dazu ein Label je Bezirk. */
+  if (st.mode === "kartell" && st.bezirke && st.familien) {
+    const famFarbe = Object.fromEntries(st.familien.map(f => [f.id, f.farbe]));
+    const bezirkVonC = (x, y) => Math.min(2, Math.floor(x / 9)) + 3 * Math.min(2, Math.floor(y / 9));
+    for (const t of st.map) {
+      if (t.water) continue;
+      const b = st.bezirke[bezirkVonC(t.x, t.y)];
+      if (!b?.kontrolle) continue;
+      const [sx, sy] = iso(t.x, t.y);
+      cx.globalAlpha = .09;
+      cx.fillStyle = famFarbe[b.kontrolle] || "#888";
+      cx.beginPath(); cx.moveTo(sx, sy); cx.lineTo(sx + TW / 2, sy + TH / 2); cx.lineTo(sx, sy + TH); cx.lineTo(sx - TW / 2, sy + TH / 2); cx.closePath(); cx.fill();
+      cx.globalAlpha = 1;
+    }
+    for (const b of st.bezirke) {
+      const zx = (b.id % 3) * 9 + 4, zy = Math.floor(b.id / 3) * 9 + 4;
+      const [sx, sy] = iso(zx, zy);
+      cx.font = "700 11px sans-serif"; cx.textAlign = "center";
+      cx.fillStyle = "rgba(8,12,20,.55)";
+      cx.fillText(b.name, sx + 1, sy + 1);
+      cx.fillStyle = b.kontrolle ? famFarbe[b.kontrolle] : "rgba(220,228,240,.5)";
+      cx.fillText(b.name, sx, sy);
+      if (b.kontrolle) {
+        const fam = st.familien.find(f => f.id === b.kontrolle);
+        cx.font = "600 9px sans-serif";
+        cx.fillStyle = "rgba(220,228,240,.65)";
+        cx.fillText(fam?.name || "", sx, sy + 12);
+      }
+    }
+  }
   /* Wasser-Effekte in einem eigenen Durchgang — direkt beim Kachelzeichnen
    * würden die danach gemalten Nachbarrauten sie sofort wieder übermalen. */
   for (const t of st.map) {
@@ -6535,7 +6566,7 @@ function kartellRendern(state, me, myId) {
   if (nwEl && hudFam) {
     let hud = alterHud;
     if (!hud) { hud = document.createElement("span"); hud.id = "mafiaHud"; nwEl.after(hud); }
-    hud.innerHTML = ` · <b style="color:${hudFam.farbe}">${hudFam.name}</b> <span class="meta">${hudFam.respekt} R</span>`;
+    hud.innerHTML = ` · <b style="color:${hudFam.farbe}">${state.pate === hudFam.id ? "👑 " : ""}${hudFam.name}</b> <span class="meta">${hudFam.respekt} R</span>`;
   } else alterHud?.remove();
   const k = me.kartell;
   const inhalt = document.getElementById("kartellInhalt");
@@ -6558,18 +6589,36 @@ function kartellRendern(state, me, myId) {
         <span class="meta">${Math.floor(me.inv[g])} Stück · ${fmt(state.avg?.[g] || 0)}/Stk</span>
         <button class="buyb" data-hehler="${g}">Alles verkaufen</button>
       </div>`).join("");
+  const bezirksZaehler = {};
+  for (const b of state.bezirke || []) if (b.kontrolle) bezirksZaehler[b.kontrolle] = (bezirksZaehler[b.kontrolle] || 0) + 1;
   const familienHtml = !state.familien ? "" : `
     <div class="joinbox" style="margin-bottom:12px">
-      <div class="lbl">Die vier Familien</div>
+      <div class="lbl">Die vier Familien${state.pate ? ` · 👑 Pate: ${state.familien.find(f => f.id === state.pate)?.name}` : ""}</div>
       ${[...state.familien].sort((a, b) => b.respekt - a.respekt).map((f, i) => `
         <div style="display:flex;gap:9px;align-items:center;margin:6px 0">
           <span class="meta">${i + 1}.</span>
           <span style="width:10px;height:10px;border-radius:3px;background:${f.farbe};flex:none"></span>
-          <span style="flex:1;${f.id === meineFamilieId ? "font-weight:600" : ""}">${f.name}${f.id === meineFamilieId ? ` <span class="meta" style="color:var(--accent)">· deine Familie</span>` : ""}
-            <span class="meta" style="display:block">${f.mitglieder.join(", ") || "—"} · Ware: ${gname(f.produkt)}</span></span>
+          <span style="flex:1;${f.id === meineFamilieId ? "font-weight:600" : ""}">${f.name}${f.id === state.pate ? " 👑" : ""}${f.id === meineFamilieId ? ` <span class="meta" style="color:var(--accent)">· deine Familie</span>` : ""}
+            <span class="meta" style="display:block">${f.mitglieder.join(", ") || "—"} · Ware: ${gname(f.produkt)} · Bezirke: ${bezirksZaehler[f.id] || 0}</span></span>
           <b>${f.respekt} R</b>
         </div>`).join("")}
+      ${state.pate ? `<p class="note" style="margin:6px 0 0">Der Pate kassiert 10 % aller fremden Hehler-Erlöse als Abgabe.</p>` : ""}
     </div>
+    ${state.bezirke ? `<div class="joinbox" style="margin-bottom:12px">
+      <div class="lbl">Bezirke · Kontrolle bringt Schutzgeld</div>
+      <p class="note" style="margin:0 0 8px">Wer in einem Bezirk die meisten Gebäude hat (mindestens zwei),
+        kontrolliert ihn: ${200} $ Schutzgeld je Minute für die Familie plus Respekt. Die meisten Bezirke machen den Paten.</p>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px">
+        ${state.bezirke.map(b => {
+          const fam = b.kontrolle ? state.familien.find(f => f.id === b.kontrolle) : null;
+          const eigene = (state.players[myId]?.familie && b.staerken?.[state.players[myId].familie]) || 0;
+          return `<div style="background:#0b1322;border:1px solid ${fam ? fam.farbe + "66" : "var(--line)"};border-radius:9px;padding:7px 8px">
+            <div style="font-size:11.5px;font-weight:600">${b.name}</div>
+            <div class="meta" style="font-size:10.5px">${fam ? `<span style="color:${fam.farbe}">${fam.name}</span>` : "umkämpft / frei"}${eigene ? ` · du: ${eigene}` : ""}</div>
+          </div>`;
+        }).join("")}
+      </div>
+    </div>` : ""}
     <div class="joinbox" style="margin-bottom:12px">
       <div class="lbl">Hehler · heiße Ware zu Geld machen</div>
       ${meineFam ? `<p class="note" style="margin:0 0 8px">Deine Familie stellt <b>${gname(meineFam.produkt)}</b> her —

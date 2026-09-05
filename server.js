@@ -447,6 +447,45 @@ const FAMILIEN = {
   bratwa:   { name: "Die Bratwa",   farbe: "#f5c542", produkt: "goldbarren", gebaeude: "goldschmelze" },
   triade:   { name: "Die Triade",   farbe: "#2ecc71", produkt: "zigaretten", gebaeude: "schmuggellager" },
 };
+/* ---- Bezirke (Kartellmodus) ----
+ * Die 26x26-Karte zerfällt in ein 3x3-Raster aus neun Bezirken. Wer in einem
+ * Bezirk die meisten Gebäude stehen hat (mindestens zwei, und mehr als jede
+ * andere Familie), kontrolliert ihn: Schutzgeld jede Minute plus Respekt.
+ * Die Familie mit den meisten Bezirken stellt den PATEN — alle anderen
+ * Familien zahlen ihm 10 % ihrer Hehler-Erlöse als Abgabe. */
+const BEZIRK_NAMEN = ["Hafenviertel", "Altstadt", "Bahnhofsviertel",
+                      "Marktviertel", "Zentrum", "Industriehof",
+                      "Gärtnerviertel", "Küstenpromenade", "Neustadt"];
+const SCHUTZGELD_JE_BEZIRK = 200;   // $ je Minute, unter den Mitgliedern aufgeteilt
+const PATEN_ABGABE = 0.10;          // Anteil der Hehler-Erlöse an den Paten
+const bezirkVon = (x, y) => Math.min(2, Math.floor(x / 9)) + 3 * Math.min(2, Math.floor(y / 9));
+function bezirkeBerechnen() {
+  const staerken = Array.from({ length: 9 }, () => ({}));
+  for (const t of G.map) {
+    if (!t.btype || !t.owner) continue;
+    const fam = G.players[t.owner]?.familie;
+    if (!fam) continue;
+    const b = bezirkVon(t.x, t.y);
+    staerken[b][fam] = (staerken[b][fam] || 0) + 1;
+  }
+  G.bezirke = staerken.map((s, i) => {
+    const reihen = Object.entries(s).sort((a, b2) => b2[1] - a[1]);
+    let kontrolle = null;
+    if (reihen.length && reihen[0][1] >= 2 && (reihen.length === 1 || reihen[0][1] > reihen[1][1]))
+      kontrolle = reihen[0][0];
+    return { id: i, name: BEZIRK_NAMEN[i], kontrolle, staerken: s };
+  });
+  /* Pate: die meisten Bezirke, eindeutig — sonst bleibt der Stuhl leer. */
+  const zaehl = {};
+  for (const b of G.bezirke) if (b.kontrolle) zaehl[b.kontrolle] = (zaehl[b.kontrolle] || 0) + 1;
+  const beste = Object.entries(zaehl).sort((a, b2) => b2[1] - a[1]);
+  const neuerPate = beste.length && (beste.length === 1 || beste[0][1] > beste[1][1]) ? beste[0][0] : null;
+  if (neuerPate !== G.pate) {
+    G.pate = neuerPate;
+    if (neuerPate) io.emit("notice", { text: `👑 ${FAMILIEN[neuerPate].name} stellt jetzt den Paten — die anderen Familien zahlen Abgaben.` });
+    else io.emit("notice", { text: "Der Stuhl des Paten ist verwaist — keine Familie dominiert die Bezirke." });
+  }
+}
 
 /* Industrien: jeder Spieler wählt beim Beitritt EINE — nur deren Gebäude sind
  * baubar (Shops kann jeder). Erzwingt Handel: Agrar braucht Wasser/Strom von
@@ -2525,6 +2564,8 @@ function snapshot() {
     /* Wer mit wem gemeinsame Sache macht, ist öffentlich; wie heiß es dem
      * Kartell unter den Füßen wird, erfahren nur seine Mitglieder (privateState). */
     cartels: MODE === "kartell" ? G.cartels.map(kartellPublic) : null,
+    bezirke: MODE === "kartell" ? G.bezirke : null,
+    pate: MODE === "kartell" ? G.pate : null,
     familien: MODE === "kartell" ? Object.entries(FAMILIEN).map(([fid, f]) => ({
       id: fid, name: f.name, farbe: f.farbe, produkt: f.produkt, gebaeude: f.gebaeude,
       respekt: Math.round(G.familienRespekt[fid] || 0),
@@ -3154,9 +3195,22 @@ io.on("connection", socket => {
     p.stats.umsatz = (p.stats.umsatz || 0) + erloes;
     const respekt = erloes / 100;
     if (p.familie) G.familienRespekt[p.familie] = (G.familienRespekt[p.familie] || 0) + respekt;
+    /* Abgabe an den Paten: 10 % des Erlöses, unter dessen Familie aufgeteilt —
+     * außer man gehört selbst zur Familie des Paten. */
+    let abgabe = 0;
+    if (G.pate && p.familie !== G.pate) {
+      const paten = Object.values(G.players).filter(x2 => x2.familie === G.pate);
+      if (paten.length) {
+        abgabe = Math.round(erloes * PATEN_ABGABE);
+        p.cash -= abgabe;
+        const teil = Math.round(abgabe / paten.length);
+        for (const x2 of paten) { x2.cash += teil; logTx(x2, "Kartell", `Abgabe von ${p.name} an den Paten`, teil); }
+        logTx(p, "Kartell", `Abgabe an den Paten (${FAMILIEN[G.pate].name})`, -abgabe);
+      }
+    }
     gainXp(p, Math.min(30, Math.round(respekt)));
     logTx(p, "Kartell", `Hehler: ${qty}× ${GOODS[good].name} verkauft (+${Math.round(respekt)} Respekt)`, erloes);
-    ack?.({ ok: true, erloes });
+    ack?.({ ok: true, erloes, abgabe });
   }));
 
   socket.on("kartellGruenden", guard((p, { name }, ack) => {
@@ -3983,7 +4037,7 @@ io.on("connection", socket => {
     G.rennen = null; G.naechstesRennenIn = RENN_INTERVALL; G.werksTeams = werksTeamsBauen();
     G.wm = {}; G.saisonRennen = 0; G.fanAuszahlungIn = FAN_TAKT;
     G.hofGespeichert = false;
-    G.cartels = []; G.familienRespekt = {};
+    G.cartels = []; G.familienRespekt = {}; G.bezirke = null; G.pate = null;
     G.started = false; G.hostId = null;   // neue Runde beginnt wieder im Warteraum
     G.groupOrder = null; G.nextGroupIn = 20;
     G.nextDividendIn = DIVIDEND_INTERVAL;
@@ -4192,6 +4246,23 @@ function runTick() {
       if (r.phase === "anmeldung" && r.rest <= 0) rennStarten();
       else if (r.phase === "laeuft") { rennTick(); if (r.rest <= 0) rennBeenden(); }
       else if (r.phase === "ergebnis" && r.rest <= 0) { G.rennen = null; G.naechstesRennenIn = RENN_INTERVALL; }
+    }
+  }
+  /* --- Kartellmodus: Bezirkskontrolle und Schutzgeld --- */
+  if (MODE === "kartell" && G.started && !G.winner) {
+    if (G.tick % 5 === 0) bezirkeBerechnen();
+    if (G.tick % 60 === 0 && G.bezirke) {
+      for (const b of G.bezirke) {
+        if (!b.kontrolle) continue;
+        const mitglieder = Object.values(G.players).filter(p2 => p2.familie === b.kontrolle);
+        if (!mitglieder.length) continue;
+        const teil = Math.round(SCHUTZGELD_JE_BEZIRK / mitglieder.length);
+        for (const m of mitglieder) {
+          m.cash += teil;
+          logTx(m, "Kartell", `Schutzgeld aus dem ${b.name}`, teil);
+        }
+        G.familienRespekt[b.kontrolle] = (G.familienRespekt[b.kontrolle] || 0) + 2;
+      }
     }
   }
   /* Stromabschaltung (Planwirtschaft): Wurde das Volkswirtschaftsziel der
