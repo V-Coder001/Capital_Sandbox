@@ -1349,6 +1349,10 @@ const BTYPES = {
                     proc: { in: { erze: 3, strom: 1 },    out: "goldbarren", rate: .3 } },
   schmuggellager: { name: "Schmuggellager", en: "Smuggling depot",        cost: 3600, out: null, rate: 0, zone: "kueste",    familie: "triade",
                     proc: { in: { kannabis: .5 },         out: "zigaretten", rate: .6 } },
+  /* Illegales Casino (Kartellmodus, jede Familie): kein Produktionsgebäude,
+   * sondern ein Spieltisch — Mitspieler zocken hier 17+4 gegen die Kasse des
+   * Besitzers. Einsätze und Gewinne fließen direkt zwischen den Spielern. */
+  casino: { name: "Illegales Casino", en: "Illegal casino", cost: 6000, out: null, rate: 0, zone: "zentrum", casino: true },
   /* Werbeagentur: produziert nichts und verkauft nichts. Sie schaltet
    * Kampagnen frei, die den Preis anheben, den die Kundschaft in den EIGENEN
    * Läden ohne Tempoverlust akzeptiert. Darf jede Industrie bauen. */
@@ -3336,6 +3340,86 @@ io.on("connection", socket => {
     ack?.({ ok: true });
   }));
 
+  /* --- Illegales Casino: 17+4 gegen die Kasse des Besitzers ---
+   * Der Server hält die Hand, der Client zeigt sie nur an. Einsatz wird beim
+   * Geben abgebucht; am Ende fließt Geld direkt zwischen Gast und Besitzer.
+   * Klassische 17+4-Karten: 7, 8, 9, 10, Unter (2), Ober (3), König (4),
+   * Ass (11) — Ziel 21, die Bank zieht bis 17 und gewinnt den Gleichstand. */
+  const KARTEN = [{ w: 7, n: "7" }, { w: 8, n: "8" }, { w: 9, n: "9" }, { w: 10, n: "10" },
+                  { w: 2, n: "U" }, { w: 3, n: "O" }, { w: 4, n: "K" }, { w: 11, n: "A" }];
+  const karte = () => KARTEN[Math.floor(Math.random() * KARTEN.length)];
+  const handWert = h => h.reduce((s, k) => s + k.w, 0);
+  const casinoEnde = (p, gast) => {
+    const sp = p.casinoSpiel; p.casinoSpiel = null;
+    const owner = G.players[sp.ownerId];
+    const wert = handWert(sp.hand);
+    let bank = sp.bankHand || [];
+    let status, auszahlung = 0;
+    /* Zwei Asse aus der Hand sind das „Feuer“ — nach klassischer 17+4-Regel
+     * ein sofortiger Sieg, kein Überkauf. */
+    if (wert === 22 && sp.hand.length === 2) status = "gewonnen";
+    else if (wert > 21) status = "verloren";
+    else {
+      while (handWert(bank) < 17) bank.push(karte());
+      const bw = handWert(bank);
+      if (bw > 21 || bw < wert) status = "gewonnen";
+      else if (bw === wert) status = "push";
+      else status = "verloren";
+    }
+    if (!owner) { p.cash += sp.einsatz; status = "push"; }   // Besitzer weg: Einsatz zurück
+    else if (status === "gewonnen") {
+      /* Einsatz zurück plus Gewinn aus der Kasse des Besitzers — mehr als der
+       * Besitzer bar hat, kann der Tisch nicht auszahlen. */
+      auszahlung = Math.min(sp.einsatz, Math.max(0, owner.cash));
+      p.cash += sp.einsatz + auszahlung;
+      owner.cash -= auszahlung;
+      logTx(p, "Kartell", `Casino: 17+4 gewonnen (${wert} gegen ${handWert(bank)})`, auszahlung);
+      logTx(owner, "Kartell", `Casino: ${p.name} sprengt den Tisch`, -auszahlung);
+    } else if (status === "push") {
+      p.cash += sp.einsatz;
+    } else {
+      owner.cash += sp.einsatz;
+      owner.stats.umsatz = (owner.stats.umsatz || 0) + sp.einsatz;
+      logTx(p, "Kartell", `Casino: 17+4 verloren (${wert > 21 ? "über 21" : wert + " gegen " + handWert(bank)})`, -sp.einsatz);
+      logTx(owner, "Kartell", `Casino: das Haus gewinnt gegen ${p.name}`, sp.einsatz);
+      if (owner.familie) G.familienRespekt[owner.familie] = (G.familienRespekt[owner.familie] || 0) + 2;
+    }
+    if (owner?.familie) G.fahndung[owner.familie] = (G.fahndung[owner.familie] || 0) + 2;
+    return { status, hand: sp.hand, wert, bank, bankWert: handWert(bank), auszahlung, einsatz: sp.einsatz };
+  };
+
+  socket.on("casinoStart", guard((p, { x, y, einsatz }, ack) => {
+    if (MODE !== "kartell") return ack?.({ error: "Casinos gibt es nur in der Kartellwirtschaft" });
+    const t = G.map[y * MAP_W + x];
+    if (!t || t.btype !== "casino") return ack?.({ error: "Hier steht kein Casino" });
+    if (t.owner === p.id) return ack?.({ error: "Am eigenen Tisch spielt man nicht — das Haus gewinnt immer" });
+    if (t.paused) return ack?.({ error: "Der Tisch ist gerade geschlossen" });
+    if (p.casinoSpiel) return ack?.({ error: "Du sitzt schon an einem Tisch" });
+    einsatz = Math.floor(+einsatz);
+    if (!(einsatz >= 50 && einsatz <= 2000)) return ack?.({ error: "Einsatz zwischen 50 und 2.000 $" });
+    if (p.cash < einsatz) return ack?.({ error: "Zu wenig Bargeld" });
+    p.cash -= einsatz;
+    p.casinoSpiel = { x, y, ownerId: t.owner, einsatz, hand: [karte(), karte()] };
+    const wert = handWert(p.casinoSpiel.hand);
+    /* 21 mit den ersten beiden Karten (oder das Feuer): sofort ausbezahlt. */
+    if (wert >= 21) return ack?.(casinoEnde(p));
+    ack?.({ status: "offen", hand: p.casinoSpiel.hand, wert, einsatz });
+  }));
+
+  socket.on("casinoZiehen", guard((p, _a, ack) => {
+    const sp = p.casinoSpiel;
+    if (!sp) return ack?.({ error: "Du sitzt an keinem Tisch" });
+    sp.hand.push(karte());
+    const wert = handWert(sp.hand);
+    if (wert >= 21) return ack?.(casinoEnde(p));
+    ack?.({ status: "offen", hand: sp.hand, wert, einsatz: sp.einsatz });
+  }));
+
+  socket.on("casinoHalten", guard((p, _a, ack) => {
+    if (!p.casinoSpiel) return ack?.({ error: "Du sitzt an keinem Tisch" });
+    ack?.(casinoEnde(p));
+  }));
+
   /* --- Bestechung: die Fahndung abkühlen --- */
   socket.on("bestechen", guard((p, _a, ack) => {
     if (MODE !== "kartell") return ack?.({ error: "Bestechung gibt es nur in der Kartellwirtschaft" });
@@ -3501,6 +3585,8 @@ io.on("connection", socket => {
       if (p.familie !== bt.familie)
         return ack?.({ error: `Die ${FAMILIEN[bt.familie].name} lässt sich nicht in die Karten schauen — nur ihre Mitglieder bauen ${bt.name}` });
     }
+    if (bt.casino && MODE !== "kartell")
+      return ack?.({ error: "Solche Etablissements gibt es nur in der Kartellwirtschaft" });
     if (bt.racing) {
       /* Planwirtschaft und Kartellmodus: keine Renntage, kein Wettpool — ein
        * Rennstall wäre ein totes Gebäude mit laufenden Fahrergehältern. */

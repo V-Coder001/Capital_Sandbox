@@ -3590,7 +3590,12 @@ const rohText = v => String(v ?? "").replace(/&(?:amp|lt|gt|quot|#39);/g, e => E
 
 /* Gebaeude ohne eigenes Sprite leihen sich eins. Der Fan-Hub ist ein
  * Vermarktungsgebaeude wie die Werbeagentur und sieht auch so aus. */
-const SPRITE_LEIHE = { fanhub: "werbeagentur" };
+const SPRITE_LEIHE = { fanhub: "werbeagentur",
+  /* Kartellmodus: die Familien-Betriebe und das Casino tarnen sich als
+   * unauffaellige Geschaefte — bis eigene Sprites da sind, passt das sogar
+   * inhaltlich: illegale Betriebe SOLLEN aussehen wie legale. */
+  destille: "saftpresse", druckerei: "chipfabrik", goldschmelze: "stahlwerk",
+  schmuggellager: "bauhandel", casino: "autohaus" };
 const spriteFor = (btype, x, y) => {
   const arr = SPRITES[btype] || SPRITES[SPRITE_LEIHE[btype]];
   return arr?.length ? arr[(x * 7 + y * 13) % arr.length] : null;
@@ -4606,6 +4611,51 @@ function pickTile(mx, my) {
   const x = Math.round(fx), y = Math.round(fy);
   return st.map.find(t => t.x===x && t.y===y) || null;
 }
+/* ---- Illegales Casino: 17+4 gegen die Kasse des Besitzers ----
+ * Der Server hält die Hand; hier wird nur angezeigt und geklickt. Jede
+ * Antwort (ack) trägt den kompletten Spielstand — kein eigener State. */
+function casinoUi(t, res) {
+  const st = store.get().state, owner = st.players[t.owner]?.name ?? "—";
+  const karten = h => (h || []).map(k =>
+    `<span style="display:inline-block;min-width:26px;padding:5px 4px;margin:0 3px;background:#f5f1e6;color:#1a1410;border-radius:5px;font-weight:700;text-align:center;box-shadow:0 2px 4px rgba(0,0,0,.4)">${k.n}</span>`).join("");
+  let inhalt;
+  if (!res) {
+    inhalt = `<p class="note" style="margin:6px 0">17+4 gegen die Bank von <b>${owner}</b>.
+        Ziel sind 21 Punkte — wer drüber liegt, verliert; die Bank zieht bis 17 und gewinnt den Gleichstand.
+        Gewinn zahlt die Kasse des Besitzers, Verlust geht an ihn. Zwei Asse sind das „Feuer“ — sofort gewonnen.</p>
+      <div style="display:flex;gap:6px;margin-top:8px">
+        <input id="casinoEinsatz" type="number" min="50" max="2000" value="200" style="flex:1" title="Einsatz $">
+        <button class="buyb" id="casinoGeben">Karten geben</button>
+      </div>`;
+  } else if (res.error) {
+    inhalt = `<p class="note" style="margin:6px 0;color:var(--warn,#f5a742)">${res.error}</p>`;
+  } else if (res.status === "offen") {
+    inhalt = `<div style="margin:8px 0">${karten(res.hand)} <b style="margin-left:6px">= ${res.wert}</b></div>
+      <div style="display:flex;gap:6px">
+        <button class="buyb" id="casinoZiehen" style="flex:1">Karte ziehen</button>
+        <button class="buyb" id="casinoHalten" style="flex:1">Halten (${res.wert})</button>
+      </div>
+      <p class="note" style="margin:6px 0 0">Einsatz: ${fmt(res.einsatz)}</p>`;
+  } else {
+    const titel = res.status === "gewonnen" ? `🎉 Gewonnen — die Kasse zahlt ${fmt(res.einsatz + res.auszahlung)}`
+      : res.status === "push" ? "Unentschieden — Einsatz zurück"
+      : "Das Haus gewinnt";
+    inhalt = `<div style="margin:8px 0">Du: ${karten(res.hand)} <b>= ${res.wert}</b></div>
+      ${res.bank?.length ? `<div style="margin:8px 0">Bank: ${karten(res.bank)} <b>= ${res.bankWert}</b></div>` : ""}
+      <p style="margin:6px 0;font-weight:600;color:${res.status === "gewonnen" ? "var(--accent2,#2ecc71)" : res.status === "push" ? "var(--muted,#9aa7bd)" : "#e74c3c"}">${titel}</p>
+      <button class="buyb" id="casinoNochmal">Noch eine Runde</button>`;
+  }
+  tm.style.display = "block";
+  tm.innerHTML = `<h3>🎰 Illegales Casino</h3>` + inhalt;
+  const geben = einsatz => socket.emit("casinoStart", { x: t.x, y: t.y, einsatz }, r => casinoUi(t, r));
+  document.getElementById("casinoGeben")?.addEventListener("click", () =>
+    geben(+document.getElementById("casinoEinsatz").value));
+  document.getElementById("casinoNochmal")?.addEventListener("click", () => casinoUi(t));
+  document.getElementById("casinoZiehen")?.addEventListener("click", () =>
+    socket.emit("casinoZiehen", {}, r => casinoUi(t, r)));
+  document.getElementById("casinoHalten")?.addEventListener("click", () =>
+    socket.emit("casinoHalten", {}, r => casinoUi(t, r)));
+}
 function clickTile(e) {
   const t = pickTile(e.clientX, e.clientY); tm.style.display = "none";
   const me = store.get().me, myId = store.get().myId;
@@ -4651,6 +4701,8 @@ function clickTile(e) {
   tm.style.display = "block";
   tm.style.left = Math.min(innerWidth-275, e.clientX+10)+"px";
   tm.style.top  = Math.min(innerHeight-330, e.clientY-10)+"px";
+  /* Fremdes Casino: kein Baumenü, sondern der Spieltisch. */
+  if (t.btype === "casino" && t.owner !== myId) { casinoUi(t); return; }
   if (t.btype) {
     const bt = BTYPES()[t.btype], mine = t.owner === myId;
     const ownerName = store.get().state.players[t.owner]?.name ?? "—";
@@ -4781,7 +4833,8 @@ function clickTile(e) {
   const opts = Object.entries(BTYPES()).filter(([bid, b]) => b.zone === t.zone
     && !(kartellModus && b.racing)
     /* Familien-Gebäude: nur das der eigenen Familie, und nur im Kartellmodus */
-    && !(b.familie && (!kartellModus || b.familie !== meineFamilie)) && (
+    && !(b.familie && (!kartellModus || b.familie !== meineFamilie))
+    && !(b.casino && !kartellModus) && (
     store.get().state?.mode === "renntag"
       ? rolleErlaubt.includes(bid)
       : (!b.industry || myInds.includes(b.industry))));
@@ -6706,7 +6759,10 @@ function kartellRendern(state, me, myId) {
         Pistolen im Lager erhöhen die Chance (+6 % je Stück, max +30 %).<br><br>
         🚧 Klicke eine <b>Straße</b> an, um für 800 $ eine <b>Straßensperre</b> zu errichten (max 2 je Familie):
         Sie zählt 3 Minuten lang wie zwei Gebäude für die Bezirkskontrolle — und Transporte, die in sie hineinfahren,
-        bleiben stehen (+25 % Überfall-Chance).</p>
+        bleiben stehen (+25 % Überfall-Chance).<br><br>
+        🎰 Baue ein <b>Illegales Casino</b> (6.000 $, Zentrum): Mitspieler zocken dort 17+4
+        gegen deine Kasse — das Haus gewinnt den Gleichstand, jedes Spiel heizt aber die Fahndung an.
+        Fremde Casinos einfach anklicken und mitspielen (Einsatz 50–2.000 $).</p>
     </div>
     ${state.bezirke ? `<div class="joinbox" style="margin-bottom:12px">
       <div class="lbl">Bezirke · Kontrolle bringt Schutzgeld</div>
