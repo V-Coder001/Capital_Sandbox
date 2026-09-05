@@ -4033,7 +4033,56 @@ function drawTrucks(now) {
     }
     });
   }
+  /* ---- Kartellmodus: Werttransporte und Straßensperren ----
+   * Die Transporte kommen als Serverposition im Sekundentakt — der Client
+   * gleitet sanft hinterher, statt zu springen. Ein goldener Puls-Ring
+   * signalisiert: anklicken heißt überfallen. */
+  const stM = store.get().state;
+  if (stM?.mode === "kartell") {
+    const schatten = (sx, sy, rx, ry) => { const s2 = sonnenStaerke(); if (s2 <= 0) return;
+      cx.globalAlpha = s2; cx.fillStyle = "rgba(0,0,0,.22)";
+      cx.beginPath(); cx.ellipse(sx, sy, rx, ry, 0, 0, Math.PI * 2); cx.fill(); cx.globalAlpha = 1; };
+    for (const tr of stM.transporte || []) {
+      let an = TRANSPORT_ANIM.get(tr.id);
+      if (!an) { an = { x: tr.x, y: tr.y }; TRANSPORT_ANIM.set(tr.id, an); }
+      an.x += (tr.x - an.x) * .08; an.y += (tr.y - an.y) * .08;
+      const [sx, sy] = iso(an.x, an.y);
+      verkehrMerken(an.x, an.y, () => {
+        const puls = 1 + Math.sin(now / 250) * .12;
+        cx.strokeStyle = tr.gestoppt ? "rgba(255,120,90,.85)" : "rgba(245,197,66,.7)";
+        cx.lineWidth = 2;
+        cx.beginPath(); cx.ellipse(sx, sy + TH / 2, 17 * puls, 9 * puls, 0, 0, Math.PI * 2); cx.stroke();
+        schatten(sx, sy + TH / 2 + 2, 13, 5);
+        cx.fillStyle = "#2c3444"; cx.fillRect(sx - 12, sy + TH / 2 - 18, 24, 15);
+        cx.fillStyle = "#3d4a61"; cx.fillRect(sx - 12, sy + TH / 2 - 18, 24, 4);
+        cx.fillStyle = "#f5c542"; cx.fillRect(sx - 12, sy + TH / 2 - 9, 24, 2);
+        cx.fillStyle = "#141a26"; cx.fillRect(sx - 9, sy + TH / 2 - 3, 5, 3); cx.fillRect(sx + 4, sy + TH / 2 - 3, 5, 3);
+        cx.font = "11px sans-serif"; cx.textAlign = "center";
+        cx.fillText(tr.art === "geld" ? "💰" : tr.art === "waffen" ? "🔫" : "🪙", sx, sy + TH / 2 - 22);
+      });
+    }
+    for (const alt of [...TRANSPORT_ANIM.keys()])
+      if (!(stM.transporte || []).some(t2 => t2.id === alt)) TRANSPORT_ANIM.delete(alt);
+    /* Straßensperren: rot-weiße Barke, Wimpel in Familienfarbe. */
+    const famFarbe2 = Object.fromEntries((stM.familien || []).map(f => [f.id, f.farbe]));
+    for (const t of stM.map) {
+      if (!t.sperre) continue;
+      const [sx, sy] = iso(t.x, t.y);
+      verkehrMerken(t.x, t.y, () => {
+        schatten(sx, sy + TH / 2 + 1, 14, 4);
+        cx.fillStyle = "#7a4a28"; cx.fillRect(sx - 15, sy + TH / 2 - 7, 4, 8); cx.fillRect(sx + 11, sy + TH / 2 - 7, 4, 8);
+        for (let i = 0; i < 6; i++) { cx.fillStyle = i % 2 ? "#e8e2d8" : "#d9463b"; cx.fillRect(sx - 13 + i * 4.4, sy + TH / 2 - 11, 4.4, 4.5); }
+        cx.strokeStyle = "rgba(20,16,10,.6)"; cx.strokeRect(sx - 13, sy + TH / 2 - 11, 26.4, 4.5);
+        const fc = famFarbe2[t.sperre.familie] || "#888";
+        cx.fillStyle = "#4a4038"; cx.fillRect(sx + 13, sy + TH / 2 - 24, 2, 17);
+        cx.fillStyle = fc;
+        cx.beginPath(); cx.moveTo(sx + 15, sy + TH / 2 - 24); cx.lineTo(sx + 25, sy + TH / 2 - 21); cx.lineTo(sx + 15, sy + TH / 2 - 18); cx.closePath(); cx.fill();
+      });
+    }
+  }
 }
+/* Gleit-Animationen der Werttransporte, je Transport-Id die letzte Position. */
+const TRANSPORT_ANIM = new Map();
 
 /* ---- Tag-Nacht-Zyklus ----
  * Ein voller Tag dauert 8 Minuten und hängt nur an der Wanduhrzeit — alle
@@ -4568,6 +4617,36 @@ function clickTile(e) {
    * Klick das Baumenue auf und boete Gebaeude an, die der Server anschliessend
    * ablehnt — ein Versprechen, das nicht eingeloest werden kann. */
   if (t?.deko) return;
+  /* Kartellmodus: Klick auf einen Werttransport = Überfallversuch. */
+  const stK = store.get().state;
+  if (stK?.mode === "kartell" && stK.transporte?.length && me) {
+    const wx = (e.clientX - innerWidth / 2 - cam.x) / cam.z,
+          wy = (e.clientY - 120 - cam.y) / cam.z;
+    for (const tr of stK.transporte) {
+      const [tx2, ty2] = iso(tr.x, tr.y);
+      if (Math.hypot(wx - tx2, wy - (ty2 + TH / 2 - 8)) < 26) {
+        socket.emit("ueberfall", { transportId: tr.id }, r => {
+          if (r?.error) toast(r.error);
+          else if (r?.beute) toast(`💥 Überfall geglückt — Beute: ${r.beute}`);
+        });
+        return;
+      }
+    }
+  }
+  /* Kartellmodus: Straßen sind anklickbar — hier errichtet man Sperren. */
+  if (stK?.mode === "kartell" && t?.road && me && stK.players?.[myId]?.familie) {
+    if (t.sperre) { toast("Hier steht schon eine Straßensperre"); return; }
+    tm.style.display = "block";
+    tm.style.left = Math.min(innerWidth - 275, e.clientX + 10) + "px";
+    tm.style.top = Math.min(innerHeight - 330, e.clientY - 10) + "px";
+    tm.innerHTML = `<h4>🚧 Straße</h4>
+      <button class="opt" id="sperreBtn">Straßensperre errichten <small>800 $ · hält 3 min · zählt wie 2 Gebäude im Bezirk und stoppt Werttransporte</small></button>`;
+    document.getElementById("sperreBtn").onclick = () => {
+      tm.style.display = "none";
+      socket.emit("sperreBauen", { x: t.x, y: t.y }, r => { if (r?.error) toast(r.error); });
+    };
+    return;
+  }
   if (!t || t.water || t.road || t.park || !me) return;
   tm.style.display = "block";
   tm.style.left = Math.min(innerWidth-275, e.clientX+10)+"px";
@@ -6604,6 +6683,31 @@ function kartellRendern(state, me, myId) {
         </div>`).join("")}
       ${state.pate ? `<p class="note" style="margin:6px 0 0">Der Pate kassiert 10 % aller fremden Hehler-Erlöse als Abgabe.</p>` : ""}
     </div>
+    <div class="joinbox" style="margin-bottom:12px">
+      <div class="lbl">Fahndungsdruck · bei 100 kommt die Razzia</div>
+      <p class="note" style="margin:0 0 8px">Überfälle, Sperren und heiße Geschäfte heizen die Fahndung an.
+        Erreicht sie 100, beschlagnahmt die Polizei alle illegale Ware der Familie (−10 Respekt, 1.000 $ Strafe je Mitglied).
+        Bestechung kühlt sie um 25 ab.</p>
+      ${[...state.familien].sort((a, b) => b.fahndung - a.fahndung).map(f => `
+        <div style="display:flex;gap:9px;align-items:center;margin:5px 0">
+          <span style="width:10px;height:10px;border-radius:3px;background:${f.farbe};flex:none"></span>
+          <span style="flex:1;font-size:11.5px;${f.id === meineFamilieId ? "font-weight:600" : ""}">${f.name}</span>
+          <div style="flex:2;height:7px;background:#0b1322;border-radius:4px;overflow:hidden">
+            <div style="width:${Math.min(100, f.fahndung || 0)}%;height:100%;background:${(f.fahndung || 0) >= 70 ? "#e74c3c" : (f.fahndung || 0) >= 40 ? "#f5a742" : "#4a90d9"}"></div>
+          </div>
+          <b style="width:26px;text-align:right;font-size:11.5px">${f.fahndung || 0}</b>
+        </div>`).join("")}
+      ${meineFam && (meineFam.fahndung || 0) > 0 ? `<button class="buyb" data-bestechen style="margin-top:6px">Beamte bestechen <small>2.000 $ · Fahndung −25</small></button>` : ""}
+    </div>
+    <div class="joinbox" style="margin-bottom:12px">
+      <div class="lbl">Straße &amp; Überfall</div>
+      <p class="note" style="margin:0">🚚 Auf den Hauptstraßen rollen <b>Werttransporte</b> (goldener Ring auf der Karte) —
+        anklicken heißt überfallen: Erfolg bringt Bargeld, Pistolen oder Goldbarren plus 5 Respekt, Misserfolg 500 $ Kaution.
+        Pistolen im Lager erhöhen die Chance (+6 % je Stück, max +30 %).<br><br>
+        🚧 Klicke eine <b>Straße</b> an, um für 800 $ eine <b>Straßensperre</b> zu errichten (max 2 je Familie):
+        Sie zählt 3 Minuten lang wie zwei Gebäude für die Bezirkskontrolle — und Transporte, die in sie hineinfahren,
+        bleiben stehen (+25 % Überfall-Chance).</p>
+    </div>
     ${state.bezirke ? `<div class="joinbox" style="margin-bottom:12px">
       <div class="lbl">Bezirke · Kontrolle bringt Schutzgeld</div>
       <p class="note" style="margin:0 0 8px">Wer in einem Bezirk die meisten Gebäude hat (mindestens zwei),
@@ -6728,6 +6832,12 @@ document.getElementById("p-kartell").addEventListener("click", e => {
   if (hehler) {
     socket.emit("hehlerVerkauf", { good: hehler.dataset.hehler },
       res => toast(res?.error || `Der Hehler zahlt ${fmt(res.erloes)} — ohne Fragen.`, !!res?.error));
+    return;
+  }
+  /* Bestechung: die Fahndung der eigenen Familie abkühlen. */
+  if (e.target.closest("button[data-bestechen]")) {
+    socket.emit("bestechen", {}, res =>
+      toast(res?.error || `Die Beamten schauen weg — Fahndung jetzt bei ${res.fahndung}.`, !!res?.error));
     return;
   }
   const gruenden = e.target.closest("#kartellGruendenBtn");

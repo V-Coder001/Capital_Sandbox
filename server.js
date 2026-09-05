@@ -462,6 +462,12 @@ const bezirkVon = (x, y) => Math.min(2, Math.floor(x / 9)) + 3 * Math.min(2, Mat
 function bezirkeBerechnen() {
   const staerken = Array.from({ length: 9 }, () => ({}));
   for (const t of G.map) {
+    /* Eine Straßensperre markiert Revier wie zwei Gebäude — Muskeln zeigen
+     * zählt in diesen Vierteln mehr als Mauern hochziehen. */
+    if (t.sperre) {
+      const b2 = bezirkVon(t.x, t.y);
+      staerken[b2][t.sperre.familie] = (staerken[b2][t.sperre.familie] || 0) + 2;
+    }
     if (!t.btype || !t.owner) continue;
     const fam = G.players[t.owner]?.familie;
     if (!fam) continue;
@@ -486,6 +492,47 @@ function bezirkeBerechnen() {
     else io.emit("notice", { text: "Der Stuhl des Paten ist verwaist — keine Familie dominiert die Bezirke." });
   }
 }
+
+/* ---- Werttransporte, Straßensperren, Fahndung (Kartellmodus) ----
+ * Auf den Hauptstraßen rollen regelmäßig Werttransporte quer über die Karte.
+ * Wer sich traut, überfällt sie: Erfolg bringt Bargeld, Pistolen oder
+ * Goldbarren plus Respekt — Misserfolg kostet Kaution und treibt den
+ * FAHNDUNGSDRUCK der Familie hoch. Bei 100 schlägt die Polizei mit einer
+ * RAZZIA zu: alle illegale Ware der Mitglieder wird beschlagnahmt.
+ * Straßensperren markieren Revier: Sie zählen wie zwei Gebäude für die
+ * Bezirkskontrolle und stoppen Transporte, die in sie hineinfahren. */
+const TRANSPORT_INTERVALL = 75;   // Sekunden zwischen zwei Werttransporten
+const TRANSPORT_TEMPO = 0.45;     // Kacheln je Sekunde
+const TRANSPORT_ARTEN = {
+  geld:   { name: "Geldtransport",   gewicht: 3 },
+  waffen: { name: "Waffentransport", gewicht: 2 },
+  gold:   { name: "Goldtransport",   gewicht: 1 },
+};
+const UEBERFALL_COOLDOWN = 45;    // Sekunden Sperrfrist je Spieler
+const SPERRE_KOSTEN = 800;
+const SPERRE_DAUER = 180;         // Sekunden Lebenszeit einer Sperre
+const SPERRE_MAX_JE_FAMILIE = 2;
+const BESTECHUNG_KOSTEN = 2000;
+
+/* Durchgehende Straßenzüge der aktuellen Karte — auf ihnen fahren die
+ * Transporte. Wird je Runde einmal aus dem Gitter abgeleitet. */
+function transportLinien() {
+  const linien = [];
+  for (let x = 0; x < MAP_W; x++) {
+    let n = 0; for (let y = 0; y < MAP_H; y++) if (G.map[y * MAP_W + x]?.road) n++;
+    if (n >= MAP_H - 2) linien.push({ achse: "y", linie: x });
+  }
+  for (let y = 0; y < MAP_H; y++) {
+    let n = 0; for (let x = 0; x < MAP_W; x++) if (G.map[y * MAP_W + x]?.road) n++;
+    if (n >= MAP_W - 2) linien.push({ achse: "x", linie: y });
+  }
+  return linien;
+}
+const transportKachel = tr => {
+  const p = Math.round(tr.pos);
+  const x = tr.achse === "x" ? p : tr.linie, y = tr.achse === "x" ? tr.linie : p;
+  return { x, y, t: G.map[y * MAP_W + x] };
+};
 
 /* Industrien: jeder Spieler wählt beim Beitritt EINE — nur deren Gebäude sind
  * baubar (Shops kann jeder). Erzwingt Handel: Agrar braucht Wasser/Strom von
@@ -1821,6 +1868,9 @@ const G = {
   contracts: [],        // {id, fromId, toId, good, qty, price, status}
   cartels: [],          // Kartellmodus: {id, name, kopfId, mitglieder[], einladungen[], verdacht, gegruendet}
   familienRespekt: {},  // Kartellmodus: Respekt je Familie (famiglia/syndikat/bratwa/triade)
+  fahndung: {},         // Kartellmodus: Fahndungsdruck 0–100 je Familie; bei 100 Razzia
+  transporte: [],       // Kartellmodus: fahrende Werttransporte {id, art, achse, linie, pos, dir, gestoppt}
+  naechsterTransport: 30,
   tick: 0, winner: null, report: null,
   /* Warteraum: die Runde läuft erst, wenn der Host sie startet — bis dahin
    * sammeln sich die Mitspieler, ohne dass Produktion oder Bots anlaufen. */
@@ -2565,10 +2615,17 @@ function snapshot() {
      * Kartell unter den Füßen wird, erfahren nur seine Mitglieder (privateState). */
     cartels: MODE === "kartell" ? G.cartels.map(kartellPublic) : null,
     bezirke: MODE === "kartell" ? G.bezirke : null,
+    transporte: MODE === "kartell" ? G.transporte.map(tr => {
+      const { x, y } = transportKachel(tr);
+      return { id: tr.id, art: tr.art,
+        x: tr.achse === "x" ? tr.pos : tr.linie, y: tr.achse === "x" ? tr.linie : tr.pos,
+        kx: x, ky: y, gestoppt: !!tr.gestoppt };
+    }) : null,
     pate: MODE === "kartell" ? G.pate : null,
     familien: MODE === "kartell" ? Object.entries(FAMILIEN).map(([fid, f]) => ({
       id: fid, name: f.name, farbe: f.farbe, produkt: f.produkt, gebaeude: f.gebaeude,
       respekt: Math.round(G.familienRespekt[fid] || 0),
+      fahndung: Math.round(G.fahndung[fid] || 0),
       mitglieder: Object.values(G.players).filter(p2 => p2.familie === fid).map(p2 => p2.name),
     })) : null,
     hof: HOF,
@@ -2576,7 +2633,7 @@ function snapshot() {
     lobby: G.started ? null : { winGoal: WIN_NW, bots: botAuswahl, botLevel: botLevelKey, mode: MODE, saison: SAISON_RENNEN, saisonWahl: SAISON_CHOICES },
     map: G.map.map(t => ({ x: t.x, y: t.y, zone: t.zone, road: t.road, water: t.water,
       park: t.park, field: t.field, sand: t.sand, deep: t.deep, rock: t.rock,
-      bank: t.bank, news: t.news, schwarz: t.schwarz, deko: t.deko, locked: t.locked, unlockCost: t.unlockCost, owner: t.owner, btype: t.btype, lien: t.lien, shop: t.shop, paused: t.paused, level: t.level, autos: autosDyn(t) })),
+      bank: t.bank, news: t.news, schwarz: t.schwarz, deko: t.deko, locked: t.locked, unlockCost: t.unlockCost, owner: t.owner, btype: t.btype, lien: t.lien, shop: t.shop, paused: t.paused, level: t.level, autos: autosDyn(t), sperre: t.sperre ?? null })),
     players: Object.fromEntries(Object.entries(G.players).map(([sid, p]) =>
       [sid, { id: sid, name: p.name, color: p.color, lvl: p.lvl, xp: p.xp, industry: p.industry, industries: p.industries,
               familie: p.familie || null,
@@ -2711,7 +2768,7 @@ function dropContract(c) {
  * Nach dem ersten Snapshot reist die Karte nur noch als Differenz über diese
  * Liste. Der Vergleich läuft über JSON, verschachtelte Arrays sind also
  * abgedeckt (derselbe Grund, aus dem `shop` hier steht). */
-const DYNAMIC_TILE_KEYS = ["locked", "owner", "btype", "lien", "shop", "paused", "level", "autos"];
+const DYNAMIC_TILE_KEYS = ["locked", "owner", "btype", "lien", "shop", "paused", "level", "autos", "sperre"];
 /* undefined wird zu null normalisiert, damit auch "Feld gelöscht" (z. B. der
  * Abriss räumt t.shop weg) beim Empfänger sicher ankommt. */
 /* Fahrzeuge gehen MIT ihren gerechneten Werten über die Leitung. Sie hier
@@ -2883,7 +2940,7 @@ io.on("connection", socket => {
       G.players[pid].familie = fids.slice().sort((a, b) =>
         Object.values(G.players).filter(x => x.familie === a).length -
         Object.values(G.players).filter(x => x.familie === b).length)[0];
-      io.emit("notice", { text: `${name} schwört der ${FAMILIEN[G.players[pid].familie].name} die Treue.` });
+      io.emit("notice", { text: `${name} schwört „${FAMILIEN[G.players[pid].familie].name}“ die Treue.` });
     }
     io.emit("notice", { text: `${name} ist der Sitzung beigetreten.` + (Object.keys(G.players).length === 1 ? ` Rundenziel: ${WIN_NW.toLocaleString("de-DE")} $` : "") });
     ack?.({ ok: true, goods: GOODS, btypes: BTYPES, rooms: ROOMS, you: pid, winGoal: WIN_NW, questDefs: QUESTS, industry, industries: INDUSTRIES,
@@ -3176,7 +3233,7 @@ io.on("connection", socket => {
     if (!FAMILIEN[fid]) return ack?.({ error: "Diese Familie kennt hier niemand" });
     if (G.started && p.familie) return ack?.({ error: "Der Familie schwört man nur einmal — ein Wechsel wäre Verrat" });
     p.familie = fid;
-    io.emit("notice", { text: `${p.name} schwört der ${FAMILIEN[fid].name} die Treue.` });
+    io.emit("notice", { text: `${p.name} schwört „${FAMILIEN[fid].name}“ die Treue.` });
     ack?.({ ok: true });
   }));
 
@@ -3211,6 +3268,84 @@ io.on("connection", socket => {
     gainXp(p, Math.min(30, Math.round(respekt)));
     logTx(p, "Kartell", `Hehler: ${qty}× ${GOODS[good].name} verkauft (+${Math.round(respekt)} Respekt)`, erloes);
     ack?.({ ok: true, erloes, abgabe });
+  }));
+
+  /* --- Überfall auf einen Werttransport ---
+   * Chance: 50 % Basis, +6 % je Pistole im Lager (höchstens +30 %), +25 %
+   * wenn der Transport an einer Sperre festhängt, minus Fahndungs-Malus.
+   * Erfolg bringt Beute und Respekt, Misserfolg Kaution — beides heizt die
+   * Fahndung an. */
+  socket.on("ueberfall", guard((p, { transportId }, ack) => {
+    if (MODE !== "kartell") return ack?.({ error: "Überfälle gibt es nur in der Kartellwirtschaft" });
+    if (!p.familie) return ack?.({ error: "Ohne Familie überfällt man niemanden" });
+    const tr = G.transporte.find(t2 => t2.id === transportId);
+    if (!tr) return ack?.({ error: "Der Transport ist längst über alle Berge" });
+    if (p.ueberfallSperre && p.ueberfallSperre > G.tick)
+      return ack?.({ error: `Zu heiß — warte noch ${p.ueberfallSperre - G.tick} s` });
+    p.ueberfallSperre = G.tick + UEBERFALL_COOLDOWN;
+    const pistolen = Math.floor(p.inv.pistole || 0);
+    const chance = 0.5 + Math.min(0.3, pistolen * 0.06) + (tr.gestoppt ? 0.25 : 0)
+      - Math.min(0.25, (G.fahndung[p.familie] || 0) / 400);
+    G.transporte = G.transporte.filter(t2 => t2 !== tr);
+    if (Math.random() < chance) {
+      let beuteText;
+      if (tr.art === "geld") {
+        const geld = 1500 + Math.floor(Math.random() * 2000);
+        p.cash += geld; beuteText = `${geld} $ Bargeld`;
+        logTx(p, "Kartell", "Überfall: Geldtransport ausgeraubt", geld);
+      } else if (tr.art === "waffen") {
+        const n = 3 + Math.floor(Math.random() * 4);
+        p.inv.pistole = (p.inv.pistole || 0) + n; beuteText = `${n} Pistolen`;
+        logTx(p, "Kartell", `Überfall: Waffentransport ausgeraubt (${n} Pistolen)`, 0);
+      } else {
+        const n = 2 + Math.floor(Math.random() * 3);
+        p.inv.goldbarren = (p.inv.goldbarren || 0) + n; beuteText = `${n} Goldbarren`;
+        logTx(p, "Kartell", `Überfall: Goldtransport ausgeraubt (${n} Goldbarren)`, 0);
+      }
+      G.familienRespekt[p.familie] = (G.familienRespekt[p.familie] || 0) + 5;
+      G.fahndung[p.familie] = (G.fahndung[p.familie] || 0) + 8;
+      gainXp(p, 15);
+      io.emit("notice", { text: `💥 ${p.name} (${FAMILIEN[p.familie].name}) überfällt einen ${TRANSPORT_ARTEN[tr.art].name}: ${beuteText} erbeutet!` });
+      ack?.({ ok: true, beute: beuteText });
+    } else {
+      const kaution = Math.min(p.cash, 500);
+      p.cash -= kaution;
+      G.fahndung[p.familie] = (G.fahndung[p.familie] || 0) + 15;
+      logTx(p, "Kartell", "Überfall vereitelt — Kaution gezahlt", -kaution);
+      io.emit("notice", { text: `🚓 Die Polizei vereitelt einen Überfall von ${p.name} — die Fahndung nach ${FAMILIEN[p.familie].name} verschärft sich.` });
+      ack?.({ error: "Der Überfall ist geplatzt — die Fahrer haben Verstärkung gerufen (−500 $ Kaution)" });
+    }
+  }));
+
+  /* --- Straßensperre: Revier markieren --- */
+  socket.on("sperreBauen", guard((p, { x, y }, ack) => {
+    if (MODE !== "kartell") return ack?.({ error: "Sperren gibt es nur in der Kartellwirtschaft" });
+    if (!p.familie) return ack?.({ error: "Ohne Familie sperrt man keine Straßen" });
+    const t = G.map[y * MAP_W + x];
+    if (!t?.road) return ack?.({ error: "Sperren stehen nur auf Straßen" });
+    if (t.sperre) return ack?.({ error: "Hier steht schon eine Sperre" });
+    const aktive = G.map.filter(t2 => t2.sperre?.familie === p.familie).length;
+    if (aktive >= SPERRE_MAX_JE_FAMILIE)
+      return ack?.({ error: `Deine Familie hält schon ${SPERRE_MAX_JE_FAMILIE} Sperren — mehr Leute habt ihr nicht` });
+    if (p.cash < SPERRE_KOSTEN) return ack?.({ error: `Zu wenig Bargeld (${SPERRE_KOSTEN} $)` });
+    p.cash -= SPERRE_KOSTEN;
+    t.sperre = { familie: p.familie, bis: G.tick + SPERRE_DAUER };
+    G.fahndung[p.familie] = (G.fahndung[p.familie] || 0) + 5;
+    logTx(p, "Kartell", `Straßensperre errichtet (${BEZIRK_NAMEN[bezirkVon(x, y)]})`, -SPERRE_KOSTEN);
+    io.emit("notice", { text: `🚧 ${FAMILIEN[p.familie].name} sperrt eine Straße im ${BEZIRK_NAMEN[bezirkVon(x, y)]}.` });
+    ack?.({ ok: true });
+  }));
+
+  /* --- Bestechung: die Fahndung abkühlen --- */
+  socket.on("bestechen", guard((p, _a, ack) => {
+    if (MODE !== "kartell") return ack?.({ error: "Bestechung gibt es nur in der Kartellwirtschaft" });
+    if (!p.familie) return ack?.({ error: "Ohne Familie besticht man niemanden" });
+    if ((G.fahndung[p.familie] || 0) <= 0) return ack?.({ error: "Nach euch fahndet gerade niemand" });
+    if (p.cash < BESTECHUNG_KOSTEN) return ack?.({ error: `Zu wenig Bargeld (${BESTECHUNG_KOSTEN} $)` });
+    p.cash -= BESTECHUNG_KOSTEN;
+    G.fahndung[p.familie] = Math.max(0, (G.fahndung[p.familie] || 0) - 25);
+    logTx(p, "Kartell", "Beamte bestochen — die Fahndung kühlt ab", -BESTECHUNG_KOSTEN);
+    ack?.({ ok: true, fahndung: Math.round(G.fahndung[p.familie]) });
   }));
 
   socket.on("kartellGruenden", guard((p, { name }, ack) => {
@@ -4038,6 +4173,7 @@ io.on("connection", socket => {
     G.wm = {}; G.saisonRennen = 0; G.fanAuszahlungIn = FAN_TAKT;
     G.hofGespeichert = false;
     G.cartels = []; G.familienRespekt = {}; G.bezirke = null; G.pate = null;
+    G.fahndung = {}; G.transporte = []; G.naechsterTransport = 30;
     G.started = false; G.hostId = null;   // neue Runde beginnt wieder im Warteraum
     G.groupOrder = null; G.nextGroupIn = 20;
     G.nextDividendIn = DIVIDEND_INTERVAL;
@@ -4263,6 +4399,59 @@ function runTick() {
         }
         G.familienRespekt[b.kontrolle] = (G.familienRespekt[b.kontrolle] || 0) + 2;
       }
+    }
+    /* Werttransporte: spawnen, rollen, an Sperren hängenbleiben, entkommen. */
+    if (--G.naechsterTransport <= 0) {
+      G.naechsterTransport = TRANSPORT_INTERVALL;
+      const linien = transportLinien();
+      if (linien.length) {
+        const l = linien[Math.floor(Math.random() * linien.length)];
+        const arten = Object.entries(TRANSPORT_ARTEN)
+          .flatMap(([id2, a]) => Array(a.gewicht).fill(id2));
+        const art = arten[Math.floor(Math.random() * arten.length)];
+        const dir = Math.random() < 0.5 ? 1 : -1;
+        const laenge = (l.achse === "x" ? MAP_W : MAP_H) - 1;
+        G.transporte.push({ id: id(), art, achse: l.achse, linie: l.linie,
+          pos: dir === 1 ? 0 : laenge, dir, gestoppt: 0 });
+        io.emit("notice", { text: `🚚 Ein ${TRANSPORT_ARTEN[art].name} ist in der Stadt unterwegs — wer greift zu?` });
+      }
+    }
+    for (const tr of [...G.transporte]) {
+      if (tr.gestoppt) {
+        /* An einer Sperre festgesetzt: leichte Beute — aber nur eine Minute,
+         * dann trauen sich die Fahrer an der Barrikade vorbei. */
+        if (++tr.gestoppt > 60) { tr.gestoppt = 0; }
+        continue;
+      }
+      tr.pos += tr.dir * TRANSPORT_TEMPO;
+      const laenge = (tr.achse === "x" ? MAP_W : MAP_H) - 1;
+      if (tr.pos < 0 || tr.pos > laenge) {
+        G.transporte = G.transporte.filter(t2 => t2 !== tr);
+        continue;
+      }
+      const { t: kachel } = transportKachel(tr);
+      if (kachel?.sperre) tr.gestoppt = 1;
+    }
+    /* Sperren verfallen; Fahndung kühlt langsam ab; bei 100 kommt die Razzia. */
+    for (const t of G.map) if (t.sperre && t.sperre.bis <= G.tick) t.sperre = null;
+    if (G.tick % 30 === 0)
+      for (const f of Object.keys(G.fahndung)) G.fahndung[f] = Math.max(0, G.fahndung[f] - 1);
+    for (const [fid, wert] of Object.entries(G.fahndung)) {
+      if (wert < 100) continue;
+      G.fahndung[fid] = 40;
+      G.familienRespekt[fid] = Math.max(0, (G.familienRespekt[fid] || 0) - 10);
+      let beschlagnahmt = 0;
+      for (const m of Object.values(G.players)) {
+        if (m.familie !== fid) continue;
+        for (const g of ILLEGAL) {
+          const n = Math.floor(m.inv[g] || 0);
+          if (n > 0) { m.inv[g] = 0; beschlagnahmt += n; }
+        }
+        const strafe = Math.min(m.cash, 1000);
+        m.cash -= strafe;
+        logTx(m, "Kartell", "Razzia! Illegale Ware beschlagnahmt, Strafe kassiert", -strafe);
+      }
+      io.emit("notice", { text: `🚨 RAZZIA bei ${FAMILIEN[fid].name}! ${beschlagnahmt} Einheiten heiße Ware beschlagnahmt, −10 Respekt.` });
     }
   }
   /* Stromabschaltung (Planwirtschaft): Wurde das Volkswirtschaftsziel der
