@@ -2613,6 +2613,7 @@ function snapshot() {
     wm: MODE === "renntag" ? G.wm : null,
     saison: MODE === "renntag" ? { gefahren: G.saisonRennen, gesamt: SAISON_RENNEN } : null,
     tutorialEnde: !!G.tutorialEnde,
+    winGrund: G.winGrund || null,
     started: G.started, hostId: G.hostId,
     mode: MODE, plan: MODE === "plan" ? G.plan : null,
     /* Wer mit wem gemeinsame Sache macht, ist öffentlich; wie heiß es dem
@@ -4254,7 +4255,7 @@ io.on("connection", socket => {
     G.shareListings = []; G.shareBids = [];
     G.lastTrade = {};
     G.chat = Object.fromEntries(ROOMS.map(r => [r, []]));
-    G.tick = 0; G.winner = null; G.report = null; G.plan = null; G.tutorialEnde = false;
+    G.tick = 0; G.winner = null; G.winGrund = null; G.report = null; G.plan = null; G.tutorialEnde = false;
     G.rennen = null; G.naechstesRennenIn = RENN_INTERVALL; G.werksTeams = werksTeamsBauen();
     G.wm = {}; G.saisonRennen = 0; G.fanAuszahlungIn = FAN_TAKT;
     G.hofGespeichert = false;
@@ -4484,6 +4485,23 @@ function runTick() {
           logTx(m, "Kartell", `Schutzgeld aus dem ${b.name}`, teil);
         }
         G.familienRespekt[b.kontrolle] = (G.familienRespekt[b.kontrolle] || 0) + 2;
+      }
+    }
+    /* Endbedingung: Wer 6 der 9 Bezirke hält, hat die Stadt. Die Familie
+     * gewinnt gemeinsam; den Titel trägt ihr vermögendstes Mitglied. */
+    if (!G.winner && G.bezirke) {
+      const zaehl = {};
+      for (const b of G.bezirke) if (b.kontrolle) zaehl[b.kontrolle] = (zaehl[b.kontrolle] || 0) + 1;
+      const beste = Object.entries(zaehl).sort((a, b2) => b2[1] - a[1])[0];
+      if (beste && beste[1] >= 6) {
+        const boss = Object.values(G.players).filter(p2 => p2.familie === beste[0])
+          .sort((x2, y2) => netWorth(y2) - netWorth(x2))[0];
+        if (boss) {
+          G.winner = boss.name;
+          G.winGrund = `${FAMILIEN[beste[0]].name} kontrolliert ${beste[1]} von 9 Bezirken — die Stadt gehört ihr`;
+          G.report = buildReport(boss.id);
+          io.emit("notice", { text: `🏆 ${FAMILIEN[beste[0]].name} kontrolliert ${beste[1]} von 9 Bezirken — die Stadt gehört ihr! ${boss.name} ist der Boss der Bosse.` });
+        }
       }
     }
     /* Werttransporte: spawnen, rollen, an Sperren hängenbleiben, entkommen. */
@@ -5123,6 +5141,45 @@ async function spawnBot(cfg, lvl = BOT_LEVELS[BOT_LEVEL_DEFAULT]) {
             const wq = Math.max(1, Math.round(gq * (BASEP[surplus] || 1) / (BASEP[brauch.good] || 1)));
             await em("planOfferCreate", { gebeGood: surplus, gebeQty: gq, willGood: brauch.good, willQty: wq });
           }
+        }
+      }
+      /* --- Kartellmodus: Bots leben das Familienleben — sie ziehen den
+       * Betrieb ihrer Familie hoch, tragen heiße Ware zum Hehler und greifen
+       * sich gelegentlich einen Werttransport. Die normalen Markt-Routinen
+       * weiter unten laufen zusätzlich, damit die Wirtschaft lebt. --- */
+      if (st.mode === "kartell") {
+        const famDef = (st.familien || []).find(f2 => f2.id === st.players?.[myId]?.familie);
+        if (famDef) {
+          const btF = BTYPES[famDef.gebaeude];
+          const meine = st.map.filter(t2 => t2.owner === myId && t2.btype === famDef.gebaeude).length;
+          if (btF && meine < 2 && me.cash > btF.cost + 2500 && Date.now() - lastBuild > lvl.bauPause) {
+            const mats = matCost(btF);
+            const fehlt = Object.entries(mats).find(([g, n]) => me.inv[g] < n);
+            if (fehlt) {
+              if (me.cash > 2000 && !st.orders.some(o => o.playerId === myId && o.side === "buy" && o.good === fehlt[0]))
+                await em("placeOrder", { side: "buy", good: fehlt[0],
+                  qty: Math.ceil(fehlt[1] - me.inv[fehlt[0]]) + 4,
+                  price: Math.round((st.avg[fehlt[0]] || BASEP[fehlt[0]] || 1) * 1.12 * 100) / 100 });
+            } else {
+              const frei = t2 => t2.zone === btF.zone && !t2.road && !t2.water && !t2.park
+                && !t2.bank && !t2.news && !t2.deko && !t2.schwarz && !t2.owner;
+              let ziel = st.map.find(t2 => frei(t2) && !t2.locked);
+              if (!ziel) {
+                const lt = st.map.find(t2 => frei(t2) && t2.locked);
+                if (lt && me.cash > btF.cost + lt.unlockCost + 2000) ziel = lt;
+              }
+              if (ziel) {
+                const r = await em("build", { x: ziel.x, y: ziel.y, btype: famDef.gebaeude });
+                if (r?.ok) lastBuild = Date.now();
+              }
+            }
+          }
+          /* Hehler: ab fünf Stück wandert die heiße Ware über den Tresen. */
+          if ((me.inv[famDef.produkt] || 0) >= 5) await em("hehlerVerkauf", { good: famDef.produkt });
+          /* Überfall: ab und zu traut sich ein Bot an einen Transport —
+           * der Server würfelt Erfolg, Kaution und Fahndung wie bei jedem. */
+          if ((st.transporte || []).length && Math.random() < 0.2)
+            await em("ueberfall", { transportId: st.transporte[0].id });
         }
       }
       /* --- Motorsport: Bots bestücken ihren Stall, tunen, melden, wetten

@@ -2120,6 +2120,7 @@ function zeigeAuswertung(state) {
   document.getElementById("winsub").textContent = state.tutorialEnde
     ? (r ? `Einsteiger-Tutorial abgeschlossen — nach ${r.dauerMin} Minuten.`
          : "Einsteiger-Tutorial abgeschlossen.")
+    : state.winGrund ? `${state.winGrund}${r ? ` — nach ${r.dauerMin} Minuten.` : "."}`
     : r ? `${fmt(state.winGoal)} Nettovermögen erreicht — nach ${r.dauerMin} Minuten.`
         : `${fmt(state.winGoal)} Nettovermögen wurde erreicht.`;
   if (!r) return;
@@ -3785,7 +3786,10 @@ function drawAmbient(now) {
    * Startrand ein anderes Modell. Das frühere Hin- und Herpendeln sah aus,
    * als führe das Auto die halbe Zeit rückwärts. Jede zweite Straße fährt
    * in Gegenrichtung, und das Sprite wird zur Fahrtrichtung gespiegelt. */
-  ROUTES.carLines.slice(0, 8).forEach((line, i) => {
+  /* Kartellmodus: die Stadt lebt — mehr Straßenzüge mit Verkehr und drei
+   * statt zwei Autos je Zug. Zwischen den Familien ist immer Betrieb. */
+  const kartellStadt = store.get().state?.mode === "kartell";
+  ROUTES.carLines.slice(0, kartellStadt ? 14 : 8).forEach((line, i) => {
     if (!AMBIENT.cars.length || line.length < 2) return;
     const n = line.length;
     /* DDR-Optik: der Verkehr zuckelt — Trabi-Tempo statt Berufsverkehr. */
@@ -3793,7 +3797,7 @@ function drawAmbient(now) {
     const luecke = 5;                       // Abstand zwischen Despawn und neuem Spawn
     const period = n - 1 + luecke;
     /* Zwei versetzte Autos pro Straßenzug — dichterer Verkehr. */
-    for (let j = 0; j < 2; j++) {
+    for (let j = 0; j < (kartellStadt ? 3 : 2); j++) {
     const total = now / 1000 * speed + i * 7 + j * period / 2;
     const u = total % period;
     if (u > n - 1) continue;                // Auto hat den Rand erreicht und ist entfernt
@@ -6767,7 +6771,8 @@ function kartellRendern(state, me, myId) {
     ${state.bezirke ? `<div class="joinbox" style="margin-bottom:12px">
       <div class="lbl">Bezirke · Kontrolle bringt Schutzgeld</div>
       <p class="note" style="margin:0 0 8px">Wer in einem Bezirk die meisten Gebäude hat (mindestens zwei),
-        kontrolliert ihn: ${200} $ Schutzgeld je Minute für die Familie plus Respekt. Die meisten Bezirke machen den Paten.</p>
+        kontrolliert ihn: ${200} $ Schutzgeld je Minute für die Familie plus Respekt. Die meisten Bezirke machen den Paten.
+        <b>Wer 6 von 9 Bezirken hält, gewinnt die Runde — die Stadt gehört dann seiner Familie.</b></p>
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px">
         ${state.bezirke.map(b => {
           const fam = b.kontrolle ? state.familien.find(f => f.id === b.kontrolle) : null;
