@@ -2120,8 +2120,8 @@ function kampfBanner(d) {
   document.getElementById("kampfBannerEmoji").textContent = d.art === "erobert" ? "⚔️" : "🛡️";
   const titel = document.getElementById("kampfBannerTitel");
   titel.textContent = d.art === "erobert"
-    ? `${d.name.toUpperCase()} GEHÖRT JETZT DER ${(fam?.name || d.sieger).toUpperCase()}`
-    : `${(fam?.name || d.sieger).toUpperCase()} VERTEIDIGT ${d.name.toUpperCase()}`;
+    ? `${(fam?.name || d.sieger).toUpperCase()} ÜBERNIMMT ${d.name.toUpperCase()}`
+    : `${(fam?.name || d.sieger).toUpperCase()} HÄLT ${d.name.toUpperCase()}`;
   titel.style.color = fam?.farbe || "#e8b544";
   document.getElementById("kampfBannerSub").textContent = d.art === "erobert"
     ? `Tauziehen ${d.pa}:${d.pv} · ${d.beute} $ geplündert · ${Math.round((d.dauer || 300) / 60)} min Besatzung`
@@ -5410,7 +5410,7 @@ function clickTile(e) {
         ? "Deine Rolle baut hier nichts — Teile und Rohstoffe gehen über die Börse."
         : "Deine Industrie kann hier nichts bauen — handle stattdessen an der Börse."}</div>`)
     + opts.map(([bid, b]) => `<button class="opt" data-b="${bid}" ${canAfford(b) ? "" : "disabled"}>${b.name}<small>${
-        !gesperrt(b) ? `${fmt(totalCost(b))} · ${matTxt(b)}`
+        !gesperrt(b) ? `${fmt(totalCost(b))}${matTxt(b) ? ` · ${matTxt(b)}` : ""}`
         : hatStall && b.racing ? "Du betreibst bereits einen Rennstall — mehr als einer ist nicht erlaubt"
         : `Motorsport ab ${fmt(nwSchwelle)} Nettovermögen — dir fehlen ${fmt(nwSchwelle - meinNW)}`}</small></button>`).join("");
   tm.querySelectorAll(".opt").forEach(btn => btn.addEventListener("click", () => {
@@ -5801,6 +5801,22 @@ function buildTut(ind) {
       p: `Städte stellen <b>Großaufträge</b> (Ø×2, fixiert!) — alle zahlen gemeinsam ein, im Lager-Panel. Im <b>Finanzen-Panel</b> gibt es Anleihen (Vorsicht: Pfändung bei Verzug). Unter <b>Firma</b> siehst du deinen Rang, im <b>Lexikon</b> alles Wissen. Und nun: Zeig dieser Stadt, was in dir steckt — ich behalte dich im Auge.` },
   ];
 }
+/* Kartellmodus: eigenes Tutorial — hier gelten andere Regeln (keine Branchen,
+ * kein Baumaterial, dafür Familien, Bezirke, Waffen und Fahndung). */
+function buildKartellTut() {
+  return [
+    { t: "Willkommen in der Kartellwirtschaft",
+      p: `Vergiss die Börsenregeln von nebenan — hier zählt die <b>Familie</b>. Jeder Spieler gehört einer von vier Familien an; gemeinsam sammelt ihr <b>Respekt</b>. Das Ziel: <b>6 der 9 Bezirke</b> kontrollieren — dann gehört die Stadt eurer Familie. Deine Aufträge links (<b>Mafia-Aufträge</b>) sind der rote Faden für den Einstieg.` },
+    { t: "Betrieb & Hehler: dein Geld",
+      p: `Bauen kostet hier <b>nur Bargeld</b> — kein Baumaterial, keine Branchen-Grenzen: Jede Familie baut alles. Dein wichtigstes Gebäude ist der <b>Betrieb deiner Familie</b> (nur ihr könnt ihn bauen): Er produziert eure <b>heiße Ware</b>, die ausschließlich der <b>Hehler</b> ankauft (Kartell-Panel) — jeder Verkauf bringt <b>1 Respekt je 100 $</b>.` },
+    { t: "Bezirke: Kontrolle, Schutzgeld, Erpressung",
+      p: `Wer in einem Bezirk die <b>meisten Gebäude</b> hat (mind. 2), kontrolliert ihn: <b>200 $ Schutzgeld pro Minute</b> für die Familie. Zusätzlich kannst du selbst durch die Läden ziehen: <b>Erpressen</b> (Kartell-Panel, alle 3 min je Bezirk) bringt Sofort-Geld — im eigenen Revier das 1,5-fache. Aber Vorsicht: Alles Illegale heizt die <b>Fahndung</b> an. Bei 100 kommt die <b>Razzia</b> — Bestechung (2.000 $) kühlt ab.` },
+    { t: "Revierkampf: Waffen & Tauziehen",
+      p: `Fremde Bezirke nimmst du mit <b>Waffen</b>: Pistolen erbeutest du bei <b>Überfällen auf Werttransporte</b> (goldener Ring auf der Karte — anklicken!). Mit 3+ Pistolen startest du den <b>Revierkampf</b>: 2 Minuten <b>Tauziehen</b> um den Kontroll-Balken — Bauten +2, Sperren +2, Erpressung +1, <b>Verstärkung</b> ($300) +1. Der Sieger <b>plündert die Kassen</b> und hält den Bezirk 5 Minuten als Besatzung.` },
+    { t: "Die Straße gehört euch",
+      p: `Noch drei Werkzeuge: <b>Straßensperren</b> (Straße anklicken, 800 $) zählen wie 2 Gebäude und stoppen Werttransporte. Das <b>Illegale Casino</b> lässt Mitspieler gegen deine Kasse zocken. Und behalte die <b>Familien-Rangliste</b> im Kartell-Panel im Blick — die meisten Bezirke machen den <b>Paten</b>, der bei allen anderen mitkassiert. Und nun: Die Stadt wartet, Capo. 🤌` },
+  ];
+}
 /* ---------- Übungsrunde ----------
  * Der Knopf "Tutorial spielen" öffnete bisher ein Lesebuch. Wer ein
  * Wirtschaftsspiel verstehen will, muss aber einmal selbst gebaut, verkauft
@@ -5934,6 +5950,11 @@ let TUT = buildTut("agrar");
 let tutIdx = -1;
 const tutEl = document.getElementById("tut");
 function tutShow(i) {
+  /* Beim Start entscheidet der MODUS, welches Tutorial gilt: Die Kartellstadt
+   * hat eigene Regeln — das Industrie-Tutorial würde dort Falsches erzählen. */
+  if (i === 0 && store.get().state?.mode === "kartell") TUT = buildKartellTut();
+  else if (i === 0 && store.get().state?.mode !== "kartell" && TUT.length && TUT[0].t === "Willkommen in der Kartellwirtschaft")
+    TUT = buildTut(store.get().meta?.industry || "agrar");
   tutIdx = i;
   if (i < 0 || i >= TUT.length) { tutEl.style.display = "none"; return; }
   const s = TUT[i];
@@ -7354,7 +7375,7 @@ function kartellRendern(state, me, myId) {
           })() : "";
           return `<div style="background:#0b1322;border:1px solid ${b.kampf ? "#e74c3c" : fam ? fam.farbe + "66" : "var(--line)"};border-radius:9px;padding:7px 8px">
             <div style="font-size:11.5px;font-weight:600">${b.name}${b.kampf ? " ⚔️" : b.besatzung ? " 🏴" : ""}</div>
-            <div class="meta" style="font-size:10.5px">${b.kampf ? `<span style="color:#e74c3c">REVIERKAMPF!</span>` : fam ? `<span style="color:${fam.farbe}">${fam.name}${b.besatzung ? ` · besetzt ${b.besatzung.rest} s` : ""}</span>` : "umkämpft / frei"}${eigene ? ` · du: ${eigene}` : ""}</div>
+            <div class="meta" style="font-size:10.5px">${b.kampf ? `<span style="color:#e74c3c">REVIERKAMPF!</span>` : fam ? `<span style="color:${fam.farbe}">${fam.name}${b.besatzung ? ` · besetzt ${b.besatzung.rest} s` : ""}</span>` : "frei — niemand hat die Mehrheit"}${eigene ? ` · du: ${eigene}` : ""}</div>
             ${kampfHtml}
             <button class="mini" data-erpress="${b.id}" ${cd ? "disabled" : ""}
               style="margin-top:5px;width:100%;font-size:10.5px${eigenesRevier ? ";border-color:var(--accent)" : ""}"
@@ -8262,7 +8283,7 @@ function render({ state, me, myId, chat, room }) {
         <img src="assets/${bid}-0.png" width="44" height="44" style="image-rendering:auto;flex-shrink:0" alt="">
         <div style="flex:1"><b>${b.name}</b> <span class="meta">· ${fmt(b.cost)} · ${ZNAME[b.zone] || b.zone}</span>
         <div class="meta" style="margin-top:3px;line-height:1.5">${what}</div>
-        <div class="meta" style="margin-top:2px;color:var(--dim)">Baumaterial: ${Math.ceil(b.cost/400)} Ziegel${b.cost >= 4000 && b.proc?.out !== "beton" ? ` + ${Math.ceil(b.cost/2000)} Beton` : ""}${(b.out || b.proc) ? " · auflevelbar (+30 %/Stufe)" : ""} · Abriss erstattet ${fmt(b.cost * 0.5)}${b.industry ? ` · <b style="color:var(--accent2)">nur ${({agrar:"Agrar",rohstoff:"Rohstoff & Bau",versorger:"Versorger",tech:"Technologie"})[b.industry]}</b>` : " · jede Industrie"}</div></div></div>`;
+        <div class="meta" style="margin-top:2px;color:var(--dim)">${store.get().state?.mode === "kartell" ? "Bar bezahlt — im Kartell baut jede Familie alles" : `Baumaterial: ${Math.ceil(b.cost/400)} Ziegel${b.cost >= 4000 && b.proc?.out !== "beton" ? ` + ${Math.ceil(b.cost/2000)} Beton` : ""}`}${(b.out || b.proc) ? " · auflevelbar (+30 %/Stufe)" : ""} · Abriss erstattet ${fmt(b.cost * 0.5)}${store.get().state?.mode === "kartell" ? "" : b.industry ? ` · <b style="color:var(--accent2)">nur ${({agrar:"Agrar",rohstoff:"Rohstoff & Bau",versorger:"Versorger",tech:"Technologie"})[b.industry]}</b>` : " · jede Industrie"}</div></div></div>`;
     };
     document.getElementById("lexbody").innerHTML = `
       <div class="sec">Agrarwirtschaft</div>${["farm","plantage","imkerei","saftpresse","pharma","baeckerei"].map(bcard).join("")}

@@ -3740,8 +3740,8 @@ io.on("connection", socket => {
       G.fahndung[p.familie] = (G.fahndung[p.familie] || 0) + 10;
       G.familienRespekt[p.familie] = Math.max(0, (G.familienRespekt[p.familie] || 0) - 2);
       G.familienRespekt[b.kontrolle] = (G.familienRespekt[b.kontrolle] || 0) + 1;
-      io.emit("notice", { text: `👊 Die ${FAMILIEN[b.kontrolle].name} wirft ${p.name} aus dem ${b.name} — die Erpressung platzt.` });
-      return ack?.({ error: `Die ${FAMILIEN[b.kontrolle].name} hält ihre Hand über den ${b.name} — ihre Schläger haben dich rausgeworfen (−2 Respekt, +Fahndung)` });
+      io.emit("notice", { text: `👊 ${FAMILIEN[b.kontrolle].name} wirft ${p.name} aus dem ${b.name} — die Erpressung platzt.` });
+      return ack?.({ error: `${FAMILIEN[b.kontrolle].name} hält ihre Hand über den ${b.name} — ihre Schläger haben dich rausgeworfen (−2 Respekt, +Fahndung)` });
     }
     let betrag = 250 + Math.floor(Math.random() * 200);
     if (eigene) betrag = Math.round(betrag * 1.5);
@@ -3799,7 +3799,7 @@ io.on("connection", socket => {
       G.fahndung[p.familie] = (G.fahndung[p.familie] || 0) + 4;   // insgesamt +12
       G.familienRespekt[p.familie] = Math.max(0, (G.familienRespekt[p.familie] || 0) - 1);
       logTx(p, "Kartell", `Revierkampf im ${b.name} verloren (${einsatz} Pistolen weg)`, -kaution);
-      io.emit("notice", { text: `⚔️ Die ${FAMILIEN[b.kontrolle].name} schlägt einen Angriff von ${p.name} auf den ${b.name} zurück.` });
+      io.emit("notice", { text: `⚔️ ${FAMILIEN[b.kontrolle].name} schlägt einen Angriff von ${p.name} auf den ${b.name} zurück.` });
       ack?.({ error: `Zurückgeschlagen — ${einsatz} Pistolen verloren, ${kaution} $ Kaution, die Fahndung brennt (+12)` });
     }
   }));
@@ -4122,7 +4122,7 @@ io.on("connection", socket => {
     if (bt.familie) {
       if (MODE !== "kartell") return ack?.({ error: "Solche Geschäfte gibt es nur in der Kartellwirtschaft" });
       if (p.familie !== bt.familie)
-        return ack?.({ error: `Die ${FAMILIEN[bt.familie].name} lässt sich nicht in die Karten schauen — nur ihre Mitglieder bauen ${bt.name}` });
+        return ack?.({ error: `${FAMILIEN[bt.familie].name} lässt sich nicht in die Karten schauen — nur ihre Mitglieder bauen ${bt.name}` });
     }
     if (bt.casino && MODE !== "kartell")
       return ack?.({ error: "Solche Etablissements gibt es nur in der Kartellwirtschaft" });
@@ -5015,7 +5015,9 @@ function runTick() {
   if (!G.winner) kartellamtTick();
   /* --- Kartellmodus: Bezirkskontrolle und Schutzgeld --- */
   if (MODE === "kartell" && G.started && !G.winner) {
-    if (G.tick % 5 === 0) bezirkeBerechnen();
+    /* Während eines Tauziehens jede Sekunde neu rechnen — der Kontroll-Balken
+     * soll live zucken, nicht im 5-Sekunden-Takt nachhinken. */
+    if (G.tick % 5 === 0 || Object.keys(G.revierKaempfe || {}).length) bezirkeBerechnen();
     /* Tauziehen auflösen: Wer bei Ablauf vorn liegt, gewinnt den Bezirk.
      * Gleichstand geht an den Verteidiger — Angreifen muss sich lohnen MÜSSEN. */
     for (const [idxS, k] of Object.entries(G.revierKaempfe || {})) {
@@ -5042,7 +5044,7 @@ function runTick() {
         G.familienRespekt[k.verteidiger] = (G.familienRespekt[k.verteidiger] || 0) + 3;
         io.emit("revierErgebnis", { bezirk: idx, name, sieger: k.verteidiger, verlierer: k.angreifer,
           art: "verteidigt", pa, pv });
-        io.emit("notice", { text: `🛡️ Die ${FAMILIEN[k.verteidiger].name} VERTEIDIGT den ${name} (${pv}:${pa}) — der Angriff der ${FAMILIEN[k.angreifer].name} verpufft.` });
+        io.emit("notice", { text: `🛡️ ${FAMILIEN[k.verteidiger].name} VERTEIDIGT den ${name} (${pv}:${pa}) — der Angriff von ${FAMILIEN[k.angreifer].name} verpufft.` });
       }
       bezirkeBerechnen();
     }
@@ -5758,6 +5760,13 @@ async function spawnBot(cfg, lvl = BOT_LEVELS[BOT_LEVEL_DEFAULT]) {
            * der Server würfelt Erfolg, Kaution und Fahndung wie bei jedem. */
           if ((st.transporte || []).length && Math.random() < 0.2)
             await em("ueberfall", { transportId: st.transporte[0].id });
+          /* Tauziehen: Wird die Familie des Bots angegriffen (oder greift sie
+           * an), schickt er Verstärkung, solange die Kasse es hergibt — sonst
+           * wären Bot-Familien im Revierkampf wehrlose Beute. */
+          const meinKampf = (st.bezirke || []).find(b2 => b2.kampf &&
+            (b2.kampf.verteidiger === st.players[myId]?.familie || b2.kampf.angreifer === st.players[myId]?.familie));
+          if (meinKampf && me.cash > 1200 && !me.verstCd)
+            await em("verstaerkung", { bezirk: meinKampf.id });
           /* Schutzgeld: gelegentlich zieht der Bot durchs EIGENE Revier —
            * fremde Bezirke lässt er in Ruhe (Bots provozieren keine Kriege). */
           if (Math.random() < 0.25) {
