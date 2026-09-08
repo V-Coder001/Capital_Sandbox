@@ -1432,10 +1432,13 @@ td:first-child{font-family:var(--font)}
         <button type="button" data-familie="syndikat" style="--fc:#a78bfa">Das Syndikat</button>
         <button type="button" data-familie="bratwa" style="--fc:#f5c542">Die Bratwa</button>
         <button type="button" data-familie="triade" style="--fc:#2ecc71">Die Triade</button>
+        <button type="button" data-familie="polizei" style="--fc:#4a90d9">🚔 Die Polizei</button>
       </div>
     </div>
     <p id="lwFamilieHint" style="display:none;font-size:11.5px;color:#8695ab;margin:2px 0 6px">
-      Jede Familie hat ein eigenes illegales Produkt (Schwarzgebrannter, Falschgeld, Goldbarren,
+      Höchstens ZWEI je Familie — freie Plätze übernehmen Mafia-KIs, unbesetzte Polizei ein KI-Kommissar.
+      Die Polizei ist der Gegenspieler: Sie kontrolliert Transporte und räumt Bezirke per Razzia
+      (25 Einsatzpunkte = Polizei-Sieg). Jede Familie hat ein eigenes illegales Produkt (Schwarzgebrannter, Falschgeld, Goldbarren,
       Schmuggelzigaretten) samt Gebäude, das nur sie bauen kann. Verkauft wird beim Hehler —
       das bringt der Familie <b>Respekt</b>. Wer keine Familie wählt, wird beim Start zugeteilt.</p>
     <p id="lwEinsteigerHint" style="display:none;font-size:11.5px;color:#8695ab;margin:2px 0 6px">
@@ -5852,6 +5855,8 @@ function buildKartellTut() {
       p: `Wer in einem Bezirk die <b>meisten Gebäude</b> hat (mind. 2), kontrolliert ihn: <b>200 $ Schutzgeld pro Minute</b> für die Familie. Zusätzlich kannst du selbst durch die Läden ziehen: <b>Erpressen</b> (Kartell-Panel, alle 3 min je Bezirk) bringt Sofort-Geld — im eigenen Revier das 1,5-fache. Aber Vorsicht: Alles Illegale heizt die <b>Fahndung</b> an. Bei 100 kommt die <b>Razzia</b> — Bestechung (2.000 $) kühlt ab.` },
     { t: "Revierkampf: Waffen & Tauziehen",
       p: `Fremde Bezirke nimmst du mit <b>Waffen</b>: Pistolen erbeutest du bei <b>Überfällen auf Werttransporte</b> (goldener Ring auf der Karte — anklicken!). Mit 3+ Pistolen startest du den <b>Revierkampf</b>: 2 Minuten <b>Tauziehen</b> um den Kontroll-Balken — Bauten +2, Sperren +2, Erpressung +1, <b>Verstärkung</b> ($300) +1. Der Sieger <b>plündert die Kassen</b> und hält den Bezirk 5 Minuten als Besatzung.` },
+    { t: "Die Polizei spielt mit",
+      p: `Eine Seite spielt GEGEN alle Familien: die <b>Polizei</b> (wählbar wie eine Familie, sonst übernimmt ein KI-Kommissar). Sie <b>kontrolliert Werttransporte</b> und führt <b>Razzien</b> gegen kontrollierte Bezirke — je höher eure <b>Fahndung</b>, desto sicherer ihr Zugriff. Sammelt sie <b>${25} Einsatzpunkte</b>, gewinnt das Gesetz die Runde. Haltet die Fahndung niedrig (Bestechung!) und lasst euch nicht erwischen.` },
     { t: "Die Straße gehört euch",
       p: `Noch drei Werkzeuge: <b>Straßensperren</b> (Straße anklicken, 800 $) zählen wie 2 Gebäude und stoppen Werttransporte. Das <b>Illegale Casino</b> lässt Mitspieler gegen deine Kasse zocken. Und behalte die <b>Familien-Rangliste</b> im Kartell-Panel im Blick — die meisten Bezirke machen den <b>Paten</b>, der bei allen anderen mitkassiert. Und nun: Die Stadt wartet, Capo. 🤌` },
   ];
@@ -7301,8 +7306,26 @@ function kartellRendern(state, me, myId) {
   /* Im Kartellmodus zählt die Straße, nicht das Konto: Die Vermögensanzeige
    * weicht dem Familienstand — Respekt-Rang und Bezirke bis zum Stadtsieg.
    * Nur ausgeblendet, nie umgebaut (die Kinder nwv/goalv braucht render()). */
+  /* Lobby: Familien-Buttons zeigen die Belegung (max 2) */
+  if (state.mode === "kartell") {
+    const zaehl = {};
+    for (const sp of Object.values(state.players || {})) if (sp.familie) zaehl[sp.familie] = (zaehl[sp.familie] || 0) + 1;
+    document.querySelectorAll("#lwFamilie button").forEach(b => {
+      const fid = b.dataset.familie;
+      const basis = b.textContent.replace(/\s*\d\/\d$/, "");
+      b.textContent = `${basis} ${zaehl[fid] || 0}/2`;
+      b.disabled = (zaehl[fid] || 0) >= 2 && state.players?.[myId]?.familie !== fid;
+    });
+  }
+  const binPolizei = state.mode === "kartell" && state.players?.[myId]?.familie === "polizei";
   if (nwEl) nwEl.style.display = hudFam ? "none" : "";
-  if (nwEl && hudFam) {
+  if (nwEl && binPolizei && state.polizei) {
+    nwEl.style.display = "none";
+    let hud = alterHud;
+    if (!hud) { hud = document.createElement("span"); hud.id = "mafiaHud"; nwEl.after(hud); }
+    hud.innerHTML = `<b style="color:${state.polizei.farbe}">🚔 Die Polizei</b>
+      <span class="meta"> · Einsätze <b>${state.polizei.punkte}/${state.polizei.ziel}</b> · Sold 150 $/min</span>`;
+  } else if (nwEl && hudFam) {
     let hud = alterHud;
     if (!hud) { hud = document.createElement("span"); hud.id = "mafiaHud"; nwEl.after(hud); }
     const sortiert = [...state.familien].sort((a, b) => b.respekt - a.respekt);
@@ -7346,6 +7369,12 @@ function kartellRendern(state, me, myId) {
           <b>${f.respekt} R</b>
         </div>`).join("")}
       ${state.pate ? `<p class="note" style="margin:6px 0 0">Der Pate kassiert 10 % aller fremden Hehler-Erlöse als Abgabe.</p>` : ""}
+      ${state.polizei ? `<div style="display:flex;gap:9px;align-items:center;margin:8px 0 0;padding-top:7px;border-top:1px solid var(--line)">
+        <span style="width:10px;height:10px;border-radius:3px;background:${state.polizei.farbe};flex:none"></span>
+        <span style="flex:1;${meineFamilieId === "polizei" ? "font-weight:600" : ""}">🚔 Die Polizei${meineFamilieId === "polizei" ? ` <span class="meta" style="color:var(--accent)">· deine Seite</span>` : ""}
+          <span class="meta" style="display:block">${state.polizei.mitglieder.join(", ") || "—"} · räumt Bezirke per Razzia</span></span>
+        <b>${state.polizei.punkte}/${state.polizei.ziel} 🚨</b>
+      </div>` : ""}
     </div>
     <div class="joinbox" style="margin-bottom:12px">
       <div class="lbl">Fahndungsdruck · bei 100 kommt die Razzia</div>
@@ -7399,6 +7428,7 @@ function kartellRendern(state, me, myId) {
           const fremdesRevier = b.kontrolle && b.kontrolle !== meineFamilieId;
           const pistolen = Math.floor(me.inv?.pistole || 0);
           const kampfBereit = fremdesRevier && !me.kampfCd && pistolen >= 3;
+          const binPolizeiPanel = meineFamilieId === "polizei";
           const kampfHtml = b.kampf ? (() => {
             const gesamt = Math.max(1, b.kampf.pa + b.kampf.pv);
             const fA = state.familien.find(f => f.id === b.kampf.angreifer);
@@ -7416,11 +7446,15 @@ function kartellRendern(state, me, myId) {
             <div style="font-size:11.5px;font-weight:600">${b.name}${b.kampf ? " ⚔️" : b.besatzung ? " 🏴" : ""}</div>
             <div class="meta" style="font-size:10.5px">${b.kampf ? `<span style="color:#e74c3c">REVIERKAMPF!</span>` : fam ? `<span style="color:${fam.farbe}">${fam.name}${b.besatzung ? ` · besetzt ${b.besatzung.rest} s` : ""}</span>` : "frei — niemand hat die Mehrheit"}${eigene ? ` · du: ${eigene}` : ""}</div>
             ${kampfHtml}
-            <button class="mini" data-erpress="${b.id}" ${cd ? "disabled" : ""}
+            ${b.gesichert ? `<div class="meta" style="color:#4a90d9;font-size:10px;margin-top:3px">🚨 polizeilich gesichert · ${b.gesichert} s</div>` : ""}
+            ${binPolizeiPanel ? (b.kontrolle ? `<button class="mini" data-razzia="${b.id}" ${me.razziaCd ? "disabled" : ""}
+              style="margin-top:5px;width:100%;font-size:10.5px;border-color:#4a90d9"
+              title="Erfolgschance steigt mit der Fahndung der Familie">
+              ${me.razziaCd ? `🚨 Einsatz in ${Math.floor(me.razziaCd / 60)}:${String(me.razziaCd % 60).padStart(2, "0")}` : "🚨 Razzia"}</button>` : "") : `<button class="mini" data-erpress="${b.id}" ${cd ? "disabled" : ""}
               style="margin-top:5px;width:100%;font-size:10.5px${eigenesRevier ? ";border-color:var(--accent)" : ""}"
               title="${eigenesRevier ? "Euer Revier: 1,5-facher Betrag, keiner mault" : fam ? "Fremdes Revier: 30 % Rauswurf-Risiko" : "Freier Bezirk"}">
-              ${cd ? `gezahlt · ${Math.floor(cd / 60)}:${String(cd % 60).padStart(2, "0")}` : "💰 Erpressen"}</button>
-            ${fremdesRevier ? `<button class="mini" data-kampf="${b.id}" ${kampfBereit ? "" : "disabled"}
+              ${cd ? `gezahlt · ${Math.floor(cd / 60)}:${String(cd % 60).padStart(2, "0")}` : "💰 Erpressen"}</button>`}
+            ${!binPolizeiPanel && fremdesRevier ? `<button class="mini" data-kampf="${b.id}" ${kampfBereit ? "" : "disabled"}
               style="margin-top:4px;width:100%;font-size:10.5px;border-color:#e74c3c66"
               title="${pistolen < 3 ? "Mind. 3 Pistolen nötig — Waffentransporte überfallen" : me.kampfCd ? "Deine Leute brauchen noch " + me.kampfCd + " s" : "Setzt bis zu 6 Pistolen ein"}">
               ${me.kampfCd ? `⚔️ bereit in ${Math.floor(me.kampfCd / 60)}:${String(me.kampfCd % 60).padStart(2, "0")}` : `⚔️ Revierkampf (${Math.min(6, pistolen)}🔫)`}</button>` : ""}
@@ -7428,13 +7462,13 @@ function kartellRendern(state, me, myId) {
         }).join("")}
       </div>
     </div>` : ""}
-    <div class="joinbox" style="margin-bottom:12px">
+    ${meineFamilieId === "polizei" ? "" : `<div class="joinbox" style="margin-bottom:12px">
       <div class="lbl">Hehler · heiße Ware zu Geld machen</div>
       ${meineFam ? `<p class="note" style="margin:0 0 8px">Deine Familie stellt <b>${gname(meineFam.produkt)}</b> her —
         baue dafür die <b>${BTYPES()[meineFam.gebaeude]?.name || meineFam.gebaeude}</b> (kann nur deine Familie).
         Der Hehler zahlt bar; jeder Verkauf bringt <b>1 Respekt je 100 $</b>.</p>` : ""}
       ${hehlerZeilen || `<p class="note">Noch keine heiße Ware im Lager.</p>`}
-    </div>`;
+    </div>`}`;
 
   if (k) {
     const binKopf = k.kopfId === myId;
@@ -7567,6 +7601,13 @@ document.getElementById("p-kartell").addEventListener("click", e => {
   if (erp) {
     socket.emit("erpressen", { bezirk: +erp.dataset.erpress }, res =>
       toast(res?.error || `Die Läden zahlen ${fmt(res.betrag)} Schutzgeld.`, !!res?.error));
+    return;
+  }
+  /* Razzia: die Polizei räumt einen kontrollierten Bezirk. */
+  const razzia = e.target.closest("button[data-razzia]");
+  if (razzia) {
+    socket.emit("razziaBezirk", { bezirk: +razzia.dataset.razzia }, res =>
+      toast(res?.error || `🚨 Zugriff! ${res.beschlagnahmt}× Ware beschlagnahmt, ${fmt(res.strafe)} Bußgeld kassiert.`, !!res?.error));
     return;
   }
   /* Verstärkung: Schläger ins laufende Tauziehen schicken. */
@@ -7889,12 +7930,24 @@ function render({ state, me, myId, chat, room }) {
   const open = qdefs.filter(d => !me.quests?.[d.id]?.done);
   const qEl = document.getElementById("quests");
   /* Im Kartellmodus heißen die Aufgaben, was sie sind. */
-  qEl.firstElementChild.textContent = state.mode === "kartell"
+  const polizeiWidget = state.mode === "kartell" && state.players?.[myId]?.familie === "polizei";
+  qEl.firstElementChild.textContent = polizeiWidget
+    ? (SPRACHE === "en" ? "POLICE DUTY" : "Einsatzbefehl")
+    : state.mode === "kartell"
     ? (SPRACHE === "en" ? "MOB CONTRACTS" : "Mafia-Aufträge")
     : (SPRACHE === "en" ? "STARTER TASKS" : "Starter-Aufgaben");
+  if (polizeiWidget) {
+    qEl.style.display = "block";
+    document.getElementById("questlist").innerHTML = `
+      <div style="display:flex;justify-content:space-between;gap:8px"><span>Einsatzpunkte sammeln</span>
+        <b style="color:var(--accent)">${state.polizei?.punkte || 0}/${state.polizei?.ziel || 25}</b></div>
+      <div class="meta" style="margin-top:5px;line-height:1.5">🚚 Transporte anklicken = Kontrolle (+1)<br>
+      🚨 Razzia auf kontrollierte Bezirke (+2, Kartell-Panel)<br>
+      Je höher die Fahndung einer Familie, desto sicherer der Zugriff.</div>`;
+  }
   /* Die Starter-Aufgaben führen zu Börse und Stadtbank — beides gibt es in
    * der Planwirtschaft nicht, dort bleibt das Widget aus. */
-  if (open.length && !state.winner && state.mode !== "plan") {
+  if (!polizeiWidget && open.length && !state.winner && state.mode !== "plan") {
     qEl.style.display = "block";
     document.getElementById("questlist").innerHTML = open.map(d => {
       const n = Math.min(d.target, Math.floor(me.quests?.[d.id]?.n || 0));
@@ -7902,7 +7955,7 @@ function render({ state, me, myId, chat, room }) {
         <span>${SPRACHE === "en" ? (d.en ?? d.text) : d.text}</span>
         <span style="font-family:var(--mono);color:var(--dim);white-space:nowrap">${d.target > 1 ? `${n}/${d.target}` : ""} <b style="color:var(--accent)">+$${d.reward}</b></span></div>`;
     }).join("");
-  } else qEl.style.display = "none";
+  } else if (!polizeiWidget) qEl.style.display = "none";
   document.getElementById("players").innerHTML = Object.values(state.players)
     /* Chips oben: Logo statt Buchstabe, wo eines vorliegt. Entscheidend ist das
      * SEITENVERHÄLTNIS — quadratisch gequetscht war jede Wortmarke unlesbar.

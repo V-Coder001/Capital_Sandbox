@@ -490,6 +490,25 @@ const FAMILIEN = {
   bratwa:   { name: "Die Bratwa",   farbe: "#f5c542", produkt: "goldbarren", gebaeude: "goldschmelze" },
   triade:   { name: "Die Triade",   farbe: "#2ecc71", produkt: "zigaretten", gebaeude: "schmuggellager" },
 };
+/* ---- Die Polizei: der Gegenspieler der Familien ----
+ * Wählbar wie eine Familie (auch für KI), aber mit eigenen Regeln: Ihre
+ * Gebäude zählen nie für Bezirkskontrolle, sie erpresst und überfällt nicht —
+ * sie KONTROLLIERT Transporte (Beschlagnahme) und führt RAZZIEN gegen
+ * kontrollierte Bezirke. Sold statt Schutzgeld; Sieg über Einsatzpunkte. */
+const POLIZEI = { id: "polizei", name: "Die Polizei", farbe: "#4a90d9" };
+const FAMILIE_MAX = 2;            // je Familie höchstens zwei Mitglieder (Mensch/Bot)
+const POLIZEI_ZIEL = 25;          // Einsatzpunkte bis zum Polizei-Sieg
+const RAZZIA_BEZIRK_CD = 90;      // Sekunden je Polizist zwischen Bezirks-Razzien
+const POLIZEI_SOLD = 150;         // $ Sold je Minute und Polizist
+const GESICHERT_DAUER = 60;       // so lange ist ein Bezirk nach einer Razzia „gesichert"
+const famDef = fid => fid === "polizei" ? POLIZEI : FAMILIEN[fid];
+const famAnzahl = fid => Object.values(G.players).filter(x => x.familie === fid).length;
+const MAFIA_BOT_NAMEN = {
+  famiglia: ["Don Salvatore", "Luca Moretti"],
+  syndikat: ["Viktor Kroll", "Greta Falk"],
+  bratwa:   ["Sergej Wolkow", "Anja Petrova"],
+  triade:   ["Onkel Chen", "Mei Ling"],
+};
 /* ---- Bezirke (Kartellmodus) ----
  * Die 26x26-Karte zerfällt in ein 3x3-Raster aus neun Bezirken. Wer in einem
  * Bezirk die meisten Gebäude stehen hat (mindestens zwei, und mehr als jede
@@ -517,7 +536,7 @@ function bezirkeBerechnen() {
     }
     if (!t.btype || !t.owner) continue;
     const fam = G.players[t.owner]?.familie;
-    if (!fam) continue;
+    if (!fam || fam === "polizei") continue;   // Polizeiwachen kontrollieren keine Reviere
     const b = bezirkVon(t.x, t.y);
     staerken[b][fam] = (staerken[b][fam] || 0) + 1;
   }
@@ -531,10 +550,13 @@ function bezirkeBerechnen() {
      * überstimmt danach 5 min lang die Gebäudemehrheit. */
     const kampf = G.revierKaempfe?.[i];
     const bes = G.besatzung?.[i];
+    const gesichert = Math.max(0, (G.gesichert?.[i] || 0) - G.tick);
     const umkaempft = kampf ? Math.max(0, kampf.bis - G.tick) : 0;
     if (kampf) kontrolle = null;
+    else if (gesichert > 0) kontrolle = null;   // frisch von der Polizei ausgeräumt
     else if (bes && bes.bis > G.tick) kontrolle = bes.familie;
     return { id: i, name: BEZIRK_NAMEN[i], kontrolle, staerken: s, umkaempft,
+      gesichert,
       kampf: kampf ? { angreifer: kampf.angreifer, verteidiger: kampf.verteidiger,
         pa: kampf.punkte[kampf.angreifer], pv: kampf.punkte[kampf.verteidiger], rest: umkaempft } : null,
       besatzung: bes && bes.bis > G.tick ? { familie: bes.familie, rest: bes.bis - G.tick } : null };
@@ -2989,6 +3011,9 @@ function snapshot() {
         kx: x, ky: y, gestoppt: !!tr.gestoppt };
     }) : null,
     pate: MODE === "kartell" ? G.pate : null,
+    polizei: MODE === "kartell" ? { punkte: G.polizeiPunkte || 0, ziel: POLIZEI_ZIEL,
+      farbe: POLIZEI.farbe,
+      mitglieder: Object.values(G.players).filter(p2 => p2.familie === "polizei").map(p2 => p2.name) } : null,
     familien: MODE === "kartell" ? Object.entries(FAMILIEN).map(([fid, f]) => ({
       id: fid, name: f.name, farbe: f.farbe, produkt: f.produkt, gebaeude: f.gebaeude,
       respekt: Math.round(G.familienRespekt[fid] || 0),
@@ -3107,6 +3132,7 @@ function privateState(p) {
           .filter(([, bis]) => bis > G.tick).map(([b, bis]) => [b, bis - G.tick])) : null,
     kampfCd: MODE === "kartell" ? Math.max(0, (p.kampfCd || 0) - G.tick) : 0,
     verstCd: MODE === "kartell" ? Math.max(0, (p.verstCd || 0) - G.tick) : 0,
+    razziaCd: MODE === "kartell" ? Math.max(0, (p.razziaCd || 0) - G.tick) : 0,
     quests: p.quests,
     tx: p.tx, sales: p.sales, fin: p.fin, nwHist: p.nwHist,
     fans: Math.round(p.fans || 0), fanHubs: fanHubs(p).length,
@@ -3280,7 +3306,7 @@ io.on("connection", socket => {
   });
 
   /* Lobby / Registrierung */
-  socket.on("register", ({ name, color, winGoal, industry, bots, botLevel, botToken }, ack) => {
+  socket.on("register", ({ name, color, winGoal, industry, bots, botLevel, botToken, familieWunsch }, ack) => {
     name = sicherText(String(name || "").trim().slice(0, 20));
     if (!name) return ack?.({ error: "Name fehlt" });
     if (Object.values(G.players).some(p => p.name === name)) return ack?.({ error: "Name vergeben" });
@@ -3316,13 +3342,22 @@ io.on("connection", socket => {
      * jeweils kleinsten Familie. */
     if (MODE === "kartell" && G.started && !G.players[pid].familie) {
       const fids = Object.keys(FAMILIEN);
-      G.players[pid].familie = fids.slice().sort((a, b) =>
-        Object.values(G.players).filter(x => x.familie === a).length -
-        Object.values(G.players).filter(x => x.familie === b).length)[0];
+      /* Wunsch aus der Registrierung (Bots wollen in IHRE Familie bzw. zur
+       * Polizei); sonst die kleinste Familie mit freiem Platz — sind alle
+       * voll, geht der Nachzügler zur Polizei. */
+      const wunsch = ["polizei", ...fids].includes(familieWunsch) ? familieWunsch : null;
+      const frei = fids.filter(f => famAnzahl(f) < FAMILIE_MAX)
+        .sort((a, b) => famAnzahl(a) - famAnzahl(b));
+      G.players[pid].familie =
+        (wunsch && (wunsch === "polizei" || famAnzahl(wunsch) < FAMILIE_MAX)) ? wunsch
+        : frei[0] || (famAnzahl("polizei") < FAMILIE_MAX ? "polizei"
+        : fids.slice().sort((a, b) => famAnzahl(a) - famAnzahl(b))[0]);
       /* Späteinsteiger bekommen dasselbe Familien-Startkapital wie alle. */
       G.players[pid].cash += 8000;
       logTx(G.players[pid], "Kartell", "Startkapital der Familie", 8000);
-      io.emit("notice", { text: `${name} schwört „${FAMILIEN[G.players[pid].familie].name}“ die Treue.` });
+      io.emit("notice", { text: G.players[pid].familie === "polizei"
+        ? `${name} tritt in die Polizei ein — die Familien sind gewarnt.`
+        : `${name} schwört „${famDef(G.players[pid].familie).name}“ die Treue.` });
     }
     io.emit("notice", { text: `${name} ist der Sitzung beigetreten.` + (Object.keys(G.players).length === 1 ? ` Rundenziel: ${WIN_NW.toLocaleString("de-DE")} $` : "") });
     ack?.({ ok: true, goods: GOODS, btypes: BTYPES, rooms: ROOMS, you: pid, winGoal: WIN_NW, questDefs: QUESTSET(), industry, industries: INDUSTRIES,
@@ -3377,19 +3412,24 @@ io.on("connection", socket => {
     /* Fahrerpool einmal je Runde würfeln — alle sehen dieselben Leute, wer
      * zuerst zugreift, hat sie. */
     if (!G.fahrer.length) G.fahrer = FAHRER_NAMEN.map((_, i) => fahrerBauen(i));
-    startBots();
+    /* Kartell: keine Wirtschafts-Bots (AgrarGenossen & Co.) — hier spielen
+     * Mafiosi mit; die Auffüllung passiert unten nach der Familienzuteilung. */
+    if (MODE !== "kartell") startBots();
     if (MODE === "kartell") {
       /* Familien auffüllen: Wer keine gewählt hat (auch Bots), kommt reihum in
        * die jeweils kleinste Familie — vier lebende Familien sind der Modus. */
       const fids = Object.keys(FAMILIEN);
       for (const sp of Object.values(G.players)) {
         if (sp.familie) continue;
-        const kleinste = fids.slice().sort((a, b) =>
-          Object.values(G.players).filter(x => x.familie === a).length -
-          Object.values(G.players).filter(x => x.familie === b).length)[0];
-        sp.familie = kleinste;
+        const frei = fids.filter(f => famAnzahl(f) < FAMILIE_MAX)
+          .sort((a, b) => famAnzahl(a) - famAnzahl(b));
+        sp.familie = frei[0] || fids.slice().sort((a, b) => famAnzahl(a) - famAnzahl(b))[0];
       }
       for (const f of fids) G.familienRespekt[f] ??= 0;
+      /* Jede Familie bekommt genau ZWEI Plätze: freie Plätze füllen Mafia-Bots.
+       * Bleibt die Polizei unbesetzt, übernimmt ein KI-Kommissar — es soll
+       * immer einen Gegenspieler geben. */
+      mafiaBotsAuffuellen();
       /* Weicher Einstieg: Startkapital der Familie obendrauf — der Betrieb
        * soll in Minute zwei stehen, nicht erst nach einer Börsenlehre.
        * Hier statt in newPlayer, weil die Registrierung VOR der Moduswahl
@@ -3629,10 +3669,14 @@ io.on("connection", socket => {
   /* --- Familie wählen (vor dem Start; danach ist der Schwur bindend) --- */
   socket.on("familieWaehlen", guard((p, { fid }, ack) => {
     if (MODE !== "kartell") return ack?.({ error: "Familien gibt es nur in der Kartellwirtschaft" });
-    if (!FAMILIEN[fid]) return ack?.({ error: "Diese Familie kennt hier niemand" });
+    if (!famDef(fid)) return ack?.({ error: "Diese Familie kennt hier niemand" });
     if (G.started && p.familie) return ack?.({ error: "Der Familie schwört man nur einmal — ein Wechsel wäre Verrat" });
+    if (fid !== p.familie && famAnzahl(fid) >= FAMILIE_MAX)
+      return ack?.({ error: `${famDef(fid).name} ist voll (${FAMILIE_MAX} Plätze) — such dir eine andere Seite` });
     p.familie = fid;
-    io.emit("notice", { text: `${p.name} schwört „${FAMILIEN[fid].name}“ die Treue.` });
+    io.emit("notice", { text: fid === "polizei"
+      ? `${p.name} tritt in die Polizei ein — die Familien sind gewarnt.`
+      : `${p.name} schwört „${famDef(fid).name}“ die Treue.` });
     ack?.({ ok: true });
   }));
 
@@ -3641,6 +3685,7 @@ io.on("connection", socket => {
    * bringt der Familie Respekt (1 Punkt je 100 $ Warenwert). */
   socket.on("hehlerVerkauf", guard((p, { good, qty }, ack) => {
     if (MODE !== "kartell") return ack?.({ error: "Der Hehler arbeitet nur in der Kartellwirtschaft" });
+    if (p.familie === "polizei") return ack?.({ error: "Der Hehler bedient keine Beamten — schon gar nicht in Uniform" });
     if (!ILLEGAL.includes(good)) return ack?.({ error: "Der Hehler nimmt nur heiße Ware" });
     qty = Math.floor(+qty) || Math.floor(p.inv[good] || 0);
     qty = Math.min(qty, Math.floor(p.inv[good] || 0));
@@ -3680,6 +3725,20 @@ io.on("connection", socket => {
     if (!p.familie) return ack?.({ error: "Ohne Familie überfällt man niemanden" });
     const tr = G.transporte.find(t2 => t2.id === transportId);
     if (!tr) return ack?.({ error: "Der Transport ist längst über alle Berge" });
+    /* Polizei: keine Beute, sondern Kontrolle — der Transport wird eskortiert,
+     * die Ladung sichergestellt. Verlässlich, aber unspektakulär bezahlt. */
+    if (p.familie === "polizei") {
+      if (p.ueberfallSperre && p.ueberfallSperre > G.tick)
+        return ack?.({ error: `Die Streife ist noch unterwegs — ${p.ueberfallSperre - G.tick} s` });
+      p.ueberfallSperre = G.tick + UEBERFALL_COOLDOWN;
+      G.transporte = G.transporte.filter(t2 => t2 !== tr);
+      const praemie = 400 + Math.floor(Math.random() * 300);
+      p.cash += praemie;
+      G.polizeiPunkte = (G.polizeiPunkte || 0) + 1;
+      logTx(p, "Polizei", `Transport kontrolliert und sichergestellt`, praemie);
+      io.emit("notice", { text: `🚔 ${p.name} kontrolliert einen ${TRANSPORT_ARTEN[tr.art].name} — Ladung sichergestellt (+1 Einsatzpunkt).` });
+      return ack?.({ ok: true, praemie });
+    }
     if (p.ueberfallSperre && p.ueberfallSperre > G.tick)
       return ack?.({ error: `Zu heiß — warte noch ${p.ueberfallSperre - G.tick} s` });
     p.ueberfallSperre = G.tick + UEBERFALL_COOLDOWN;
@@ -3726,6 +3785,7 @@ io.on("connection", socket => {
    * Familie riskiert man, von deren Schlägern rausgeworfen zu werden. */
   socket.on("erpressen", guard((p, { bezirk }, ack) => {
     if (MODE !== "kartell") return ack?.({ error: "Schutzgeld gibt es nur in der Kartellwirtschaft" });
+    if (p.familie === "polizei") return ack?.({ error: "Die Polizei erpresst niemanden — sie macht Razzien" });
     if (!p.familie) return ack?.({ error: "Ohne Familie erpresst man niemanden" });
     bezirk = Math.floor(+bezirk);
     const b = G.bezirke?.[bezirk];
@@ -3761,6 +3821,7 @@ io.on("connection", socket => {
    * Fenster holt man sich mit Bauten und Sperren selbst die Mehrheit. */
   socket.on("revierkampf", guard((p, { bezirk }, ack) => {
     if (MODE !== "kartell") return ack?.({ error: "Revierkämpfe gibt es nur in der Kartellwirtschaft" });
+    if (p.familie === "polizei") return ack?.({ error: "Die Polizei führt keine Revierkämpfe — sie sichert Bezirke per Razzia" });
     if (!p.familie) return ack?.({ error: "Ohne Familie kämpft man um kein Revier" });
     bezirk = Math.floor(+bezirk);
     const b = G.bezirke?.[bezirk];
@@ -3804,9 +3865,53 @@ io.on("connection", socket => {
     }
   }));
 
+  /* --- Polizei: Razzia gegen einen kontrollierten Bezirk ---
+   * Das Kerngeschäft des Gegenspielers: Die Polizei liest im Panel ab, WER
+   * einen Bezirk hält und wie heiß dessen Fahndung läuft — je höher die
+   * Fahndung, desto sicherer der Zugriff. Erfolg: Ware der Familie weg,
+   * Bußgeld an die Staatskasse (den Polizisten), Bezirk 60 s „gesichert",
+   * ein Einsatzpunkt. 25 Punkte, und die Polizei gewinnt die Runde. */
+  socket.on("razziaBezirk", guard((p, { bezirk }, ack) => {
+    if (MODE !== "kartell") return ack?.({ error: "Razzien gibt es nur in der Kartellwirtschaft" });
+    if (p.familie !== "polizei") return ack?.({ error: "Razzien führt nur die Polizei" });
+    bezirk = Math.floor(+bezirk);
+    const b = G.bezirke?.[bezirk];
+    if (!b) return ack?.({ error: "Diesen Bezirk kennt hier niemand" });
+    if (!b.kontrolle) return ack?.({ error: "Dort kontrolliert niemand etwas — keine Grundlage für einen Zugriff" });
+    if ((p.razziaCd || 0) > G.tick)
+      return ack?.({ error: `Das Einsatzkommando rüstet noch — ${p.razziaCd - G.tick} s` });
+    p.razziaCd = G.tick + RAZZIA_BEZIRK_CD;
+    const fam = b.kontrolle;
+    const chance = Math.min(.9, .35 + (G.fahndung[fam] || 0) / 200);   // heiße Familien = leichte Beute
+    if (Math.random() < chance) {
+      let beschlagnahmt = 0, strafe = 0;
+      for (const m of Object.values(G.players)) {
+        if (m.familie !== fam) continue;
+        for (const g of ILLEGAL) { const n = Math.floor(m.inv[g] || 0); if (n > 0) { m.inv[g] = 0; beschlagnahmt += n; } }
+        const st2 = Math.min(m.cash, 800); m.cash -= st2; strafe += st2;
+        logTx(m, "Kartell", `Razzia im ${b.name} — Ware beschlagnahmt, Bußgeld`, -st2);
+      }
+      p.cash += strafe;
+      G.familienRespekt[fam] = Math.max(0, (G.familienRespekt[fam] || 0) - 5);
+      G.fahndung[fam] = Math.max(0, (G.fahndung[fam] || 0) - 30);   // Akte abgearbeitet
+      (G.gesichert ??= {})[bezirk] = G.tick + GESICHERT_DAUER;
+      G.polizeiPunkte = (G.polizeiPunkte || 0) + 2;
+      gainXp(p, 15);
+      logTx(p, "Polizei", `Razzia im ${b.name}: ${beschlagnahmt}× Ware, ${strafe} $ Bußgeld`, strafe);
+      bezirkeBerechnen();
+      io.emit("notice", { text: `🚨 RAZZIA! ${p.name} stürmt den ${b.name} (${famDef(fam).name}): ${beschlagnahmt}× heiße Ware beschlagnahmt, ${strafe} $ Bußgeld — der Bezirk ist ${GESICHERT_DAUER} s gesichert.` });
+      ack?.({ ok: true, beschlagnahmt, strafe });
+    } else {
+      G.fahndung[fam] = Math.max(0, (G.fahndung[fam] || 0) - 5);
+      io.emit("notice", { text: `🚔 Eine Razzia im ${b.name} läuft ins Leere — ${famDef(fam).name} wurde gewarnt.` });
+      ack?.({ error: "Der Zugriff platzt — die Läden waren sauber. Mehr Fahndungsdruck macht den nächsten sicherer" });
+    }
+  }));
+
   /* --- Verstärkung: im laufenden Tauziehen Schläger in den Bezirk schicken --- */
   socket.on("verstaerkung", guard((p, { bezirk }, ack) => {
     if (MODE !== "kartell") return ack?.({ error: "Verstärkung gibt es nur in der Kartellwirtschaft" });
+    if (p.familie === "polizei") return ack?.({ error: "Die Polizei mischt sich nicht in Bandenkriege — sie beendet sie" });
     bezirk = Math.floor(+bezirk);
     const k = G.revierKaempfe?.[bezirk];
     if (!k) return ack?.({ error: "Dort kämpft gerade niemand" });
@@ -3825,6 +3930,7 @@ io.on("connection", socket => {
   /* --- Straßensperre: Revier markieren --- */
   socket.on("sperreBauen", guard((p, { x, y }, ack) => {
     if (MODE !== "kartell") return ack?.({ error: "Sperren gibt es nur in der Kartellwirtschaft" });
+    if (p.familie === "polizei") return ack?.({ error: "Die Polizei baut keine Barrikaden" });
     if (!p.familie) return ack?.({ error: "Ohne Familie sperrt man keine Straßen" });
     const t = G.map[y * MAP_W + x];
     if (!t?.road) return ack?.({ error: "Sperren stehen nur auf Straßen" });
@@ -5048,9 +5154,27 @@ function runTick() {
       }
       bezirkeBerechnen();
     }
-    /* Abgelaufene Besatzungen aufräumen */
+    /* Abgelaufene Besatzungen und Sicherungen aufräumen */
     for (const [idxS, bes] of Object.entries(G.besatzung || {}))
       if (bes.bis <= G.tick) delete G.besatzung[idxS];
+    for (const [idxS, bis] of Object.entries(G.gesichert || {}))
+      if (bis <= G.tick) delete G.gesichert[idxS];
+    /* Polizei: Sold im Minutentakt und der Blick auf das Einsatzziel */
+    if (G.tick % 60 === 0) for (const p2 of Object.values(G.players)) {
+      if (p2.familie !== "polizei") continue;
+      p2.cash += POLIZEI_SOLD;
+      logTx(p2, "Polizei", "Sold", POLIZEI_SOLD);
+    }
+    if (!G.winner && (G.polizeiPunkte || 0) >= POLIZEI_ZIEL) {
+      const beste = Object.values(G.players).filter(p2 => p2.familie === "polizei")
+        .sort((a, b) => netWorth(b) - netWorth(a))[0];
+      if (beste) {
+        G.winner = beste.name;
+        G.winGrund = `Die Polizei hat die Stadt aufgeräumt — ${POLIZEI_ZIEL} erfolgreiche Einsätze`;
+        G.report = buildReport(beste.id);
+        io.emit("notice", { text: `🚔 DIE POLIZEI GEWINNT: ${POLIZEI_ZIEL} Einsätze abgeschlossen — die Stadt gehört wieder dem Gesetz. ${beste.name} führt die Ehrenliste an.` });
+      }
+    }
     if (G.tick % 60 === 0 && G.bezirke) {
       for (const b of G.bezirke) {
         if (!b.kontrolle) continue;
@@ -5646,6 +5770,26 @@ function startBots() {
   console.log(`Bots: ${liste.map(c => c.name).join(", ") || "keine"} — Stufe ${lvl.name}`);
   liste.forEach((cfg, i) => setTimeout(() => { if (gen === botGen && botsStarted) spawnBot(cfg, lvl); }, 8000 + i * 5000));
 }
+function mafiaBotsAuffuellen() {
+  if (process.env.BOT === "0") return;
+  botsStarted = true;
+  let delay = 4000;
+  for (const fid of Object.keys(FAMILIEN)) {
+    const fehlt = FAMILIE_MAX - famAnzahl(fid);
+    for (let i = 0; i < fehlt; i++) {
+      const name = (MAFIA_BOT_NAMEN[fid] || [])[i] || `${FAMILIEN[fid].name}-Soldat`;
+      const cfg = { name, color: FAMILIEN[fid].farbe, industry: "agrar", kartellFamilie: fid };
+      const d = delay; delay += 3500;
+      setTimeout(() => spawnBot(cfg), d);
+    }
+  }
+  if (famAnzahl("polizei") === 0) {
+    const d = delay;
+    setTimeout(() => spawnBot({ name: "Commissario Rizzo", color: POLIZEI.farbe,
+      industry: "agrar", polizei: true }), d);
+  }
+  console.log("Mafia-Bots werden aufgefüllt (2 je Familie, Polizei besetzt).");
+}
 function stopBots() {
   botGen++;
   for (const h of botHandles) { clearInterval(h.timer); h.socket.close(); }
@@ -5671,7 +5815,7 @@ async function spawnBot(cfg, lvl = BOT_LEVELS[BOT_LEVEL_DEFAULT]) {
     st = botMap ? { ...x, map: botMap } : x;
   });
   let botMeta = null;   // Registrierungsdaten (Tuning-Tabelle, Schwellen) für die Rennlogik
-  s.on("connect", () => s.emit("register", { name: cfg.name, color: cfg.color, industry: cfg.industry, botToken: BOT_TOKEN },
+  s.on("connect", () => s.emit("register", { name: cfg.name, color: cfg.color, industry: cfg.industry, botToken: BOT_TOKEN, familieWunsch: cfg.polizei ? "polizei" : cfg.kartellFamilie },
     res => { if (res?.ok) { myId = res.you; botMeta = res; } }));
   /* Mit Zeitlimit: bleibt eine Bestätigung aus — etwa weil ein Handler sie
    * vergisst —, würde der Bot sonst an dieser Stelle für immer stehen bleiben
@@ -5689,6 +5833,22 @@ async function spawnBot(cfg, lvl = BOT_LEVELS[BOT_LEVEL_DEFAULT]) {
     if (laeuft || !me || !st || !myId || st.winner) return;
     laeuft = true;
     try {
+      /* --- Polizei-KI: kontrolliert Transporte und razzt die heißeste
+       * Familie — wirtschaftet aber nicht und kennt keinen Hehler. --- */
+      if (cfg.polizei) {
+        if (st.mode === "kartell" && st.started && !st.winner) {
+          if ((st.transporte || []).length && Math.random() < .6)
+            await em("ueberfall", { transportId: st.transporte[0].id });
+          if (!me.razziaCd) {
+            const fahndungVon = Object.fromEntries((st.familien || []).map(f => [f.id, f.fahndung || 0]));
+            const ziel = (st.bezirke || []).filter(b => b.kontrolle)
+              .sort((a, b) => (fahndungVon[b.kontrolle] || 0) - (fahndungVon[a.kontrolle] || 0)).pop();
+            if (ziel && (fahndungVon[ziel.kontrolle] || 0) >= 15)
+              await em("razziaBezirk", { bezirk: ziel.id });
+          }
+        }
+        return;
+      }
       /* --- Planwirtschaft: Bots bedienen ihr Soll, das Volksziel und den
        * Schwarzmarkt — die Markt-Routinen weiter unten laufen ins Leere
        * (Börse/Verträge sind gesperrt) und stören nicht. --- */
