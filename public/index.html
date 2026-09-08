@@ -5246,7 +5246,8 @@ function clickTile(e) {
       /* Kartellmodus: Familien bauen ALLES — Bezirkskontrolle zählt Gebäude,
        * eine Branchen-Sperre aus dem Normalmodus hätte hier keinen Sinn. */
       : (kartellModus || !b.industry || myInds.includes(b.industry))));
-  const mats = b => { const m = { ziegel: Math.ceil(b.cost / 400) };
+  const mats = b => { if (kartellModus) return {};   // Kartell: die Mafia zahlt bar, kein Baumaterial
+    const m = { ziegel: Math.ceil(b.cost / 400) };
     if (b.cost >= 4000 && b.proc?.out !== "beton") m.beton = Math.ceil(b.cost / 2000);
     return m; };
   const matName = { ziegel: "Ziegel", beton: "Beton" };
@@ -5276,7 +5277,7 @@ function clickTile(e) {
   const casaNote = kartellModus && CASAS?.has(t.x + "," + t.y)
     ? `<div class="note" style="border-left:3px solid var(--accent);padding-left:7px">🏠 Hier steht ein <b>Geschäft des Viertels</b> — solche Läden zahlen das <b>Schutzgeld</b> (Kartell-Panel → Bezirke). Baust du hier, weicht es deinem Betrieb.</div>`
     : "";
-  tm.innerHTML = `<h3>${t.locked ? "Gesperrt · " : ""}Bauen — ${t.zone}</h3>` + casaNote + (opts.length ? `<div class="note">Baumaterial: Ziegel und Beton — Nachschub über die Börse. Später mit Elektronik auflevelbar.${lockNote}</div>` : `<div class="note">${store.get().state?.mode === "renntag"
+  tm.innerHTML = `<h3>${t.locked ? "Gesperrt · " : ""}Bauen — ${t.zone}</h3>` + casaNote + (opts.length ? `<div class="note">${kartellModus ? "Bezahlt wird bar — die Handwerker der Stadt stellen keine Fragen." : "Baumaterial: Ziegel und Beton — Nachschub über die Börse. Später mit Elektronik auflevelbar."}${lockNote}</div>` : `<div class="note">${store.get().state?.mode === "renntag"
         ? "Deine Rolle baut hier nichts — Teile und Rohstoffe gehen über die Börse."
         : "Deine Industrie kann hier nichts bauen — handle stattdessen an der Börse."}</div>`)
     + opts.map(([bid, b]) => `<button class="opt" data-b="${bid}" ${canAfford(b) ? "" : "disabled"}>${b.name}<small>${

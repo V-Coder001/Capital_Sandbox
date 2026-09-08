@@ -626,6 +626,11 @@ const RENNTAG_BAUTEN = {
  * wird NICHT zum Bauen gebraucht, sondern zum Aufleveln bestehender Gebäude
  * (siehe upgradeCost / "upgradeBuilding"-Handler weiter unten). */
 const matCost = bt => {
+  /* Kartellmodus: kein Baumaterial. Es gibt dort keine verlässliche
+   * Ziegel-Lieferkette (reines P2P ohne Markt-Bot, Bots bauen keine
+   * Ziegeleien) — nach dem Starter-Kit war JEDES Gebäude unbaubar.
+   * Die Mafia zahlt bar, Handwerker stellen keine Fragen. */
+  if (MODE === "kartell") return {};
   const m = { ziegel: Math.ceil(bt.cost / 400) };
   /* Ausnahme Betonwerk: es selbst mit Beton zu verlangen wäre ein Henne-Ei-Problem
    * (ohne ein erstes Werk kann niemand je das Material haben, um eins zu bauen). */
@@ -3722,12 +3727,14 @@ io.on("connection", socket => {
     const t = G.map[y * MAP_W + x];
     if (!t?.road) return ack?.({ error: "Sperren stehen nur auf Straßen" });
     if (t.sperre) return ack?.({ error: "Hier steht schon eine Sperre" });
-    const aktive = G.map.filter(t2 => t2.sperre?.familie === p.familie).length;
+    /* Limit je SPIELER, nicht je Familie: Mit Bots als Familienmitgliedern
+     * war das Familien-Kontingent sonst belegt, bevor ein Mensch klickte. */
+    const aktive = G.map.filter(t2 => t2.sperre?.von === p.id).length;
     if (aktive >= SPERRE_MAX_JE_FAMILIE)
-      return ack?.({ error: `Deine Familie hält schon ${SPERRE_MAX_JE_FAMILIE} Sperren — mehr Leute habt ihr nicht` });
+      return ack?.({ error: `Du hältst schon ${SPERRE_MAX_JE_FAMILIE} Sperren — mehr Leute hast du nicht` });
     if (p.cash < SPERRE_KOSTEN) return ack?.({ error: `Zu wenig Bargeld (${SPERRE_KOSTEN} $)` });
     p.cash -= SPERRE_KOSTEN;
-    t.sperre = { familie: p.familie, bis: G.tick + SPERRE_DAUER };
+    t.sperre = { familie: p.familie, von: p.id, bis: G.tick + SPERRE_DAUER };
     G.fahndung[p.familie] = (G.fahndung[p.familie] || 0) + 5;
     questProg(p, "sperre");
     logTx(p, "Kartell", `Straßensperre errichtet (${BEZIRK_NAMEN[bezirkVon(x, y)]})`, -SPERRE_KOSTEN);
