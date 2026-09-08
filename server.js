@@ -453,9 +453,13 @@ const FAMILIEN = {
  * andere Familie), kontrolliert ihn: Schutzgeld jede Minute plus Respekt.
  * Die Familie mit den meisten Bezirken stellt den PATEN — alle anderen
  * Familien zahlen ihm 10 % ihrer Hehler-Erlöse als Abgabe. */
-const BEZIRK_NAMEN = ["Hafenviertel", "Altstadt", "Bahnhofsviertel",
-                      "Marktviertel", "Zentrum", "Industriehof",
-                      "Gärtnerviertel", "Küstenpromenade", "Neustadt"];
+/* Italienische Viertel — die Karte des Kartellmodus ist eine alte
+ * Mittelmeerstadt, ihre Bezirke heißen entsprechend. Reihenfolge = 3x3-Raster
+ * von Nordwest nach Südost; die Zona Industriale liegt wirklich im Nordosten,
+ * der Porto Vecchio wirklich an der Küste. */
+const BEZIRK_NAMEN = ["Borgo Antico", "Stazione", "Zona Industriale",
+                      "Mercato Vecchio", "Piazza Grande", "Collina",
+                      "Porto Vecchio", "Marina", "Giardini"];
 const SCHUTZGELD_JE_BEZIRK = 200;   // $ je Minute, unter den Mitgliedern aufgeteilt
 const PATEN_ABGABE = 0.10;          // Anteil der Hehler-Erlöse an den Paten
 const bezirkVon = (x, y) => Math.min(2, Math.floor(x / 9)) + 3 * Math.min(2, Math.floor(y / 9));
@@ -521,15 +525,21 @@ const BESTECHUNG_KOSTEN = 2000;
 /* Durchgehende Straßenzüge der aktuellen Karte — auf ihnen fahren die
  * Transporte. Wird je Runde einmal aus dem Gitter abgeleitet. */
 function transportLinien() {
+  /* Längster ZUSAMMENHÄNGENDER Straßenzug je Zeile/Spalte — auf der
+   * Küstenkarte enden die Nord-Süd-Corsi im Meer, eine „volle Spalte“ gibt
+   * es dort nicht mehr. Ab 12 Kacheln am Stück lohnt sich ein Transport. */
   const linien = [];
-  for (let x = 0; x < MAP_W; x++) {
-    let n = 0; for (let y = 0; y < MAP_H; y++) if (G.map[y * MAP_W + x]?.road) n++;
-    if (n >= MAP_H - 2) linien.push({ achse: "y", linie: x });
-  }
-  for (let y = 0; y < MAP_H; y++) {
-    let n = 0; for (let x = 0; x < MAP_W; x++) if (G.map[y * MAP_W + x]?.road) n++;
-    if (n >= MAP_W - 2) linien.push({ achse: "x", linie: y });
-  }
+  const lauf = (achse, linie, laenge, lies) => {
+    let start = 0, bestVon = 0, bestBis = -1;
+    for (let i = 0; i <= laenge; i++) {
+      if (i < laenge && lies(i)) continue;
+      if (i - start > bestBis - bestVon + 1) { bestVon = start; bestBis = i - 1; }
+      start = i + 1;
+    }
+    if (bestBis - bestVon + 1 >= 12) linien.push({ achse, linie, von: bestVon, bis: bestBis });
+  };
+  for (let x = 0; x < MAP_W; x++) lauf("y", x, MAP_H, y => !!G.map[y * MAP_W + x]?.road);
+  for (let y = 0; y < MAP_H; y++) lauf("x", y, MAP_W, x => !!G.map[y * MAP_W + x]?.road);
   return linien;
 }
 const transportKachel = tr => {
@@ -1728,6 +1738,79 @@ function buildMap(mode = "sandbox") {
   if (mode === "renntag")
     return buildStadtMap({ w: 30, h: 30, seed: 137, ufer: "ecke", sperren: false,
                            deko: 7, inseln: [[7, 25, 2.4]] });
+  /* Kartellmodus: eine alte italienische Küstenstadt. 27x27, damit die neun
+   * Bezirke exakt 9x9 groß sind und die beiden Hauptstraßen-Kreuze (x/y = 8
+   * und 17) genau auf den Bezirksgrenzen liegen. Enge, versetzte Gassen in
+   * den Vierteln, eine Piazza mit dem Bankpalazzo in der Mitte, Weinberge im
+   * Umland, Mittelmeer im Süden — und NICHTS ist gesperrt: Der Modus soll
+   * Spaß machen, nicht Bauland verkaufen. */
+  if (mode === "kartell") {
+    MAP_W = 27; MAP_H = 27; MAP_ROUTES = null;
+    const noise = (x, y) => {
+      const n = Math.sin((x + 53) * 12.9898 + (y + 17) * 78.233) * 43758.5453;
+      return n - Math.floor(n);
+    };
+    /* Mittelmeer: Bucht im Süden, sanft ausgefranst. */
+    let wat = [];
+    for (let y = 0; y < MAP_H; y++) for (let x = 0; x < MAP_W; x++)
+      wat.push((y - (MAP_H - 3.4)) + (noise(x, y) - 0.5) * 1.6 > 0);
+    for (let pass = 0; pass < 2; pass++) {
+      const next = [...wat];
+      for (let y = 0; y < MAP_H; y++) for (let x = 0; x < MAP_W; x++) {
+        let n = 0, c = 0;
+        for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+          const xx = x + dx, yy = y + dy;
+          if (xx < 0 || yy < 0 || xx >= MAP_W || yy >= MAP_H) { n += (yy >= MAP_H) ? 1 : 0; c++; continue; }
+          n += wat[yy * MAP_W + xx] ? 1 : 0; c++;
+        }
+        next[y * MAP_W + x] = n > c / 2;
+      }
+      wat = next;
+    }
+    /* Eine kleine Insel vor dem Hafen — Schmugglerromantik. */
+    for (let y = 0; y < MAP_H; y++) for (let x = 0; x < MAP_W; x++)
+      if (Math.hypot(x - 5, y - (MAP_H - 1.4)) < 1.9) wat[y * MAP_W + x] = false;
+    const CX2 = 13, CY2 = 12;   // die Piazza
+    const tiles = [];
+    for (let y = 0; y < MAP_H; y++) for (let x = 0; x < MAP_W; x++) {
+      const water = wat[y * MAP_W + x];
+      /* Straßennetz: zwei Hauptstraßen-Kreuze auf den Bezirksgrenzen (Corso),
+       * dazu je Viertel kurze, versetzte Gassen — Altstadt statt Schachbrett. */
+      const corso = x === 8 || x === 17 || y === 8 || y === 17;
+      const bx = Math.min(2, Math.floor(x / 9)), by = Math.min(2, Math.floor(y / 9));
+      const gasse =
+        (y === by * 9 + 4 && x % 9 >= 1 && x % 9 <= 7 && (bx + by) % 2 === 0) ||
+        (x === bx * 9 + 4 && y % 9 >= 1 && y % 9 <= 7 && (bx + by) % 2 === 1);
+      /* Hafenpromenade: eine Uferstraße oberhalb der Küstenlinie. */
+      const promenade = y === MAP_H - 6;
+      const road = !water && (corso || gasse || promenade);
+      let zone = "agrar";
+      if (water) zone = "wasser";
+      else if (Math.hypot(x - CX2, y - CY2) < 6.5) zone = "zentrum";
+      else if (y >= MAP_H - 8) zone = "kueste";
+      else if (x >= 18 && y <= 8) zone = "industrie";
+      /* Piazza: der freie Platz ums Zentrum — Zypressen und Brunnenflair. */
+      const piazza = Math.abs(x - CX2) <= 1 && Math.abs(y - CY2) <= 1;
+      const park = !water && !road && (piazza || (x * 7 + y * 13) % 19 === 0);
+      /* Weinberge und Olivenhaine: das Umland ist sichtbar Landwirtschaft. */
+      const field = !water && !road && !park && zone === "agrar" && (x * 5 + y * 11) % 7 === 0;
+      tiles.push({ x, y, zone, road, water, locked: false, unlockCost: 0,
+        park, field, owner: null, btype: null, lien: false });
+    }
+    const at2 = (x, y) => (x < 0 || y < 0 || x >= MAP_W || y >= MAP_H) ? null : tiles[y * MAP_W + x];
+    for (const t of tiles) {
+      const nb = [at2(t.x + 1, t.y), at2(t.x - 1, t.y), at2(t.x, t.y + 1), at2(t.x, t.y - 1)];
+      if (!t.water && nb.some(n => n?.water)) t.sand = true;
+      if (t.water && !nb.some(n => n && !n.water)) t.deep = true;
+      if (t.water && (t.x * 3 + t.y * 17) % 19 === 0) t.rock = true;
+    }
+    /* Der Bankpalazzo thront am Rand der Piazza. */
+    const bank2 = at2(CX2, CY2 - 2) && !at2(CX2, CY2 - 2).water && !at2(CX2, CY2 - 2).road
+      ? at2(CX2, CY2 - 2)
+      : tiles.find(t => t.zone === "zentrum" && !t.water && !t.road && !t.park);
+    if (bank2) Object.assign(bank2, { bank: true, road: false, park: false, field: false, locked: false, unlockCost: 0 });
+    return tiles;
+  }
   MAP_W = 26; MAP_H = 26; MAP_ROUTES = null;
   /* Die Planwirtschaft spielt auf einer eigenen Fläche: andere Küstenlinie
    * (verschobenes Rauschen), engeres Straßenraster, Industrie links statt
@@ -3044,6 +3127,13 @@ io.on("connection", socket => {
         sp.cash += 8000;
         logTx(sp, "Kartell", "Startkapital der Familie", 8000);
       }
+      /* Eigene Spielfläche: die alte italienische Küstenstadt. Wie bei Plan/
+       * Renntag muss die Karte nach dem Tausch einmal VOLLSTÄNDIG an alle —
+       * der Kachel-Diff trägt nur veränderliche Felder. */
+      G.map = buildMap("kartell");
+      G.groupOrder = null;
+      lastTileSigs = null;
+      for (const sock of io.sockets.sockets.values()) sock.data.gotMap = false;
       io.emit("notice", { text: "Die vier Familien teilen die Stadt unter sich auf — Respekt entscheidet, wer das Sagen hat." });
     }
     if (MODE === "renntag") {
@@ -3078,6 +3168,8 @@ io.on("connection", socket => {
       G.plan = { phase: 0, rest: 0, spieler: {}, markt: [] };
       planPhaseStarten();
       io.emit("notice", { text: `Planwirtschaft: Der Fünfjahresplan beginnt — ${PLAN_ZIEL} Planpunkte machen dich zum Helden der Arbeit.` });
+    } else if (MODE === "kartell") {
+      io.emit("notice", { text: "Die Runde läuft — Ziel: 6 von 9 Bezirken. Wer die Stadt hält, gewinnt." });
     } else {
       io.emit("notice", { text: `Die Runde läuft — Ziel: ${WIN_NW.toLocaleString("de-DE")} $` });
     }
@@ -4550,9 +4642,8 @@ function runTick() {
           .flatMap(([id2, a]) => Array(a.gewicht).fill(id2));
         const art = arten[Math.floor(Math.random() * arten.length)];
         const dir = Math.random() < 0.5 ? 1 : -1;
-        const laenge = (l.achse === "x" ? MAP_W : MAP_H) - 1;
         G.transporte.push({ id: id(), art, achse: l.achse, linie: l.linie,
-          pos: dir === 1 ? 0 : laenge, dir, gestoppt: 0 });
+          von: l.von, bis: l.bis, pos: dir === 1 ? l.von : l.bis, dir, gestoppt: 0 });
         io.emit("notice", { text: `🚚 Ein ${TRANSPORT_ARTEN[art].name} ist in der Stadt unterwegs — wer greift zu?` });
       }
     }
@@ -4564,8 +4655,7 @@ function runTick() {
         continue;
       }
       tr.pos += tr.dir * TRANSPORT_TEMPO;
-      const laenge = (tr.achse === "x" ? MAP_W : MAP_H) - 1;
-      if (tr.pos < 0 || tr.pos > laenge) {
+      if (tr.pos < (tr.von ?? 0) || tr.pos > (tr.bis ?? (tr.achse === "x" ? MAP_W : MAP_H) - 1)) {
         G.transporte = G.transporte.filter(t2 => t2 !== tr);
         continue;
       }

@@ -3314,6 +3314,10 @@ const TW = 64, TH = 32; let cam = { x: 0, y: -120, z: 1 }, drag = null;
 /* DDR-Optik: Im Planwirtschafts-Modus bekommt die Karte einen gedeckten,
  * entsättigten Look — wird pro Frame aus dem Spielzustand gesetzt. */
 let PLAN_LOOK = false;
+/* Kartellmodus: die alte italienische Küstenstadt — warme Terrakotta-Töne,
+ * sandsteinfarbene Straßen, türkiseres Meer. Reiner Farb-Schleier über den
+ * fertigen Kachel-Texturen, keine eigenen Sprites nötig. */
+let ITALIA_LOOK = false;
 function resize(){ cv.width = innerWidth * devicePixelRatio; cv.height = innerHeight * devicePixelRatio;
   cv.style.width = innerWidth + "px"; cv.style.height = innerHeight + "px";
   /* Ein Resize setzt den Kontext zurück — die Glättungsqualität danach neu setzen. */
@@ -4354,6 +4358,7 @@ function draw() {
   /* Moduswechsel bringt eine neue Spielfläche mit — Straßen- und Ufer-Cache
    * müssen dann neu aufgebaut werden. */
   PLAN_LOOK = st.mode === "plan";
+  ITALIA_LOOK = st.mode === "kartell";
   const mapKey = st.mode + ":" + st.started;
   if (draw.mapKey !== mapKey) { draw.mapKey = mapKey; ROUTES = null; SHORE = null; ROADSET = null; }
   if (!ROUTES) {
@@ -4383,6 +4388,14 @@ function draw() {
      * Textur, ein Farbschleier darüber würde sie nur trüben. Nur das offene
      * Meer bekommt weiterhin einen Dunkel-Ton, damit sich Tiefe abhebt. */
     if (t.water && t.deep) { cx.globalAlpha = 0.35; cx.fillStyle = "#092536"; cx.fill(); cx.globalAlpha = 1; }
+    /* Italien-Schleier: Pflaster statt Asphalt, Olivgrün statt Rasen,
+     * warmes Zentrum, türkises Mittelmeer. */
+    if (ITALIA_LOOK) {
+      cx.globalAlpha = t.road ? .42 : t.water ? .26 : t.sand ? .34 : t.zone === "zentrum" ? .30 : .24;
+      cx.fillStyle = t.road ? "#c29a63" : t.water ? "#1a96a3" : t.sand ? "#e3c078"
+        : t.zone === "zentrum" ? "#cd9058" : t.park ? "#5a7035" : "#96a14b";
+      cx.fill(); cx.globalAlpha = 1;
+    }
     /* Gesperrte Flaechen sind 40 % der Karte (Kueste und Industrieband
      * zusammen 270 von 676 Kacheln). Mit 45 % Schwarz darueber wirkten sie
      * wie tote Flaeche statt wie Bauland, das man kaufen kann — und da nur
