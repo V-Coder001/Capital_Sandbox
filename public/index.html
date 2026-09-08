@@ -3773,12 +3773,29 @@ function buildRoutes(map) {
     (cols[t.x] ??= []).push(t);
     (rows[t.y] ??= []).push(t);
   }
+  /* Nur ZUSAMMENHÄNGENDE Straßenzüge werden Fahrspuren: Auf der Kartell-Karte
+   * liegen in einer Spalte mehrere getrennte Gassen-Stücke — als eine Linie
+   * verkettet fuhren die Autos schnurgerade über die Wiese dazwischen. Deshalb
+   * an jeder Lücke trennen und nur lange Stücke behalten (kurze Gassen haben
+   * keinen Durchgangsverkehr). */
+  const stuecke = (tiles, koord) => {
+    const runs = []; let run = [];
+    for (const t of tiles) {
+      if (run.length && t[koord] - run[run.length - 1][koord] !== 1) {
+        if (run.length > 10) runs.push(run);
+        run = [];
+      }
+      run.push(t);
+    }
+    if (run.length > 10) runs.push(run);
+    return runs;
+  };
   /* Spalten- und Zeilenstraßen abwechselnd einreihen — vorher kamen erst alle
    * Spalten, und die ersten vier Züge (die Autos) fuhren dadurch alle in
    * dieselbe Bildschirmrichtung. */
   const colLines = [], rowLines = [];
-  for (const k in cols) if (cols[k].length > 10) colLines.push(cols[k].sort((a, b) => a.y - b.y));
-  for (const k in rows) if (rows[k].length > 10) rowLines.push(rows[k].sort((a, b) => a.x - b.x));
+  for (const k in cols) colLines.push(...stuecke(cols[k].sort((a, b) => a.y - b.y), "y"));
+  for (const k in rows) rowLines.push(...stuecke(rows[k].sort((a, b) => a.x - b.x), "x"));
   const carLines = [];
   for (let i = 0; i < Math.max(colLines.length, rowLines.length); i++) {
     if (colLines[i]) carLines.push(colLines[i]);
