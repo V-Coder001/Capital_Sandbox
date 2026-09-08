@@ -1779,6 +1779,14 @@ td:first-child{font-family:var(--font)}
   </div>
 </div>
 
+<div id="kampfBanner" style="position:fixed;inset:0;z-index:55;display:none;place-items:center;pointer-events:none;background:radial-gradient(ellipse at center,rgba(10,6,6,.0),rgba(10,6,6,.55))">
+  <div id="kampfBannerBox" style="text-align:center;transform:scale(.8);transition:transform .25s">
+    <div id="kampfBannerEmoji" style="font-size:54px">⚔️</div>
+    <div id="kampfBannerTitel" style="font-size:34px;font-weight:800;letter-spacing:.04em;text-shadow:0 3px 18px rgba(0,0,0,.8)"></div>
+    <div id="kampfBannerSub" style="font-size:15px;color:#dfe6f2;opacity:.85;margin-top:6px;text-shadow:0 2px 8px rgba(0,0,0,.8)"></div>
+  </div>
+</div>
+
 <div id="tilemenu"></div>
 
 <!-- Bugreport: Beschreibung plus optionaler Screenshot (automatisch von der
@@ -2084,6 +2092,53 @@ setInterval(() => {
   letztesMe = Date.now();                         // nicht im Sekundentakt erneut versuchen
   socket.emit("rejoin", { token: myToken }, () => {});
 }, 5000);
+/* ---- Revierkampf-Inszenierung: Beben, Schüsse, Sieges-Banner ---- */
+let KAMPF_SHAKE = 0;
+function kampfSchuesse() {
+  /* Drei kurze Salven aus geformtem Rauschen — klingt nach Straßenschlacht,
+   * braucht keine Datei. Nutzt denselben Stummschalter wie alles andere. */
+  try {
+    if (typeof MUSIC !== "undefined" && MUSIC.istStumm()) return;
+    const ctx = rennAudio.ctx ??= new (window.AudioContext || window.webkitAudioContext)();
+    for (let i = 0; i < 3; i++) {
+      const t0 = ctx.currentTime + i * .22 + Math.random() * .05;
+      const puffer = ctx.createBuffer(1, ctx.sampleRate * .12, ctx.sampleRate);
+      const d = puffer.getChannelData(0);
+      for (let j = 0; j < d.length; j++) d[j] = (Math.random() * 2 - 1) * Math.pow(1 - j / d.length, 3);
+      const q = ctx.createBufferSource(), g2 = ctx.createGain(), f = ctx.createBiquadFilter();
+      f.type = "lowpass"; f.frequency.value = 900;
+      q.buffer = puffer; g2.gain.value = .25;
+      q.connect(f); f.connect(g2); g2.connect(ctx.destination);
+      q.start(t0);
+    }
+  } catch {}
+}
+function kampfBanner(d) {
+  const st = store.get().state;
+  const fam = (st?.familien || []).find(f => f.id === d.sieger);
+  const box = document.getElementById("kampfBanner");
+  document.getElementById("kampfBannerEmoji").textContent = d.art === "erobert" ? "⚔️" : "🛡️";
+  const titel = document.getElementById("kampfBannerTitel");
+  titel.textContent = d.art === "erobert"
+    ? `${d.name.toUpperCase()} GEHÖRT JETZT DER ${(fam?.name || d.sieger).toUpperCase()}`
+    : `${(fam?.name || d.sieger).toUpperCase()} VERTEIDIGT ${d.name.toUpperCase()}`;
+  titel.style.color = fam?.farbe || "#e8b544";
+  document.getElementById("kampfBannerSub").textContent = d.art === "erobert"
+    ? `Tauziehen ${d.pa}:${d.pv} · ${d.beute} $ geplündert · ${Math.round((d.dauer || 300) / 60)} min Besatzung`
+    : `Tauziehen ${d.pv}:${d.pa} — der Angriff verpufft`;
+  box.style.display = "grid";
+  requestAnimationFrame(() => document.getElementById("kampfBannerBox").style.transform = "scale(1)");
+  KAMPF_SHAKE = Math.max(KAMPF_SHAKE, .6);
+  try {   // kleiner Jingle: Sieg = aufsteigend, Verteidigung = zwei feste Töne
+    if (d.art === "erobert") { rennTon(392, .18, "triangle", .12); setTimeout(() => rennTon(523, .18, "triangle", .12), 160); setTimeout(() => rennTon(659, .3, "triangle", .14), 320); }
+    else { rennTon(330, .2, "triangle", .12); setTimeout(() => rennTon(330, .28, "triangle", .12), 220); }
+  } catch {}
+  clearTimeout(kampfBanner._t);
+  kampfBanner._t = setTimeout(() => {
+    document.getElementById("kampfBannerBox").style.transform = "scale(.8)";
+    box.style.display = "none";
+  }, 4500);
+}
 function bindSocketEvents(s) {
   s.on("connect", () => reidentify(s));        // direkte socket.io-Verbindung
   s.on("reconnected", () => reidentify(s));    // über die WebRTC-Bridge gemeldet
@@ -2091,6 +2146,9 @@ function bindSocketEvents(s) {
   s.on("me", me => { letztesMe = Date.now(); store.set({ me }); });
   s.on("kurse", k => { priceHist = k?.waren || {}; firmHist = k?.firmen || {}; });
   s.on("notice", ({ text }) => toast(text));
+  /* Revierkampf-Inszenierung: Kamera bebt, Schüsse knallen, am Ende Banner */
+  s.on("kampfStart", () => { KAMPF_SHAKE = 1; kampfSchuesse(); });
+  s.on("revierErgebnis", d => kampfBanner(d));
   /* Kein Toast mehr je Handel: Das Ereignis feuert bei JEDEM Abschluss im
    * Spiel, auch zwischen zwei Bots, an denen man selbst gar nicht beteiligt
    * ist. Bei sechs handelnden Bots stapelten sich die Meldungen bis in die
@@ -4574,7 +4632,14 @@ function draw() {
   effekteErkennen(st.map, now);
   const dt = Math.min(.1, (now - (draw.letzt || now)) / 1000); draw.letzt = now;
   trucksAktualisieren(st, now, dt);
-  cx.translate(innerWidth/2 + cam.x, 120 + cam.y); cx.scale(cam.z, cam.z);
+  /* Kamera-Beben bei Revierkämpfen: klingt schnell ab, respektiert Ruhe danach */
+  let bebenX = 0, bebenY = 0;
+  if (KAMPF_SHAKE > .01) {
+    bebenX = (Math.random() - .5) * 14 * KAMPF_SHAKE;
+    bebenY = (Math.random() - .5) * 10 * KAMPF_SHAKE;
+    KAMPF_SHAKE *= .93;
+  } else KAMPF_SHAKE = 0;
+  cx.translate(innerWidth/2 + cam.x + bebenX, 120 + cam.y + bebenY); cx.scale(cam.z, cam.z);
   for (const t of st.map) {
     const [sx, sy] = iso(t.x, t.y);
     cx.beginPath(); cx.moveTo(sx,sy); cx.lineTo(sx+TW/2,sy+TH/2); cx.lineTo(sx,sy+TH); cx.lineTo(sx-TW/2,sy+TH/2); cx.closePath();
@@ -4650,12 +4715,39 @@ function draw() {
     for (const t of st.map) {
       if (t.water) continue;
       const b = st.bezirke[bezirkVonC(t.x, t.y)];
-      if (!b?.kontrolle) continue;
       const [sx, sy] = iso(t.x, t.y);
+      /* Tauziehen: roter Puls-Schleier über dem ganzen umkämpften Bezirk */
+      if (b?.kampf) {
+        cx.globalAlpha = .1 + ((Math.sin(now / 260) + 1) / 2) * .12;
+        cx.fillStyle = "#e74c3c";
+        cx.beginPath(); cx.moveTo(sx, sy); cx.lineTo(sx + TW / 2, sy + TH / 2); cx.lineTo(sx, sy + TH); cx.lineTo(sx - TW / 2, sy + TH / 2); cx.closePath(); cx.fill();
+        cx.globalAlpha = 1;
+        continue;
+      }
+      if (!b?.kontrolle) continue;
       cx.globalAlpha = .09;
       cx.fillStyle = famFarbe[b.kontrolle] || "#888";
       cx.beginPath(); cx.moveTo(sx, sy); cx.lineTo(sx + TW / 2, sy + TH / 2); cx.lineTo(sx, sy + TH); cx.lineTo(sx - TW / 2, sy + TH / 2); cx.closePath(); cx.fill();
       cx.globalAlpha = 1;
+    }
+    /* Straßenschlacht-Effekte: Mündungsblitze und Rauch im umkämpften Bezirk */
+    for (const b of st.bezirke) {
+      if (!b.kampf) continue;
+      const bx0 = (b.id % 3) * 9, by0 = Math.floor(b.id / 3) * 9;
+      for (let k = 0; k < 3; k++) {
+        const seed = Math.floor(now / 160) * 7 + k * 13 + b.id;
+        const rx = bx0 + (seed * 31 % 9), ry = by0 + (seed * 17 % 9);
+        const [fx, fy] = iso(rx, ry);
+        if ((seed % 3) === 0) {   // Mündungsblitz
+          cx.fillStyle = "rgba(255,236,160," + (.5 + (seed % 5) * .1) + ")";
+          cx.beginPath(); cx.arc(fx + (seed % 11) - 5, fy + TH / 2 - 6, 2.4 + (seed % 3), 0, Math.PI * 2); cx.fill();
+        }
+        const rauchT = ((now / 1200 + k * .37 + b.id * .21) % 1);   // aufsteigender Rauch
+        cx.globalAlpha = (1 - rauchT) * .28;
+        cx.fillStyle = "#6a6f78";
+        cx.beginPath(); cx.arc(fx + Math.sin(rauchT * 5 + k) * 5, fy + TH / 2 - 10 - rauchT * 34, 4 + rauchT * 9, 0, Math.PI * 2); cx.fill();
+        cx.globalAlpha = 1;
+      }
     }
     for (const b of st.bezirke) {
       const zx = (b.id % 3) * 9 + 4, zy = Math.floor(b.id / 3) * 9 + 4;
@@ -4670,6 +4762,26 @@ function draw() {
         cx.font = "600 9px sans-serif";
         cx.fillStyle = "rgba(220,228,240,.65)";
         cx.fillText(fam?.name || "", sx, sy + 12);
+        if (b.besatzung) {
+          cx.fillStyle = "rgba(231,76,60,.9)";
+          cx.fillText(`🏴 besetzt · noch ${b.besatzung.rest} s`, sx, sy + 23);
+        }
+      }
+      /* Tauziehen-Balken + Countdown direkt am Bezirk */
+      if (b.kampf) {
+        const gesamt = Math.max(1, b.kampf.pa + b.kampf.pv);
+        const w = 88, h = 8, bx2 = sx - w / 2, by2 = sy + 16;
+        const fa = famFarbe[b.kampf.angreifer] || "#e74c3c";
+        const fv = famFarbe[b.kampf.verteidiger] || "#4a90d9";
+        cx.fillStyle = "rgba(8,12,20,.75)";
+        cx.fillRect(bx2 - 2, by2 - 2, w + 4, h + 4);
+        cx.fillStyle = fa; cx.fillRect(bx2, by2, w * (b.kampf.pa / gesamt), h);
+        cx.fillStyle = fv; cx.fillRect(bx2 + w * (b.kampf.pa / gesamt), by2, w * (b.kampf.pv / gesamt), h);
+        cx.fillStyle = "#fff";
+        cx.fillRect(bx2 + w * (b.kampf.pa / gesamt) - 1, by2 - 1, 2, h + 2);
+        cx.font = "800 13px sans-serif";
+        cx.fillStyle = "#ffd7d0";
+        cx.fillText(`⚔️ ${b.kampf.pa} : ${b.kampf.pv} · ${b.kampf.rest}s`, sx, by2 + 24);
       }
     }
   }
@@ -4813,6 +4925,22 @@ function draw() {
              * vorher hingen die Häuser ~5 px über dem Boden und „flogen". */
             schattenMalen(haus, sx, sy + TH - 2, sy + TH - 50, 50, false, .3);
             cx.drawImage(haus, sx - 28, sy + TH - 54, 56, 56);
+            /* Territorial-Stolz: Im kontrollierten Bezirk hängt die Familie
+             * ihre Fahne an die Häuser — man sieht im Vorbeiscrollen, wem
+             * die Straße gehört. Weht sacht im Seewind. */
+            const bezC = st.bezirke?.[Math.min(2, Math.floor(t.x / 9)) + 3 * Math.min(2, Math.floor(t.y / 9))];
+            const famC = bezC?.kontrolle && (st.familien || []).find(f => f.id === bezC.kontrolle);
+            if (famC && (t.x + t.y) % 3 === 0) {
+              const fxp = sx + 16, fyp = sy + TH - 52;
+              cx.strokeStyle = "#3a3430"; cx.lineWidth = 1.2;
+              cx.beginPath(); cx.moveTo(fxp, fyp); cx.lineTo(fxp, fyp + 14); cx.stroke(); cx.lineWidth = 1;
+              const weh = Math.sin(now / 500 + t.x) * 1.5;
+              cx.fillStyle = famC.farbe;
+              cx.beginPath(); cx.moveTo(fxp, fyp);
+              cx.quadraticCurveTo(fxp + 5, fyp + 1 + weh * .3, fxp + 9, fyp + 2 + weh);
+              cx.lineTo(fxp + 8, fyp + 5 + weh); cx.quadraticCurveTo(fxp + 4, fyp + 5, fxp, fyp + 6);
+              cx.closePath(); cx.fill();
+            }
           } else {
             const set = MEDIT.casas[seed % MEDIT.casas.length];
             const img = LICHT < .5 ? set.nacht : set.tag;
@@ -7196,9 +7324,12 @@ function kartellRendern(state, me, myId) {
         250–450 $ sofort, im <b>eigenen Revier das 1,5-fache</b> — aber jede Tour heizt die Fahndung an (+6).
         Im Revier einer fremden Familie riskierst du ihre Schläger: Rauswurf, −2 Respekt, +10 Fahndung.<br><br>
         ⚔️ <b>Revierkampf:</b> Geclaimte Bezirke nimmst du mit <b>Waffen</b>: mind. 3 Pistolen
-        (Waffentransporte überfallen!), bis zu 6 werden eingesetzt — mehr Waffen, bessere Chance;
-        viele Verteidiger-Gebäude senken sie. Sieg setzt die Kontrolle <b>2 min aus</b>: Das Viertel ist offen —
-        bau und sperre dich in dieser Zeit zur Mehrheit. Niederlage: Waffen weg, 500 $ Kaution, Fahndung +12.</p>
+        (Waffentransporte überfallen!), bis zu 6 werden eingesetzt. Gelingt der Sturm, beginnt ein
+        <b>2-Minuten-Tauziehen</b> um das Viertel — der Kontroll-Balken zeigt, wer vorn liegt.
+        Alles zählt: Gebäude bauen +2, Sperre +2, Erpressung +1, <b>🥊 Verstärkung schicken</b> ($300) +1.
+        Wer bei Ablauf führt, gewinnt (Gleichstand: Verteidiger). Der Eroberer <b>plündert die Kassen des
+        Viertels</b> und hält es <b>5 Minuten als Besatzung 🏴</b> — Zeit, sich die Gebäudemehrheit zu sichern.
+        Misslungener Sturm: Waffen weg, 500 $ Kaution, Fahndung +12.</p>
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px">
         ${state.bezirke.map(b => {
           const fam = b.kontrolle ? state.familien.find(f => f.id === b.kontrolle) : null;
@@ -7208,9 +7339,23 @@ function kartellRendern(state, me, myId) {
           const fremdesRevier = b.kontrolle && b.kontrolle !== meineFamilieId;
           const pistolen = Math.floor(me.inv?.pistole || 0);
           const kampfBereit = fremdesRevier && !me.kampfCd && pistolen >= 3;
-          return `<div style="background:#0b1322;border:1px solid ${b.umkaempft ? "#e74c3c" : fam ? fam.farbe + "66" : "var(--line)"};border-radius:9px;padding:7px 8px">
-            <div style="font-size:11.5px;font-weight:600">${b.name}${b.umkaempft ? " ⚔️" : ""}</div>
-            <div class="meta" style="font-size:10.5px">${b.umkaempft ? `<span style="color:#e74c3c">UMKÄMPFT · noch ${b.umkaempft} s offen!</span>` : fam ? `<span style="color:${fam.farbe}">${fam.name}</span>` : "umkämpft / frei"}${eigene ? ` · du: ${eigene}` : ""}</div>
+          const kampfHtml = b.kampf ? (() => {
+            const gesamt = Math.max(1, b.kampf.pa + b.kampf.pv);
+            const fA = state.familien.find(f => f.id === b.kampf.angreifer);
+            const fV = state.familien.find(f => f.id === b.kampf.verteidiger);
+            const dabei = meineFamilieId === b.kampf.angreifer || meineFamilieId === b.kampf.verteidiger;
+            return `<div style="display:flex;height:9px;border-radius:5px;overflow:hidden;margin-top:5px;border:1px solid #0006">
+                <div style="width:${b.kampf.pa / gesamt * 100}%;background:${fA?.farbe || "#e74c3c"}"></div>
+                <div style="flex:1;background:${fV?.farbe || "#4a90d9"}"></div></div>
+              <div class="meta" style="font-size:10px;margin-top:2px">⚔️ ${b.kampf.pa} : ${b.kampf.pv} · noch ${b.kampf.rest} s</div>
+              ${dabei ? `<button class="mini" data-verst="${b.id}" ${me.verstCd ? "disabled" : ""}
+                style="margin-top:4px;width:100%;font-size:10.5px;border-color:#e74c3c">
+                ${me.verstCd ? `🥊 unterwegs · ${me.verstCd} s` : "🥊 Verstärkung schicken ($300 · +1)"}</button>` : ""}`;
+          })() : "";
+          return `<div style="background:#0b1322;border:1px solid ${b.kampf ? "#e74c3c" : fam ? fam.farbe + "66" : "var(--line)"};border-radius:9px;padding:7px 8px">
+            <div style="font-size:11.5px;font-weight:600">${b.name}${b.kampf ? " ⚔️" : b.besatzung ? " 🏴" : ""}</div>
+            <div class="meta" style="font-size:10.5px">${b.kampf ? `<span style="color:#e74c3c">REVIERKAMPF!</span>` : fam ? `<span style="color:${fam.farbe}">${fam.name}${b.besatzung ? ` · besetzt ${b.besatzung.rest} s` : ""}</span>` : "umkämpft / frei"}${eigene ? ` · du: ${eigene}` : ""}</div>
+            ${kampfHtml}
             <button class="mini" data-erpress="${b.id}" ${cd ? "disabled" : ""}
               style="margin-top:5px;width:100%;font-size:10.5px${eigenesRevier ? ";border-color:var(--accent)" : ""}"
               title="${eigenesRevier ? "Euer Revier: 1,5-facher Betrag, keiner mault" : fam ? "Fremdes Revier: 30 % Rauswurf-Risiko" : "Freier Bezirk"}">
@@ -7362,6 +7507,13 @@ document.getElementById("p-kartell").addEventListener("click", e => {
   if (erp) {
     socket.emit("erpressen", { bezirk: +erp.dataset.erpress }, res =>
       toast(res?.error || `Die Läden zahlen ${fmt(res.betrag)} Schutzgeld.`, !!res?.error));
+    return;
+  }
+  /* Verstärkung: Schläger ins laufende Tauziehen schicken. */
+  const verst = e.target.closest("button[data-verst]");
+  if (verst) {
+    socket.emit("verstaerkung", { bezirk: +verst.dataset.verst }, res =>
+      toast(res?.error || `🥊 Deine Schläger sind unterwegs — ${JSON.stringify(res.punkte).replace(/[{}"]/g, "").replace(/,/g, " · ")}`, !!res?.error));
     return;
   }
   /* Revierkampf: einen fremd kontrollierten Bezirk mit Waffen angreifen. */

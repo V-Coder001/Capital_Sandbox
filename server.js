@@ -526,12 +526,18 @@ function bezirkeBerechnen() {
     let kontrolle = null;
     if (reihen.length && reihen[0][1] >= 2 && (reihen.length === 1 || reihen[0][1] > reihen[1][1]))
       kontrolle = reihen[0][0];
-    /* Revierkampf: Nach einem erfolgreichen Angriff ist die Kontrolle
-     * ausgesetzt — kein Schutzgeld, kein sicheres Erpressen, das Viertel
-     * ist offen für die Übernahme. */
-    const umkaempft = Math.max(0, (G.bezirkKampf?.[i] || 0) - G.tick);
-    if (umkaempft > 0) kontrolle = null;
-    return { id: i, name: BEZIRK_NAMEN[i], kontrolle, staerken: s, umkaempft };
+    /* Tauziehen: Während des Kampfs ist die Kontrolle ausgesetzt (kein
+     * Schutzgeld, kein sicheres Erpressen). Eine BESATZUNG des Kampfsiegers
+     * überstimmt danach 5 min lang die Gebäudemehrheit. */
+    const kampf = G.revierKaempfe?.[i];
+    const bes = G.besatzung?.[i];
+    const umkaempft = kampf ? Math.max(0, kampf.bis - G.tick) : 0;
+    if (kampf) kontrolle = null;
+    else if (bes && bes.bis > G.tick) kontrolle = bes.familie;
+    return { id: i, name: BEZIRK_NAMEN[i], kontrolle, staerken: s, umkaempft,
+      kampf: kampf ? { angreifer: kampf.angreifer, verteidiger: kampf.verteidiger,
+        pa: kampf.punkte[kampf.angreifer], pv: kampf.punkte[kampf.verteidiger], rest: umkaempft } : null,
+      besatzung: bes && bes.bis > G.tick ? { familie: bes.familie, rest: bes.bis - G.tick } : null };
   });
   /* Mafia-Auftrag „Bezirk kontrollieren“: zählt für jedes Familienmitglied,
    * sobald die Familie irgendeinen Bezirk hält (questProg ignoriert Erledigte). */
@@ -573,7 +579,20 @@ const ERPRESS_COOLDOWN = 180;     // Sekunden je Spieler UND Bezirk — die Läd
 const KAMPF_COOLDOWN = 180;       // Sekunden je Spieler (egal welcher Bezirk)
 const KAMPF_PISTOLEN_MIN = 3;     // Mindesteinsatz; bis zu 6 werden automatisch eingesetzt
 const KAMPF_PISTOLEN_MAX = 6;
-const KAMPF_DAUER = 120;          // solange gilt der Bezirk als umkämpft (Kontrolle ausgesetzt)
+const KAMPF_DAUER = 120;          // solange tobt das Tauziehen um den Bezirk
+/* Revierkampf 2.0 — das Tauziehen: Der Angriff eröffnet einen sichtbaren
+ * Kontroll-Balken (Angreifer- vs. Verteidiger-Punkte). Alles im Bezirk zählt:
+ * Gebäude +2, Sperre +2, Erpressung +1, „Verstärkung schicken" +1. Bei Ablauf
+ * gewinnt, wer vorn liegt (Gleichstand: Verteidiger). Der Sieger übernimmt
+ * den Bezirk als BESATZUNG für 5 Minuten — egal, wer mehr Gebäude hat — und
+ * plündert die Kassen des Viertels. */
+const VERST_KOSTEN = 300;         // Verstärkung schicken: $ je Klick
+const VERST_CD = 10;              // Sekunden je Spieler zwischen Verstärkungen
+const BESATZUNG_DAUER = 300;      // eroberte Bezirke bleiben 5 min besetzt
+function kampfPunkte(idx, familie, n) {
+  const k = G.revierKaempfe?.[idx];
+  if (k && k.punkte[familie] != null) k.punkte[familie] += n;
+}
 const SPERRE_KOSTEN = 800;
 const SPERRE_DAUER = 180;         // Sekunden Lebenszeit einer Sperre
 const SPERRE_MAX_JE_FAMILIE = 2;
@@ -3087,6 +3106,7 @@ function privateState(p) {
       ? Object.fromEntries(Object.entries(p.erpressCd || {})
           .filter(([, bis]) => bis > G.tick).map(([b, bis]) => [b, bis - G.tick])) : null,
     kampfCd: MODE === "kartell" ? Math.max(0, (p.kampfCd || 0) - G.tick) : 0,
+    verstCd: MODE === "kartell" ? Math.max(0, (p.verstCd || 0) - G.tick) : 0,
     quests: p.quests,
     tx: p.tx, sales: p.sales, fin: p.fin, nwHist: p.nwHist,
     fans: Math.round(p.fans || 0), fanHubs: fanHubs(p).length,
@@ -3726,6 +3746,7 @@ io.on("connection", socket => {
     let betrag = 250 + Math.floor(Math.random() * 200);
     if (eigene) betrag = Math.round(betrag * 1.5);
     p.cash += betrag;
+    kampfPunkte(bezirk, p.familie, 1);   // Tauziehen: wer eintreibt, zeigt, wem die Straße gehört
     G.fahndung[p.familie] = (G.fahndung[p.familie] || 0) + 6;
     G.familienRespekt[p.familie] = (G.familienRespekt[p.familie] || 0) + 1;
     questProg(p, "schutzgeld");
@@ -3744,6 +3765,8 @@ io.on("connection", socket => {
     bezirk = Math.floor(+bezirk);
     const b = G.bezirke?.[bezirk];
     if (!b) return ack?.({ error: "Diesen Bezirk kennt hier niemand" });
+    if ((G.revierKaempfe ??= {})[bezirk])
+      return ack?.({ error: "Dort tobt schon ein Revierkampf — misch dich mit Verstärkung ein" });
     if (!b.kontrolle) return ack?.({ error: "Der Bezirk ist frei — bau einfach, statt zu schießen" });
     if (b.kontrolle === p.familie) return ack?.({ error: "Das ist euer eigenes Revier" });
     if ((p.kampfCd || 0) > G.tick)
@@ -3759,14 +3782,16 @@ io.on("connection", socket => {
     const chance = Math.min(.85, .35 + einsatz * .08 - Math.max(0, verteidigung - 2) * .04);
     G.fahndung[p.familie] = (G.fahndung[p.familie] || 0) + 8;
     if (Math.random() < chance) {
-      (G.bezirkKampf ??= {})[bezirk] = G.tick + KAMPF_DAUER;
-      G.familienRespekt[p.familie] = (G.familienRespekt[p.familie] || 0) + 4;
-      G.familienRespekt[b.kontrolle] = Math.max(0, (G.familienRespekt[b.kontrolle] || 0) - 2);
+      /* Das Tauziehen beginnt: Angreifer stürmt mit Momentum (3:2) */
+      G.revierKaempfe[bezirk] = { angreifer: p.familie, verteidiger: b.kontrolle,
+        punkte: { [p.familie]: 3, [b.kontrolle]: 2 }, bis: G.tick + KAMPF_DAUER };
+      G.familienRespekt[p.familie] = (G.familienRespekt[p.familie] || 0) + 2;
       questProg(p, "kampf");
       gainXp(p, 20);
       bezirkeBerechnen();
-      logTx(p, "Kartell", `Revierkampf gewonnen: ${b.name} ist umkämpft`, 0);
-      io.emit("notice", { text: `⚔️ ${FAMILIEN[p.familie].name} stürmt den ${b.name} — die ${FAMILIEN[b.kontrolle].name} verliert die Kontrolle! ${KAMPF_DAUER} s lang ist das Viertel offen.` });
+      logTx(p, "Kartell", `Revierkampf eröffnet: ${b.name}`, 0);
+      io.emit("kampfStart", { bezirk, name: b.name, angreifer: p.familie, verteidiger: b.kontrolle });
+      io.emit("notice", { text: `⚔️ REVIERKAMPF! ${FAMILIEN[p.familie].name} stürmt den ${b.name} der ${FAMILIEN[b.kontrolle].name} — ${KAMPF_DAUER} s Tauziehen: Bauten, Sperren, Erpressungen und Verstärkung zählen!` });
       ack?.({ ok: true, dauer: KAMPF_DAUER });
     } else {
       const kaution = Math.min(p.cash, 500);
@@ -3777,6 +3802,24 @@ io.on("connection", socket => {
       io.emit("notice", { text: `⚔️ Die ${FAMILIEN[b.kontrolle].name} schlägt einen Angriff von ${p.name} auf den ${b.name} zurück.` });
       ack?.({ error: `Zurückgeschlagen — ${einsatz} Pistolen verloren, ${kaution} $ Kaution, die Fahndung brennt (+12)` });
     }
+  }));
+
+  /* --- Verstärkung: im laufenden Tauziehen Schläger in den Bezirk schicken --- */
+  socket.on("verstaerkung", guard((p, { bezirk }, ack) => {
+    if (MODE !== "kartell") return ack?.({ error: "Verstärkung gibt es nur in der Kartellwirtschaft" });
+    bezirk = Math.floor(+bezirk);
+    const k = G.revierKaempfe?.[bezirk];
+    if (!k) return ack?.({ error: "Dort kämpft gerade niemand" });
+    if (k.punkte[p.familie] == null)
+      return ack?.({ error: "Das ist nicht der Kampf deiner Familie — halt dich raus" });
+    if ((p.verstCd || 0) > G.tick)
+      return ack?.({ error: `Deine Schläger sind noch unterwegs — ${p.verstCd - G.tick} s` });
+    if (p.cash < VERST_KOSTEN) return ack?.({ error: `Verstärkung kostet ${VERST_KOSTEN} $` });
+    p.cash -= VERST_KOSTEN;
+    p.verstCd = G.tick + VERST_CD;
+    k.punkte[p.familie] += 1;
+    logTx(p, "Kartell", `Verstärkung in den ${BEZIRK_NAMEN[bezirk]} geschickt`, -VERST_KOSTEN);
+    ack?.({ ok: true, punkte: k.punkte });
   }));
 
   /* --- Straßensperre: Revier markieren --- */
@@ -3794,6 +3837,7 @@ io.on("connection", socket => {
     if (p.cash < SPERRE_KOSTEN) return ack?.({ error: `Zu wenig Bargeld (${SPERRE_KOSTEN} $)` });
     p.cash -= SPERRE_KOSTEN;
     t.sperre = { familie: p.familie, von: p.id, bis: G.tick + SPERRE_DAUER };
+    kampfPunkte(bezirkVon(x, y), p.familie, 2);   // Tauziehen: Sperre zeigt Präsenz
     G.fahndung[p.familie] = (G.fahndung[p.familie] || 0) + 5;
     questProg(p, "sperre");
     logTx(p, "Kartell", `Straßensperre errichtet (${BEZIRK_NAMEN[bezirkVon(x, y)]})`, -SPERRE_KOSTEN);
@@ -4106,6 +4150,7 @@ io.on("connection", socket => {
       missing.map(([g, n]) => `${Math.ceil(n - p.inv[g])}× ${GOODS[g].name}`).join(", ") + " — an der Börse kaufen" });
     for (const [g, n] of Object.entries(mats)) p.inv[g] -= n;
     if (t.locked) { t.locked = false; gainXp(p, 30); }
+    if (MODE === "kartell" && p.familie) kampfPunkte(bezirkVon(x, y), p.familie, 2);   // Tauziehen
     if (bt.out || bt.proc) questProg(p, "build");
     if (bt.familie) questProg(p, "familiebau");
     p.cash -= bt.cost + unlockCost; t.owner = p.id; t.btype = btype; t.level = 1; gainXp(p, 20);
@@ -4971,6 +5016,39 @@ function runTick() {
   /* --- Kartellmodus: Bezirkskontrolle und Schutzgeld --- */
   if (MODE === "kartell" && G.started && !G.winner) {
     if (G.tick % 5 === 0) bezirkeBerechnen();
+    /* Tauziehen auflösen: Wer bei Ablauf vorn liegt, gewinnt den Bezirk.
+     * Gleichstand geht an den Verteidiger — Angreifen muss sich lohnen MÜSSEN. */
+    for (const [idxS, k] of Object.entries(G.revierKaempfe || {})) {
+      if (k.bis > G.tick) continue;
+      const idx = +idxS;
+      delete G.revierKaempfe[idx];
+      const pa = k.punkte[k.angreifer], pv = k.punkte[k.verteidiger];
+      const name = BEZIRK_NAMEN[idx];
+      if (pa > pv) {
+        (G.besatzung ??= {})[idx] = { familie: k.angreifer, bis: G.tick + BESATZUNG_DAUER };
+        /* Plünderung: die Kassen des Viertels — mehr Verteidiger-Gebäude, mehr Beute */
+        const gebaeude = G.map.filter(t => t.btype && G.players[t.owner]?.familie === k.verteidiger &&
+          bezirkVon(t.x, t.y) === idx).length;
+        const beute = 800 + gebaeude * 100;
+        const sieger = Object.values(G.players).filter(p2 => p2.familie === k.angreifer);
+        const teil = Math.round(beute / Math.max(1, sieger.length));
+        for (const m of sieger) { m.cash += teil; logTx(m, "Kartell", `Plünderung im ${name}`, teil); }
+        G.familienRespekt[k.angreifer] = (G.familienRespekt[k.angreifer] || 0) + 6;
+        G.familienRespekt[k.verteidiger] = Math.max(0, (G.familienRespekt[k.verteidiger] || 0) - 3);
+        io.emit("revierErgebnis", { bezirk: idx, name, sieger: k.angreifer, verlierer: k.verteidiger,
+          art: "erobert", beute, pa, pv, dauer: BESATZUNG_DAUER });
+        io.emit("notice", { text: `⚔️ ${FAMILIEN[k.angreifer].name} EROBERT den ${name} (${pa}:${pv})! ${beute} $ geplündert — 5 min Besatzung, dann zählt wieder die Gebäudemehrheit.` });
+      } else {
+        G.familienRespekt[k.verteidiger] = (G.familienRespekt[k.verteidiger] || 0) + 3;
+        io.emit("revierErgebnis", { bezirk: idx, name, sieger: k.verteidiger, verlierer: k.angreifer,
+          art: "verteidigt", pa, pv });
+        io.emit("notice", { text: `🛡️ Die ${FAMILIEN[k.verteidiger].name} VERTEIDIGT den ${name} (${pv}:${pa}) — der Angriff der ${FAMILIEN[k.angreifer].name} verpufft.` });
+      }
+      bezirkeBerechnen();
+    }
+    /* Abgelaufene Besatzungen aufräumen */
+    for (const [idxS, bes] of Object.entries(G.besatzung || {}))
+      if (bes.bis <= G.tick) delete G.besatzung[idxS];
     if (G.tick % 60 === 0 && G.bezirke) {
       for (const b of G.bezirke) {
         if (!b.kontrolle) continue;
