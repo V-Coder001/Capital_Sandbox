@@ -1830,7 +1830,7 @@ td:first-child{font-family:var(--font)}
   </div>
 </div></div>
 
-<script src="/socket.io/socket.io.js"></script>
+<script src="vendor/socket.io.min.js"></script>
 <script src="vendor/peerjs.min.js"></script>
 <script>
 "use strict";
@@ -2010,7 +2010,23 @@ const act = (ev, payload) => socket.emit(ev, payload, res => {
  * "Mit Code beitreten": derselbe socket.io-Vertrag (emit/on mit Ack), aber über
  * eine WebRTC-Datenverbindung (PeerJS) zum Server-Tab des Hosts getunnelt — der
  * Host bleibt Single Source of Truth, es gibt keine zweite Simulation. */
-let socket = io();
+/* ---------- Adresse des Spielservers ----------
+ * LEER = gleiche Herkunft, wie bisher. Genau das ist der lokale Betrieb
+ * (./start.sh): Der Browser laedt die Seite vom Server und redet mit
+ * demselben Server zurueck.
+ *
+ * GESETZT = feste Adresse. Das braucht jede Fassung, die NICHT vom Spielserver
+ * selbst ausgeliefert wird — auf einem Spieleportal liegen die Dateien auf
+ * deren CDN, die eigene Herkunft waere also das Portal und nicht der Server.
+ *
+ * Bewusst eine einzige Stelle fuer Socket UND die /api-Aufrufe: Waere die
+ * Adresse an neun Stellen verteilt, wuerde beim naechsten Hosterwechsel genau
+ * eine davon vergessen — und die faellt erst im Betrieb auf. */
+const SERVER = "";
+/* Alle Serverpfade laufen hierueber. Bei leerem SERVER kommt exakt der
+ * bisherige relative Pfad heraus. */
+const api = pfad => SERVER + pfad;
+let socket = io(SERVER || undefined);
 /* Lokaler Kachel-Cache: die Karte hat pro Kachel viele Felder, die sich nach der
  * Generierung NIE mehr ändern (x, y, zone, road, water, park, field, sand, deep,
  * rock, unlockCost) — nur wenige tun es (locked, owner, btype, lien, shop, paused).
@@ -2291,7 +2307,7 @@ function startHosting(retriesLeft = 2) {
  * gehabt — inklusive des WebRTC-Beitritts weiter unten, den es im
  * Gateway-Modus gar nicht braucht (alle erreichen ja denselben Server). */
 let MULTIROOM = false, GATEWAY_BOOT_ID = null, myRoomCode = null;
-const multiroomReady = fetch("/api/mode").then(r => r.ok ? r.json() : { multiroom: false })
+const multiroomReady = fetch(api("/api/mode")).then(r => r.ok ? r.json() : { multiroom: false })
   .then(d => { MULTIROOM = !!d.multiroom; GATEWAY_BOOT_ID = d.bootId || null; })
   .catch(() => { MULTIROOM = false; });
 /* Wechselt die aktive Verbindung auf eine bestimmte Runde. Genau wie beim
@@ -2300,7 +2316,10 @@ const multiroomReady = fetch("/api/mode").then(r => r.ok ? r.json() : { multiroo
 function connectToRoom(code) {
   try { socket.disconnect?.(); } catch {}
   cachedFullMap = null;
-  socket = io({ path: `/r/${code}/socket.io` });
+  /* Auch hier ueber SERVER: Im Portalbetrieb liegt die Runde nicht bei der
+   * Seite, sondern beim eigenen Server. Ohne diese Angabe suchte der Client die
+   * Runde beim Portal — und faende sie nie. */
+  socket = io(SERVER || undefined, { path: `/r/${code}/socket.io` });
   bindSocketEvents(socket);
   return socket;
 }
@@ -2930,7 +2949,7 @@ async function uebungsrundeStarten() {
     await multiroomReady;
     myIndustry = "agrar";               // einfachste Branche für den Einstieg
     if (MULTIROOM) {
-      const r = await fetch("/api/rooms", { method: "POST" });
+      const r = await fetch(api("/api/rooms"), { method: "POST" });
       const data = await r.json();
       if (!r.ok || data.error) return fehler(data.error);
       myRoomCode = data.code;
@@ -2966,7 +2985,7 @@ document.getElementById("jgo").addEventListener("click", async () => {
        * dem andere gezielt zu GENAU dieser Runde finden (statt zu irgendeiner). */
       jgoBtn.disabled = true;
       try {
-        const r = await fetch("/api/rooms", { method: "POST",
+        const r = await fetch(api("/api/rooms"), { method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ oeffentlich: document.getElementById("oeffentlich").checked }) });
         const data = await r.json();
@@ -2990,7 +3009,7 @@ document.getElementById("jgo").addEventListener("click", async () => {
     const status = document.getElementById("joinCodeStatus");
     status.textContent = "Verbinde …";
     try {
-      const r = await fetch("/api/rooms/" + encodeURIComponent(code));
+      const r = await fetch(api("/api/rooms/" + encodeURIComponent(code)));
       const data = await r.json();
       if (!data.exists) { status.textContent = "Diese Runde gibt es nicht (mehr) — Code prüfen."; return; }
       myRoomCode = code;
@@ -3043,7 +3062,7 @@ async function oeffentlicheLaden() {
   if (!box || !MULTIROOM) return;
   clearTimeout(oeffTimer);
   let runden = [];
-  try { runden = await (await fetch("/api/rooms/public")).json(); } catch {}
+  try { runden = await (await fetch(api("/api/rooms/public"))).json(); } catch {}
   const dauer = ms => { const m = Math.floor(ms / 60000); return m < 1 ? t("gerade eröffnet") : `${m} min`; };
   box.innerHTML = `<div class="kopf">${t("Öffentliche Runden")}</div>` + (runden.length
     ? runden.map(r => {
@@ -3154,7 +3173,7 @@ async function oeffentlicheLaden() {
   let hofSig = "", hofDaten = null;
   (async function hofLaden() {
     try {
-      const antwort = await fetch("/api/invite");
+      const antwort = await fetch(api("/api/invite"));
       hofDaten = (await antwort.json()).hof || [];
       hofZeichnen();
     } catch {}
@@ -3205,7 +3224,7 @@ async function oeffentlicheLaden() {
   async function rundenZaehlen() {
     if (!MULTIROOM || join.style.display === "none") return;
     try {
-      const d = await (await fetch("/api/stats")).json();
+      const d = await (await fetch(api("/api/stats"))).json();
       rundenZahl.textContent = d.rooms === 0 ? "keine Runde aktiv"
         : d.rooms === 1 ? "1 Runde läuft" : `${d.rooms} Runden laufen`;
       document.getElementById("joinWaiting").textContent =
@@ -3237,7 +3256,7 @@ multiroomReady.then(() => {
     introVielleichtZeigen(GATEWAY_BOOT_ID);
     return;
   }
-  fetch("/api/invite").then(r => r.json()).then(({ urls, bootId }) => {
+  fetch(api("/api/invite")).then(r => r.json()).then(({ urls, bootId }) => {
     const url = urls[0] || location.href;
     document.getElementById("inviteUrl").value = url;
     document.getElementById("inviteHint").textContent = t(url.startsWith("https")
@@ -4959,7 +4978,7 @@ document.getElementById("bugSend").addEventListener("click", async () => {
   } catch { image = null; }
   try {
     const name = store.get()?.state?.players?.[store.get()?.myId]?.name || "";
-    const antwort = await fetch("/api/bugreport", {
+    const antwort = await fetch(api("/api/bugreport"), {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ text, image, name })
     });
@@ -6838,7 +6857,19 @@ function kartellRendern(state, me, myId) {
             <span>Verdacht des Kartellamts</span><span class="meta">${k.verdacht} %</span></div>
           <div style="height:6px;background:#0b1220;border-radius:4px;overflow:hidden;margin-top:4px">
             <div style="width:${Math.min(100, k.verdacht)}%;height:100%;background:${k.verdacht >= 66 ? "#fb7185" : k.verdacht >= 33 ? "#fbbf24" : "#34d399"}"></div></div>
-          <div class="note" style="margin-top:3px">Nur ihr seht diesen Wert — von außen ist er nicht ablesbar.</div>
+          <div class="note" style="margin-top:3px">Nur ihr seht diesen Wert — von außen ist er nicht ablesbar.
+            Er steigt, solange mehrere von euch dieselbe Ware sichtbar zum abgesprochenen Preis anbieten,
+            und faellt wieder, sobald die Absprache weg ist.</div>
+          ${k.ermittlung ? `<div style="margin-top:9px;padding:8px 10px;border:1px solid rgba(251,113,133,.5);border-radius:8px;color:#fb7185">
+            <b>Ermittlung laeuft</b> — Bescheid in ${Math.floor(k.ermittlung.rest / 60)}:${String(k.ermittlung.rest % 60).padStart(2, "0")} min.
+            <div class="note" style="color:#fb7185;margin-top:2px">Die ganze Stadt weiss davon. Was ihr bis dahin
+              noch unter der Absprache verdient, erhoeht das Bussgeld.</div>
+          </div>` : ""}
+          <div style="display:flex;justify-content:space-between;margin-top:9px;font-size:12px">
+            <span>Umsatz unter Absprache</span><b>${fp(k.umsatz || 0)}</b></div>
+          <div style="display:flex;justify-content:space-between;font-size:12px">
+            <span class="meta">Bussgeld bei einem Bescheid</span>
+            <b style="color:${(k.risiko || 0) > 0 ? "#fb7185" : "var(--dim)"}">${fp(k.risiko || 0)}</b></div>
         </div>
       </div>
       <div class="joinbox" style="margin-bottom:12px">
@@ -6866,6 +6897,16 @@ function kartellRendern(state, me, myId) {
           <button class="buyb" id="kartellEinladenBtn">Einladen</button>
         </div><p id="kartellEinladenStatus" class="note" style="margin:6px 0 0"></p>`
         : `<p class="note">Niemand mehr frei — alle sind schon in einem Kartell oder eingeladen.</p>`}
+      </div>` : ""}
+      ${absprachen.length ? `<div class="joinbox" style="margin-bottom:12px;border-color:rgba(251,113,133,.35)">
+        <div class="lbl" style="color:#fb7185">Kronzeugenregelung</div>
+        <p class="note" style="margin:0 0 8px">Zeigst du „${k.name}" an, zahlst du <b>nichts</b> und behältst,
+          was du unter der Absprache verdient hast. Die anderen zahlen den höheren Satz — und erfahren,
+          dass du es warst. Du verlässt das Kartell damit.</p>
+        <button class="mini" id="kartellPetzen" style="border-color:rgba(251,113,133,.5);color:#fb7185">Kartell anzeigen</button>
+        <span id="kartellPetzFrage" style="display:none;margin-left:8px;font-size:12px">
+          Sicher? <button class="mini" id="kartellPetzJa" style="border-color:rgba(251,113,133,.5);color:#fb7185">Ja, anzeigen</button>
+          <button class="mini" id="kartellPetzNein">Abbrechen</button></span>
       </div>` : ""}
       <button class="mini" id="kartellRaus">Kartell verlassen</button>`;
     return;
@@ -6901,7 +6942,8 @@ function kartellFremdeRendern(state, myId) {
   const fremde = (state.cartels || []).filter(c => c !== meins);
   document.getElementById("kartellFremde").innerHTML = fremde.length ? fremde.map(c =>
     `<div style="margin:6px 0">
-      <div style="font-weight:600">${c.name}</div>
+      <div style="font-weight:600">${c.name}${c.ermittlung
+        ? ` <span style="color:#fb7185;font-weight:600">· Kartellamt ermittelt</span>` : ""}</div>
       <div class="meta">${c.mitglieder.map(m => m.name).join(", ")}</div>
     </div>`).join("")
     : `<p class="note">Sonst hat sich niemand zusammengetan${meins ? "" : " — noch ist der Markt frei"}.</p>`;
@@ -6952,6 +6994,19 @@ document.getElementById("p-kartell").addEventListener("click", e => {
   if (ja) return act("kartellBeitreten", { kartellId: +ja.dataset.kartellja });
   const nein = e.target.closest("button[data-kartellnein]");
   if (nein) return act("kartellAblehnen", { kartellId: +nein.dataset.kartellnein });
+  /* Zweistufig, weil der Zug endgueltig ist und die Runde fuer alle anderen
+   * spuerbar veraendert — ein Fehlklick waere nicht zurueckzunehmen. */
+  if (e.target.closest("#kartellPetzen")) {
+    document.getElementById("kartellPetzen").style.display = "none";
+    document.getElementById("kartellPetzFrage").style.display = "";
+    return;
+  }
+  if (e.target.closest("#kartellPetzNein")) {
+    document.getElementById("kartellPetzFrage").style.display = "none";
+    document.getElementById("kartellPetzen").style.display = "";
+    return;
+  }
+  if (e.target.closest("#kartellPetzJa")) return act("kartellAnzeigen", {});
   if (e.target.closest("#kartellRaus")) return act("kartellVerlassen", {});
 });
 
@@ -7010,7 +7065,7 @@ function adminAbfragen() {
   });
   /* Andere Runden gibt es nur hinter dem Gateway — im Einzelbetrieb haelt der
    * Prozess genau eine, und die steht ohnehin schon vollstaendig da. */
-  if (MULTIROOM) fetch("/api/rooms/public").then(r => r.json())
+  if (MULTIROOM) fetch(api("/api/rooms/public")).then(r => r.json())
     .then(d => { adminRunden = d; adminRendern(); }).catch(() => {});
 }
 

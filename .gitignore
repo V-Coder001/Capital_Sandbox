@@ -157,3 +157,8 @@ leaderboard.json
 
 # Fertiges itch-Upload-Paket — wird aus marketing/itch-embed/ gebaut
 marketing/capital-sandbox-itch.zip
+
+# Erzeugte Portalfassung — entsteht jederzeit neu aus public/ per build-portal.sh.
+# Mit fuehrendem Schraegstrich, damit nur dieser Ordner im Projektstamm gemeint
+# ist und nicht jedes "build" irgendwo tiefer im Baum.
+/build/
