@@ -4218,15 +4218,54 @@ function drawAtmosphere() {
   }
   cx.fillStyle = ATMO.haze; cx.fillRect(0, 0, innerWidth, innerHeight);
   cx.fillStyle = ATMO.vig;  cx.fillRect(0, 0, innerWidth, innerHeight);
-  /* Tageszeit: orangene Dämmerung an den Übergängen, nachts blauer Schleier. */
+  /* ---- Farb-Grading („Shader") ----
+   * Früher: flacher Orange- bzw. Dunkel-Schleier — das wusch die Szene milchig
+   * aus. Jetzt drei abgestimmte Pässe, alle nur Vollbild-Fills:
+   *  1) MULTIPLY-Farbton = Farbtemperatur des Tages (erhält Kontraste:
+   *     Mittag fast neutral, goldene Stunde warm, Nacht kühles Blau)
+   *  2) Dämmerung als HIMMELSVERLAUF von oben statt flacher Fläche
+   *  3) nachts ein zarter MONDLICHT-Glanz (screen) von oben + Rest-Dunkel
+   * Verläufe werden je Fenstergröße gecacht; der Tint ist ein billiger Fill. */
+  const lerp3 = (a, b, t) => [0, 1, 2].map(i => Math.round(a[i] + (b[i] - a[i]) * t));
+  let tint;
+  if (LICHT > .55)      tint = lerp3([255, 246, 232], [255, 253, 250], (LICHT - .55) / .45);  // Tag: Hauch warm
+  else if (LICHT > .28) tint = lerp3([255, 208, 162], [255, 246, 232], (LICHT - .28) / .27);  // goldene Stunde
+  else                  tint = lerp3([76, 90, 146], [255, 208, 162], LICHT / .28);            // Nacht: kühles Blau
+  cx.globalCompositeOperation = "multiply";
+  cx.fillStyle = `rgb(${tint.join(",")})`;
+  cx.fillRect(0, 0, innerWidth, innerHeight);
+  cx.globalCompositeOperation = "source-over";
   if (DAEMMERUNG > .01) {
-    cx.fillStyle = `rgba(255,138,66,${(DAEMMERUNG * .16).toFixed(3)})`;
+    /* Der Himmel brennt oben, der Boden bleibt ruhig */
+    const d = Math.round(DAEMMERUNG * 100);
+    if (!ATMO.daemmer || ATMO.daemmerKey !== d) {
+      const g = cx.createLinearGradient(0, 0, 0, innerHeight);
+      g.addColorStop(0,  `rgba(255,132,58,${(DAEMMERUNG * .30).toFixed(3)})`);
+      g.addColorStop(.45, `rgba(255,96,96,${(DAEMMERUNG * .10).toFixed(3)})`);
+      g.addColorStop(1,  "rgba(255,132,58,0)");
+      ATMO.daemmer = g; ATMO.daemmerKey = d;
+    }
+    cx.fillStyle = ATMO.daemmer;
     cx.fillRect(0, 0, innerWidth, innerHeight);
   }
   const nacht = 1 - LICHT;
   if (nacht > .02) {
-    cx.fillStyle = `rgba(9,14,38,${(nacht * .45).toFixed(3)})`;
+    /* Rest-Dunkel deutlich schwächer als früher (das Multiply-Blau trägt
+     * die Nacht) — dafür oben ein kühler Glanz, als stünde der Mond hoch. */
+    cx.fillStyle = `rgba(7,11,30,${(nacht * .34).toFixed(3)})`;
     cx.fillRect(0, 0, innerWidth, innerHeight);
+    const m = Math.round(nacht * 100);
+    if (!ATMO.mond || ATMO.mondKey !== m) {
+      const g = cx.createRadialGradient(innerWidth * .5, -innerHeight * .15, 0,
+                                        innerWidth * .5, -innerHeight * .15, innerHeight * .95);
+      g.addColorStop(0, `rgba(150,178,232,${(nacht * .14).toFixed(3)})`);
+      g.addColorStop(1, "rgba(150,178,232,0)");
+      ATMO.mond = g; ATMO.mondKey = m;
+    }
+    cx.globalCompositeOperation = "screen";
+    cx.fillStyle = ATMO.mond;
+    cx.fillRect(0, 0, innerWidth, innerHeight);
+    cx.globalCompositeOperation = "source-over";
   }
 }
 
