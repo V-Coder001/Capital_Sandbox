@@ -4808,10 +4808,11 @@ function draw() {
         if (seed != null) {
           const haus = CASA_IMGS[seed % 18];
           if (haus) {
-            /* Die Retro-Tiles bringen Bodenplatte und Beleuchtung selbst mit —
-             * Bodenanker so, dass ihre Grundfläche auf der Kachel sitzt. */
-            schattenMalen(haus, sx, sy + TH / 2 + 3, sy + TH / 2 - 40, 50, false, .3);
-            cx.drawImage(haus, sx - 28, sy + TH / 2 - 45, 56, 56);
+            /* Die Retro-Tiles bringen Bodenplatte und Beleuchtung selbst mit.
+             * Anker: Unterkante der Bodenplatte auf die Kachel-Unterspitze —
+             * vorher hingen die Häuser ~5 px über dem Boden und „flogen". */
+            schattenMalen(haus, sx, sy + TH - 2, sy + TH - 50, 50, false, .3);
+            cx.drawImage(haus, sx - 28, sy + TH - 54, 56, 56);
           } else {
             const set = MEDIT.casas[seed % MEDIT.casas.length];
             const img = LICHT < .5 ? set.nacht : set.tag;
@@ -7193,20 +7194,31 @@ function kartellRendern(state, me, myId) {
         <b>Wer 6 von 9 Bezirken hält, gewinnt die Runde — die Stadt gehört dann seiner Familie.</b><br><br>
         💰 <b>Schutzgelderpressung:</b> Zieh selbst durch die Läden eines Bezirks (alle 3 min je Bezirk):
         250–450 $ sofort, im <b>eigenen Revier das 1,5-fache</b> — aber jede Tour heizt die Fahndung an (+6).
-        Im Revier einer fremden Familie riskierst du ihre Schläger: Rauswurf, −2 Respekt, +10 Fahndung.</p>
+        Im Revier einer fremden Familie riskierst du ihre Schläger: Rauswurf, −2 Respekt, +10 Fahndung.<br><br>
+        ⚔️ <b>Revierkampf:</b> Geclaimte Bezirke nimmst du mit <b>Waffen</b>: mind. 3 Pistolen
+        (Waffentransporte überfallen!), bis zu 6 werden eingesetzt — mehr Waffen, bessere Chance;
+        viele Verteidiger-Gebäude senken sie. Sieg setzt die Kontrolle <b>2 min aus</b>: Das Viertel ist offen —
+        bau und sperre dich in dieser Zeit zur Mehrheit. Niederlage: Waffen weg, 500 $ Kaution, Fahndung +12.</p>
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px">
         ${state.bezirke.map(b => {
           const fam = b.kontrolle ? state.familien.find(f => f.id === b.kontrolle) : null;
           const eigene = (state.players[myId]?.familie && b.staerken?.[state.players[myId].familie]) || 0;
           const cd = me.erpress?.[b.id];
           const eigenesRevier = b.kontrolle && b.kontrolle === meineFamilieId;
-          return `<div style="background:#0b1322;border:1px solid ${fam ? fam.farbe + "66" : "var(--line)"};border-radius:9px;padding:7px 8px">
-            <div style="font-size:11.5px;font-weight:600">${b.name}</div>
-            <div class="meta" style="font-size:10.5px">${fam ? `<span style="color:${fam.farbe}">${fam.name}</span>` : "umkämpft / frei"}${eigene ? ` · du: ${eigene}` : ""}</div>
+          const fremdesRevier = b.kontrolle && b.kontrolle !== meineFamilieId;
+          const pistolen = Math.floor(me.inv?.pistole || 0);
+          const kampfBereit = fremdesRevier && !me.kampfCd && pistolen >= 3;
+          return `<div style="background:#0b1322;border:1px solid ${b.umkaempft ? "#e74c3c" : fam ? fam.farbe + "66" : "var(--line)"};border-radius:9px;padding:7px 8px">
+            <div style="font-size:11.5px;font-weight:600">${b.name}${b.umkaempft ? " ⚔️" : ""}</div>
+            <div class="meta" style="font-size:10.5px">${b.umkaempft ? `<span style="color:#e74c3c">UMKÄMPFT · noch ${b.umkaempft} s offen!</span>` : fam ? `<span style="color:${fam.farbe}">${fam.name}</span>` : "umkämpft / frei"}${eigene ? ` · du: ${eigene}` : ""}</div>
             <button class="mini" data-erpress="${b.id}" ${cd ? "disabled" : ""}
               style="margin-top:5px;width:100%;font-size:10.5px${eigenesRevier ? ";border-color:var(--accent)" : ""}"
               title="${eigenesRevier ? "Euer Revier: 1,5-facher Betrag, keiner mault" : fam ? "Fremdes Revier: 30 % Rauswurf-Risiko" : "Freier Bezirk"}">
               ${cd ? `gezahlt · ${Math.floor(cd / 60)}:${String(cd % 60).padStart(2, "0")}` : "💰 Erpressen"}</button>
+            ${fremdesRevier ? `<button class="mini" data-kampf="${b.id}" ${kampfBereit ? "" : "disabled"}
+              style="margin-top:4px;width:100%;font-size:10.5px;border-color:#e74c3c66"
+              title="${pistolen < 3 ? "Mind. 3 Pistolen nötig — Waffentransporte überfallen" : me.kampfCd ? "Deine Leute brauchen noch " + me.kampfCd + " s" : "Setzt bis zu 6 Pistolen ein"}">
+              ${me.kampfCd ? `⚔️ bereit in ${Math.floor(me.kampfCd / 60)}:${String(me.kampfCd % 60).padStart(2, "0")}` : `⚔️ Revierkampf (${Math.min(6, pistolen)}🔫)`}</button>` : ""}
           </div>`;
         }).join("")}
       </div>
@@ -7350,6 +7362,13 @@ document.getElementById("p-kartell").addEventListener("click", e => {
   if (erp) {
     socket.emit("erpressen", { bezirk: +erp.dataset.erpress }, res =>
       toast(res?.error || `Die Läden zahlen ${fmt(res.betrag)} Schutzgeld.`, !!res?.error));
+    return;
+  }
+  /* Revierkampf: einen fremd kontrollierten Bezirk mit Waffen angreifen. */
+  const kampf = e.target.closest("button[data-kampf]");
+  if (kampf) {
+    socket.emit("revierkampf", { bezirk: +kampf.dataset.kampf }, res =>
+      toast(res?.error || `⚔️ Revier gestürmt — ${res.dauer} s lang ist der Bezirk offen: bau dich jetzt zur Mehrheit!`, !!res?.error));
     return;
   }
   /* Bestechung: die Fahndung der eigenen Familie abkühlen. */

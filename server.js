@@ -526,7 +526,12 @@ function bezirkeBerechnen() {
     let kontrolle = null;
     if (reihen.length && reihen[0][1] >= 2 && (reihen.length === 1 || reihen[0][1] > reihen[1][1]))
       kontrolle = reihen[0][0];
-    return { id: i, name: BEZIRK_NAMEN[i], kontrolle, staerken: s };
+    /* Revierkampf: Nach einem erfolgreichen Angriff ist die Kontrolle
+     * ausgesetzt — kein Schutzgeld, kein sicheres Erpressen, das Viertel
+     * ist offen für die Übernahme. */
+    const umkaempft = Math.max(0, (G.bezirkKampf?.[i] || 0) - G.tick);
+    if (umkaempft > 0) kontrolle = null;
+    return { id: i, name: BEZIRK_NAMEN[i], kontrolle, staerken: s, umkaempft };
   });
   /* Mafia-Auftrag „Bezirk kontrollieren“: zählt für jedes Familienmitglied,
    * sobald die Familie irgendeinen Bezirk hält (questProg ignoriert Erledigte). */
@@ -561,6 +566,14 @@ const TRANSPORT_ARTEN = {
 };
 const UEBERFALL_COOLDOWN = 45;    // Sekunden Sperrfrist je Spieler
 const ERPRESS_COOLDOWN = 180;     // Sekunden je Spieler UND Bezirk — die Läden zahlen nicht zweimal am Tag
+/* Revierkampf: geclaimte Bezirke lassen sich mit WAFFEN umkämpfen. Der Angriff
+ * kostet Pistolen (aus Waffentransport-Überfällen); Erfolg setzt die Kontrolle
+ * des Bezirks für eine Weile aus — das Fenster, in dem man mit Bauten und
+ * Sperren selbst die Mehrheit holt. */
+const KAMPF_COOLDOWN = 180;       // Sekunden je Spieler (egal welcher Bezirk)
+const KAMPF_PISTOLEN_MIN = 3;     // Mindesteinsatz; bis zu 6 werden automatisch eingesetzt
+const KAMPF_PISTOLEN_MAX = 6;
+const KAMPF_DAUER = 120;          // solange gilt der Bezirk als umkämpft (Kontrolle ausgesetzt)
 const SPERRE_KOSTEN = 800;
 const SPERRE_DAUER = 180;         // Sekunden Lebenszeit einer Sperre
 const SPERRE_MAX_JE_FAMILIE = 2;
@@ -2064,7 +2077,7 @@ function newPlayer(pid, name, color, industry, socketId) {
   /* Testhilfe (nur per Umgebungsvariable): TEST_GARAGE=1 legt jedem neuen
    * Spieler Fahrzeuge, Tuningteile und Baumaterial ins Lager — zum schnellen
    * Durchspielen des Renntags, ohne die Produktionskette hochzuziehen. */
-  if (process.env.TEST_GARAGE) { inv.eauto = 2; inv.benzinauto = 1; inv.rennreifen = 12; inv.rennsoftware = 12; inv.ziegel = 200; inv.beton = 40;
+  if (process.env.TEST_GARAGE) { inv.eauto = 2; inv.benzinauto = 1; inv.rennreifen = 12; inv.rennsoftware = 12; inv.ziegel = 200; inv.beton = 40; inv.pistole = 8;
     inv.obst = 150; inv.wasser = 150; inv.erze = 150; inv.kannabis = 80; inv.strom = 200; inv.elektronik = 20; }
   return { id: pid, name, color, industry, industries: [industry], cash: START_CASH, xp: 0, lvl: 1,
     inv,
@@ -2526,6 +2539,7 @@ const KARTELL_QUESTS = [
   { id: "ueberfall",  text: "Wage einen Überfall auf einen Werttransport", en: "Attempt a heist on a transport",  target: 1, reward: 800 },
   { id: "sperre",     text: "Errichte eine Straßensperre", en: "Set up a road block",                          target: 1, reward: 800 },
   { id: "schutzgeld", text: "Kassiere Schutzgeld aus einem Bezirk", en: "Collect protection money",            target: 1, reward: 600 },
+  { id: "kampf",      text: "Gewinne einen Revierkampf", en: "Win a turf war",                                 target: 1, reward: 1500 },
 ];
 const QUESTSET = () => MODE === "kartell" ? KARTELL_QUESTS : QUESTS;
 function questProg(p, id, n = 1) {
@@ -3072,6 +3086,7 @@ function privateState(p) {
     erpress: MODE === "kartell"
       ? Object.fromEntries(Object.entries(p.erpressCd || {})
           .filter(([, bis]) => bis > G.tick).map(([b, bis]) => [b, bis - G.tick])) : null,
+    kampfCd: MODE === "kartell" ? Math.max(0, (p.kampfCd || 0) - G.tick) : 0,
     quests: p.quests,
     tx: p.tx, sales: p.sales, fin: p.fin, nwHist: p.nwHist,
     fans: Math.round(p.fans || 0), fanHubs: fanHubs(p).length,
@@ -3718,6 +3733,50 @@ io.on("connection", socket => {
     logTx(p, "Kartell", `Schutzgeld aus dem ${b.name} erpresst`, betrag);
     io.to(p.id).emit("notice", { text: `💰 Die Läden im ${b.name} zahlen: +${betrag} $${eigene ? " — euer Revier, keiner mault" : ""}` });
     ack?.({ ok: true, betrag });
+  }));
+
+  /* --- Revierkampf: geclaimte Bezirke mit Waffen umkämpfen ---
+   * Setzt bei Erfolg die Kontrolle des Bezirks für KAMPF_DAUER aus. In dem
+   * Fenster holt man sich mit Bauten und Sperren selbst die Mehrheit. */
+  socket.on("revierkampf", guard((p, { bezirk }, ack) => {
+    if (MODE !== "kartell") return ack?.({ error: "Revierkämpfe gibt es nur in der Kartellwirtschaft" });
+    if (!p.familie) return ack?.({ error: "Ohne Familie kämpft man um kein Revier" });
+    bezirk = Math.floor(+bezirk);
+    const b = G.bezirke?.[bezirk];
+    if (!b) return ack?.({ error: "Diesen Bezirk kennt hier niemand" });
+    if (!b.kontrolle) return ack?.({ error: "Der Bezirk ist frei — bau einfach, statt zu schießen" });
+    if (b.kontrolle === p.familie) return ack?.({ error: "Das ist euer eigenes Revier" });
+    if ((p.kampfCd || 0) > G.tick)
+      return ack?.({ error: `Deine Leute lecken noch ihre Wunden — warte ${p.kampfCd - G.tick} s` });
+    const pistolen = Math.floor(p.inv.pistole || 0);
+    if (pistolen < KAMPF_PISTOLEN_MIN)
+      return ack?.({ error: `Für einen Revierkampf brauchst du mindestens ${KAMPF_PISTOLEN_MIN} Pistolen — Waffentransporte überfallen!` });
+    p.kampfCd = G.tick + KAMPF_COOLDOWN;
+    const einsatz = Math.min(KAMPF_PISTOLEN_MAX, pistolen);
+    p.inv.pistole -= einsatz;
+    /* Chance: Waffen helfen, die Präsenz der Verteidiger (Gebäude im Bezirk) bremst */
+    const verteidigung = b.staerken?.[b.kontrolle] || 2;
+    const chance = Math.min(.85, .35 + einsatz * .08 - Math.max(0, verteidigung - 2) * .04);
+    G.fahndung[p.familie] = (G.fahndung[p.familie] || 0) + 8;
+    if (Math.random() < chance) {
+      (G.bezirkKampf ??= {})[bezirk] = G.tick + KAMPF_DAUER;
+      G.familienRespekt[p.familie] = (G.familienRespekt[p.familie] || 0) + 4;
+      G.familienRespekt[b.kontrolle] = Math.max(0, (G.familienRespekt[b.kontrolle] || 0) - 2);
+      questProg(p, "kampf");
+      gainXp(p, 20);
+      bezirkeBerechnen();
+      logTx(p, "Kartell", `Revierkampf gewonnen: ${b.name} ist umkämpft`, 0);
+      io.emit("notice", { text: `⚔️ ${FAMILIEN[p.familie].name} stürmt den ${b.name} — die ${FAMILIEN[b.kontrolle].name} verliert die Kontrolle! ${KAMPF_DAUER} s lang ist das Viertel offen.` });
+      ack?.({ ok: true, dauer: KAMPF_DAUER });
+    } else {
+      const kaution = Math.min(p.cash, 500);
+      p.cash -= kaution;
+      G.fahndung[p.familie] = (G.fahndung[p.familie] || 0) + 4;   // insgesamt +12
+      G.familienRespekt[p.familie] = Math.max(0, (G.familienRespekt[p.familie] || 0) - 1);
+      logTx(p, "Kartell", `Revierkampf im ${b.name} verloren (${einsatz} Pistolen weg)`, -kaution);
+      io.emit("notice", { text: `⚔️ Die ${FAMILIEN[b.kontrolle].name} schlägt einen Angriff von ${p.name} auf den ${b.name} zurück.` });
+      ack?.({ error: `Zurückgeschlagen — ${einsatz} Pistolen verloren, ${kaution} $ Kaution, die Fahndung brennt (+12)` });
+    }
   }));
 
   /* --- Straßensperre: Revier markieren --- */
