@@ -3551,10 +3551,71 @@ const MEDIT = (() => {
       g.beginPath(); g.ellipse(7, 18 + (30 - h2) / 2, w2, h2 / 2, 0, 0, Math.PI * 2); g.fill();
     }
     g.fillStyle = "#43763a"; g.beginPath(); g.ellipse(7, 4.5, 1.2, 3, 0, 0, Math.PI * 2); g.fill(); }
-  return { weinberg, oliven, boot, zypresse,
+  /* Gaslaterne: schmiedeeiserner Mast mit Lampenkopf */
+  const laterne = document.createElement("canvas"); laterne.width = 12; laterne.height = 34;
+  { const g = laterne.getContext("2d");
+    g.fillStyle = "rgba(0,0,0,.25)"; g.beginPath(); g.ellipse(6, 31.5, 4, 1.8, 0, 0, Math.PI * 2); g.fill();
+    g.fillStyle = "#23282e"; g.fillRect(5.1, 8, 1.8, 24);
+    g.fillRect(3.5, 30, 5, 2);
+    g.fillStyle = "#2c333b"; g.fillRect(3.8, 4, 4.4, 5.5);      // Lampengehäuse
+    g.fillStyle = "#ffd884"; g.fillRect(4.6, 5, 2.8, 3.6);      // Glas (warm, auch tags)
+    g.fillStyle = "#23282e"; g.beginPath(); g.moveTo(3, 4.4); g.lineTo(9, 4.4); g.lineTo(6, 1); g.closePath(); g.fill(); }
+  /* Altstadt-Häuser: schmale Palazzi in Terrakotta, Ocker & Rosé — je Variante
+   * eine Tag- und eine Nachtfassung (erleuchtete Fenster). */
+  const casaFarben = [["#c98a5a", "#a96e44"], ["#d9b07a", "#b8935f"], ["#e0cba8", "#bfa987"],
+                     ["#b7746b", "#985a52"], ["#a8b090", "#8a9274"], ["#cf9d7e", "#ad7f62"]];
+  const mkCasa = (seed, nacht) => {
+    const c = document.createElement("canvas"); c.width = 48; c.height = 66;
+    const g = c.getContext("2d");
+    const [colR, colL] = casaFarben[seed % casaFarben.length];
+    const fw = 13 + (seed % 3) * 2, hh = 24 + (seed * 7) % 14, bx = 24, by = 62;
+    g.fillStyle = colL;                                          // linke Wand (im Schatten)
+    g.beginPath(); g.moveTo(bx, by); g.lineTo(bx - fw, by - fw / 2);
+    g.lineTo(bx - fw, by - fw / 2 - hh); g.lineTo(bx, by - hh); g.closePath(); g.fill();
+    g.fillStyle = colR;                                          // rechte Wand (Sonnenseite)
+    g.beginPath(); g.moveTo(bx, by); g.lineTo(bx + fw, by - fw / 2);
+    g.lineTo(bx + fw, by - fw / 2 - hh); g.lineTo(bx, by - hh); g.closePath(); g.fill();
+    const ry = by - hh - fw * .8;                                // Ziegeldach mit First
+    g.fillStyle = "#a14f38";
+    g.beginPath(); g.moveTo(bx, by - hh); g.lineTo(bx + fw, by - fw / 2 - hh); g.lineTo(bx, ry); g.closePath(); g.fill();
+    g.fillStyle = "#8a4230";
+    g.beginPath(); g.moveTo(bx, by - hh); g.lineTo(bx - fw, by - fw / 2 - hh); g.lineTo(bx, ry); g.closePath(); g.fill();
+    g.strokeStyle = "#6e3526"; g.beginPath(); g.moveTo(bx, by - hh); g.lineTo(bx, ry); g.stroke();
+    /* Fenster mit Läden auf der Sonnenseite, Tür auf der Schattenseite */
+    for (let r = 0; r < (hh > 32 ? 3 : 2); r++) for (let col2 = 0; col2 < 2; col2++) {
+      const wx = bx + 3 + col2 * 6.5, wy = by - hh + 5 + r * 10 + (3 + col2 * 6.5) * .5 * .5;
+      g.fillStyle = nacht && (seed + r * 2 + col2) % 3 ? "#ffd27a" : "#31302e";
+      g.fillRect(wx, wy, 3.6, 5);
+      g.fillStyle = "#5c7248"; g.fillRect(wx - 1.2, wy, 1, 5); g.fillRect(wx + 3.8, wy, 1, 5);
+    }
+    g.fillStyle = "#4a382a"; g.fillRect(bx - fw + 3, by - fw / 2 - 9 + 1.5, 4.5, 9);   // Tür
+    if (nacht) { g.fillStyle = "rgba(255,210,120,.28)"; g.fillRect(bx - fw + 2, by - fw / 2 - 10, 6.5, 11); }
+    return c;
+  };
+  const casas = Array.from({ length: 6 }, (_, i) => ({ tag: mkCasa(i, false), nacht: mkCasa(i, true) }));
+  return { weinberg, oliven, boot, zypresse, laterne, casas,
     schirme: [schirm("#c94f3d"), schirm("#3d7ac9"), schirm("#4a9a55")],
     waescheFarben: ["#e8e4d8", "#c94f3d", "#7fb4d9", "#e3c078", "#9fc98a"] };
 })();
+/* Wo die Altstadt-Häuser stehen: freie Kacheln mit Straßenanschluss (einmal
+ * je Karte berechnet, deterministisch — alle Clients sehen dieselbe Stadt). */
+let CASAS = null;
+function buildCasas(map) {
+  const W = map.reduce((m, t) => Math.max(m, t.x), 0) + 1;
+  const at3 = (x, y) => map[y * W + x];
+  const res = new Map();
+  for (const t of map) {
+    if (t.water || t.road || t.sand || t.park || t.field || t.piazza || t.pier ||
+        t.leuchtturm || t.bank || t.news || t.schwarz || t.deko || t.zone === "industrie") continue;
+    const anStrasse = [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dy]) => {
+      const n = t.x + dx >= 0 && t.x + dx < W && t.y + dy >= 0 ? at3(t.x + dx, t.y + dy) : null;
+      return n?.road;
+    });
+    if (anStrasse && (t.x * 7 + t.y * 13) % 5 < 2)
+      res.set(t.x + "," + t.y, (t.x * 3 + t.y * 11) % 97);
+  }
+  return res;
+}
 /* Gebäude-Sprites (Kenney City Kits, CC0) — public/assets/<btype>-<n>.png.
  * Mehrere Varianten je Typ; die Kachelposition wählt deterministisch eine aus,
  * damit alle Clients dasselbe Stadtbild sehen. Fallback: farbige Blöcke. */
@@ -4469,6 +4530,7 @@ function draw() {
       ? { carLines: st.routes.map(l => l.map(([x, y]) => ({ x, y }))) }
       : buildRoutes(st.map);
     SHORE = buildShore(st.map);
+    CASAS = ITALIA_LOOK ? buildCasas(st.map) : null;
   }
   lichtBerechnen(now);
   effekteErkennen(st.map, now);
@@ -4700,6 +4762,38 @@ function draw() {
         const richtungY = t.y === 7 ? .3 : t.y === 9 ? -.3 : 0;
         const ox = (richtungX - richtungY) * TW / 2, oy = (richtungX + richtungY) * TH / 2;
         cx.drawImage(MEDIT.zypresse, sx + ox - 7, sy + TH / 2 + oy - 34, 14, 40);
+      }
+      /* Altstadt-Häuser: schmale Palazzi füllen die Viertel an den Straßen.
+       * Rein dekorativ — wer dort baut, ersetzt das Haus (so ist die Mafia). */
+      if (!t.btype && CASAS) {
+        const seed = CASAS.get(t.x + "," + t.y);
+        if (seed != null) {
+          const set = MEDIT.casas[seed % MEDIT.casas.length];
+          const img = LICHT < .5 ? set.nacht : set.tag;
+          schattenMalen(img, sx, sy + TH / 2 + 2, sy + TH / 2 - 50, 40, false, .38);
+          cx.drawImage(img, sx - 20, sy + TH / 2 - 51, 40, 55);
+        }
+      }
+      /* Gaslaternen in den Gassen: abwechselnd links und rechts, nachts mit
+       * warmem Schein und Lichtpfütze auf dem Pflaster. */
+      if (t.road && ![8, 17].includes(t.x) && ![8, 17].includes(t.y) && t.y !== 21 &&
+          t.zone !== "kueste" && (t.x * 11 + t.y * 5) % 4 === 2) {
+        const horiz = t.y % 9 === 4;
+        const seite = (t.x + t.y) % 2 ? 1 : -1;
+        const lx = sx + (horiz ? -1 : 1) * seite * 9.5;
+        const ly = sy + TH / 2 + seite * 4.6;
+        cx.drawImage(MEDIT.laterne, lx - 5, ly - 31, 10, 32);
+        if (LICHT < .55) {
+          const a = Math.min(1, (.55 - LICHT) * 1.8);
+          cx.save(); cx.globalCompositeOperation = "lighter"; cx.globalAlpha = a * .8;
+          cx.translate(lx, ly); cx.scale(1, .5);
+          cx.drawImage(LICHTPFUETZE, -22, -22, 44, 44);         // Pfütze auf dem Pflaster
+          cx.restore();
+          cx.globalAlpha = a;
+          cx.fillStyle = "rgba(255,214,130,.75)";
+          cx.beginPath(); cx.arc(lx, ly - 26.5, 2.6, 0, Math.PI * 2); cx.fill();
+          cx.globalAlpha = 1;
+        }
       }
       /* Wäscheleinen über den Altstadt-Gassen: durchhängende Leine mit
        * bunter Wäsche, die sacht im Seewind schwingt. */
