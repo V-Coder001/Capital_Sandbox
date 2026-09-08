@@ -5197,7 +5197,9 @@ function clickTile(e) {
     && !(b.casino && !kartellModus) && (
     store.get().state?.mode === "renntag"
       ? rolleErlaubt.includes(bid)
-      : (!b.industry || myInds.includes(b.industry))));
+      /* Kartellmodus: Familien bauen ALLES — Bezirkskontrolle zählt Gebäude,
+       * eine Branchen-Sperre aus dem Normalmodus hätte hier keinen Sinn. */
+      : (kartellModus || !b.industry || myInds.includes(b.industry))));
   const mats = b => { const m = { ziegel: Math.ceil(b.cost / 400) };
     if (b.cost >= 4000 && b.proc?.out !== "beton") m.beton = Math.ceil(b.cost / 2000);
     return m; };
@@ -7136,14 +7138,23 @@ function kartellRendern(state, me, myId) {
       <div class="lbl">Bezirke · Kontrolle bringt Schutzgeld</div>
       <p class="note" style="margin:0 0 8px">Wer in einem Bezirk die meisten Gebäude hat (mindestens zwei),
         kontrolliert ihn: ${200} $ Schutzgeld je Minute für die Familie plus Respekt. Die meisten Bezirke machen den Paten.
-        <b>Wer 6 von 9 Bezirken hält, gewinnt die Runde — die Stadt gehört dann seiner Familie.</b></p>
+        <b>Wer 6 von 9 Bezirken hält, gewinnt die Runde — die Stadt gehört dann seiner Familie.</b><br><br>
+        💰 <b>Schutzgelderpressung:</b> Zieh selbst durch die Läden eines Bezirks (alle 3 min je Bezirk):
+        250–450 $ sofort, im <b>eigenen Revier das 1,5-fache</b> — aber jede Tour heizt die Fahndung an (+6).
+        Im Revier einer fremden Familie riskierst du ihre Schläger: Rauswurf, −2 Respekt, +10 Fahndung.</p>
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px">
         ${state.bezirke.map(b => {
           const fam = b.kontrolle ? state.familien.find(f => f.id === b.kontrolle) : null;
           const eigene = (state.players[myId]?.familie && b.staerken?.[state.players[myId].familie]) || 0;
+          const cd = me.erpress?.[b.id];
+          const eigenesRevier = b.kontrolle && b.kontrolle === meineFamilieId;
           return `<div style="background:#0b1322;border:1px solid ${fam ? fam.farbe + "66" : "var(--line)"};border-radius:9px;padding:7px 8px">
             <div style="font-size:11.5px;font-weight:600">${b.name}</div>
             <div class="meta" style="font-size:10.5px">${fam ? `<span style="color:${fam.farbe}">${fam.name}</span>` : "umkämpft / frei"}${eigene ? ` · du: ${eigene}` : ""}</div>
+            <button class="mini" data-erpress="${b.id}" ${cd ? "disabled" : ""}
+              style="margin-top:5px;width:100%;font-size:10.5px${eigenesRevier ? ";border-color:var(--accent)" : ""}"
+              title="${eigenesRevier ? "Euer Revier: 1,5-facher Betrag, keiner mault" : fam ? "Fremdes Revier: 30 % Rauswurf-Risiko" : "Freier Bezirk"}">
+              ${cd ? `gezahlt · ${Math.floor(cd / 60)}:${String(cd % 60).padStart(2, "0")}` : "💰 Erpressen"}</button>
           </div>`;
         }).join("")}
       </div>
@@ -7280,6 +7291,13 @@ document.getElementById("p-kartell").addEventListener("click", e => {
   if (hehler) {
     socket.emit("hehlerVerkauf", { good: hehler.dataset.hehler },
       res => toast(res?.error || `Der Hehler zahlt ${fmt(res.erloes)} — ohne Fragen.`, !!res?.error));
+    return;
+  }
+  /* Schutzgelderpressung: durch die Läden eines Bezirks ziehen. */
+  const erp = e.target.closest("button[data-erpress]");
+  if (erp) {
+    socket.emit("erpressen", { bezirk: +erp.dataset.erpress }, res =>
+      toast(res?.error || `Die Läden zahlen ${fmt(res.betrag)} Schutzgeld.`, !!res?.error));
     return;
   }
   /* Bestechung: die Fahndung der eigenen Familie abkühlen. */

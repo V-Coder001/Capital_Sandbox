@@ -560,6 +560,7 @@ const TRANSPORT_ARTEN = {
   gold:   { name: "Goldtransport",   gewicht: 1 },
 };
 const UEBERFALL_COOLDOWN = 45;    // Sekunden Sperrfrist je Spieler
+const ERPRESS_COOLDOWN = 180;     // Sekunden je Spieler UND Bezirk — die Läden zahlen nicht zweimal am Tag
 const SPERRE_KOSTEN = 800;
 const SPERRE_DAUER = 180;         // Sekunden Lebenszeit einer Sperre
 const SPERRE_MAX_JE_FAMILIE = 2;
@@ -3062,6 +3063,10 @@ function privateState(p) {
       einladungen: eigenesKartell.einladungen.map(mid => ({ id: mid, name: G.players[mid]?.name ?? "—" })) } : null,
     kartellEinladungen: MODE === "kartell" && !eigenesKartell
       ? G.cartels.filter(k => k.einladungen.includes(p.id)).map(kartellPublic) : [],
+    /* Restzeit je Bezirk, bis dort wieder Schutzgeld erpresst werden kann */
+    erpress: MODE === "kartell"
+      ? Object.fromEntries(Object.entries(p.erpressCd || {})
+          .filter(([, bis]) => bis > G.tick).map(([b, bis]) => [b, bis - G.tick])) : null,
     quests: p.quests,
     tx: p.tx, sales: p.sales, fin: p.fin, nwHist: p.nwHist,
     fans: Math.round(p.fans || 0), fanHubs: fanHubs(p).length,
@@ -3673,6 +3678,43 @@ io.on("connection", socket => {
     }
   }));
 
+  /* --- Schutzgelderpressung: die Läden eines Bezirks einschüchtern ---
+   * Ergänzt das passive Bezirks-Schutzgeld (das weiter jede Minute an die
+   * kontrollierende Familie fließt): Wer selbst durch die Gassen zieht, holt
+   * mehr heraus — bezahlt aber mit Fahndungsdruck. Im eigenen Revier zahlen
+   * die Läden das Anderthalbfache ohne Murren; im Revier einer FREMDEN
+   * Familie riskiert man, von deren Schlägern rausgeworfen zu werden. */
+  socket.on("erpressen", guard((p, { bezirk }, ack) => {
+    if (MODE !== "kartell") return ack?.({ error: "Schutzgeld gibt es nur in der Kartellwirtschaft" });
+    if (!p.familie) return ack?.({ error: "Ohne Familie erpresst man niemanden" });
+    bezirk = Math.floor(+bezirk);
+    const b = G.bezirke?.[bezirk];
+    if (!b) return ack?.({ error: "Diesen Bezirk kennt hier niemand" });
+    p.erpressCd ??= {};
+    if ((p.erpressCd[bezirk] || 0) > G.tick)
+      return ack?.({ error: `Die Läden im ${b.name} haben gerade erst gezahlt — warte noch ${p.erpressCd[bezirk] - G.tick} s` });
+    p.erpressCd[bezirk] = G.tick + ERPRESS_COOLDOWN;
+    const eigene = b.kontrolle === p.familie, fremd = b.kontrolle && b.kontrolle !== p.familie;
+    if (fremd && Math.random() < 0.3) {
+      /* Die Schläger der kontrollierenden Familie funken dazwischen */
+      G.fahndung[p.familie] = (G.fahndung[p.familie] || 0) + 10;
+      G.familienRespekt[p.familie] = Math.max(0, (G.familienRespekt[p.familie] || 0) - 2);
+      G.familienRespekt[b.kontrolle] = (G.familienRespekt[b.kontrolle] || 0) + 1;
+      io.emit("notice", { text: `👊 Die ${FAMILIEN[b.kontrolle].name} wirft ${p.name} aus dem ${b.name} — die Erpressung platzt.` });
+      return ack?.({ error: `Die ${FAMILIEN[b.kontrolle].name} hält ihre Hand über den ${b.name} — ihre Schläger haben dich rausgeworfen (−2 Respekt, +Fahndung)` });
+    }
+    let betrag = 250 + Math.floor(Math.random() * 200);
+    if (eigene) betrag = Math.round(betrag * 1.5);
+    p.cash += betrag;
+    G.fahndung[p.familie] = (G.fahndung[p.familie] || 0) + 6;
+    G.familienRespekt[p.familie] = (G.familienRespekt[p.familie] || 0) + 1;
+    questProg(p, "schutzgeld");
+    gainXp(p, 8);
+    logTx(p, "Kartell", `Schutzgeld aus dem ${b.name} erpresst`, betrag);
+    io.to(p.id).emit("notice", { text: `💰 Die Läden im ${b.name} zahlen: +${betrag} $${eigene ? " — euer Revier, keiner mault" : ""}` });
+    ack?.({ ok: true, betrag });
+  }));
+
   /* --- Straßensperre: Revier markieren --- */
   socket.on("sperreBauen", guard((p, { x, y }, ack) => {
     if (MODE !== "kartell") return ack?.({ error: "Sperren gibt es nur in der Kartellwirtschaft" });
@@ -3958,7 +4000,9 @@ io.on("connection", socket => {
           : p.industry === "rennclub"
             ? "Als Race Club baust du Rennstall und Werbung — Teile kaufst du an der Börse bei der Rennindustrie"
             : "Als Rennindustrie baust du die Zulieferkette und die Teile-Werke — gefahren wird im Race Club" });
-    } else if (bt.industry && !(p.industries || [p.industry]).includes(bt.industry)) {
+    } else if (MODE !== "kartell" && bt.industry && !(p.industries || [p.industry]).includes(bt.industry)) {
+      /* Kartellmodus: Familien bauen branchenfrei — Bezirkskontrolle zählt
+       * Gebäude, die Industrie-Sperre gilt nur in der normalen Wirtschaft. */
       return ack?.({ error: `Nur ${INDUSTRIES[bt.industry].name} kann das bauen` });
     }
     /* Der Rennstall ist branchenfrei, aber auf einen je Firma begrenzt: Ohne
@@ -5118,7 +5162,8 @@ function runTick() {
   }
   /* Nachrichtenzentrale: Marktbericht alle zwei Minuten. Bewusst versetzt zur
    * vollen Minute, damit er nicht mit der Dividendenmeldung zusammenfällt. */
-  if (MODE !== "plan" && G.tick > 60 && G.tick % NEWS_INTERVAL === 0) sendeMarktbericht();
+  /* Kartellmodus: keine Nachrichtenzentrale — die Stadt redet nicht mit der Presse. */
+  if (MODE !== "plan" && MODE !== "kartell" && G.tick > 60 && G.tick % NEWS_INTERVAL === 0) sendeMarktbericht();
   /* Aktien: Dividendenausschüttung alle 10 min */
   if (--G.nextDividendIn <= 0) { distributeDividends(); G.nextDividendIn = DIVIDEND_INTERVAL; }
   /* Fahrergehälter: eine laufende Verpflichtung, kein Einmalkauf. Wer nicht
@@ -5569,6 +5614,13 @@ async function spawnBot(cfg, lvl = BOT_LEVELS[BOT_LEVEL_DEFAULT]) {
            * der Server würfelt Erfolg, Kaution und Fahndung wie bei jedem. */
           if ((st.transporte || []).length && Math.random() < 0.2)
             await em("ueberfall", { transportId: st.transporte[0].id });
+          /* Schutzgeld: gelegentlich zieht der Bot durchs EIGENE Revier —
+           * fremde Bezirke lässt er in Ruhe (Bots provozieren keine Kriege). */
+          if (Math.random() < 0.25) {
+            const revier = (st.bezirke || []).find(b2 =>
+              b2.kontrolle === st.players[myId]?.familie && !(me.erpress || {})[b2.id]);
+            if (revier) await em("erpressen", { bezirk: revier.id });
+          }
         }
       }
       /* --- Motorsport: Bots bestücken ihren Stall, tunen, melden, wetten
