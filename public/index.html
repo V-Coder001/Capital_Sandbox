@@ -3597,6 +3597,44 @@ const MEDIT = (() => {
     schirme: [schirm("#c94f3d"), schirm("#3d7ac9"), schirm("#4a9a55")],
     waescheFarben: ["#e8e4d8", "#c94f3d", "#7fb4d9", "#e3c078", "#9fc98a"] };
 })();
+/* Retro-Italien-Häuser (eigene Pixel-Tiles): die Geschäfte der Stadt, aus
+ * denen das Schutzgeld kommt. 18 Varianten, geladen aus assets/casa/ —
+ * bis sie da sind, springen die prozeduralen Häuschen ein. */
+const CASA_IMGS = [];
+/* Einige der Tiles kommen mit weißem Hintergrund statt Alpha. Beim Laden wird
+ * das Weiß per Flutfüllung von den Bildrändern her ausgestanzt — nur der
+ * zusammenhängende Randbereich, weiße Details im Motiv bleiben unberührt. */
+function casaFreistellen(img) {
+  const w = img.naturalWidth, h = img.naturalHeight;
+  const c = document.createElement("canvas"); c.width = w; c.height = h;
+  const g = c.getContext("2d", { willReadFrequently: true });
+  g.drawImage(img, 0, 0);
+  const d = g.getImageData(0, 0, w, h), px = d.data;
+  const weiss = i => px[i + 3] > 0 && px[i] >= 232 && px[i + 1] >= 232 && px[i + 2] >= 232;
+  const stack = [];
+  for (let x = 0; x < w; x++) { stack.push(x, x + (h - 1) * w); }
+  for (let y = 0; y < h; y++) { stack.push(y * w, w - 1 + y * w); }
+  const gesehen = new Uint8Array(w * h);
+  while (stack.length) {
+    const p = stack.pop();
+    if (gesehen[p]) continue;
+    gesehen[p] = 1;
+    if (!weiss(p * 4)) continue;
+    px[p * 4 + 3] = 0;
+    const x = p % w, y = (p / w) | 0;
+    if (x > 0) stack.push(p - 1);
+    if (x < w - 1) stack.push(p + 1);
+    if (y > 0) stack.push(p - w);
+    if (y < h - 1) stack.push(p + w);
+  }
+  g.putImageData(d, 0, 0);
+  return c;
+}
+for (let i = 0; i < 18; i++) {
+  const img = new Image();
+  img.onload = () => CASA_IMGS[i] = casaFreistellen(img);
+  img.src = `assets/casa/casa-${i}.png`;
+}
 /* Wo die Altstadt-Häuser stehen: freie Kacheln mit Straßenanschluss (einmal
  * je Karte berechnet, deterministisch — alle Clients sehen dieselbe Stadt). */
 let CASAS = null;
@@ -4768,10 +4806,18 @@ function draw() {
       if (!t.btype && CASAS) {
         const seed = CASAS.get(t.x + "," + t.y);
         if (seed != null) {
-          const set = MEDIT.casas[seed % MEDIT.casas.length];
-          const img = LICHT < .5 ? set.nacht : set.tag;
-          schattenMalen(img, sx, sy + TH / 2 + 2, sy + TH / 2 - 50, 40, false, .38);
-          cx.drawImage(img, sx - 20, sy + TH / 2 - 51, 40, 55);
+          const haus = CASA_IMGS[seed % 18];
+          if (haus) {
+            /* Die Retro-Tiles bringen Bodenplatte und Beleuchtung selbst mit —
+             * Bodenanker so, dass ihre Grundfläche auf der Kachel sitzt. */
+            schattenMalen(haus, sx, sy + TH / 2 + 3, sy + TH / 2 - 40, 50, false, .3);
+            cx.drawImage(haus, sx - 28, sy + TH / 2 - 45, 56, 56);
+          } else {
+            const set = MEDIT.casas[seed % MEDIT.casas.length];
+            const img = LICHT < .5 ? set.nacht : set.tag;
+            schattenMalen(img, sx, sy + TH / 2 + 2, sy + TH / 2 - 50, 40, false, .38);
+            cx.drawImage(img, sx - 20, sy + TH / 2 - 51, 40, 55);
+          }
         }
       }
       /* Gaslaternen in den Gassen: abwechselnd links und rechts, nachts mit
@@ -5225,7 +5271,12 @@ function clickTile(e) {
   const gesperrt = b => !!b.racing && (hatStall || (!rennModus && meinNW < nwSchwelle));
   const canAfford = b => !gesperrt(b) && me.cash >= totalCost(b) && Object.entries(mats(b)).every(([g, n]) => me.inv[g] >= n);
   const lockNote = t.locked ? ` (inkl. ${fmt(t.unlockCost)} Freischaltung)` : "";
-  tm.innerHTML = `<h3>${t.locked ? "Gesperrt · " : ""}Bauen — ${t.zone}</h3>` + (opts.length ? `<div class="note">Baumaterial: Ziegel und Beton — Nachschub über die Börse. Später mit Elektronik auflevelbar.${lockNote}</div>` : `<div class="note">${store.get().state?.mode === "renntag"
+  /* Kartellmodus: Auf der Kachel steht eines der Geschäfte der Stadt — aus
+   * ihnen kommt das Schutzgeld. Wer hier baut, reißt es ab. */
+  const casaNote = kartellModus && CASAS?.has(t.x + "," + t.y)
+    ? `<div class="note" style="border-left:3px solid var(--accent);padding-left:7px">🏠 Hier steht ein <b>Geschäft des Viertels</b> — solche Läden zahlen das <b>Schutzgeld</b> (Kartell-Panel → Bezirke). Baust du hier, weicht es deinem Betrieb.</div>`
+    : "";
+  tm.innerHTML = `<h3>${t.locked ? "Gesperrt · " : ""}Bauen — ${t.zone}</h3>` + casaNote + (opts.length ? `<div class="note">Baumaterial: Ziegel und Beton — Nachschub über die Börse. Später mit Elektronik auflevelbar.${lockNote}</div>` : `<div class="note">${store.get().state?.mode === "renntag"
         ? "Deine Rolle baut hier nichts — Teile und Rohstoffe gehen über die Börse."
         : "Deine Industrie kann hier nichts bauen — handle stattdessen an der Börse."}</div>`)
     + opts.map(([bid, b]) => `<button class="opt" data-b="${bid}" ${canAfford(b) ? "" : "disabled"}>${b.name}<small>${
