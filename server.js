@@ -1861,6 +1861,11 @@ function buildMap(mode = "sandbox") {
         if (t2?.water) { t2.pier = true; t2.rock = false; t2.deep = false; }
       }
     }
+    /* Der Leuchtturm wacht auf der Schmuggler-Insel — reines Stadtbild,
+     * nicht bebaubar, nachts kreist sein Licht (Client-Animation). */
+    const turm = at2(5, MAP_H - 2);
+    if (turm && !turm.water)
+      Object.assign(turm, { leuchtturm: true, park: false, field: false, rock: false });
     /* Der Bankpalazzo thront am Rand der Piazza. */
     const bank2 = at2(CX2, CY2 - 2) && !at2(CX2, CY2 - 2).water && !at2(CX2, CY2 - 2).road
       ? at2(CX2, CY2 - 2)
@@ -2956,7 +2961,7 @@ function snapshot() {
     lobby: G.started ? null : { winGoal: WIN_NW, bots: botAuswahl, botLevel: botLevelKey, mode: MODE, saison: SAISON_RENNEN, saisonWahl: SAISON_CHOICES },
     map: G.map.map(t => ({ x: t.x, y: t.y, zone: t.zone, road: t.road, water: t.water,
       park: t.park, field: t.field, sand: t.sand, deep: t.deep, rock: t.rock,
-      piazza: t.piazza, fontana: t.fontana, pier: t.pier,
+      piazza: t.piazza, fontana: t.fontana, pier: t.pier, leuchtturm: t.leuchtturm,
       bank: t.bank, news: t.news, schwarz: t.schwarz, deko: t.deko, locked: t.locked, unlockCost: t.unlockCost, owner: t.owner, btype: t.btype, lien: t.lien, shop: t.shop, paused: t.paused, level: t.level, autos: autosDyn(t), sperre: t.sperre ?? null })),
     players: Object.fromEntries(Object.entries(G.players).map(([sid, p]) =>
       [sid, { id: sid, name: p.name, color: p.color, lvl: p.lvl, xp: p.xp, industry: p.industry, industries: p.industries,
@@ -3929,7 +3934,7 @@ io.on("connection", socket => {
   socket.on("build", guard((p, { x, y, btype }, ack) => {
     const t = tileAt(x, y), bt = BTYPES[btype];
     if (!t || !bt) return ack?.({ error: "Ungültig" });
-    if (t.water || t.road || t.park || t.piazza || t.pier) return ack?.({ error: "Nicht bebaubar" });
+    if (t.water || t.road || t.park || t.piazza || t.pier || t.leuchtturm) return ack?.({ error: "Nicht bebaubar" });
     if (t.bank) return ack?.({ error: "Die Stadtbank gehört der Stadt" });
     if (t.news) return ack?.({ error: "Die Nachrichtenzentrale gehört der Stadt" });
     if (t.deko) return ack?.({ error: "Das Hochhaus gehört der Stadt" });

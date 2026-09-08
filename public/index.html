@@ -3540,7 +3540,20 @@ const MEDIT = (() => {
     }
     g.fillStyle = "#fff"; g.beginPath(); g.arc(10, 10, 1.3, 0, Math.PI * 2); g.fill();
     return s; };
-  return { weinberg, oliven, boot, schirme: [schirm("#c94f3d"), schirm("#3d7ac9"), schirm("#4a9a55")] };
+  /* Zypresse: schlanke, dunkle Säule — das Ausrufezeichen der Toskana */
+  const zypresse = document.createElement("canvas"); zypresse.width = 14; zypresse.height = 40;
+  { const g = zypresse.getContext("2d");
+    g.fillStyle = "rgba(0,0,0,.22)";
+    g.beginPath(); g.ellipse(7, 37, 5.5, 2.2, 0, 0, Math.PI * 2); g.fill();
+    g.fillStyle = "#5d4426"; g.fillRect(6.2, 32, 1.6, 5);
+    for (const [w2, h2, col] of [[4.6, 30, "#274a22"], [3.4, 26, "#2f5a29"], [2.2, 20, "#3a6a31"]]) {
+      g.fillStyle = col;
+      g.beginPath(); g.ellipse(7, 18 + (30 - h2) / 2, w2, h2 / 2, 0, 0, Math.PI * 2); g.fill();
+    }
+    g.fillStyle = "#43763a"; g.beginPath(); g.ellipse(7, 4.5, 1.2, 3, 0, 0, Math.PI * 2); g.fill(); }
+  return { weinberg, oliven, boot, zypresse,
+    schirme: [schirm("#c94f3d"), schirm("#3d7ac9"), schirm("#4a9a55")],
+    waescheFarben: ["#e8e4d8", "#c94f3d", "#7fb4d9", "#e3c078", "#9fc98a"] };
 })();
 /* Gebäude-Sprites (Kenney City Kits, CC0) — public/assets/<btype>-<n>.png.
  * Mehrere Varianten je Typ; die Kachelposition wählt deterministisch eine aus,
@@ -4659,6 +4672,84 @@ function draw() {
         } else if (h2 === 5) {
           cx.save(); cx.translate(sx, sy + TH / 2); cx.rotate(((t.x + t.y) % 5 - 2) * .3);
           cx.drawImage(MEDIT.boot, -12, -6, 24, 12); cx.restore();
+        }
+      }
+      /* Zypressen-Alleen: freie Kacheln direkt an den Corsi bekommen die
+       * schlanken Säulen — jede zweite, leicht versetzt, wie gepflanzt. */
+      if (!t.water && !t.road && !t.btype && !t.field && !t.park && !t.sand && !t.piazza &&
+          ([7, 9, 16, 18].includes(t.x) || [7, 9, 16, 18].includes(t.y)) &&
+          (t.x + t.y) % 2 === 0) {
+        const richtungX = t.x === 7 ? .3 : t.x === 9 ? -.3 : 0;   // zur Straße rücken
+        const richtungY = t.y === 7 ? .3 : t.y === 9 ? -.3 : 0;
+        const ox = (richtungX - richtungY) * TW / 2, oy = (richtungX + richtungY) * TH / 2;
+        cx.drawImage(MEDIT.zypresse, sx + ox - 7, sy + TH / 2 + oy - 34, 14, 40);
+      }
+      /* Wäscheleinen über den Altstadt-Gassen: durchhängende Leine mit
+       * bunter Wäsche, die sacht im Seewind schwingt. */
+      if (t.road && ![8, 17].includes(t.x) && ![8, 17].includes(t.y) && t.y !== 21 &&
+          (t.x * 11 + t.y * 5) % 4 === 0 && t.zone !== "kueste") {
+        const sway = Math.sin(now / 900 + t.x * 1.7 + t.y) * 1.6;
+        const y0 = sy + TH / 2 - 15;
+        const p1 = [sx - TW * .32, y0], p2 = [sx + TW * .32, y0], mid = [sx + sway * .4, y0 + 5];
+        cx.strokeStyle = "rgba(60,50,40,.65)"; cx.lineWidth = 1;
+        cx.beginPath(); cx.moveTo(...p1); cx.quadraticCurveTo(...mid, ...p2); cx.stroke();
+        for (let i = 0; i < 3; i++) {
+          const u = .28 + i * .22;
+          const lx = (1-u)*(1-u)*p1[0] + 2*(1-u)*u*mid[0] + u*u*p2[0];
+          const ly = (1-u)*(1-u)*p1[1] + 2*(1-u)*u*mid[1] + u*u*p2[1];
+          cx.fillStyle = MEDIT.waescheFarben[(t.x + t.y + i) % MEDIT.waescheFarben.length];
+          cx.save(); cx.translate(lx, ly); cx.rotate(sway * .06);
+          cx.fillRect(-2.4, 0, 4.8, 6); cx.restore();
+        }
+      }
+      /* Leuchtturm auf der Schmuggler-Insel: weißer Turm mit roten Bändern,
+       * nachts kreist das Leuchtfeuer über der Bucht. */
+      if (t.leuchtturm) {
+        const bx2 = sx, by2 = sy + TH / 2;
+        cx.fillStyle = "rgba(0,0,0,.25)";
+        cx.beginPath(); cx.ellipse(bx2 + 3, by2 + 3, 10, 4.5, 0, 0, Math.PI * 2); cx.fill();
+        for (let seg = 0; seg < 4; seg++) {   // konischer Turm, rot-weiß gebändert
+          const w2 = 9 - seg * 1.6, yTop = by2 - 8 - seg * 9;
+          cx.fillStyle = seg % 2 ? "#c9473a" : "#f2ede2";
+          cx.beginPath();
+          cx.moveTo(bx2 - w2, yTop + 9); cx.lineTo(bx2 + w2, yTop + 9);
+          cx.lineTo(bx2 + w2 - .8, yTop); cx.lineTo(bx2 - w2 + .8, yTop); cx.closePath(); cx.fill();
+        }
+        cx.fillStyle = "#2b3440"; cx.fillRect(bx2 - 4.5, by2 - 49, 9, 5);      // Galerie
+        const blitz = (Math.sin(now / 500) + 1) / 2;
+        cx.fillStyle = `rgba(255,235,150,${.5 + blitz * .5})`;
+        cx.beginPath(); cx.arc(bx2, by2 - 46.5, 2.6, 0, Math.PI * 2); cx.fill();
+        cx.fillStyle = "#8a2f26";
+        cx.beginPath(); cx.moveTo(bx2 - 5, by2 - 49); cx.lineTo(bx2 + 5, by2 - 49);
+        cx.lineTo(bx2, by2 - 56); cx.closePath(); cx.fill();                    // Dachhaube
+        if (LICHT < .75) {   // nachts: kreisender Lichtkegel
+          const ang = now / 1400;
+          cx.save(); cx.translate(bx2, by2 - 46.5);
+          cx.globalAlpha = (.75 - LICHT) * .9;
+          for (const a of [ang, ang + Math.PI]) {
+            const grad = cx.createLinearGradient(0, 0, Math.cos(a) * 85, Math.sin(a) * 42);
+            grad.addColorStop(0, "rgba(255,240,170,.55)"); grad.addColorStop(1, "rgba(255,240,170,0)");
+            cx.fillStyle = grad;
+            cx.beginPath(); cx.moveTo(0, 0);
+            cx.lineTo(Math.cos(a - .16) * 85, Math.sin(a - .16) * 42);
+            cx.lineTo(Math.cos(a + .16) * 85, Math.sin(a + .16) * 42);
+            cx.closePath(); cx.fill();
+          }
+          cx.restore(); cx.globalAlpha = 1;
+        }
+      }
+      /* Möwen: kreisen über der äußeren Molenspitze, Flügelschlag inklusive */
+      if (t.pier && t.y % 2 === 1) {
+        for (let m = 0; m < 3; m++) {
+          const ph = now / 1600 + m * 2.1 + t.x;
+          const gx = sx + Math.cos(ph) * (26 + m * 7);
+          const gy = sy - 26 - m * 6 + Math.sin(ph) * 9;
+          const flap = Math.sin(now / 140 + m * 3) * 3;
+          cx.strokeStyle = "rgba(245,245,240,.9)"; cx.lineWidth = 1.4;
+          cx.beginPath();
+          cx.moveTo(gx - 5, gy - flap); cx.quadraticCurveTo(gx - 2, gy + 1.5, gx, gy);
+          cx.quadraticCurveTo(gx + 2, gy + 1.5, gx + 5, gy - flap);
+          cx.stroke(); cx.lineWidth = 1;
         }
       }
     }
