@@ -3492,6 +3492,56 @@ const tileSprite = t => {
   if (t.zone === "zentrum") return TILEIMG.stadt;
   return TILEIMG.gras;
 };
+
+/* ---- Mittelmeer-Deko (Kartellmodus), einmal vorgerendert ----
+ * Punkt (a,b) in Kachel-Koordinaten [0..1]² → Pixel im 64×32-Diamant. */
+const MEDIT = (() => {
+  const P = (a, b) => [(a - b) * 32 + 32, (a + b) * 16];
+  const mk = fn => { const c = document.createElement("canvas"); c.width = 64; c.height = 32; fn(c.getContext("2d")); return c; };
+  /* Weinberg: vier Rebzeilen entlang der Kachelachse, mit Erdstreifen */
+  const weinberg = mk(g => {
+    for (let r = 0; r < 4; r++) {
+      const b = .2 + r * .21;
+      g.strokeStyle = "rgba(101,74,48,.5)"; g.lineWidth = 2.5;
+      g.beginPath(); g.moveTo(...P(.12, b)); g.lineTo(...P(.88, b)); g.stroke();
+      for (let i = 0; i < 6; i++) {
+        const [x, y] = P(.16 + i * .14, b);
+        g.fillStyle = i % 2 ? "#3f6428" : "#4a7230";
+        g.beginPath(); g.arc(x, y - 1.5, 2.4, 0, Math.PI * 2); g.fill();
+      }
+    }
+  });
+  /* Olivenhain: lockeres Raster silbergrüner Kronen */
+  const oliven = mk(g => {
+    for (const a of [.25, .5, .75]) for (const b of [.25, .5, .75]) {
+      const [x, y] = P(a + (a * b * 7 % .1) - .05, b);
+      g.fillStyle = "rgba(0,0,0,.18)";
+      g.beginPath(); g.ellipse(x + 1, y + 1, 3.4, 1.8, 0, 0, Math.PI * 2); g.fill();
+      g.fillStyle = (a + b) % .5 < .25 ? "#7d8f5a" : "#6e8150";
+      g.beginPath(); g.arc(x, y - 1.5, 3, 0, Math.PI * 2); g.fill();
+    }
+  });
+  /* Fischerboot (Draufsicht): Rumpf mit Bug, Sitzbank */
+  const boot = document.createElement("canvas"); boot.width = 28; boot.height = 14;
+  { const g = boot.getContext("2d");
+    g.fillStyle = "#7a4f2c";
+    g.beginPath(); g.moveTo(2, 7); g.quadraticCurveTo(6, 1, 16, 1.5); g.quadraticCurveTo(26, 3, 27, 7);
+    g.quadraticCurveTo(26, 11, 16, 12.5); g.quadraticCurveTo(6, 13, 2, 7); g.closePath(); g.fill();
+    g.strokeStyle = "#553517"; g.lineWidth = 1.4; g.stroke();
+    g.fillStyle = "#9c6b3d"; g.fillRect(10, 3.5, 3, 7); g.fillRect(18, 3.5, 3, 7); }
+  /* Sonnenschirm (Draufsicht): Kreis mit Farbsegmenten */
+  const schirm = (c1) => { const s = document.createElement("canvas"); s.width = 20; s.height = 20;
+    const g = s.getContext("2d");
+    g.fillStyle = "rgba(0,0,0,.2)"; g.beginPath(); g.ellipse(11, 12, 8, 4.5, 0, 0, Math.PI * 2); g.fill();
+    for (let i = 0; i < 8; i++) {
+      g.fillStyle = i % 2 ? "#f2ede2" : c1;
+      g.beginPath(); g.moveTo(10, 10);
+      g.arc(10, 10, 8.5, i * Math.PI / 4, (i + 1) * Math.PI / 4); g.closePath(); g.fill();
+    }
+    g.fillStyle = "#fff"; g.beginPath(); g.arc(10, 10, 1.3, 0, Math.PI * 2); g.fill();
+    return s; };
+  return { weinberg, oliven, boot, schirme: [schirm("#c94f3d"), schirm("#3d7ac9"), schirm("#4a9a55")] };
+})();
 /* Gebäude-Sprites (Kenney City Kits, CC0) — public/assets/<btype>-<n>.png.
  * Mehrere Varianten je Typ; die Kachelposition wählt deterministisch eine aus,
  * damit alle Clients dasselbe Stadtbild sehen. Fallback: farbige Blöcke. */
@@ -4415,6 +4465,43 @@ function draw() {
         : t.zone === "zentrum" ? "#cd9058" : t.park ? "#5a7035" : "#96a14b";
       cx.fill(); cx.globalAlpha = 1;
     }
+    /* Piazza: warmes Kopfsteinpflaster — deutlich heller als die Straßen,
+     * damit der Platz als Platz lesbar ist. Fugenlinien deuten Pflaster an. */
+    if (t.piazza) {
+      cx.globalAlpha = .62; cx.fillStyle = "#c9a06b"; cx.fill();
+      cx.globalAlpha = .25; cx.strokeStyle = "#7a5a38";
+      for (const f of [.33, .66]) {
+        cx.beginPath();
+        cx.moveTo(sx - TW / 2 + f * TW / 2, sy + TH / 2 - f * TH / 2);
+        cx.lineTo(sx + f * TW / 2, sy + TH - f * TH / 2);
+        cx.moveTo(sx + TW / 2 - f * TW / 2, sy + TH / 2 - f * TH / 2);
+        cx.lineTo(sx - f * TW / 2, sy + TH - f * TH / 2);
+        cx.stroke();
+      }
+      cx.globalAlpha = 1;
+    }
+    /* Hafenmole: Holzdeck mit Planken über dem Wasser, Pfähle an den Ecken. */
+    if (t.pier) {
+      const w = TW * .44, h = TH * .44, mx = sx, my = sy + TH / 2;
+      cx.beginPath();
+      cx.moveTo(mx, my - h); cx.lineTo(mx + w, my); cx.lineTo(mx, my + h); cx.lineTo(mx - w, my); cx.closePath();
+      cx.fillStyle = "#8a6a45"; cx.fill();
+      cx.strokeStyle = "#5f4830"; cx.lineWidth = 1.2; cx.stroke(); cx.lineWidth = 1;
+      cx.strokeStyle = "rgba(58,42,26,.55)";
+      for (const f of [.25, .5, .75]) {   // Planken quer zur Mole
+        cx.beginPath();
+        cx.moveTo(mx - w + f * w, my - f * h);
+        cx.lineTo(mx + f * w, my + h - f * h);
+        cx.stroke();
+      }
+      cx.fillStyle = "#4e3a24";           // Pfähle
+      for (const [px2, py2] of [[mx - w * .82, my], [mx + w * .82, my]]) {
+        cx.beginPath(); cx.ellipse(px2, py2, 2.4, 1.6, 0, 0, Math.PI * 2); cx.fill();
+      }
+    }
+    /* Weinberge & Olivenhaine: flache Bodendeko, direkt auf die Kachel gelegt */
+    if (ITALIA_LOOK && t.field && !t.btype)
+      cx.drawImage((t.x * 5 + t.y * 3) % 3 ? MEDIT.weinberg : MEDIT.oliven, sx - TW / 2, sy, TW, TH);
     /* Gesperrte Flaechen sind 40 % der Karte (Kueste und Industrieband
      * zusammen 270 von 676 Kacheln). Mit 45 % Schwarz darueber wirkten sie
      * wie tote Flaeche statt wie Bauland, das man kaufen kann — und da nur
@@ -4532,12 +4619,47 @@ function draw() {
         cx.drawImage(d, sx + ox - gr / 2, decoY(sy + oy, d, gr), gr, gr);
       }
     }
-    if (t.field && !t.btype && DECO.field.length) {
+    if (t.field && !t.btype && DECO.field.length && !ITALIA_LOOK) {
       const d = DECO.field[(t.x * 3 + t.y * 7) % DECO.field.length];
       if (d) {
         const [ox, oy] = streuVersatz(t, .34);   // enger als im Park: Aecker sind angelegt
         const gr = 70 + streu(t.x, t.y, 6) * 14;
         cx.drawImage(d, sx + ox - gr / 2, decoY(sy + oy, d, gr), gr, gr);
+      }
+    }
+    /* --- Mittelmeer-Leben (Kartellmodus) --- */
+    if (ITALIA_LOOK) {
+      /* Fontana auf der Piazza: Steinbecken, Wasser, pulsierende Gischt */
+      if (t.fontana) {
+        const fx = sx, fy = sy + TH / 2;
+        cx.fillStyle = "#a8926e";
+        cx.beginPath(); cx.ellipse(fx, fy, 15, 8.5, 0, 0, Math.PI * 2); cx.fill();
+        cx.strokeStyle = "#7a6448"; cx.stroke();
+        cx.fillStyle = "#2f8fa8";
+        cx.beginPath(); cx.ellipse(fx, fy, 11, 6, 0, 0, Math.PI * 2); cx.fill();
+        const puls = (Math.sin(now / 420) + 1) / 2;
+        cx.globalAlpha = .35 + puls * .3; cx.fillStyle = "#bfe8f2";
+        cx.beginPath(); cx.ellipse(fx, fy, 4 + puls * 3.5, 2.2 + puls * 2, 0, 0, Math.PI * 2); cx.fill();
+        cx.globalAlpha = 1; cx.fillStyle = "#e9f6fa";
+        cx.beginPath(); cx.ellipse(fx, fy - 3 - puls * 2, 1.6, 2.6, 0, 0, Math.PI * 2); cx.fill();
+      }
+      /* Fischerboote an den Molen: sanft dümpelnd, jede zweite Kachel eins */
+      if (t.pier && t.y % 2 === 0) {
+        const bob = Math.sin(now / 700 + t.x * 2 + t.y) * 1.4;
+        cx.globalAlpha = .95;
+        cx.drawImage(MEDIT.boot, sx + TW * .3 - 14, sy + TH / 2 - 7 + bob, 28, 14);
+        cx.globalAlpha = 1;
+      }
+      /* Strand: vereinzelte Sonnenschirme und ein gezogenes Ruderboot */
+      if (t.sand && !t.btype) {
+        const h2 = (t.x * 13 + t.y * 7) % 11;
+        if (h2 === 0) {
+          const s = MEDIT.schirme[(t.x + t.y) % MEDIT.schirme.length];
+          cx.drawImage(s, sx - 10 + ((t.x * 3) % 9) - 4, sy + TH / 2 - 12 + ((t.y * 5) % 7) - 3, 20, 20);
+        } else if (h2 === 5) {
+          cx.save(); cx.translate(sx, sy + TH / 2); cx.rotate(((t.x + t.y) % 5 - 2) * .3);
+          cx.drawImage(MEDIT.boot, -12, -6, 24, 12); cx.restore();
+        }
       }
     }
     if (t.deko) {

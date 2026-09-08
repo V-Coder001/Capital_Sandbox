@@ -1832,12 +1832,14 @@ function buildMap(mode = "sandbox") {
       else if (Math.hypot(x - CX2, y - CY2) < 6.5) zone = "zentrum";
       else if (y >= MAP_H - 8) zone = "kueste";
       else if (x >= 18 && y <= 8) zone = "industrie";
-      /* Piazza: der freie Platz ums Zentrum — Zypressen und Brunnenflair. */
+      /* Piazza: der freie Platz ums Zentrum — gepflastert, mit Brunnen in der
+       * Mitte. Als eigenes Flag, damit der Client Pflaster + Fontana zeichnet. */
       const piazza = Math.abs(x - CX2) <= 1 && Math.abs(y - CY2) <= 1;
-      const park = !water && !road && (piazza || (x * 7 + y * 13) % 19 === 0);
+      const park = !water && !road && !piazza && (x * 7 + y * 13) % 19 === 0;
       /* Weinberge und Olivenhaine: das Umland ist sichtbar Landwirtschaft. */
-      const field = !water && !road && !park && zone === "agrar" && (x * 5 + y * 11) % 7 === 0;
+      const field = !water && !road && !park && !piazza && zone === "agrar" && (x * 5 + y * 11) % 7 === 0;
       tiles.push({ x, y, zone, road, water, locked: false, unlockCost: 0,
+        piazza, fontana: piazza && x === CX2 && y === CY2,
         park, field, owner: null, btype: null, lien: false });
     }
     const at2 = (x, y) => (x < 0 || y < 0 || x >= MAP_W || y >= MAP_H) ? null : tiles[y * MAP_W + x];
@@ -1846,6 +1848,18 @@ function buildMap(mode = "sandbox") {
       if (!t.water && nb.some(n => n?.water)) t.sand = true;
       if (t.water && !nb.some(n => n && !n.water)) t.deep = true;
       if (t.water && (t.x * 3 + t.y * 17) % 19 === 0) t.rock = true;
+    }
+    /* Der Hafen des Porto Vecchio: zwei Holzmolen ragen von der Küste ins
+     * Meer — vom ersten Landstück unterhalb der Promenade senkrecht nach
+     * Süden, bis zu 3 Kacheln weit. An den Molen liegen (clientseitig
+     * gezeichnete) Fischerboote. Molen sind begehbar-hübsch, nicht bebaubar. */
+    for (const px2 of [3, 7]) {
+      let y2 = MAP_H - 6;                          // Promenaden-Höhe
+      while (y2 < MAP_H - 1 && !at2(px2, y2)?.water) y2++;   // erste Wasserkachel finden
+      for (let i = 0; i < 3 && y2 + i < MAP_H; i++) {
+        const t2 = at2(px2, y2 + i);
+        if (t2?.water) { t2.pier = true; t2.rock = false; t2.deep = false; }
+      }
     }
     /* Der Bankpalazzo thront am Rand der Piazza. */
     const bank2 = at2(CX2, CY2 - 2) && !at2(CX2, CY2 - 2).water && !at2(CX2, CY2 - 2).road
@@ -2942,6 +2956,7 @@ function snapshot() {
     lobby: G.started ? null : { winGoal: WIN_NW, bots: botAuswahl, botLevel: botLevelKey, mode: MODE, saison: SAISON_RENNEN, saisonWahl: SAISON_CHOICES },
     map: G.map.map(t => ({ x: t.x, y: t.y, zone: t.zone, road: t.road, water: t.water,
       park: t.park, field: t.field, sand: t.sand, deep: t.deep, rock: t.rock,
+      piazza: t.piazza, fontana: t.fontana, pier: t.pier,
       bank: t.bank, news: t.news, schwarz: t.schwarz, deko: t.deko, locked: t.locked, unlockCost: t.unlockCost, owner: t.owner, btype: t.btype, lien: t.lien, shop: t.shop, paused: t.paused, level: t.level, autos: autosDyn(t), sperre: t.sperre ?? null })),
     players: Object.fromEntries(Object.entries(G.players).map(([sid, p]) =>
       [sid, { id: sid, name: p.name, color: p.color, lvl: p.lvl, xp: p.xp, industry: p.industry, industries: p.industries,
@@ -3914,7 +3929,7 @@ io.on("connection", socket => {
   socket.on("build", guard((p, { x, y, btype }, ack) => {
     const t = tileAt(x, y), bt = BTYPES[btype];
     if (!t || !bt) return ack?.({ error: "Ungültig" });
-    if (t.water || t.road || t.park) return ack?.({ error: "Nicht bebaubar" });
+    if (t.water || t.road || t.park || t.piazza || t.pier) return ack?.({ error: "Nicht bebaubar" });
     if (t.bank) return ack?.({ error: "Die Stadtbank gehört der Stadt" });
     if (t.news) return ack?.({ error: "Die Nachrichtenzentrale gehört der Stadt" });
     if (t.deko) return ack?.({ error: "Das Hochhaus gehört der Stadt" });
