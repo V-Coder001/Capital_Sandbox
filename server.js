@@ -1931,6 +1931,16 @@ function buildMap(mode = "sandbox") {
       ? at2(CX2, CY2 - 2)
       : tiles.find(t => t.zone === "zentrum" && !t.water && !t.road && !t.park);
     if (bank2) Object.assign(bank2, { bank: true, road: false, park: false, field: false, locked: false, unlockCost: 0 });
+    /* Die Questura: Sitz der Polizei, nahe dem Corso-Kreuz im Stazione-Viertel.
+     * Reines Stadtbild wie die Bank — nicht bebaubar, nachts mit Blaulicht. */
+    const qKandidaten = [[16, 7], [15, 7], [16, 6], [18, 6], [15, 6]];
+    let questura = null;
+    for (const [qx, qy] of qKandidaten) {
+      const t2 = at2(qx, qy);
+      if (t2 && !t2.water && !t2.road && !t2.bank) { questura = t2; break; }
+    }
+    questura ??= tiles.find(t2 => t2.zone === "zentrum" && !t2.water && !t2.road && !t2.bank && !t2.piazza);
+    if (questura) Object.assign(questura, { questura: true, park: false, field: false, locked: false, unlockCost: 0 });
     return tiles;
   }
   MAP_W = 26; MAP_H = 26; MAP_ROUTES = null;
@@ -3025,7 +3035,7 @@ function snapshot() {
     lobby: G.started ? null : { winGoal: WIN_NW, bots: botAuswahl, botLevel: botLevelKey, mode: MODE, saison: SAISON_RENNEN, saisonWahl: SAISON_CHOICES },
     map: G.map.map(t => ({ x: t.x, y: t.y, zone: t.zone, road: t.road, water: t.water,
       park: t.park, field: t.field, sand: t.sand, deep: t.deep, rock: t.rock,
-      piazza: t.piazza, fontana: t.fontana, pier: t.pier, leuchtturm: t.leuchtturm,
+      piazza: t.piazza, fontana: t.fontana, pier: t.pier, leuchtturm: t.leuchtturm, questura: t.questura,
       bank: t.bank, news: t.news, schwarz: t.schwarz, deko: t.deko, locked: t.locked, unlockCost: t.unlockCost, owner: t.owner, btype: t.btype, lien: t.lien, shop: t.shop, paused: t.paused, level: t.level, autos: autosDyn(t), sperre: t.sperre ?? null })),
     players: Object.fromEntries(Object.entries(G.players).map(([sid, p]) =>
       [sid, { id: sid, name: p.name, color: p.color, lvl: p.lvl, xp: p.xp, industry: p.industry, industries: p.industries,
@@ -4192,7 +4202,7 @@ io.on("connection", socket => {
   socket.on("build", guard((p, { x, y, btype }, ack) => {
     const t = tileAt(x, y), bt = BTYPES[btype];
     if (!t || !bt) return ack?.({ error: "Ungültig" });
-    if (t.water || t.road || t.park || t.piazza || t.pier || t.leuchtturm) return ack?.({ error: "Nicht bebaubar" });
+    if (t.water || t.road || t.park || t.piazza || t.pier || t.leuchtturm || t.questura) return ack?.({ error: "Nicht bebaubar" });
     if (t.bank) return ack?.({ error: "Die Stadtbank gehört der Stadt" });
     if (t.news) return ack?.({ error: "Die Nachrichtenzentrale gehört der Stadt" });
     if (t.deko) return ack?.({ error: "Das Hochhaus gehört der Stadt" });

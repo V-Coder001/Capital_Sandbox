@@ -3654,7 +3654,30 @@ const MEDIT = (() => {
     return c;
   };
   const casas = Array.from({ length: 6 }, (_, i) => ({ tag: mkCasa(i, false), nacht: mkCasa(i, true) }));
-  return { weinberg, oliven, boot, zypresse, laterne, casas,
+  /* Marktstand: Theke mit gestreifter Markise — die Piazza soll nach
+   * Wochenmarkt aussehen, nicht nach leerem Parkplatz. */
+  const stand = (farbe) => {
+    const c = document.createElement("canvas"); c.width = 30; c.height = 26;
+    const g = c.getContext("2d");
+    g.fillStyle = "rgba(0,0,0,.22)"; g.beginPath(); g.ellipse(15, 23, 11, 3, 0, 0, Math.PI * 2); g.fill();
+    g.fillStyle = "#6b4d2e"; g.fillRect(4, 12, 22, 9);                     // Theke
+    g.fillStyle = "#573d24"; g.fillRect(4, 12, 22, 2);
+    g.fillStyle = "#3f2d1a"; g.fillRect(5, 21, 2, 3); g.fillRect(23, 21, 2, 3);
+    for (let i = 0; i < 6; i++) {                                          // Markise
+      g.fillStyle = i % 2 ? "#f2ede2" : farbe;
+      g.beginPath(); g.moveTo(2 + i * 4.4, 6); g.lineTo(6.4 + i * 4.4, 6);
+      g.lineTo(6.4 + i * 4.4, 10); g.quadraticCurveTo(4.2 + i * 4.4, 12, 2 + i * 4.4, 10);
+      g.closePath(); g.fill();
+    }
+    g.fillStyle = "#8a6a45"; g.fillRect(3, 6, 1.6, 16); g.fillRect(25.4, 6, 1.6, 16);   // Pfosten
+    g.fillStyle = farbe; g.fillRect(2, 4, 26, 2.5);                        // Markisenkante
+    /* Ware auf der Theke */
+    for (let i = 0; i < 4; i++) { g.fillStyle = ["#c94f3d", "#e3c078", "#7fb44d", "#e08a3c"][i];
+      g.beginPath(); g.arc(8 + i * 5, 12.5, 1.8, 0, Math.PI * 2); g.fill(); }
+    return c;
+  };
+  const staende = [stand("#c94f3d"), stand("#3d7ac9"), stand("#4a9a55")];
+  return { weinberg, oliven, boot, zypresse, laterne, casas, staende,
     schirme: [schirm("#c94f3d"), schirm("#3d7ac9"), schirm("#4a9a55")],
     waescheFarben: ["#e8e4d8", "#c94f3d", "#7fb4d9", "#e3c078", "#9fc98a"] };
 })();
@@ -4926,6 +4949,42 @@ function draw() {
         cx.beginPath(); cx.ellipse(fx, fy, 4 + puls * 3.5, 2.2 + puls * 2, 0, 0, Math.PI * 2); cx.fill();
         cx.globalAlpha = 1; cx.fillStyle = "#e9f6fa";
         cx.beginPath(); cx.ellipse(fx, fy - 3 - puls * 2, 1.6, 2.6, 0, 0, Math.PI * 2); cx.fill();
+      }
+      /* Wochenmarkt auf der Piazza: je Kachel ein Stand, versetzt zur Fontana */
+      if (t.piazza && !t.fontana && !t.btype) {
+        const sIdx = (t.x * 3 + t.y * 7) % MEDIT.staende.length;
+        const ox2 = ((t.x * 13 + t.y * 5) % 11) - 5, oy2 = ((t.x * 7 + t.y * 11) % 7) - 3;
+        cx.drawImage(MEDIT.staende[sIdx], sx - 15 + ox2, sy + TH / 2 - 20 + oy2, 30, 26);
+      }
+      /* Die Questura: Sitz der Polizei — blaugraues Amtsgebäude mit Schild,
+       * das Blaulicht über der Tür rotiert nachts wie am Tag. */
+      if (t.questura) {
+        const bx2 = sx, by2 = sy + TH / 2;
+        cx.fillStyle = "rgba(0,0,0,.28)";
+        cx.beginPath(); cx.ellipse(bx2 + 2, by2 + 4, 20, 7, 0, 0, Math.PI * 2); cx.fill();
+        cx.fillStyle = "#5e6b7c";                                          // Seitenwand
+        cx.beginPath(); cx.moveTo(bx2, by2 + 8); cx.lineTo(bx2 - 19, by2 - 1); cx.lineTo(bx2 - 19, by2 - 34); cx.lineTo(bx2, by2 - 25); cx.closePath(); cx.fill();
+        cx.fillStyle = "#77879c";                                          // Front
+        cx.beginPath(); cx.moveTo(bx2, by2 + 8); cx.lineTo(bx2 + 19, by2 - 1); cx.lineTo(bx2 + 19, by2 - 34); cx.lineTo(bx2, by2 - 25); cx.closePath(); cx.fill();
+        cx.fillStyle = "#46536b";                                          // Dach
+        cx.beginPath(); cx.moveTo(bx2, by2 - 25); cx.lineTo(bx2 + 19, by2 - 34); cx.lineTo(bx2, by2 - 43); cx.lineTo(bx2 - 19, by2 - 34); cx.closePath(); cx.fill();
+        cx.fillStyle = "#2e3646";                                          // Tür + Fenster
+        cx.fillRect(bx2 + 6, by2 - 12, 6, 12);
+        for (const [fx2, fy2] of [[bx2 + 4, by2 - 24], [bx2 + 12, by2 - 21], [bx2 - 8, by2 - 26], [bx2 - 14, by2 - 24]]) {
+          cx.fillStyle = LICHT < .5 ? "#ffd27a" : "#2e3646"; cx.fillRect(fx2, fy2, 3.6, 5);
+        }
+        cx.fillStyle = "#e8edf5"; cx.font = "700 6.5px sans-serif"; cx.textAlign = "center";
+        cx.fillText("QUESTURA", bx2 + 9.5, by2 - 14.5);
+        /* rotierendes Blaulicht über der Tür */
+        const bl = (Math.sin(now / 180) + 1) / 2;
+        cx.fillStyle = `rgba(74,144,226,${(.35 + bl * .65).toFixed(2)})`;
+        cx.beginPath(); cx.arc(bx2 + 9, by2 - 27.5, 2.2, 0, Math.PI * 2); cx.fill();
+        if (LICHT < .6) {
+          cx.globalCompositeOperation = "lighter"; cx.globalAlpha = bl * .35;
+          cx.beginPath(); cx.arc(bx2 + 9, by2 - 27.5, 9 + bl * 5, 0, Math.PI * 2);
+          cx.fillStyle = "#4a90e2"; cx.fill();
+          cx.globalAlpha = 1; cx.globalCompositeOperation = "source-over";
+        }
       }
       /* Fischerboote an den Molen: sanft dümpelnd, jede zweite Kachel eins */
       if (t.pier && t.y % 2 === 0) {
