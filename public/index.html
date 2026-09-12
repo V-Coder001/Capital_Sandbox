@@ -1782,6 +1782,9 @@ td:first-child{font-family:var(--font)}
   </div>
 </div>
 
+<div id="gcasinoModal" style="position:fixed;inset:0;z-index:52;display:none;place-items:center;background:rgba(6,9,15,.55)" onclick="if(event.target===this)gcasinoSchliessen()">
+  <div class="gcInhalt" style="width:min(430px,92vw);max-height:80vh;overflow:auto;background:#101725;border:1px solid #c9a04e66;border-radius:14px;padding:16px;box-shadow:0 12px 40px rgba(0,0,0,.6)"></div>
+</div>
 <div id="kampfBanner" style="position:fixed;inset:0;z-index:55;display:none;place-items:center;pointer-events:none;background:radial-gradient(ellipse at center,rgba(10,6,6,.0),rgba(10,6,6,.55))">
   <div id="kampfBannerBox" style="text-align:center;transform:scale(.8);transition:transform .25s">
     <div id="kampfBannerEmoji" style="font-size:54px">⚔️</div>
@@ -2156,6 +2159,86 @@ const AMBIENTE = (() => {
   }, 500);
   return { quellen };
 })();
+
+/* ---- Casino Municipale: das Spielhaus an der Piazza ----
+ * Ein Modal statt Panel: Man steht ja „vor dem Gebäude". Fünf Spiele für
+ * Gäste; wer die Piazza hält, sieht stattdessen die Betreiber-Werkzeuge
+ * (Quoten, Ausbau, Schwarzverkauf). Aktualisiert sich mit jedem State-Push,
+ * solange es offen ist — außer man tippt gerade den Einsatz ein. */
+let gcasinoOffen = false;
+function gcasinoOeffnen() { gcasinoOffen = true; gcasinoRender(); }
+function gcasinoSchliessen() { gcasinoOffen = false; document.getElementById("gcasinoModal").style.display = "none"; }
+function gcasinoRender() {
+  const el = document.getElementById("gcasinoModal");
+  if (!gcasinoOffen) return;
+  const st = store.get().state, me = store.get().me, myId = store.get().myId;
+  const gc = st?.gcasino;
+  if (!gc) { gcasinoSchliessen(); return; }
+  if (el.contains(document.activeElement) && /INPUT/.test(document.activeElement.tagName)) return;
+  const meineFam = st.players?.[myId]?.familie;
+  const herr = gc.herrscher ? st.familien?.find(f => f.id === gc.herrscher) : null;
+  const binHerr = meineFam && meineFam === gc.herrscher;
+  const einsatzAlt = document.getElementById("gcEinsatz")?.value || 100;
+  const illegale = Object.entries(GOODS()).filter(([, g]) => g.cat === "Illegal").map(([g2]) => g2);
+  const schwarz = binHerr ? illegale.filter(g => Math.floor(me.inv?.[g] || 0) > 0).map(g =>
+    `<div style="display:flex;gap:8px;align-items:center;margin:4px 0">
+      <span style="flex:1">${gname(g)} · ${Math.floor(me.inv[g])} Stück</span>
+      <button class="buyb" data-gcverkauf="${g}">ans Volk (130 %)</button></div>`).join("") : "";
+  el.style.display = "grid";
+  el.querySelector(".gcInhalt").innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px">
+      <h3 style="margin:0">🎰 Casino Municipale</h3>
+      <button class="x" onclick="gcasinoSchliessen()">✕</button>
+    </div>
+    <div class="meta" style="margin:4px 0 10px">Stil <b>„${gc.stil}“</b> (Stufe ${gc.stufe}/5) ·
+      ${herr ? `Haus: <b style="color:${herr.farbe}">${herr.name}</b>` : "<b>geschlossen</b> — niemand hält die Piazza"} ·
+      Quote: <b>${gc.quote === "fair" ? "fair" : gc.quote === "gierig" ? "gierig" : "großzügig"}</b></div>
+    ${!herr ? `<p class="note">Wer die Piazza Grande kontrolliert, führt dieses Haus: Bürger-Umsatz jede halbe Minute, Quoten, Ausbau — und der Schwarzverkauf am Hehler (und am Paten!) vorbei.</p>` : binHerr ? `
+      <div class="lbl" style="margin-top:4px">Ihr führt das Haus</div>
+      <p class="note" style="margin:2px 0 6px">Bürger-Umsatz: ${gc.quote === "gierig" ? 170 : gc.quote === "fair" ? 100 : 50} $ × Stufe ${gc.stufe} je 30 s an eure Familie.
+        Gierig bringt mehr, heizt aber die Fahndung an; großzügig bringt Respekt.</p>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
+        ${["fair", "gierig", "grosszuegig"].map(q => `<button class="mini" data-gcquote="${q}" ${gc.quote === q ? 'style="border-color:var(--accent)"' : ""}>${q === "grosszuegig" ? "großzügig" : q}</button>`).join("")}
+        ${gc.upgradeKosten ? `<button class="mini" data-gcupgrade style="border-color:#c9a04e">✨ Ausbauen → „${["Spelunke","Salon Rosso","Belle Époque","Art déco","La Dorata"][gc.stufe]}“ (${fmt(gc.upgradeKosten)})</button>` : `<span class="meta">Vollausbau erreicht</span>`}
+      </div>
+      ${schwarz ? `<div class="lbl" style="margin-top:10px">Unterm Tisch ans Volk (130 % Hehlerpreis, keine Paten-Abgabe, +2 Fahndung)</div>${schwarz}` : `<p class="note" style="margin-top:8px">Heiße Ware im Lager lässt sich hier zu 130 % ohne Paten-Abgabe verkaufen.</p>`}
+    ` : `
+      <div class="lbl" style="margin-top:4px">Spiele — Gewinne zahlt ${herr.name}</div>
+      <div style="display:flex;gap:8px;align-items:center;margin:6px 0">
+        <span class="meta">Einsatz</span>
+        <input id="gcEinsatz" type="number" min="50" max="2000" value="${einsatzAlt}" style="width:90px">
+        <span class="meta">50–2.000 $</span>
+      </div>
+      ${Object.entries(gc.spiele).map(([k, sp]) => `
+        <div style="display:flex;gap:8px;align-items:center;margin:5px 0">
+          <span style="flex:1">${sp.name}</span>
+          <span class="meta" style="font-family:var(--mono)">${(sp.chance * 100).toFixed(1)} % · ×${sp.faktor}</span>
+          <button class="buyb" data-gcspiel="${k}">Setzen</button>
+        </div>`).join("")}
+      <p class="note" style="margin-top:6px">Das Haus gehört ${herr.name} — jeder verlorene Einsatz landet in ihren Taschen. Sprengst du die Bank, müssen sie zahlen … so weit die Kassen reichen.</p>
+    `}`;
+}
+document.addEventListener("click", e => {
+  const sp = e.target.closest("button[data-gcspiel]");
+  if (sp) {
+    const einsatz = +document.getElementById("gcEinsatz").value || 100;
+    socket.emit("gcasinoSpielen", { spiel: sp.dataset.gcspiel, einsatz }, res => {
+      if (res?.error) return toast(res.error, true);
+      toast(res.gewonnen ? `🎉 Gewonnen! +${fmt(res.betrag)}` : `Verloren — ${fmt(res.betrag)} ans Haus.`, !res.gewonnen);
+      gcasinoRender();
+    });
+    return;
+  }
+  const q = e.target.closest("button[data-gcquote]");
+  if (q) { socket.emit("gcasinoQuote", { quote: q.dataset.gcquote }, res => { if (res?.error) toast(res.error, true); gcasinoRender(); }); return; }
+  if (e.target.closest("button[data-gcupgrade]")) {
+    socket.emit("gcasinoUpgrade", {}, res => { if (res?.error) toast(res.error, true); gcasinoRender(); });
+    return;
+  }
+  const v = e.target.closest("button[data-gcverkauf]");
+  if (v) { socket.emit("gcasinoVerkauf", { good: v.dataset.gcverkauf }, res => {
+    toast(res?.error || `Das Volk zahlt ${fmt(res.erloes)} — kein Wort zum Paten.`, !!res?.error); gcasinoRender(); }); return; }
+});
 
 /* ---- Revierkampf-Inszenierung: Beben, Schüsse, Sieges-Banner ---- */
 let KAMPF_SHAKE = 0;
@@ -5048,6 +5131,41 @@ function draw() {
           cx.globalAlpha = 1; cx.globalCompositeOperation = "source-over";
         }
       }
+      /* Casino Municipale: Goldfassade, rotes Neon, nachts Lichterkette —
+       * das Gebäude soll schreien: Hier fließt das Geld der Stadt. */
+      if (t.gcasino) {
+        const bx2 = sx, by2 = sy + TH / 2;
+        cx.fillStyle = "rgba(0,0,0,.3)";
+        cx.beginPath(); cx.ellipse(bx2 + 2, by2 + 4, 21, 7.5, 0, 0, Math.PI * 2); cx.fill();
+        cx.fillStyle = "#8a6a3a";   // Seitenwand (dunkles Gold)
+        cx.beginPath(); cx.moveTo(bx2, by2 + 8); cx.lineTo(bx2 - 20, by2 - 2); cx.lineTo(bx2 - 20, by2 - 30); cx.lineTo(bx2, by2 - 20); cx.closePath(); cx.fill();
+        cx.fillStyle = "#c9a04e";   // Front (Gold)
+        cx.beginPath(); cx.moveTo(bx2, by2 + 8); cx.lineTo(bx2 + 20, by2 - 2); cx.lineTo(bx2 + 20, by2 - 30); cx.lineTo(bx2, by2 - 20); cx.closePath(); cx.fill();
+        cx.fillStyle = "#6e2f2f";   // rotes Walmdach
+        cx.beginPath(); cx.moveTo(bx2, by2 - 20); cx.lineTo(bx2 + 20, by2 - 30); cx.lineTo(bx2, by2 - 40); cx.lineTo(bx2 - 20, by2 - 30); cx.closePath(); cx.fill();
+        cx.fillStyle = "#3a2a18";   // Portal
+        cx.fillRect(bx2 + 6, by2 - 11, 7, 12);
+        for (const [fx2, fy2] of [[bx2 + 3, by2 - 22], [bx2 + 13, by2 - 19], [bx2 - 9, by2 - 24], [bx2 - 15, by2 - 22]]) {
+          cx.fillStyle = LICHT < .6 ? "#ffdf8a" : "#4a3a22"; cx.fillRect(fx2, fy2, 3.6, 5);
+        }
+        const neonPuls = .55 + ((Math.sin(now / 300) + 1) / 2) * .45;
+        cx.fillStyle = `rgba(255,72,72,${neonPuls.toFixed(2)})`;   // Neon-Schriftzug
+        cx.font = "800 7px sans-serif"; cx.textAlign = "center";
+        cx.fillText("CASINO", bx2 + 9.5, by2 - 12.5);
+        /* Lichterkette an der Traufe: Lauflicht */
+        for (let i = 0; i < 8; i++) {
+          const an = (Math.floor(now / 180) + i) % 3 === 0;
+          cx.fillStyle = an ? "#ffd75e" : "rgba(255,215,94,.25)";
+          cx.beginPath(); cx.arc(bx2 + 2 + i * 2.4, by2 - 21 + i * 1.2, 1.1, 0, Math.PI * 2); cx.fill();
+          cx.beginPath(); cx.arc(bx2 - 2 - i * 2.4, by2 - 21 + i * 1.2, 1.1, 0, Math.PI * 2); cx.fill();
+        }
+        if (LICHT < .6) {   // goldener Schein aufs Pflaster
+          cx.globalCompositeOperation = "lighter"; cx.globalAlpha = .22 * neonPuls;
+          cx.beginPath(); cx.ellipse(bx2, by2 + 6, 26, 10, 0, 0, Math.PI * 2);
+          cx.fillStyle = "#ffca55"; cx.fill();
+          cx.globalAlpha = 1; cx.globalCompositeOperation = "source-over";
+        }
+      }
       /* Fischerboote an den Molen: sanft dümpelnd, jede zweite Kachel eins */
       if (t.pier && t.y % 2 === 0) {
         const bob = Math.sin(now / 700 + t.x * 2 + t.y) * 1.4;
@@ -5361,6 +5479,7 @@ function clickTile(e) {
   if (t?.schwarz && me) { openPanel("schwarz"); return; }
   if (t?.bank && me) { openPanel("bank"); return; }
   if (t?.news && me) { openPanel("news"); return; }
+  if (t?.gcasino && me) { gcasinoOeffnen(); return; }
   /* Die Deko-Hochhaeuser sind reines Stadtbild. Ohne diese Zeile ginge beim
    * Klick das Baumenue auf und boete Gebaeude an, die der Server anschliessend
    * ablehnt — ein Versprechen, das nicht eingeloest werden kann. */
@@ -7439,6 +7558,7 @@ function kartellRendern(state, me, myId) {
     });
   }
   const binPolizei = state.mode === "kartell" && state.players?.[myId]?.familie === "polizei";
+  if (gcasinoOffen) gcasinoRender();
   if (nwEl) nwEl.style.display = hudFam ? "none" : "";
   if (nwEl && binPolizei && state.polizei) {
     nwEl.style.display = "none";

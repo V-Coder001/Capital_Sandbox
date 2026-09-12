@@ -503,6 +503,30 @@ const POLIZEI_SOLD = 150;         // $ Sold je Minute und Polizist
 const GESICHERT_DAUER = 60;       // so lange ist ein Bezirk nach einer Razzia „gesichert"
 const famDef = fid => fid === "polizei" ? POLIZEI : FAMILIEN[fid];
 const famAnzahl = fid => Object.values(G.players).filter(x => x.familie === fid).length;
+/* ---- Casino Municipale ----
+ * Das städtische Casino steht fest an der Piazza. Es GEHÖRT niemandem —
+ * es gehorcht dem, der die Piazza Grande (Bezirk 4) kontrolliert: Die
+ * Herrscher-Familie kassiert den Bürger-Umsatz, stellt die Quoten, baut
+ * Stufen aus und verkauft unterm Tisch heiße Ware ans Volk (besser als der
+ * Hehler, OHNE Paten-Abgabe). Gewinne der Gäste zahlt die Familie — gedeckelt
+ * durch ihre Kassen, damit ein Glückstreffer sie nicht ruiniert. */
+const GCASINO_SPIELE = {
+  rot:     { name: "Roulette · Rot/Schwarz", chance: .48,  faktor: 2 },
+  zahl:    { name: "Roulette · Volle Zahl",  chance: .027, faktor: 30 },
+  wuerfel: { name: "Hohe Neun (Würfel)",     chance: .40,  faktor: 2.4 },
+  slots:   { name: "Slots „La Fortuna“",     chance: .15,  faktor: 6 },
+  baccara: { name: "Baccara",                chance: .44,  faktor: 2.2 },
+};
+const GCASINO_STILE = ["Spelunke", "Salon Rosso", "Belle Époque", "Art déco", "La Dorata"];
+const GCASINO_QUOTEN = {
+  fair:         { name: "faire Quoten",   netto: 100, chanceDelta: 0,    respekt: 0, fahndung: 0 },
+  gierig:       { name: "gierige Quoten", netto: 170, chanceDelta: -.03, respekt: 0, fahndung: 2 },
+  grosszuegig:  { name: "großzügige Quoten", netto: 50, chanceDelta: .03, respekt: 1, fahndung: 0 },
+};
+const GCASINO_BEZIRK = 4;             // Piazza Grande
+const GCASINO_EINSATZ_MAX = 2000;
+const GCASINO_SCHWARZPREIS = 1.3;     // Faktor auf den Hehler-Basispreis
+const gcasinoHerrscher = () => G.bezirke?.[GCASINO_BEZIRK]?.kontrolle || null;
 const MAFIA_BOT_NAMEN = {
   famiglia: ["Don Salvatore", "Luca Moretti"],
   syndikat: ["Viktor Kroll", "Greta Falk"],
@@ -1941,6 +1965,14 @@ function buildMap(mode = "sandbox") {
     }
     questura ??= tiles.find(t2 => t2.zone === "zentrum" && !t2.water && !t2.road && !t2.bank && !t2.piazza);
     if (questura) Object.assign(questura, { questura: true, park: false, field: false, locked: false, unlockCost: 0 });
+    /* Das Casino Municipale glänzt direkt am Piazza-Rand. */
+    for (const [cxK, cyK] of [[15, 12], [15, 13], [11, 14], [15, 11], [12, 14]]) {
+      const t2 = at2(cxK, cyK);
+      if (t2 && !t2.water && !t2.road && !t2.bank && !t2.questura && !t2.piazza) {
+        Object.assign(t2, { gcasino: true, park: false, field: false, locked: false, unlockCost: 0 });
+        break;
+      }
+    }
     return tiles;
   }
   MAP_W = 26; MAP_H = 26; MAP_ROUTES = null;
@@ -2099,6 +2131,7 @@ const G = {
    * sammeln sich die Mitspieler, ohne dass Produktion oder Bots anlaufen. */
   started: false, hostId: null,
   groupOrder: null, nextGroupIn: 20,   // erster Stadt-Auftrag nach 20 s
+  gcasino: { stufe: 1, quote: "fair" },   // Casino Municipale (Kartellmodus)
   shareListings: [],     // {id, companyId, sellerId, count(1-4 = 25%-Schritte), price, ts, toId}
   shareBids: [],         // Kaufanfragen an eine Firma: {id, companyId, bidderId, count, price, ttl}
   nextDividendIn: DIVIDEND_INTERVAL,
@@ -3021,6 +3054,13 @@ function snapshot() {
         kx: x, ky: y, gestoppt: !!tr.gestoppt };
     }) : null,
     pate: MODE === "kartell" ? G.pate : null,
+    gcasino: MODE === "kartell" ? { stufe: G.gcasino.stufe, stil: GCASINO_STILE[G.gcasino.stufe - 1],
+      quote: G.gcasino.quote, herrscher: gcasinoHerrscher(),
+      spiele: Object.fromEntries(Object.entries(GCASINO_SPIELE).map(([k, sp]) => {
+        const q = GCASINO_QUOTEN[G.gcasino.quote];
+        return [k, { name: sp.name, chance: Math.max(.005, sp.chance + (sp.chance > .1 ? q.chanceDelta : q.chanceDelta / 10)), faktor: sp.faktor }];
+      })),
+      upgradeKosten: G.gcasino.stufe < 5 ? 4000 * G.gcasino.stufe : null } : null,
     polizei: MODE === "kartell" ? { punkte: G.polizeiPunkte || 0, ziel: POLIZEI_ZIEL,
       farbe: POLIZEI.farbe,
       mitglieder: Object.values(G.players).filter(p2 => p2.familie === "polizei").map(p2 => p2.name) } : null,
@@ -3035,7 +3075,7 @@ function snapshot() {
     lobby: G.started ? null : { winGoal: WIN_NW, bots: botAuswahl, botLevel: botLevelKey, mode: MODE, saison: SAISON_RENNEN, saisonWahl: SAISON_CHOICES },
     map: G.map.map(t => ({ x: t.x, y: t.y, zone: t.zone, road: t.road, water: t.water,
       park: t.park, field: t.field, sand: t.sand, deep: t.deep, rock: t.rock,
-      piazza: t.piazza, fontana: t.fontana, pier: t.pier, leuchtturm: t.leuchtturm, questura: t.questura,
+      piazza: t.piazza, fontana: t.fontana, pier: t.pier, leuchtturm: t.leuchtturm, questura: t.questura, gcasino: t.gcasino,
       bank: t.bank, news: t.news, schwarz: t.schwarz, deko: t.deko, locked: t.locked, unlockCost: t.unlockCost, owner: t.owner, btype: t.btype, lien: t.lien, shop: t.shop, paused: t.paused, level: t.level, autos: autosDyn(t), sperre: t.sperre ?? null })),
     players: Object.fromEntries(Object.entries(G.players).map(([sid, p]) =>
       [sid, { id: sid, name: p.name, color: p.color, lvl: p.lvl, xp: p.xp, industry: p.industry, industries: p.industries,
@@ -3918,6 +3958,92 @@ io.on("connection", socket => {
     }
   }));
 
+  /* --- Casino Municipale: spielen, Quoten, Ausbau, Schwarzverkauf --- */
+  socket.on("gcasinoSpielen", guard((p, { spiel, einsatz }, ack) => {
+    if (MODE !== "kartell") return ack?.({ error: "Das Casino Municipale gibt es nur in der Kartellwirtschaft" });
+    const sp = GCASINO_SPIELE[spiel];
+    if (!sp) return ack?.({ error: "Dieses Spiel kennt das Haus nicht" });
+    const herr = gcasinoHerrscher();
+    if (!herr) return ack?.({ error: "Das Casino ist geschlossen — niemand beherrscht die Piazza Grande" });
+    if (p.familie === herr) return ack?.({ error: "Hausverbot fürs Haus — eure Familie führt die Bank" });
+    if (p.familie === "polizei") return ack?.({ error: "Nicht im Dienst, Commissario" });
+    einsatz = Math.floor(+einsatz);
+    if (!(einsatz >= 50 && einsatz <= GCASINO_EINSATZ_MAX))
+      return ack?.({ error: `Einsatz zwischen 50 und ${GCASINO_EINSATZ_MAX} $` });
+    if (p.cash < einsatz) return ack?.({ error: "Zu wenig Bargeld" });
+    const q = GCASINO_QUOTEN[G.gcasino.quote];
+    const chance = Math.max(.005, sp.chance + (sp.chance > .1 ? q.chanceDelta : q.chanceDelta / 10));
+    const bank = Object.values(G.players).filter(m => m.familie === herr);
+    if (Math.random() < chance) {
+      /* Gewinn: die Familie zahlt — anteilig aus ihren Kassen, gedeckelt.
+       * Kann sie nicht voll zahlen, gibt es nur, was da ist (und Spott). */
+      const brutto = Math.round(einsatz * (sp.faktor - 1));
+      let offen = brutto;
+      for (const m of bank) {
+        const teil = Math.min(m.cash, Math.ceil(offen / Math.max(1, bank.length)));
+        m.cash -= teil; offen -= teil;
+        logTx(m, "Casino", `Auszahlung an ${p.name} (${sp.name})`, -teil);
+        if (offen <= 0) break;
+      }
+      const gezahlt = brutto - Math.max(0, offen);
+      p.cash += gezahlt;
+      logTx(p, "Casino", `Gewinn im Casino Municipale (${sp.name})`, gezahlt);
+      if (offen > 0) {
+        G.familienRespekt[herr] = Math.max(0, (G.familienRespekt[herr] || 0) - 3);
+        io.emit("notice", { text: `🎰 ${p.name} sprengt die Bank — ${famDef(herr).name} kann nicht voll auszahlen (−3 Respekt)!` });
+      } else if (brutto >= 3000) {
+        io.emit("notice", { text: `🎰 Großer Abend im Casino Municipale: ${p.name} gewinnt ${brutto} $ bei ${sp.name}.` });
+      }
+      ack?.({ ok: true, gewonnen: true, betrag: gezahlt });
+    } else {
+      p.cash -= einsatz;
+      const teil = Math.round(einsatz / Math.max(1, bank.length));
+      for (const m of bank) { m.cash += teil; logTx(m, "Casino", `Spieleinnahme (${sp.name})`, teil); }
+      logTx(p, "Casino", `Verloren im Casino Municipale (${sp.name})`, -einsatz);
+      ack?.({ ok: true, gewonnen: false, betrag: einsatz });
+    }
+  }));
+
+  socket.on("gcasinoQuote", guard((p, { quote }, ack) => {
+    if (MODE !== "kartell") return ack?.({ error: "Nur in der Kartellwirtschaft" });
+    if (!GCASINO_QUOTEN[quote]) return ack?.({ error: "Diese Quote kennt das Haus nicht" });
+    if (p.familie !== gcasinoHerrscher()) return ack?.({ error: "Die Quoten stellt nur die Familie ein, die die Piazza hält" });
+    G.gcasino.quote = quote;
+    io.emit("notice", { text: `🎰 ${famDef(p.familie).name} stellt im Casino ${GCASINO_QUOTEN[quote].name} ein.` });
+    ack?.({ ok: true });
+  }));
+
+  socket.on("gcasinoUpgrade", guard((p, _x, ack) => {
+    if (MODE !== "kartell") return ack?.({ error: "Nur in der Kartellwirtschaft" });
+    if (p.familie !== gcasinoHerrscher()) return ack?.({ error: "Ausbauen darf nur die Familie, die die Piazza hält" });
+    if (G.gcasino.stufe >= 5) return ack?.({ error: "„La Dorata“ ist die höchste Ausbaustufe — prunkvoller geht es nicht" });
+    const kosten = 4000 * G.gcasino.stufe;
+    if (p.cash < kosten) return ack?.({ error: `Der Ausbau kostet ${kosten} $` });
+    p.cash -= kosten;
+    G.gcasino.stufe++;
+    logTx(p, "Casino", `Casino ausgebaut: „${GCASINO_STILE[G.gcasino.stufe - 1]}“`, -kosten);
+    gainXp(p, 25);
+    io.emit("notice", { text: `🎰 Das Casino Municipale erstrahlt neu: Stil „${GCASINO_STILE[G.gcasino.stufe - 1]}“ (Stufe ${G.gcasino.stufe}) — mehr Bürger, mehr Umsatz. Achtung: Der Ausbau bleibt, auch wenn die Piazza den Herrn wechselt.` });
+    ack?.({ ok: true, stufe: G.gcasino.stufe });
+  }));
+
+  socket.on("gcasinoVerkauf", guard((p, { good, qty }, ack) => {
+    if (MODE !== "kartell") return ack?.({ error: "Nur in der Kartellwirtschaft" });
+    if (p.familie !== gcasinoHerrscher()) return ack?.({ error: "Unterm Tisch verkauft nur die Familie, die die Piazza hält" });
+    if (!ILLEGAL.includes(good)) return ack?.({ error: "Das Volk will nur heiße Ware" });
+    qty = Math.floor(+qty) || Math.floor(p.inv[good] || 0);
+    qty = Math.min(qty, Math.floor(p.inv[good] || 0));
+    if (qty <= 0) return ack?.({ error: `Kein ${GOODS[good].name} im Lager` });
+    const erloes = Math.round(qty * BASEP[good] * GCASINO_SCHWARZPREIS);
+    p.inv[good] -= qty;
+    p.cash += erloes;
+    G.familienRespekt[p.familie] = (G.familienRespekt[p.familie] || 0) + Math.floor(erloes / 100);
+    G.fahndung[p.familie] = (G.fahndung[p.familie] || 0) + 2;
+    logTx(p, "Casino", `${qty}× ${GOODS[good].name} unterm Tisch ans Volk (ohne Paten-Abgabe)`, erloes);
+    questProg(p, "hehler");
+    ack?.({ ok: true, erloes });
+  }));
+
   /* --- Verstärkung: im laufenden Tauziehen Schläger in den Bezirk schicken --- */
   socket.on("verstaerkung", guard((p, { bezirk }, ack) => {
     if (MODE !== "kartell") return ack?.({ error: "Verstärkung gibt es nur in der Kartellwirtschaft" });
@@ -4202,7 +4328,7 @@ io.on("connection", socket => {
   socket.on("build", guard((p, { x, y, btype }, ack) => {
     const t = tileAt(x, y), bt = BTYPES[btype];
     if (!t || !bt) return ack?.({ error: "Ungültig" });
-    if (t.water || t.road || t.park || t.piazza || t.pier || t.leuchtturm || t.questura) return ack?.({ error: "Nicht bebaubar" });
+    if (t.water || t.road || t.park || t.piazza || t.pier || t.leuchtturm || t.questura || t.gcasino) return ack?.({ error: "Nicht bebaubar" });
     if (t.bank) return ack?.({ error: "Die Stadtbank gehört der Stadt" });
     if (t.news) return ack?.({ error: "Die Nachrichtenzentrale gehört der Stadt" });
     if (t.deko) return ack?.({ error: "Das Hochhaus gehört der Stadt" });
@@ -5199,6 +5325,21 @@ function runTick() {
         G.familienRespekt[b.kontrolle] = (G.familienRespekt[b.kontrolle] || 0) + 2;
       }
     }
+    /* Casino Municipale: Alle 30 s spielen die Bürger — der Netto-Erlös
+     * (Quote × Ausbaustufe) geht an die Familie, die die Piazza hält. Bürger
+     * gewinnen auch mal, aber gedeckelt: Das steckt bereits im Netto. */
+    if (G.tick % 30 === 0) {
+      const herr = gcasinoHerrscher();
+      if (herr) {
+        const q = GCASINO_QUOTEN[G.gcasino.quote];
+        const brutto = q.netto * G.gcasino.stufe;
+        const bank = Object.values(G.players).filter(m => m.familie === herr);
+        const teil = Math.round(brutto / Math.max(1, bank.length));
+        for (const m of bank) { m.cash += teil; logTx(m, "Casino", `Bürger-Umsatz (${GCASINO_STILE[G.gcasino.stufe - 1]})`, teil); }
+        if (q.respekt) G.familienRespekt[herr] = (G.familienRespekt[herr] || 0) + q.respekt;
+        if (q.fahndung) G.fahndung[herr] = (G.fahndung[herr] || 0) + q.fahndung;
+      }
+    }
     /* Endbedingung: Wer 6 der 9 Bezirke hält, hat die Stadt. Die Familie
      * gewinnt gemeinsam; den Titel trägt ihr vermögendstes Mitglied. */
     if (!G.winner && G.bezirke) {
@@ -5913,7 +6054,11 @@ async function spawnBot(cfg, lvl = BOT_LEVELS[BOT_LEVEL_DEFAULT]) {
             } else {
               const frei = t2 => t2.zone === btF.zone && !t2.road && !t2.water && !t2.park
                 && !t2.bank && !t2.news && !t2.deko && !t2.schwarz && !t2.owner;
-              let ziel = st.map.find(t2 => frei(t2) && !t2.locked);
+              /* Die Piazza Grande zuerst: Wer sie hält, führt das Casino. */
+              const kandidaten = st.map.filter(t2 => frei(t2) && !t2.locked)
+                .sort((a2, b2) => (bezirkVon(a2.x, a2.y) === GCASINO_BEZIRK ? 0 : 1) -
+                                  (bezirkVon(b2.x, b2.y) === GCASINO_BEZIRK ? 0 : 1));
+              let ziel = kandidaten[0];
               if (!ziel) {
                 const lt = st.map.find(t2 => frei(t2) && t2.locked);
                 if (lt && me.cash > btF.cost + lt.unlockCost + 2000) ziel = lt;
@@ -5924,8 +6069,18 @@ async function spawnBot(cfg, lvl = BOT_LEVELS[BOT_LEVEL_DEFAULT]) {
               }
             }
           }
-          /* Hehler: ab fünf Stück wandert die heiße Ware über den Tresen. */
-          if ((me.inv[famDef.produkt] || 0) >= 5) await em("hehlerVerkauf", { good: famDef.produkt });
+          /* Heiße Ware: Hält die Familie die Piazza, läuft der Verkauf übers
+           * Casino (bessere Preise, keine Paten-Abgabe) — sonst zum Hehler. */
+          const piazzaMeins = st.bezirke?.[4]?.kontrolle === st.players[myId]?.familie;
+          if ((me.inv[famDef.produkt] || 0) >= 5)
+            await em(piazzaMeins ? "gcasinoVerkauf" : "hehlerVerkauf", { good: famDef.produkt });
+          /* Casino pflegen: gelegentlich ausbauen, wenn die Kasse prall ist */
+          if (piazzaMeins && st.gcasino?.upgradeKosten && me.cash > st.gcasino.upgradeKosten + 6000 && Math.random() < .3)
+            await em("gcasinoUpgrade", {});
+          /* Die Piazza EROBERN, wenn eine fremde Familie sie hält */
+          if (!piazzaMeins && st.bezirke?.[4]?.kontrolle && !st.bezirke[4].kampf &&
+              Math.floor(me.inv.pistole || 0) >= 3 && !me.kampfCd && Math.random() < .25)
+            await em("revierkampf", { bezirk: 4 });
           /* Überfall: ab und zu traut sich ein Bot an einen Transport —
            * der Server würfelt Erfolg, Kaution und Fahndung wie bei jedem. */
           if ((st.transporte || []).length && Math.random() < 0.2)
