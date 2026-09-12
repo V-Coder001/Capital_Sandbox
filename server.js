@@ -545,6 +545,45 @@ const bjSumme = karten => {
 };
 const bacSumme = karten => karten.reduce((a, k) => a + k.bac, 0) % 10;
 
+/* Poker braucht ein echtes Deck (keine doppelten Karten) und eine Handwertung. */
+const deckNeu = () => {
+  const d = [];
+  for (let i = 0; i < 13; i++) for (const f of "\u2660\u2665\u2666\u2663") d.push({
+    txt: KARTEN_WERTE[i] + f, rot: f === "\u2665" || f === "\u2666", f, w: i + 2,
+    bj: i <= 7 ? i + 2 : i === 12 ? 11 : 10, bac: i <= 7 ? i + 2 : i === 12 ? 1 : 0 });
+  for (let i = d.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [d[i], d[j]] = [d[j], d[i]]; }
+  return d;
+};
+const POKER_RAENGE = ["H\u00f6chste Karte", "Paar", "Zwei Paare", "Drilling", "Stra\u00dfe", "Flush", "Full House", "Vierling", "Straight Flush"];
+function pokerWert(karten) {   // 7 Karten -> Score-Array, lexikografisch vergleichbar
+  const ws = karten.map(k => k.w);
+  const byW = {}; for (const w of ws) byW[w] = (byW[w] || 0) + 1;
+  const byF = {}; for (const k of karten) (byF[k.f] = byF[k.f] || []).push(k.w);
+  const desc = a => [...a].sort((x, y) => y - x);
+  const strasseHoch = vals => {
+    const u = [...new Set(vals)].sort((a, b) => b - a);
+    if (u[0] === 14) u.push(1);
+    let run = 1;
+    for (let i = 1; i < u.length; i++) { if (u[i] === u[i - 1] - 1) { run++; if (run >= 5) return u[i] + 4; } else run = 1; }
+    return 0;
+  };
+  let flush = null; for (const f in byF) if (byF[f].length >= 5) flush = desc(byF[f]);
+  const sf = flush ? strasseHoch(flush) : 0;
+  if (sf) return [8, sf];
+  const grp = Object.entries(byW).map(([w, n]) => [n, +w]).sort((a, b) => b[0] - a[0] || b[1] - a[1]);
+  if (grp[0][0] === 4) return [7, grp[0][1], desc(ws.filter(w => w !== grp[0][1]))[0]];
+  if (grp[0][0] === 3 && grp[1] && grp[1][0] >= 2) return [6, grp[0][1], grp[1][1]];
+  if (flush) return [5, ...flush.slice(0, 5)];
+  const st = strasseHoch(ws); if (st) return [4, st];
+  if (grp[0][0] === 3) return [3, grp[0][1], ...desc(ws.filter(w => w !== grp[0][1])).slice(0, 2)];
+  if (grp[0][0] === 2 && grp[1] && grp[1][0] === 2)
+    return [2, grp[0][1], grp[1][1], desc(ws.filter(w => w !== grp[0][1] && w !== grp[1][1]))[0]];
+  if (grp[0][0] === 2) return [1, grp[0][1], ...desc(ws.filter(w => w !== grp[0][1])).slice(0, 3)];
+  return [0, ...desc(ws).slice(0, 5)];
+}
+const pokerVergleich = (a, b) => { for (let i = 0; i < Math.max(a.length, b.length); i++) { const d = (a[i] || 0) - (b[i] || 0); if (d) return d; } return 0; };
+const kartePub = k => ({ txt: k.txt, rot: k.rot });
+
 /* Einsatz wandert in die Familienkasse; Gewinne zahlt die Familie — anteilig,
  * gedeckelt auf das, was da ist (sonst gibt es Spott und Respektverlust). */
 function gcasinoEinsatz(p, einsatz, quelle) {
@@ -557,7 +596,14 @@ function gcasinoEinsatz(p, einsatz, quelle) {
 }
 function gcasinoGewinn(p, brutto, quelle) {
   const herr = gcasinoHerrscher();
-  const bank = Object.values(G.players).filter(m => m.familie === herr);
+  const bank = herr ? Object.values(G.players).filter(m => m.familie === herr) : [];
+  if (!bank.length) {
+    /* Die Piazza ist gerade herrenlos: Laufende Runden spielt "die Stadt" zu
+     * Ende — voller Gewinn, niemandem tut es weh. */
+    p.cash += brutto;
+    logTx(p, "Casino", `Gewinn im Casino Municipale (${quelle})`, brutto);
+    return brutto;
+  }
   let offen = brutto;
   for (const m of bank) {
     const teil = Math.min(m.cash, Math.ceil(offen / Math.max(1, bank.length)));
@@ -571,34 +617,149 @@ function gcasinoGewinn(p, brutto, quelle) {
   if (offen > 0) {
     G.familienRespekt[herr] = Math.max(0, (G.familienRespekt[herr] || 0) - 3);
     io.emit("notice", { text: `\u{1F3B0} ${p.name} sprengt die Bank — ${famDef(herr).name} kann nicht voll auszahlen (−3 Respekt)!` });
+    io.emit("gcasinoEreignis", { art: "gesprengt", name: p.name, betrag: gezahlt });
   } else if (brutto >= 3000) {
     io.emit("notice", { text: `\u{1F3B0} Großer Abend im Casino Municipale: ${p.name} gewinnt ${brutto} $ bei ${quelle}.` });
+    io.emit("gcasinoEreignis", { art: "grossgewinn", name: p.name, betrag: brutto });
   }
   return gezahlt;
 }
 
+const bjSitzNeu = (p, einsatz) => ({ pid: p.id, name: p.name, farbe: p.color, einsatz, einsatz2: 0,
+  karten: [], karten2: null, aktiv: 1, fertig: false, fertig2: false, ergebnis: null });
+const bjSitzFertig = s => s.fertig && (!s.karten2 || s.fertig2);
+/* Eine Aktion auf der gerade aktiven Hand — vom Spieler wie vom Bot benutzt. */
+function gblackjackAktion(p, s, aktion) {
+  const B = G.gblackjack;
+  const hand = s.aktiv === 2 ? s.karten2 : s.karten;
+  const handZu = () => { if (s.aktiv === 1) { s.fertig = true; if (s.karten2 && !s.fertig2) { s.aktiv = 2; return; } } else s.fertig2 = true; };
+  if (aktion === "hit") {
+    hand.push(karteZiehen());
+    if (bjSumme(hand) >= 21) handZu();
+  } else if (aktion === "double") {
+    if (hand.length !== 2) return { error: "Verdoppeln geht nur mit den ersten zwei Karten" };
+    const grund = s.aktiv === 2 ? s.einsatz2 : s.einsatz;
+    if (p.cash < grund) return { error: "Zu wenig Bargeld zum Verdoppeln" };
+    gcasinoEinsatz(p, grund, "Blackjack (verdoppelt)");
+    if (s.aktiv === 2) s.einsatz2 *= 2; else s.einsatz *= 2;
+    hand.push(karteZiehen());
+    handZu();
+  } else if (aktion === "split") {
+    if (s.aktiv !== 1 || s.karten2 || s.karten.length !== 2 || s.karten[0].bj !== s.karten[1].bj)
+      return { error: "Splitten geht nur mit einem Paar als erste Hand" };
+    if (p.cash < s.einsatz) return { error: "Zu wenig Bargeld zum Splitten" };
+    gcasinoEinsatz(p, s.einsatz, "Blackjack (Split)");
+    s.einsatz2 = s.einsatz;
+    s.karten2 = [s.karten.pop(), karteZiehen()];
+    s.karten.push(karteZiehen());
+    if (bjSumme(s.karten) >= 21) handZu();
+  } else {   // stand
+    handZu();
+  }
+  if (bjSitzFertig(s)) gblackjackWeiter();
+  else B.endet = G.tick + 20;
+  return { ok: true };
+}
+/* Poker: eine Aktion des Spielers an der Reihe — Spieler und Bots nutzen dieselbe Tür. */
+function gpokerAktion(p, s, aktion) {
+  const P = G.gpoker;
+  const kosten = P.aktBet - s.gesetzt;
+  if (aktion === "fold") s.gefoldet = true;
+  else if (aktion === "check") {
+    if (kosten > 0) return { error: `Da liegt eine Erhöhung — mitgehen kostet ${kosten} $` };
+  } else if (aktion === "call") {
+    if (kosten <= 0) return { error: "Nichts zu callen — schieb (Check) oder erhöhe" };
+    if (p.cash < kosten) return { error: "Zu wenig Bargeld zum Mitgehen" };
+    p.cash -= kosten; P.pot += kosten; s.gesetzt = P.aktBet;
+    logTx(p, "Casino", "Poker: mitgegangen", -kosten);
+  } else if (aktion === "raise") {
+    if (P.raises >= 3) return { error: "Dreimal erhöht ist genug — Call, Check oder Fold" };
+    const gesamt = kosten + P.einsatz;
+    if (p.cash < gesamt) return { error: `Erhöhen kostet ${gesamt} $` };
+    p.cash -= gesamt; P.pot += gesamt;
+    P.aktBet += P.einsatz; s.gesetzt = P.aktBet; P.raises++;
+    for (const x of P.spieler) if (x !== s) x.dranWar = false;
+    logTx(p, "Casino", "Poker: erhöht", -gesamt);
+  } else return { error: "Diese Ansage kennt der Croupier nicht" };
+  s.dranWar = true;
+  gpokerWeiter();
+  return { ok: true };
+}
+function gpokerWeiter() {
+  const P = G.gpoker;
+  const aktive = P.spieler.filter(s => !s.gefoldet);
+  if (aktive.length <= 1) return gpokerShowdown();
+  for (let i = 1; i <= P.spieler.length; i++) {
+    const j = (P.dran + i) % P.spieler.length, s = P.spieler[j];
+    if (!s.gefoldet && (!s.dranWar || s.gesetzt < P.aktBet)) { P.dran = j; P.endet = G.tick + 25; return; }
+  }
+  /* Setzrunde vorbei -> nächste Straße oder Showdown */
+  P.strasse++;
+  for (const s of P.spieler) { s.gesetzt = 0; s.dranWar = false; }
+  P.aktBet = 0; P.raises = 0;
+  if (P.strasse === 1) P.board.push(P.deck.pop(), P.deck.pop(), P.deck.pop());
+  else if (P.strasse === 2 || P.strasse === 3) P.board.push(P.deck.pop());
+  else return gpokerShowdown();
+  P.dran = -1;
+  for (let i = 0; i < P.spieler.length; i++) if (!P.spieler[i].gefoldet) { P.dran = i; break; }
+  P.endet = G.tick + 25;
+}
+function gpokerShowdown() {
+  const P = G.gpoker;
+  const aktive = P.spieler.filter(s => !s.gefoldet);
+  let gewinner = aktive, rangName = null;
+  if (aktive.length > 1) {
+    for (const s of aktive) s.wert = pokerWert([...s.karten, ...P.board]);
+    let best = aktive[0].wert;
+    for (const s of aktive) if (pokerVergleich(s.wert, best) > 0) best = s.wert;
+    gewinner = aktive.filter(s => pokerVergleich(s.wert, best) === 0);
+    rangName = POKER_RAENGE[best[0]];
+  }
+  /* 5 % Rake ans Haus, der Rest an die Gewinner */
+  const herr = gcasinoHerrscher();
+  const rake = Math.round(P.pot * .05);
+  if (herr && rake > 0) {
+    const bank = Object.values(G.players).filter(m => m.familie === herr);
+    const teil = Math.round(rake / Math.max(1, bank.length));
+    for (const m of bank) { m.cash += teil; logTx(m, "Casino", "Poker-Rake", teil); }
+  }
+  const anteil = Math.floor((P.pot - rake) / gewinner.length);
+  for (const s of P.spieler) {
+    const pl = G.players[s.pid];
+    if (s.gefoldet) { s.ergebnis = "Gefoldet"; continue; }
+    if (gewinner.includes(s)) {
+      if (pl) { pl.cash += anteil; logTx(pl, "Casino", `Poker gewonnen${rangName ? ` (${rangName})` : ""}`, anteil); }
+      s.ergebnis = `+${anteil} $${rangName ? ` · ${rangName}` : ""}`;
+    } else s.ergebnis = s.wert ? POKER_RAENGE[s.wert[0]] : "Verloren";
+  }
+  io.emit("notice", { text: `\u{1F0A1} Poker: ${gewinner.map(s => s.name).join(" & ")} ${gewinner.length > 1 ? "teilen sich" : "holt"} den Pot von ${P.pot} $${rangName ? ` mit ${rangName}` : " — alle anderen gefoldet"}.` });
+  if (anteil >= 3000) io.emit("gcasinoEreignis", { art: "grossgewinn", name: gewinner.map(s => s.name).join(" & "), betrag: anteil });
+  P.phase = "vorbei"; P.endet = G.tick + 12;
+}
 function gblackjackWeiter() {
   const B = G.gblackjack;
-  B.dran = B.spieler.findIndex((s, i) => i > B.dran && !s.fertig);
+  B.dran = B.spieler.findIndex((s, i) => i > B.dran && !bjSitzFertig(s));
   if (B.dran >= 0) { B.endet = G.tick + 20; return; }
   /* Alle fertig: Dealer zieht bis 17, dann wird abgerechnet. */
   while (bjSumme(B.dealer) < 17) B.dealer.push(karteZiehen());
   const d = bjSumme(B.dealer);
+  const handWerten = (pl, karten, einsatz, split) => {
+    const sum = bjSumme(karten);
+    if (sum > 21) return "Überkauft";
+    if (sum === 21 && karten.length === 2 && !split) {
+      if (pl) gcasinoGewinn(pl, Math.round(einsatz * 2.5), "Blackjack");
+      return "Blackjack!";
+    }
+    if (d > 21 || sum > d) { if (pl) gcasinoGewinn(pl, einsatz * 2, "Blackjack"); return "Gewonnen"; }
+    if (sum === d) { if (pl) gcasinoGewinn(pl, einsatz, "Blackjack"); return "Push"; }
+    return "Verloren";
+  };
   for (const s of B.spieler) {
-    const pl = G.players[s.pid], sum = bjSumme(s.karten);
-    if (sum > 21) s.ergebnis = "Überkauft";
-    else if (sum === 21 && s.karten.length === 2) {
-      s.ergebnis = "Blackjack!";
-      if (pl) gcasinoGewinn(pl, Math.round(s.einsatz * 2.5), "Blackjack");
-    } else if (d > 21 || sum > d) {
-      s.ergebnis = "Gewonnen";
-      if (pl) gcasinoGewinn(pl, s.einsatz * 2, "Blackjack");
-    } else if (sum === d) {
-      s.ergebnis = "Push";
-      if (pl) gcasinoGewinn(pl, s.einsatz, "Blackjack");
-    } else s.ergebnis = "Verloren";
+    const pl = G.players[s.pid];
+    s.ergebnis = handWerten(pl, s.karten, s.einsatz, !!s.karten2);
+    if (s.karten2) s.ergebnis += " / " + handWerten(pl, s.karten2, s.einsatz2, true);
   }
-  const sieger = B.spieler.filter(s => s.ergebnis === "Gewonnen" || s.ergebnis === "Blackjack!").map(s => s.name);
+  const sieger = B.spieler.filter(s => /Gewonnen|Blackjack/.test(s.ergebnis)).map(s => s.name);
   io.emit("notice", { text: `\u{1F0CF} Blackjack: Der Dealer hat ${d > 21 ? d + " — überkauft!" : d}. ${sieger.length ? "Es gewinnen: " + sieger.join(", ") : "Der Tisch geht leer aus."}` });
   B.phase = "vorbei"; B.endet = G.tick + 10;
 }
@@ -2247,6 +2408,7 @@ const G = {
   gcasino: { stufe: 1, quote: "fair" },   // Casino Municipale (Kartellmodus)
   groulette: { phase: "warten", endet: 0, zahl: null, letzteZahl: null, einsaetze: [] },
   gblackjack: { phase: "warten", endet: 0, dran: -1, dealer: [], spieler: [] },
+  gpoker: { phase: "warten", endet: 0, einsatz: 100, pot: 0, board: [], deck: [], strasse: 0, dran: -1, aktBet: 0, raises: 0, spieler: [] },
   shareListings: [],     // {id, companyId, sellerId, count(1-4 = 25%-Schritte), price, ts, toId}
   shareBids: [],         // Kaufanfragen an eine Firma: {id, companyId, bidderId, count, price, ttl}
   nextDividendIn: DIVIDEND_INTERVAL,
@@ -3179,15 +3341,23 @@ function snapshot() {
     groulette: MODE === "kartell" ? { phase: G.groulette.phase,
       rest: Math.max(0, G.groulette.endet - G.tick),
       zahl: G.groulette.phase === "drehen" ? G.groulette.zahl : null,
-      letzteZahl: G.groulette.letzteZahl,
+      letzteZahl: G.groulette.letzteZahl, letzteGewinner: G.groulette.letzteGewinner || [],
       einsaetze: G.groulette.einsaetze.map(e => ({ name: e.name, farbe: e.farbe, art: e.art, zahl: e.zahl, einsatz: e.einsatz })) } : null,
     gblackjack: MODE === "kartell" ? { phase: G.gblackjack.phase,
       rest: Math.max(0, G.gblackjack.endet - G.tick), dran: G.gblackjack.dran,
       dealer: G.gblackjack.dealer.map(k => ({ txt: k.txt, rot: k.rot })),
       dealerSumme: G.gblackjack.dealer.length ? bjSumme(G.gblackjack.dealer) : null,
-      spieler: G.gblackjack.spieler.map(s => ({ pid: s.pid, name: s.name, farbe: s.farbe, einsatz: s.einsatz,
-        karten: s.karten.map(k => ({ txt: k.txt, rot: k.rot })), summe: bjSumme(s.karten),
+      spieler: G.gblackjack.spieler.map(s => ({ pid: s.pid, name: s.name, farbe: s.farbe,
+        einsatz: s.einsatz, einsatz2: s.einsatz2, aktiv: s.aktiv,
+        karten: s.karten.map(kartePub), summe: bjSumme(s.karten),
+        karten2: s.karten2 ? s.karten2.map(kartePub) : null, summe2: s.karten2 ? bjSumme(s.karten2) : null,
         fertig: s.fertig, ergebnis: s.ergebnis })) } : null,
+    gpoker: MODE === "kartell" ? { phase: G.gpoker.phase, rest: Math.max(0, G.gpoker.endet - G.tick),
+      einsatz: G.gpoker.einsatz, pot: G.gpoker.pot, aktBet: G.gpoker.aktBet, raises: G.gpoker.raises,
+      strasse: G.gpoker.strasse, dran: G.gpoker.dran, board: G.gpoker.board.map(kartePub),
+      spieler: G.gpoker.spieler.map(s => ({ pid: s.pid, name: s.name, farbe: s.farbe,
+        gefoldet: s.gefoldet, gesetzt: s.gesetzt, ergebnis: s.ergebnis,
+        karten: G.gpoker.phase === "vorbei" && !s.gefoldet ? s.karten.map(kartePub) : null })) } : null,
     polizei: MODE === "kartell" ? { punkte: G.polizeiPunkte || 0, ziel: POLIZEI_ZIEL,
       farbe: POLIZEI.farbe,
       mitglieder: Object.values(G.players).filter(p2 => p2.familie === "polizei").map(p2 => p2.name) } : null,
@@ -3446,7 +3616,12 @@ function pushState() {
     if (schlank && sock.data.gotMap) sock.emit("state", schlank);
     else { sock.emit("state", voll); sock.data.gotMap = true; }
   }
-  for (const p of Object.values(G.players)) if (p.socketId) io.to(p.socketId).emit("me", privateState(p));
+  for (const p of Object.values(G.players)) if (p.socketId) {
+    const ps = privateState(p);
+    const sitz = G.gpoker?.spieler?.find(s => s.pid === p.id);
+    if (sitz?.karten?.length && G.gpoker.phase !== "warten") ps.gpokerKarten = sitz.karten.map(kartePub);
+    io.to(p.socketId).emit("me", ps);
+  }
   if (PERF) { perf.pushes++; perf.snapMs += Number(process.hrtime.bigint() - t0) / 1e6; }
 }
 if (PERF) setInterval(() => {
@@ -4144,7 +4319,7 @@ io.on("connection", socket => {
       return ack?.({ error: `Einsatz zwischen 50 und ${GCASINO_EINSATZ_MAX} $` });
     if (p.cash < einsatz) return ack?.({ error: "Zu wenig Bargeld" });
     gcasinoEinsatz(p, einsatz, "Blackjack");
-    B.spieler.push({ pid: p.id, name: p.name, farbe: p.color, einsatz, karten: [], fertig: false, ergebnis: null });
+    B.spieler.push(bjSitzNeu(p, einsatz));
     if (B.phase === "warten") {
       B.phase = "setzen"; B.endet = G.tick + 12; B.dealer = []; B.dran = -1;
       io.emit("notice", { text: `\u{1F0CF} ${p.name} setzt sich an den Blackjack-Tisch — wer spielt mit? (12 s)` });
@@ -4157,14 +4332,41 @@ io.on("connection", socket => {
     if (MODE !== "kartell" || B.phase !== "ziehen") return ack?.({ error: "Gerade wird nicht gezogen" });
     const s = B.spieler[B.dran];
     if (!s || s.pid !== p.id) return ack?.({ error: "Du bist nicht an der Reihe" });
-    if (aktion === "hit") {
-      s.karten.push(karteZiehen());
-      const sum = bjSumme(s.karten);
-      if (sum >= 21) s.fertig = true;
-    } else s.fertig = true;
-    if (s.fertig) gblackjackWeiter();
-    else B.endet = G.tick + 20;
+    ack?.(gblackjackAktion(p, s, aktion));
+  }));
+
+  /* --- Poker: 2-4 Spieler gegeneinander, das Haus nimmt 5 % Rake --- */
+  socket.on("gpokerBeitreten", guard((p, { einsatz }, ack) => {
+    if (MODE !== "kartell") return ack?.({ error: "Nur in der Kartellwirtschaft" });
+    if (!gcasinoHerrscher()) return ack?.({ error: "Das Casino ist geschlossen — niemand beherrscht die Piazza Grande" });
+    const P = G.gpoker;
+    if (P.phase !== "warten" && P.phase !== "setzen") return ack?.({ error: "Die Hand läuft — gleich wird neu gemischt" });
+    if (P.spieler.some(s => s.pid === p.id)) return ack?.({ error: "Du sitzt schon am Tisch" });
+    if (P.spieler.length >= 4) return ack?.({ error: "Der Tisch ist voll (4 Plätze)" });
+    if (P.phase === "warten") {
+      einsatz = Math.floor(+einsatz);
+      if (!(einsatz >= 50 && einsatz <= GCASINO_EINSATZ_MAX))
+        return ack?.({ error: `Grundeinsatz zwischen 50 und ${GCASINO_EINSATZ_MAX} $` });
+      P.einsatz = einsatz;
+    }
+    if (p.cash < P.einsatz * 6) return ack?.({ error: `Für diesen Tisch brauchst du Reserven: ${P.einsatz * 6} $ (6× Grundeinsatz)` });
+    p.cash -= P.einsatz; P.pot += P.einsatz;
+    logTx(p, "Casino", "Poker: Ante", -P.einsatz);
+    P.spieler.push({ pid: p.id, name: p.name, farbe: p.color, karten: [], gefoldet: false,
+      gesetzt: 0, dranWar: false, ergebnis: null, wert: null });
+    if (P.phase === "warten") {
+      P.phase = "setzen"; P.endet = G.tick + 15; P.board = []; P.pot = P.einsatz;
+      io.emit("notice", { text: `\u{1F0A1} ${p.name} eröffnet einen Poker-Tisch (Grundeinsatz ${P.einsatz} $) — wer setzt sich dazu? (15 s)` });
+    }
     ack?.({ ok: true });
+  }));
+
+  socket.on("gpokerZug", guard((p, { aktion }, ack) => {
+    const P = G.gpoker;
+    if (MODE !== "kartell" || P.phase !== "wetten") return ack?.({ error: "Gerade wird nicht gesetzt" });
+    const s = P.spieler[P.dran];
+    if (!s || s.pid !== p.id) return ack?.({ error: "Du bist nicht an der Reihe" });
+    ack?.(gpokerAktion(p, s, aktion));
   }));
 
   socket.on("gcasinoQuote", guard((p, { quote }, ack) => {
@@ -5520,7 +5722,8 @@ function runTick() {
         }
         const farbe = R.zahl === 0 ? "Zero — die Bank lacht" : rot ? "Rot" : "Schwarz";
         io.emit("notice", { text: `\u{1F3A1} Roulette: Die ${R.zahl} (${farbe}). ${gewinner.length ? "Es kassieren: " + [...new Set(gewinner)].join(", ") : "Das Haus räumt den Tisch ab."}` });
-        R.letzteZahl = R.zahl; R.phase = "warten"; R.einsaetze = []; R.endet = 0;
+        R.letzteZahl = R.zahl; R.letzteGewinner = [...new Set(gewinner)];
+        R.phase = "warten"; R.einsaetze = []; R.endet = 0;
       }
     }
     /* Blackjack: geben, Zug-Timeouts, Dealer, Abrechnung */
@@ -5537,6 +5740,82 @@ function runTick() {
         gblackjackWeiter();
       } else if (B.phase === "vorbei" && G.tick >= B.endet) {
         Object.assign(B, { phase: "warten", endet: 0, dran: -1, dealer: [], spieler: [] });
+      }
+    }
+    /* Poker: geben, Zug-Timeouts, Aufräumen */
+    {
+      const P = G.gpoker;
+      if (P.phase === "setzen" && G.tick >= P.endet) {
+        if (P.spieler.length >= 2) {
+          P.deck = deckNeu();
+          for (const s of P.spieler) s.karten = [P.deck.pop(), P.deck.pop()];
+          P.strasse = 0; P.aktBet = 0; P.raises = 0; P.dran = 0; P.phase = "wetten"; P.endet = G.tick + 25;
+        } else {
+          const s = P.spieler[0];
+          const pl = s && G.players[s.pid];
+          if (pl) { pl.cash += P.einsatz; logTx(pl, "Casino", "Poker: niemand kam — Ante zurück", P.einsatz); }
+          Object.assign(P, { phase: "warten", endet: 0, pot: 0, board: [], dran: -1, spieler: [] });
+        }
+      } else if (P.phase === "wetten" && G.tick >= P.endet) {
+        const s = P.spieler[P.dran];
+        if (s) {
+          const pl = G.players[s.pid];
+          gpokerAktion(pl || {}, s, P.aktBet - s.gesetzt > 0 ? "fold" : "check");
+        }
+      } else if (P.phase === "vorbei" && G.tick >= P.endet) {
+        Object.assign(P, { phase: "warten", endet: 0, pot: 0, board: [], dran: -1, aktBet: 0, raises: 0, spieler: [] });
+      }
+    }
+    /* Die Bots zieht es an die Tische: Sie setzen beim Roulette mit, nehmen am
+     * Blackjack- und Poker-Tisch Platz und spielen ordentlich ihre Züge. */
+    {
+      const tischBots = Object.values(G.players).filter(b => b.bot && b.familie && b.familie !== "polizei" && b.cash > 1500);
+      const casinoOffen = !!gcasinoHerrscher();
+      const R2 = G.groulette;
+      if (casinoOffen && R2.phase === "setzen" && R2.endet - G.tick <= 15) for (const b of tischBots) {
+        if (R2.einsaetze.some(e => e.pid === b.id) || Math.random() > .06) continue;
+        const einsatz = 100 * (1 + Math.floor(Math.random() * 4));
+        const art = Math.random() < .12 ? "zahl" : Math.random() < .5 ? "rot" : "schwarz";
+        gcasinoEinsatz(b, einsatz, "Roulette");
+        R2.einsaetze.push({ pid: b.id, name: b.name, farbe: b.color, art,
+          zahl: art === "zahl" ? Math.floor(Math.random() * 37) : null, einsatz });
+      }
+      const B2 = G.gblackjack;
+      if (casinoOffen && B2.phase === "setzen" && B2.spieler.length < 4) for (const b of tischBots) {
+        if (B2.spieler.some(s => s.pid === b.id) || Math.random() > .05) continue;
+        const einsatz = 100 * (1 + Math.floor(Math.random() * 3));
+        gcasinoEinsatz(b, einsatz, "Blackjack");
+        B2.spieler.push(bjSitzNeu(b, einsatz));
+      }
+      if (B2.phase === "ziehen") {
+        const s = B2.spieler[B2.dran], pl = s && G.players[s.pid];
+        if (pl?.bot && G.tick >= B2.endet - 17) {   // ~3 s Bedenkzeit
+          const hand = s.aktiv === 2 ? s.karten2 : s.karten;
+          const sum = bjSumme(hand);
+          let akt = sum < 17 ? "hit" : "stand";
+          if (hand.length === 2 && (sum === 10 || sum === 11) && pl.cash > s.einsatz && Math.random() < .5) akt = "double";
+          else if (s.aktiv === 1 && !s.karten2 && hand.length === 2 && hand[0].bj === hand[1].bj && hand[0].bj >= 8 && pl.cash > s.einsatz && Math.random() < .5) akt = "split";
+          gblackjackAktion(pl, s, akt);
+        }
+      }
+      const P2 = G.gpoker;
+      if (casinoOffen && P2.phase === "setzen" && P2.spieler.length < 4) for (const b of tischBots) {
+        if (P2.spieler.some(s => s.pid === b.id) || b.cash < P2.einsatz * 8 || Math.random() > .07) continue;
+        b.cash -= P2.einsatz; P2.pot += P2.einsatz;
+        logTx(b, "Casino", "Poker: Ante", -P2.einsatz);
+        P2.spieler.push({ pid: b.id, name: b.name, farbe: b.color, karten: [], gefoldet: false,
+          gesetzt: 0, dranWar: false, ergebnis: null, wert: null });
+      }
+      if (P2.phase === "wetten") {
+        const s = P2.spieler[P2.dran], pl = s && G.players[s.pid];
+        if (pl?.bot && G.tick >= P2.endet - 21) {   // ~4 s Bedenkzeit
+          const kosten = P2.aktBet - s.gesetzt;
+          let akt = kosten > 0 ? "call" : "check";
+          if (kosten === 0 && P2.raises < 3 && pl.cash > P2.einsatz * 3 && Math.random() < .18) akt = "raise";
+          else if (kosten > 0 && Math.random() < .12) akt = "fold";
+          if (akt !== "fold" && akt !== "check" && pl.cash < kosten + (akt === "raise" ? P2.einsatz : 0)) akt = "fold";
+          gpokerAktion(pl, s, akt);
+        }
       }
     }
     /* Endbedingung: Wer 6 der 9 Bezirke hält, hat die Stadt. Die Familie

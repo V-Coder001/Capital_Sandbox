@@ -2222,7 +2222,9 @@ function gcasinoRender() {
         { k: "roulette", icon: "🎡", name: "Roulette — Live-Tisch", live: true,
           info: "Alle setzen zusammen, ein Rad entscheidet · Rot/Schwarz ×2 · Volle Zahl ×36" },
         { k: "blackjack", icon: "🃏", name: "Blackjack — Live-Tisch", live: true,
-          info: "Bis zu 4 Plätze · näher an 21 als der Dealer · ×2, Blackjack ×2.5" },
+          info: "Bis zu 4 Plätze · näher an 21 als der Dealer · ×2, Blackjack ×2.5 · Verdoppeln & Splitten" },
+        { k: "poker", icon: "🂡", name: "Poker — Live-Tisch", live: true,
+          info: "2–4 Spieler gegeneinander · Hold’em light · das Haus nimmt 5 % vom Pot" },
         { k: "wuerfel", icon: "🎲", name: gc.spiele.wuerfel.name,
           info: `${(gc.spiele.wuerfel.chance * 100).toFixed(1)} % Chance · zahlt ×${gc.spiele.wuerfel.faktor}` },
         { k: "slots", icon: "🎰", name: gc.spiele.slots.name,
@@ -2293,6 +2295,7 @@ const GC_RAD = { winkel: 0, raf: 0, ziel: null, laeuft: false };
 const GC_RAD_ORD = [0,32,15,19,4,21,2,25,17,34,6,27,13,36,11,30,8,23,10,5,24,16,33,1,20,14,31,9,22,18,29,7,28,12,35,3,26];
 const GC_ROT = new Set([1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36]);
 const GC_TITEL = { roulette: "🎡 Roulette — Live-Tisch", blackjack: "🃏 Blackjack — Live-Tisch",
+  poker: "🂡 Poker — Live-Tisch",
   wuerfel: "🎲 Hohe Neun", slots: "🎰 Slots „La Fortuna“", baccara: "🎴 Baccara" };
 const karteHtml = k => `<span style="display:inline-block;min-width:32px;padding:6px 4px;margin:2px;border-radius:5px;background:#f4f0e6;color:${k.rot ? "#c0392b" : "#1c2430"};font-family:var(--mono);font-weight:800;font-size:15px;text-align:center;box-shadow:0 2px 6px rgba(0,0,0,.45)">${k.txt}</span>`;
 const gcChips = ziel => [100, 500, 1000, 2000].map(v =>
@@ -2340,6 +2343,8 @@ function gcSpielBauen() {
     gcRadMalen();
   } else if (GC_SPIEL === "blackjack") {
     el.innerHTML = `<div id="gcBjTisch"></div>`;
+  } else if (GC_SPIEL === "poker") {
+    el.innerHTML = `<div id="gcPokerTisch"></div>`;
   } else {
     /* Solo-Tische: Würfel, Slots, Baccara */
     const knopf = { wuerfel: "🎲 Würfeln", slots: "🎰 Drehen", baccara: "🎴 Karten geben" }[GC_SPIEL];
@@ -2394,9 +2399,12 @@ function gcRadDrehen(zahl) {
   const start = GC_RAD.winkel % (Math.PI * 2);
   const zielWinkel = -idx * seg + Math.PI * 2 * 6;   // 6 Extradrehungen, Segment landet am Zeiger
   const t0 = performance.now(), dauer = 6000;
+  let letztesSeg = -1;
   const schritt = t => {
     const f = Math.min(1, (t - t0) / dauer), e = 1 - Math.pow(1 - f, 3);
     GC_RAD.winkel = start + (zielWinkel - start) * e;
+    const seg2 = Math.floor(GC_RAD.winkel / (Math.PI * 2 / 37));
+    if (seg2 !== letztesSeg && f < .96) { KTON.tick(); letztesSeg = seg2; }
     gcRadMalen();
     if (f < 1 && GC_SPIEL === "roulette") GC_RAD.raf = requestAnimationFrame(schritt);
     else { GC_RAD.laeuft = false; GC_RAD.anzeige = zahl; gcRadMalen(); }
@@ -2427,7 +2435,7 @@ function gcRouletteTick() {
 
 /* ---- Blackjack ---- */
 function gcBlackjackTick() {
-  const st = store.get().state, myId = store.get().myId, B = st?.gblackjack;
+  const st = store.get().state, myId = store.get().myId, me = store.get().me, B = st?.gblackjack;
   const el = document.getElementById("gcBjTisch");
   if (!B || !el) return;
   if (el.contains(document.activeElement) && /INPUT/.test(document.activeElement.tagName)) return;
@@ -2438,6 +2446,12 @@ function gcBlackjackTick() {
     : B.phase === "setzen" ? `Karten kommen in <b style="color:#e8c268">${B.rest}s</b> — noch ${4 - B.spieler.length} Plätze frei.`
     : B.phase === "ziehen" ? (binDran ? `<b style="color:#e8c268">Du bist dran — ${B.rest}s</b>` : `${dranS ? dranS.name : "…"} überlegt (${B.rest}s)…`)
     : "Runde vorbei — der Tisch wird gleich neu eröffnet.";
+  if (B.phase === "vorbei" && ich?.ergebnis && gcBlackjackTick._erg !== ich.ergebnis) {
+    gcBlackjackTick._erg = ich.ergebnis;
+    if (/Gewonnen|Blackjack/.test(ich.ergebnis)) { KTON.win(/Blackjack/.test(ich.ergebnis)); gcKonfetti(); }
+    else if (!/Push/.test(ich.ergebnis)) KTON.lose();
+  }
+  if (B.phase !== "vorbei") gcBlackjackTick._erg = null;
   const ergFarbe = e => e === "Verloren" || e === "Überkauft" ? "var(--down)" : e === "Push" ? "var(--dim)" : "var(--up)";
   el.innerHTML = `
     <div class="lbl" style="text-align:center;min-height:16px">${status}</div>
@@ -2448,15 +2462,25 @@ function gcBlackjackTick() {
         <div style="margin-top:7px;padding-top:6px;border-top:1px solid rgba(201,160,78,.18);${B.phase === "ziehen" && i === B.dran ? "background:rgba(232,194,104,.08);border-radius:6px;padding:6px" : ""}">
           <div style="display:flex;gap:7px;align-items:center">
             <span style="color:${s.farbe}">●</span><b style="flex:1">${s.name}${s.pid === myId ? " (du)" : ""}</b>
-            <span class="meta" style="font-family:var(--mono)">${fmt(s.einsatz)}</span>
-            ${s.ergebnis ? `<b style="color:${ergFarbe(s.ergebnis)}">${s.ergebnis}</b>` : s.karten.length ? `<b>${s.summe}</b>` : ""}
+            <span class="meta" style="font-family:var(--mono)">${fmt(s.einsatz + (s.einsatz2 || 0))}</span>
+            ${s.ergebnis ? `<b style="color:${ergFarbe(s.ergebnis.split(" / ")[0])}">${s.ergebnis}</b>` : s.karten.length ? `<b>${s.summe}${s.karten2 ? " | " + s.summe2 : ""}</b>` : ""}
           </div>
-          <div>${s.karten.map(karteHtml).join("")}</div>
+          <div>${s.karten.map(karteHtml).join("")}${s.karten2 ? `<span class="meta" style="margin:0 5px">✂</span>${s.karten2.map(karteHtml).join("")}` : ""}
+          ${s.karten2 && B.phase === "ziehen" && i === B.dran ? `<span class="meta">(Hand ${s.aktiv})</span>` : ""}</div>
         </div>`).join("")}
     </div>
-    ${binDran ? `<div style="display:flex;gap:6px">
-        <button class="bknopf kauf" data-gcbjzug="hit" style="flex:1">🃏 Karte</button>
-        <button class="bknopf" data-gcbjzug="stand" style="flex:1;border-color:#c9a04e;color:#e8c268">✋ Halten</button></div>`
+    ${binDran ? (() => {
+        const hand = ich.aktiv === 2 ? ich.karten2 : ich.karten;
+        const grund = ich.aktiv === 2 ? ich.einsatz2 : ich.einsatz;
+        const kannDouble = hand.length === 2 && (me?.cash ?? 0) >= grund;
+        const kannSplit = ich.aktiv === 1 && !ich.karten2 && ich.karten.length === 2 &&
+          ich.karten[0].txt.slice(0, -1) === ich.karten[1].txt.slice(0, -1) && (me?.cash ?? 0) >= ich.einsatz;
+        return `<div style="display:flex;gap:6px;flex-wrap:wrap">
+        <button class="bknopf kauf" data-gcbjzug="hit" style="flex:1;min-width:100px">🃏 Karte</button>
+        <button class="bknopf" data-gcbjzug="stand" style="flex:1;min-width:100px;border-color:#c9a04e;color:#e8c268">✋ Halten</button>
+        ${kannDouble ? `<button class="bknopf" data-gcbjzug="double" style="flex:1;min-width:100px;border-color:#7ec8ff;color:#aadcff">×2 Verdoppeln</button>` : ""}
+        ${kannSplit ? `<button class="bknopf" data-gcbjzug="split" style="flex:1;min-width:100px;border-color:#d98cff;color:#e8b8ff">✂ Splitten</button>` : ""}</div>`;
+      })()
       : !ich && (B.phase === "warten" || B.phase === "setzen") ? `
         ${gcEinsatzZeile("gcBjEinsatz")}
         <button class="bknopf kauf" data-gcbjsitz style="width:100%">Platz nehmen</button>`
@@ -2464,12 +2488,156 @@ function gcBlackjackTick() {
       : ""}`;
 }
 
+/* ---- Poker ---- */
+function gcPokerTick() {
+  const st = store.get().state, myId = store.get().myId, me = store.get().me, P = st?.gpoker;
+  const el = document.getElementById("gcPokerTisch");
+  if (!P || !el) return;
+  const meinErg = P.spieler.find(s => s.pid === myId)?.ergebnis;
+  if (P.phase === "vorbei" && meinErg && gcPokerTick._erg !== meinErg) {
+    gcPokerTick._erg = meinErg;
+    if (meinErg.startsWith("+")) { KTON.win(true); gcKonfetti(); }
+    else if (meinErg !== "Gefoldet") KTON.lose();
+  }
+  if (P.phase !== "vorbei") gcPokerTick._erg = null;
+  if (el.contains(document.activeElement) && /INPUT/.test(document.activeElement.tagName)) return;
+  const ich = P.spieler.find(s => s.pid === myId);
+  const dranS = P.spieler[P.dran];
+  const binDran = P.phase === "wetten" && dranS && dranS.pid === myId;
+  const kosten = ich ? P.aktBet - ich.gesetzt : 0;
+  const STRASSEN = ["Preflop", "Flop", "Turn", "River"];
+  const status = P.phase === "warten" ? "Der Tisch ist frei — wer eröffnet, bestimmt den Grundeinsatz."
+    : P.phase === "setzen" ? `Karten kommen in <b style="color:#e8c268">${P.rest}s</b> — Grundeinsatz ${fmt(P.einsatz)}, noch ${4 - P.spieler.length} Plätze.`
+    : P.phase === "wetten" ? (binDran ? `<b style="color:#e8c268">Du bist dran (${STRASSEN[P.strasse]}) — ${P.rest}s</b>` : `${dranS ? dranS.name : "…"} überlegt (${STRASSEN[P.strasse]}, ${P.rest}s)…`)
+    : "Showdown — gleich wird neu gemischt.";
+  const ruecken = `<span style="display:inline-block;min-width:32px;padding:6px 4px;margin:2px;border-radius:5px;background:repeating-linear-gradient(45deg,#28406e,#28406e 4px,#1c2f52 4px,#1c2f52 8px);color:transparent">?</span>`;
+  el.innerHTML = `
+    <div class="lbl" style="text-align:center;min-height:16px">${status}</div>
+    <div style="margin:9px 0;padding:9px;border-radius:9px;background:linear-gradient(180deg,#123524,#0c2418);border:1px solid #c9a04e33">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <span class="lbl">Board</span>
+        <b style="font-family:var(--mono);color:#e8c268">Pot ${fmt(P.pot)}</b>
+      </div>
+      <div style="min-height:44px">${P.board.map(karteHtml).join("") || `<span class="meta">— noch keine Gemeinschaftskarten —</span>`}</div>
+      ${P.spieler.map((s, i) => `
+        <div style="margin-top:7px;padding-top:6px;border-top:1px solid rgba(201,160,78,.18);${P.phase === "wetten" && i === P.dran ? "background:rgba(232,194,104,.08);border-radius:6px;padding:6px" : ""};${s.gefoldet ? "opacity:.45" : ""}">
+          <div style="display:flex;gap:7px;align-items:center">
+            <span style="color:${s.farbe}">●</span><b style="flex:1">${s.name}${s.pid === myId ? " (du)" : ""}</b>
+            ${s.gesetzt ? `<span class="meta" style="font-family:var(--mono)">gesetzt ${fmt(s.gesetzt)}</span>` : ""}
+            ${s.ergebnis ? `<b style="color:${s.ergebnis.startsWith("+") ? "var(--up)" : "var(--dim)"}">${s.ergebnis}</b>` : s.gefoldet ? `<b class="meta">Fold</b>` : ""}
+          </div>
+          <div>${s.karten ? s.karten.map(karteHtml).join("")
+            : s.pid === myId && me?.gpokerKarten ? me.gpokerKarten.map(karteHtml).join("")
+            : P.phase === "wetten" || P.phase === "setzen" ? ruecken + ruecken : ""}</div>
+        </div>`).join("")}
+    </div>
+    ${binDran ? `<div style="display:flex;gap:6px;flex-wrap:wrap">
+        <button class="bknopf verkauf" data-gcpoker="fold" style="flex:1;min-width:90px">Fold</button>
+        <button class="bknopf kauf" data-gcpoker="${kosten > 0 ? "call" : "check"}" style="flex:1;min-width:90px">${kosten > 0 ? `Call ${fmt(kosten)}` : "Check"}</button>
+        ${P.raises < 3 ? `<button class="bknopf" data-gcpoker="raise" style="flex:1;min-width:90px;border-color:#c9a04e;color:#e8c268">Raise +${fmt(P.einsatz)}</button>` : ""}</div>`
+      : !ich && (P.phase === "warten" || P.phase === "setzen") ? `
+        ${P.phase === "warten" ? gcEinsatzZeile("gcPokerEinsatz") : `<p class="note" style="margin:4px 0">Grundeinsatz dieses Tisches: ${fmt(P.einsatz)} — du brauchst ${fmt(P.einsatz * 6)} Reserve.</p>`}
+        <button class="bknopf kauf" data-gcpokersitz style="width:100%">Platz nehmen</button>`
+      : ""}
+    <p class="note" style="margin:6px 0 0">Gespielt wird gegeneinander — das Haus nimmt 5 % vom Pot.</p>`;
+}
+
 function gcSpielTick() {
   const st = store.get().state;
-  if (!st?.gcasino?.herrscher && GC_SPIEL) { gcSpielSchliessen(); return; }
+  /* Wechselt die Piazza mitten in der Runde den Herrn, bleibt das Fenster
+   * offen: Laufende Haende werden zu Ende gespielt, nur neue Einsaetze
+   * weist der Server ab. */
   if (GC_SPIEL === "roulette") gcRouletteTick();
   else if (GC_SPIEL === "blackjack") gcBlackjackTick();
+  else if (GC_SPIEL === "poker") gcPokerTick();
+  gcTischSounds();
 }
+
+/* ---- Casino-Sounds: kurze Klänge über den vorhandenen rennTon-Synth ---- */
+const KTON = {
+  chip()  { rennTon(660, .05, "square", .05); setTimeout(() => rennTon(880, .05, "square", .04), 45); },
+  karte() { rennTon(1400, .03, "square", .035); },
+  tick()  { rennTon(1900, .015, "square", .03); },
+  win(gross) {
+    rennTon(523, .12, "triangle", .1); setTimeout(() => rennTon(659, .12, "triangle", .1), 110);
+    setTimeout(() => rennTon(784, .2, "triangle", .12), 220);
+    if (gross) setTimeout(() => rennTon(1047, .3, "triangle", .13), 330);
+  },
+  lose() { rennTon(180, .22, "sine", .07, 120); },
+};
+
+/* Karten-Sounds aus Zustandswechseln ableiten (Geben am Live-Tisch) */
+let GC_SND = { bj: 0, poker: 0, board: 0, radPhase: null, radBet: false };
+function gcTischSounds() {
+  const st = store.get().state, myId = store.get().myId;
+  if (!st) return;
+  const bjK = (st.gblackjack?.spieler || []).reduce((a, s) => a + s.karten.length + (s.karten2?.length || 0), 0)
+    + (st.gblackjack?.dealer?.length || 0);
+  if (bjK > GC_SND.bj && GC_SPIEL === "blackjack") KTON.karte();
+  GC_SND.bj = bjK;
+  const brd = st.gpoker?.board?.length || 0;
+  if (brd > GC_SND.board && GC_SPIEL === "poker") KTON.karte();
+  GC_SND.board = brd;
+  /* Roulette: Runde vorbei -> Gewinn-Fanfare oder Seufzer, plus Konfetti */
+  const R = st.groulette;
+  if (R) {
+    if (R.phase !== "warten") GC_SND.radBet = GC_SND.radBet || R.einsaetze.some(e => e.name === st.players?.[myId]?.name);
+    if (GC_SND.radPhase === "drehen" && R.phase === "warten" && GC_SND.radBet) {
+      const meinName = st.players?.[myId]?.name;
+      if ((R.letzteGewinner || []).includes(meinName)) { KTON.win(); gcKonfetti(); }
+      else KTON.lose();
+      GC_SND.radBet = false;
+    }
+    GC_SND.radPhase = R.phase;
+  }
+}
+
+/* ---- Konfetti im Spielfenster ---- */
+function gcKonfetti() {
+  const ziel = document.querySelector("#gcSpielModal .gcPanel");
+  if (!ziel || document.getElementById("gcKonfetti")) return;
+  const box = document.createElement("div");
+  box.id = "gcKonfetti";
+  box.style.cssText = "position:absolute;inset:0;overflow:hidden;pointer-events:none;z-index:5";
+  ziel.style.position = "relative";
+  const TEILE = ["🪙", "✨", "💰", "🎉"];
+  for (let i = 0; i < 22; i++) {
+    const s = document.createElement("span");
+    s.textContent = TEILE[Math.floor(Math.random() * TEILE.length)];
+    s.style.cssText = `position:absolute;top:-30px;left:${Math.random() * 96}%;font-size:${13 + Math.random() * 14}px;transition:transform ${1 + Math.random() * .8}s cubic-bezier(.3,.7,.6,1),opacity 1.6s;opacity:1`;
+    box.appendChild(s);
+    requestAnimationFrame(() => { s.style.transform = `translateY(${360 + Math.random() * 200}px) rotate(${(Math.random() - .5) * 540}deg)`; s.style.opacity = "0"; });
+  }
+  ziel.appendChild(box);
+  setTimeout(() => box.remove(), 2100);
+}
+
+/* ---- Bank gesprengt / Großgewinn: goldenes Vollbild-Banner ---- */
+function gcasinoBanner(d) {
+  let el = document.getElementById("gcBanner");
+  if (!el) {
+    el = document.createElement("div");
+    el.id = "gcBanner";
+    el.style.cssText = "position:fixed;inset:0;z-index:9999;display:none;place-items:center;pointer-events:none;background:radial-gradient(ellipse at center,rgba(201,160,78,.22),rgba(6,9,15,.55))";
+    el.innerHTML = `<div id="gcBannerBox" style="text-align:center;transform:scale(.8);transition:transform .35s cubic-bezier(.2,1.6,.4,1)">
+      <div id="gcBannerTitel" style="font-size:min(8vw,52px);font-weight:900;letter-spacing:2px;color:#e8c268;text-shadow:0 3px 24px rgba(201,160,78,.6)"></div>
+      <div id="gcBannerText" style="font-size:min(4vw,20px);color:#f3ead2;margin-top:8px"></div></div>`;
+    document.body.appendChild(el);
+  }
+  document.getElementById("gcBannerTitel").textContent = d.art === "gesprengt" ? "💥 BANK GESPRENGT!" : "🎰 GROSSER ABEND!";
+  document.getElementById("gcBannerText").textContent = `${d.name} räumt ${fmt(d.betrag)} ab`;
+  el.style.display = "grid";
+  requestAnimationFrame(() => document.getElementById("gcBannerBox").style.transform = "scale(1)");
+  KTON.win(true);
+  if (d.art === "gesprengt") setTimeout(() => rennTon(1319, .4, "triangle", .12), 440);
+  gcKonfetti();
+  clearTimeout(gcasinoBanner._t);
+  gcasinoBanner._t = setTimeout(() => {
+    document.getElementById("gcBannerBox").style.transform = "scale(.8)";
+    el.style.display = "none";
+  }, 3200);
+}
+socket.on("gcasinoEreignis", d => gcasinoBanner(d));
 
 /* ---- Solo-Animationen ---- */
 const GC_AUGEN = ["⚀","⚁","⚂","⚃","⚄","⚅"];
@@ -2478,9 +2646,12 @@ function gcSoloSpielen(art) {
   socket.emit("gcasinoSpielen", { spiel: art, einsatz }, res => {
     if (res?.error) return toast(res.error, true);
     const erg = document.getElementById("gcSoloErgebnis");
-    const fertigText = () => { if (erg) erg.innerHTML = res.gewonnen
-      ? `<span style="color:var(--up)">🎉 Gewonnen · +${fmt(res.betrag)}</span>`
-      : `<span style="color:var(--down)">✗ Verloren · −${fmt(res.betrag)}</span>`; };
+    const fertigText = () => {
+      if (erg) erg.innerHTML = res.gewonnen
+        ? `<span style="color:var(--up)">🎉 Gewonnen · +${fmt(res.betrag)}</span>`
+        : `<span style="color:var(--down)">✗ Verloren · −${fmt(res.betrag)}</span>`;
+      if (res.gewonnen) { KTON.win(res.betrag >= 1000); gcKonfetti(); } else KTON.lose();
+    };
     if (erg) erg.innerHTML = "";
     if (art === "wuerfel" && res.detail?.wuerfel) {
       const feld = document.getElementById("gcWuerfelFeld"), summe = document.getElementById("gcWuerfelSumme");
@@ -2488,7 +2659,7 @@ function gcSoloSpielen(art) {
       const iv = setInterval(() => {
         n++;
         if (!feld || GC_SPIEL !== "wuerfel") return clearInterval(iv);
-        if (n < 12) feld.textContent = GC_AUGEN[Math.floor(Math.random() * 6)] + " " + GC_AUGEN[Math.floor(Math.random() * 6)];
+        if (n < 12) { feld.textContent = GC_AUGEN[Math.floor(Math.random() * 6)] + " " + GC_AUGEN[Math.floor(Math.random() * 6)]; if (n % 3 === 0) KTON.tick(); }
         else {
           clearInterval(iv);
           const [a, b] = res.detail.wuerfel;
@@ -2502,13 +2673,13 @@ function gcSoloSpielen(art) {
       [0, 1, 2].forEach(i => {
         const w = document.getElementById("gcWalze" + i);
         const iv = setInterval(() => { if (w) w.textContent = SYM[Math.floor(Math.random() * SYM.length)]; }, 70);
-        setTimeout(() => { clearInterval(iv); if (w) w.textContent = res.detail.walzen[i]; if (i === 2) fertigText(); }, 800 + i * 550);
+        setTimeout(() => { clearInterval(iv); if (w) w.textContent = res.detail.walzen[i]; KTON.chip(); if (i === 2) fertigText(); }, 800 + i * 550);
       });
     } else if (art === "baccara" && res.detail) {
       const sEl = document.getElementById("gcBacSpieler"), bEl = document.getElementById("gcBacBank");
       if (sEl) sEl.innerHTML = ""; if (bEl) bEl.innerHTML = "";
       const alle = [...res.detail.spieler.map(k => [sEl, k]), ...res.detail.bank.map(k => [bEl, k])];
-      alle.forEach(([el2, k], i) => setTimeout(() => { if (el2) el2.innerHTML += karteHtml(k); }, 280 * i));
+      alle.forEach(([el2, k], i) => setTimeout(() => { if (el2) el2.innerHTML += karteHtml(k); KTON.karte(); }, 280 * i));
       setTimeout(() => {
         if (sEl) sEl.innerHTML += ` <b style="font-family:var(--mono)">= ${res.detail.ps}</b>`;
         if (bEl) bEl.innerHTML += ` <b style="font-family:var(--mono)">= ${res.detail.bs}</b>`;
@@ -2522,18 +2693,29 @@ document.addEventListener("click", e => {
   const fenster = e.target.closest("button[data-gcfenster]");
   if (fenster) { gcSpielOeffnen(fenster.dataset.gcfenster); return; }
   const chip = e.target.closest("button[data-gcchip]");
-  if (chip) { const f = document.getElementById(chip.dataset.gcchip); if (f) f.value = chip.dataset.wert; return; }
+  if (chip) { const f = document.getElementById(chip.dataset.gcchip); if (f) f.value = chip.dataset.wert; KTON.chip(); return; }
+  if (e.target.closest("button[data-gcpokersitz]")) {
+    socket.emit("gpokerBeitreten", { einsatz: +document.getElementById("gcPokerEinsatz")?.value || 100 },
+      res => { if (res?.error) toast(res.error, true); else KTON.chip(); });
+    return;
+  }
+  const pz = e.target.closest("button[data-gcpoker]");
+  if (pz) {
+    socket.emit("gpokerZug", { aktion: pz.dataset.gcpoker },
+      res => { if (res?.error) toast(res.error, true); else if (pz.dataset.gcpoker === "raise" || pz.dataset.gcpoker === "call") KTON.chip(); });
+    return;
+  }
   const rad = e.target.closest("button[data-gcrad]");
   if (rad) {
     const art = rad.dataset.gcrad;
     socket.emit("grouletteSetzen", { art, zahl: +document.getElementById("gcRadZahl")?.value || 0,
       einsatz: +document.getElementById("gcRadEinsatz")?.value || 100 },
-      res => { if (res?.error) toast(res.error, true); else gcRouletteTick(); });
+      res => { if (res?.error) toast(res.error, true); else { KTON.chip(); gcRouletteTick(); } });
     return;
   }
   if (e.target.closest("button[data-gcbjsitz]")) {
     socket.emit("gblackjackBeitreten", { einsatz: +document.getElementById("gcBjEinsatz")?.value || 100 },
-      res => { if (res?.error) toast(res.error, true); });
+      res => { if (res?.error) toast(res.error, true); else KTON.chip(); });
     return;
   }
   const zug = e.target.closest("button[data-gcbjzug]");
