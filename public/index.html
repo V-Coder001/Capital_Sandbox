@@ -2355,7 +2355,7 @@ function gcSpielBauen() {
   if (GC_SPIEL === "roulette") {
     el.innerHTML = `
       <div id="gcRadStatus" class="lbl" style="text-align:center;min-height:16px"></div>
-      <canvas id="gcRadCanvas" width="240" height="240" style="display:block;margin:6px auto 2px;width:240px;height:240px"></canvas>
+      <canvas id="gcRadCanvas" style="display:block;margin:6px auto 2px;width:264px;height:264px;max-width:100%"></canvas>
       <div id="gcRadLetzte" class="meta" style="text-align:center;font-family:var(--mono);min-height:18px"></div>
       ${gcEinsatzZeile("gcRadEinsatz")}
       <div style="display:flex;gap:6px;margin-bottom:7px">
@@ -2392,33 +2392,91 @@ function gcSpielBauen() {
 }
 
 /* ---- Roulette: Rad malen & drehen ---- */
+/* Der Kessel: Holz-und-Gold-Rand, satte Faecher, Kugel, Gewinner-Glut.
+ * Gezeichnet in Retina-Aufloesung, damit nichts verwaschen wirkt. */
 function gcRadMalen() {
   const c = document.getElementById("gcRadCanvas");
   if (!c) return;
-  const cx = c.getContext("2d"), M = 120, R = 112;
-  cx.clearRect(0, 0, 240, 240);
-  cx.save(); cx.translate(M, M); cx.rotate(GC_RAD.winkel);
-  const seg = Math.PI * 2 / 37;
+  const dpr = Math.min(2, window.devicePixelRatio || 1), CSSW = 264;
+  if (c.width !== CSSW * dpr) { c.width = c.height = CSSW * dpr; }
+  const cx = c.getContext("2d");
+  cx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  cx.clearRect(0, 0, CSSW, CSSW);
+  const M = CSSW / 2, R = 118, seg = Math.PI * 2 / 37;
+  cx.save(); cx.translate(M, M);
+
+  /* Aeusserer Rand: dunkles Holz mit Goldkante */
+  let g = cx.createRadialGradient(0, 0, R - 4, 0, 0, R + 12);
+  g.addColorStop(0, "#3a2417"); g.addColorStop(.55, "#57351d"); g.addColorStop(1, "#2a1a10");
+  cx.beginPath(); cx.arc(0, 0, R + 12, 0, Math.PI * 2); cx.fillStyle = g; cx.fill();
+  cx.beginPath(); cx.arc(0, 0, R + 12, 0, Math.PI * 2); cx.strokeStyle = "#c9a04e"; cx.lineWidth = 2; cx.stroke();
+  cx.beginPath(); cx.arc(0, 0, R + 2, 0, Math.PI * 2); cx.strokeStyle = "#e8c26866"; cx.lineWidth = 1; cx.stroke();
+
+  cx.rotate(GC_RAD.winkel);
+  const idxSieger = GC_RAD.anzeige != null && GC_RAD.anzeige !== "…" ? GC_RAD_ORD.indexOf(GC_RAD.anzeige) : -1;
   for (let i = 0; i < 37; i++) {
     const z = GC_RAD_ORD[i];
-    cx.beginPath(); cx.moveTo(0, 0); cx.arc(0, 0, R, i * seg - Math.PI / 2 - seg / 2, (i + 1) * seg - Math.PI / 2 - seg / 2);
-    cx.fillStyle = z === 0 ? "#1d7a45" : GC_ROT.has(z) ? "#a12a2a" : "#181d26";
-    cx.fill(); cx.strokeStyle = "#c9a04e55"; cx.lineWidth = 1; cx.stroke();
+    const a0 = i * seg - Math.PI / 2 - seg / 2, a1 = a0 + seg;
+    /* Fach mit leichtem Radialverlauf */
+    const basis = z === 0 ? ["#1f8b4d", "#0f5c30"] : GC_ROT.has(z) ? ["#c22f36", "#7e1b21"] : ["#262c38", "#101319"];
+    g = cx.createRadialGradient(0, 0, 58, 0, 0, R);
+    g.addColorStop(0, basis[1]); g.addColorStop(1, basis[0]);
+    cx.beginPath(); cx.moveTo(0, 0); cx.arc(0, 0, R, a0, a1); cx.closePath();
+    cx.fillStyle = g; cx.fill();
+    /* Gewinnerfach gluehen lassen */
+    if (i === idxSieger && !GC_RAD.laeuft) {
+      cx.save(); cx.globalAlpha = .55 + .35 * Math.sin(performance.now() / 220);
+      cx.beginPath(); cx.moveTo(0, 0); cx.arc(0, 0, R, a0, a1); cx.closePath();
+      cx.fillStyle = "#e8c268"; cx.fill(); cx.restore();
+    }
+    /* Goldsteg zwischen den Faechern */
+    cx.save(); cx.rotate(a0);
+    cx.beginPath(); cx.moveTo(62, 0); cx.lineTo(R, 0);
+    cx.strokeStyle = "#c9a04e88"; cx.lineWidth = 1.2; cx.stroke(); cx.restore();
+    /* Zahl */
     cx.save(); cx.rotate(i * seg - Math.PI / 2);
-    cx.fillStyle = "#e9e2d0"; cx.font = "700 9px ui-monospace,monospace"; cx.textAlign = "center";
-    cx.fillText(z, 0, -R + 13);
+    cx.fillStyle = i === idxSieger && !GC_RAD.laeuft ? "#10131a" : "#f2e8d2";
+    cx.font = "800 10px ui-monospace,monospace"; cx.textAlign = "center"; cx.textBaseline = "middle";
+    cx.shadowColor = "rgba(0,0,0,.6)"; cx.shadowBlur = 2;
+    cx.fillText(z, 0, -R + 12);
     cx.restore();
   }
-  cx.beginPath(); cx.arc(0, 0, 58, 0, Math.PI * 2); cx.fillStyle = "#0d1420"; cx.fill();
-  cx.strokeStyle = "#c9a04e"; cx.lineWidth = 2; cx.stroke();
-  const st2 = store.get().state;
-  cx.fillStyle = "#e8c268"; cx.font = "800 26px ui-monospace,monospace"; cx.textAlign = "center"; cx.textBaseline = "middle";
+  /* Innenring */
+  cx.beginPath(); cx.arc(0, 0, 62, 0, Math.PI * 2); cx.strokeStyle = "#c9a04e"; cx.lineWidth = 2.5; cx.stroke();
   cx.rotate(-GC_RAD.winkel);
-  cx.fillText(GC_RAD.anzeige ?? (st2?.groulette?.letzteZahl ?? "–"), 0, 1);
+
+  /* Nabe: dunkler Samt mit Goldring und grosser Zahl */
+  g = cx.createRadialGradient(-14, -18, 6, 0, 0, 58);
+  g.addColorStop(0, "#1c2536"); g.addColorStop(1, "#0a0e17");
+  cx.beginPath(); cx.arc(0, 0, 58, 0, Math.PI * 2); cx.fillStyle = g; cx.fill();
+  cx.beginPath(); cx.arc(0, 0, 50, 0, Math.PI * 2); cx.strokeStyle = "#c9a04e44"; cx.lineWidth = 1; cx.stroke();
+  const st2 = store.get().state;
+  const anz = GC_RAD.anzeige ?? (st2?.groulette?.letzteZahl ?? "–");
+  const anzFarbe = anz === "…" || anz === "–" ? "#8fa0b8"
+    : anz === 0 ? "#37c977" : GC_ROT.has(anz) ? "#ff6b6b" : "#dfe6f0";
+  cx.fillStyle = anzFarbe; cx.font = "900 30px ui-monospace,monospace";
+  cx.textAlign = "center"; cx.textBaseline = "middle";
+  cx.shadowColor = "rgba(232,194,104,.4)"; cx.shadowBlur = anz === "…" ? 0 : 14;
+  cx.fillText(anz, 0, 1);
+  cx.shadowBlur = 0;
+
+  /* Kugel: rollt beim Drehen gegenlaeufig aussen, faellt dann ins Fach */
+  if (GC_RAD.kugelWinkel != null) {
+    const kr = GC_RAD.kugelR ?? R - 10;
+    const kx = Math.cos(GC_RAD.kugelWinkel) * kr, ky = Math.sin(GC_RAD.kugelWinkel) * kr;
+    g = cx.createRadialGradient(kx - 2, ky - 2, .5, kx, ky, 5.5);
+    g.addColorStop(0, "#ffffff"); g.addColorStop(1, "#9aa4b5");
+    cx.beginPath(); cx.arc(kx, ky, 5, 0, Math.PI * 2); cx.fillStyle = g; cx.fill();
+    cx.beginPath(); cx.arc(kx, ky, 5, 0, Math.PI * 2); cx.strokeStyle = "rgba(0,0,0,.35)"; cx.lineWidth = 1; cx.stroke();
+  }
   cx.restore();
-  /* Zeiger oben */
-  cx.beginPath(); cx.moveTo(M - 8, 4); cx.lineTo(M + 8, 4); cx.lineTo(M, 20); cx.closePath();
-  cx.fillStyle = "#e8c268"; cx.fill();
+
+  /* Zeiger oben, mit Goldschliff */
+  cx.beginPath(); cx.moveTo(M - 9, 2); cx.lineTo(M + 9, 2); cx.lineTo(M, 22); cx.closePath();
+  g = cx.createLinearGradient(M, 2, M, 22);
+  g.addColorStop(0, "#f2dda2"); g.addColorStop(1, "#b9903f");
+  cx.fillStyle = g; cx.fill();
+  cx.strokeStyle = "#7d6023"; cx.lineWidth = 1; cx.stroke();
 }
 function gcRadDrehen(zahl) {
   if (GC_RAD.laeuft && GC_RAD.ziel === zahl) return;
@@ -2426,16 +2484,36 @@ function gcRadDrehen(zahl) {
   const idx = GC_RAD_ORD.indexOf(zahl), seg = Math.PI * 2 / 37;
   const start = GC_RAD.winkel % (Math.PI * 2);
   const zielWinkel = -idx * seg + Math.PI * 2 * 6;   // 6 Extradrehungen, Segment landet am Zeiger
+  const R = 118;
   const t0 = performance.now(), dauer = 6000;
+  const kugelStart = -Math.PI / 2 + Math.random() * Math.PI * 2;
   let letztesSeg = -1;
   const schritt = t => {
     const f = Math.min(1, (t - t0) / dauer), e = 1 - Math.pow(1 - f, 3);
     GC_RAD.winkel = start + (zielWinkel - start) * e;
+    /* Kugel: laeuft gegen die Drehrichtung, wird langsamer, sinkt nach innen
+     * und liegt am Ende exakt im Zeigerfach (oben). */
+    const kugelUmlaeufe = 8 * (1 - Math.pow(1 - f, 2.2));
+    GC_RAD.kugelWinkel = f < .92
+      ? kugelStart + kugelUmlaeufe * Math.PI * 2
+      : -Math.PI / 2;                     // eingerastet im Fach am Zeiger
+    GC_RAD.kugelR = R - 10 - 34 * Math.pow(f, 3);
     const seg2 = Math.floor(GC_RAD.winkel / (Math.PI * 2 / 37));
     if (seg2 !== letztesSeg && f < .96) { KTON.tick(); letztesSeg = seg2; }
     gcRadMalen();
     if (f < 1 && GC_SPIEL === "roulette") GC_RAD.raf = requestAnimationFrame(schritt);
-    else { GC_RAD.laeuft = false; GC_RAD.anzeige = zahl; gcRadMalen(); }
+    else {
+      GC_RAD.laeuft = false; GC_RAD.anzeige = zahl;
+      /* Gewinner-Glut noch kurz pulsieren lassen */
+      const t1 = performance.now();
+      const glut = () => {
+        if (GC_SPIEL !== "roulette") return;
+        gcRadMalen();
+        if (performance.now() - t1 < 2600) GC_RAD.raf = requestAnimationFrame(glut);
+        else { GC_RAD.kugelWinkel = null; GC_RAD.kugelR = null; gcRadMalen(); }
+      };
+      GC_RAD.raf = requestAnimationFrame(glut);
+    }
   };
   GC_RAD.raf = requestAnimationFrame(schritt);
 }
