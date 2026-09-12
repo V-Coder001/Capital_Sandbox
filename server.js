@@ -527,6 +527,119 @@ const GCASINO_BEZIRK = 4;             // Piazza Grande
 const GCASINO_EINSATZ_MAX = 2000;
 const GCASINO_SCHWARZPREIS = 1.3;     // Faktor auf den Hehler-Basispreis
 const gcasinoHerrscher = () => G.bezirke?.[GCASINO_BEZIRK]?.kontrolle || null;
+
+/* --- Live-Spieltische: gemeinsames Roulette-Rad & Blackjack-Tisch ---
+ * Ergebnisse würfelt der Server; die Clients animieren nur, was feststeht. */
+const GROULETTE_ROT = new Set([1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36]);
+const KARTEN_WERTE = ["2","3","4","5","6","7","8","9","10","B","D","K","A"];
+const karteZiehen = () => {
+  const i = Math.floor(Math.random() * 13), f = "\u2660\u2665\u2666\u2663"[Math.floor(Math.random() * 4)];
+  return { txt: KARTEN_WERTE[i] + f, rot: f === "\u2665" || f === "\u2666",
+    bj: i <= 7 ? i + 2 : i === 12 ? 11 : 10,
+    bac: i <= 7 ? i + 2 : i === 12 ? 1 : 0 };
+};
+const bjSumme = karten => {
+  let s = karten.reduce((a, k) => a + k.bj, 0), asse = karten.filter(k => k.bj === 11).length;
+  while (s > 21 && asse-- > 0) s -= 10;
+  return s;
+};
+const bacSumme = karten => karten.reduce((a, k) => a + k.bac, 0) % 10;
+
+/* Einsatz wandert in die Familienkasse; Gewinne zahlt die Familie — anteilig,
+ * gedeckelt auf das, was da ist (sonst gibt es Spott und Respektverlust). */
+function gcasinoEinsatz(p, einsatz, quelle) {
+  const herr = gcasinoHerrscher();
+  const bank = Object.values(G.players).filter(m => m.familie === herr);
+  p.cash -= einsatz;
+  const teil = Math.round(einsatz / Math.max(1, bank.length));
+  for (const m of bank) { m.cash += teil; logTx(m, "Casino", `Spieleinnahme (${quelle})`, teil); }
+  logTx(p, "Casino", `Einsatz im Casino Municipale (${quelle})`, -einsatz);
+}
+function gcasinoGewinn(p, brutto, quelle) {
+  const herr = gcasinoHerrscher();
+  const bank = Object.values(G.players).filter(m => m.familie === herr);
+  let offen = brutto;
+  for (const m of bank) {
+    const teil = Math.min(m.cash, Math.ceil(offen / Math.max(1, bank.length)));
+    m.cash -= teil; offen -= teil;
+    logTx(m, "Casino", `Auszahlung an ${p.name} (${quelle})`, -teil);
+    if (offen <= 0) break;
+  }
+  const gezahlt = brutto - Math.max(0, offen);
+  p.cash += gezahlt;
+  logTx(p, "Casino", `Gewinn im Casino Municipale (${quelle})`, gezahlt);
+  if (offen > 0) {
+    G.familienRespekt[herr] = Math.max(0, (G.familienRespekt[herr] || 0) - 3);
+    io.emit("notice", { text: `\u{1F3B0} ${p.name} sprengt die Bank — ${famDef(herr).name} kann nicht voll auszahlen (−3 Respekt)!` });
+  } else if (brutto >= 3000) {
+    io.emit("notice", { text: `\u{1F3B0} Großer Abend im Casino Municipale: ${p.name} gewinnt ${brutto} $ bei ${quelle}.` });
+  }
+  return gezahlt;
+}
+
+function gblackjackWeiter() {
+  const B = G.gblackjack;
+  B.dran = B.spieler.findIndex((s, i) => i > B.dran && !s.fertig);
+  if (B.dran >= 0) { B.endet = G.tick + 20; return; }
+  /* Alle fertig: Dealer zieht bis 17, dann wird abgerechnet. */
+  while (bjSumme(B.dealer) < 17) B.dealer.push(karteZiehen());
+  const d = bjSumme(B.dealer);
+  for (const s of B.spieler) {
+    const pl = G.players[s.pid], sum = bjSumme(s.karten);
+    if (sum > 21) s.ergebnis = "Überkauft";
+    else if (sum === 21 && s.karten.length === 2) {
+      s.ergebnis = "Blackjack!";
+      if (pl) gcasinoGewinn(pl, Math.round(s.einsatz * 2.5), "Blackjack");
+    } else if (d > 21 || sum > d) {
+      s.ergebnis = "Gewonnen";
+      if (pl) gcasinoGewinn(pl, s.einsatz * 2, "Blackjack");
+    } else if (sum === d) {
+      s.ergebnis = "Push";
+      if (pl) gcasinoGewinn(pl, s.einsatz, "Blackjack");
+    } else s.ergebnis = "Verloren";
+  }
+  const sieger = B.spieler.filter(s => s.ergebnis === "Gewonnen" || s.ergebnis === "Blackjack!").map(s => s.name);
+  io.emit("notice", { text: `\u{1F0CF} Blackjack: Der Dealer hat ${d > 21 ? d + " — überkauft!" : d}. ${sieger.length ? "Es gewinnen: " + sieger.join(", ") : "Der Tisch geht leer aus."}` });
+  B.phase = "vorbei"; B.endet = G.tick + 10;
+}
+
+/* Solo-Spiele: erst entscheidet die Quote über Sieg/Niederlage, dann werden
+ * Würfel, Walzen oder Karten passend zum Ausgang erzeugt — die Animation im
+ * Client zeigt also immer genau das, was zählt. */
+function gcasinoDetail(spiel, gewonnen) {
+  if (spiel === "wuerfel") {
+    let a, b;
+    do { a = 1 + Math.floor(Math.random() * 6); b = 1 + Math.floor(Math.random() * 6); }
+    while ((a + b >= 9) !== gewonnen);
+    return { wuerfel: [a, b] };
+  }
+  if (spiel === "slots") {
+    const SYM = ["\u{1F34B}", "\u{1F352}", "\u{1F514}", "\u2B50", "\u{1F347}", "7\uFE0F\u20E3"];
+    if (gewonnen) { const s = SYM[Math.floor(Math.random() * SYM.length)]; return { walzen: [s, s, s] }; }
+    let w;
+    do { w = [0, 0, 0].map(() => SYM[Math.floor(Math.random() * SYM.length)]); }
+    while (w[0] === w[1] && w[1] === w[2]);
+    return { walzen: w };
+  }
+  if (spiel === "baccara") {
+    for (let i = 0; i < 400; i++) {
+      const sp = [karteZiehen(), karteZiehen()], bk = [karteZiehen(), karteZiehen()];
+      if (bacSumme(sp) <= 4) sp.push(karteZiehen());
+      if (bacSumme(bk) <= 4) bk.push(karteZiehen());
+      if ((bacSumme(sp) > bacSumme(bk)) === gewonnen)
+        return { spieler: sp.map(k => ({ txt: k.txt, rot: k.rot })), bank: bk.map(k => ({ txt: k.txt, rot: k.rot })),
+                 ps: bacSumme(sp), bs: bacSumme(bk) };
+    }
+    return null;
+  }
+  if (spiel === "rot" || spiel === "zahl") {
+    let z;
+    do { z = Math.floor(Math.random() * 37); }
+    while (spiel === "rot" && (z !== 0 && GROULETTE_ROT.has(z)) !== gewonnen);
+    return { zahl: z, rot: GROULETTE_ROT.has(z) };
+  }
+  return null;
+}
 const MAFIA_BOT_NAMEN = {
   famiglia: ["Don Salvatore", "Luca Moretti"],
   syndikat: ["Viktor Kroll", "Greta Falk"],
@@ -2132,6 +2245,8 @@ const G = {
   started: false, hostId: null,
   groupOrder: null, nextGroupIn: 20,   // erster Stadt-Auftrag nach 20 s
   gcasino: { stufe: 1, quote: "fair" },   // Casino Municipale (Kartellmodus)
+  groulette: { phase: "warten", endet: 0, zahl: null, letzteZahl: null, einsaetze: [] },
+  gblackjack: { phase: "warten", endet: 0, dran: -1, dealer: [], spieler: [] },
   shareListings: [],     // {id, companyId, sellerId, count(1-4 = 25%-Schritte), price, ts, toId}
   shareBids: [],         // Kaufanfragen an eine Firma: {id, companyId, bidderId, count, price, ttl}
   nextDividendIn: DIVIDEND_INTERVAL,
@@ -3061,6 +3176,18 @@ function snapshot() {
         return [k, { name: sp.name, chance: Math.max(.005, sp.chance + (sp.chance > .1 ? q.chanceDelta : q.chanceDelta / 10)), faktor: sp.faktor }];
       })),
       upgradeKosten: G.gcasino.stufe < 5 ? 4000 * G.gcasino.stufe : null } : null,
+    groulette: MODE === "kartell" ? { phase: G.groulette.phase,
+      rest: Math.max(0, G.groulette.endet - G.tick),
+      zahl: G.groulette.phase === "drehen" ? G.groulette.zahl : null,
+      letzteZahl: G.groulette.letzteZahl,
+      einsaetze: G.groulette.einsaetze.map(e => ({ name: e.name, farbe: e.farbe, art: e.art, zahl: e.zahl, einsatz: e.einsatz })) } : null,
+    gblackjack: MODE === "kartell" ? { phase: G.gblackjack.phase,
+      rest: Math.max(0, G.gblackjack.endet - G.tick), dran: G.gblackjack.dran,
+      dealer: G.gblackjack.dealer.map(k => ({ txt: k.txt, rot: k.rot })),
+      dealerSumme: G.gblackjack.dealer.length ? bjSumme(G.gblackjack.dealer) : null,
+      spieler: G.gblackjack.spieler.map(s => ({ pid: s.pid, name: s.name, farbe: s.farbe, einsatz: s.einsatz,
+        karten: s.karten.map(k => ({ txt: k.txt, rot: k.rot })), summe: bjSumme(s.karten),
+        fertig: s.fertig, ergebnis: s.ergebnis })) } : null,
     polizei: MODE === "kartell" ? { punkte: G.polizeiPunkte || 0, ziel: POLIZEI_ZIEL,
       farbe: POLIZEI.farbe,
       mitglieder: Object.values(G.players).filter(p2 => p2.familie === "polizei").map(p2 => p2.name) } : null,
@@ -3973,35 +4100,71 @@ io.on("connection", socket => {
     if (p.cash < einsatz) return ack?.({ error: "Zu wenig Bargeld" });
     const q = GCASINO_QUOTEN[G.gcasino.quote];
     const chance = Math.max(.005, sp.chance + (sp.chance > .1 ? q.chanceDelta : q.chanceDelta / 10));
-    const bank = Object.values(G.players).filter(m => m.familie === herr);
-    if (Math.random() < chance) {
-      /* Gewinn: die Familie zahlt — anteilig aus ihren Kassen, gedeckelt.
-       * Kann sie nicht voll zahlen, gibt es nur, was da ist (und Spott). */
-      const brutto = Math.round(einsatz * (sp.faktor - 1));
-      let offen = brutto;
-      for (const m of bank) {
-        const teil = Math.min(m.cash, Math.ceil(offen / Math.max(1, bank.length)));
-        m.cash -= teil; offen -= teil;
-        logTx(m, "Casino", `Auszahlung an ${p.name} (${sp.name})`, -teil);
-        if (offen <= 0) break;
-      }
-      const gezahlt = brutto - Math.max(0, offen);
-      p.cash += gezahlt;
-      logTx(p, "Casino", `Gewinn im Casino Municipale (${sp.name})`, gezahlt);
-      if (offen > 0) {
-        G.familienRespekt[herr] = Math.max(0, (G.familienRespekt[herr] || 0) - 3);
-        io.emit("notice", { text: `🎰 ${p.name} sprengt die Bank — ${famDef(herr).name} kann nicht voll auszahlen (−3 Respekt)!` });
-      } else if (brutto >= 3000) {
-        io.emit("notice", { text: `🎰 Großer Abend im Casino Municipale: ${p.name} gewinnt ${brutto} $ bei ${sp.name}.` });
-      }
-      ack?.({ ok: true, gewonnen: true, betrag: gezahlt });
-    } else {
-      p.cash -= einsatz;
-      const teil = Math.round(einsatz / Math.max(1, bank.length));
-      for (const m of bank) { m.cash += teil; logTx(m, "Casino", `Spieleinnahme (${sp.name})`, teil); }
-      logTx(p, "Casino", `Verloren im Casino Municipale (${sp.name})`, -einsatz);
-      ack?.({ ok: true, gewonnen: false, betrag: einsatz });
+    gcasinoEinsatz(p, einsatz, sp.name);
+    const gewonnen = Math.random() < chance;
+    const detail = gcasinoDetail(spiel, gewonnen);
+    let betrag = einsatz;
+    if (gewonnen) betrag = gcasinoGewinn(p, Math.round(einsatz * sp.faktor), sp.name);
+    ack?.({ ok: true, gewonnen, betrag, detail });
+  }));
+
+  /* --- Live-Roulette: gemeinsamer Tisch, alle setzen, ein Rad dreht --- */
+  socket.on("grouletteSetzen", guard((p, { art, zahl, einsatz }, ack) => {
+    if (MODE !== "kartell") return ack?.({ error: "Nur in der Kartellwirtschaft" });
+    if (!gcasinoHerrscher()) return ack?.({ error: "Das Casino ist geschlossen — niemand beherrscht die Piazza Grande" });
+    const R = G.groulette;
+    if (R.phase === "drehen") return ack?.({ error: "Rien ne va plus — das Rad dreht sich schon" });
+    if (!["rot", "schwarz", "zahl"].includes(art)) return ack?.({ error: "Diese Wette kennt der Croupier nicht" });
+    zahl = Math.floor(+zahl);
+    if (art === "zahl" && !(zahl >= 0 && zahl <= 36)) return ack?.({ error: "Volle Zahl: 0 bis 36" });
+    einsatz = Math.floor(+einsatz);
+    if (!(einsatz >= 50 && einsatz <= GCASINO_EINSATZ_MAX))
+      return ack?.({ error: `Einsatz zwischen 50 und ${GCASINO_EINSATZ_MAX} $` });
+    if (p.cash < einsatz) return ack?.({ error: "Zu wenig Bargeld" });
+    gcasinoEinsatz(p, einsatz, "Roulette");
+    if (R.phase === "warten") {
+      R.phase = "setzen"; R.endet = G.tick + 20; R.zahl = null;
+      io.emit("notice", { text: `\u{1F3A1} ${p.name} eröffnet eine Runde am Roulette-Tisch — Einsätze bitte! (20 s)` });
     }
+    R.einsaetze.push({ pid: p.id, name: p.name, farbe: p.color, art, zahl: art === "zahl" ? zahl : null, einsatz });
+    ack?.({ ok: true, endet: R.endet });
+  }));
+
+  /* --- Blackjack: bis zu 4 Plätze, reihum ziehen, der Dealer zieht bis 17 --- */
+  socket.on("gblackjackBeitreten", guard((p, { einsatz }, ack) => {
+    if (MODE !== "kartell") return ack?.({ error: "Nur in der Kartellwirtschaft" });
+    if (!gcasinoHerrscher()) return ack?.({ error: "Das Casino ist geschlossen — niemand beherrscht die Piazza Grande" });
+    const B = G.gblackjack;
+    if (B.phase !== "warten" && B.phase !== "setzen")
+      return ack?.({ error: "Die Runde läuft — gleich wird neu gegeben" });
+    if (B.spieler.some(s => s.pid === p.id)) return ack?.({ error: "Du sitzt schon am Tisch" });
+    if (B.spieler.length >= 4) return ack?.({ error: "Der Tisch ist voll (4 Plätze)" });
+    einsatz = Math.floor(+einsatz);
+    if (!(einsatz >= 50 && einsatz <= GCASINO_EINSATZ_MAX))
+      return ack?.({ error: `Einsatz zwischen 50 und ${GCASINO_EINSATZ_MAX} $` });
+    if (p.cash < einsatz) return ack?.({ error: "Zu wenig Bargeld" });
+    gcasinoEinsatz(p, einsatz, "Blackjack");
+    B.spieler.push({ pid: p.id, name: p.name, farbe: p.color, einsatz, karten: [], fertig: false, ergebnis: null });
+    if (B.phase === "warten") {
+      B.phase = "setzen"; B.endet = G.tick + 12; B.dealer = []; B.dran = -1;
+      io.emit("notice", { text: `\u{1F0CF} ${p.name} setzt sich an den Blackjack-Tisch — wer spielt mit? (12 s)` });
+    }
+    ack?.({ ok: true });
+  }));
+
+  socket.on("gblackjackZug", guard((p, { aktion }, ack) => {
+    const B = G.gblackjack;
+    if (MODE !== "kartell" || B.phase !== "ziehen") return ack?.({ error: "Gerade wird nicht gezogen" });
+    const s = B.spieler[B.dran];
+    if (!s || s.pid !== p.id) return ack?.({ error: "Du bist nicht an der Reihe" });
+    if (aktion === "hit") {
+      s.karten.push(karteZiehen());
+      const sum = bjSumme(s.karten);
+      if (sum >= 21) s.fertig = true;
+    } else s.fertig = true;
+    if (s.fertig) gblackjackWeiter();
+    else B.endet = G.tick + 20;
+    ack?.({ ok: true });
   }));
 
   socket.on("gcasinoQuote", guard((p, { quote }, ack) => {
@@ -5338,6 +5501,42 @@ function runTick() {
         for (const m of bank) { m.cash += teil; logTx(m, "Casino", `Bürger-Umsatz (${GCASINO_STILE[G.gcasino.stufe - 1]})`, teil); }
         if (q.respekt) G.familienRespekt[herr] = (G.familienRespekt[herr] || 0) + q.respekt;
         if (q.fahndung) G.fahndung[herr] = (G.fahndung[herr] || 0) + q.fahndung;
+      }
+    }
+    /* Live-Roulette: Setzphase zu Ende -> Kugel fällt (Nummer steht fest, die
+     * Clients drehen das Rad dorthin); nach der Drehphase wird ausgezahlt. */
+    {
+      const R = G.groulette;
+      if (R.phase === "setzen" && G.tick >= R.endet) {
+        R.phase = "drehen"; R.zahl = Math.floor(Math.random() * 37); R.endet = G.tick + 8;
+      } else if (R.phase === "drehen" && G.tick >= R.endet) {
+        const rot = GROULETTE_ROT.has(R.zahl);
+        const gewinner = [];
+        for (const e of R.einsaetze) {
+          const pl = G.players[e.pid]; if (!pl) continue;
+          const faktor = e.art === "zahl" ? (e.zahl === R.zahl ? 36 : 0)
+            : (R.zahl !== 0 && (e.art === "rot") === rot ? 2 : 0);
+          if (faktor) { gcasinoGewinn(pl, e.einsatz * faktor, "Roulette"); gewinner.push(pl.name); }
+        }
+        const farbe = R.zahl === 0 ? "Zero — die Bank lacht" : rot ? "Rot" : "Schwarz";
+        io.emit("notice", { text: `\u{1F3A1} Roulette: Die ${R.zahl} (${farbe}). ${gewinner.length ? "Es kassieren: " + [...new Set(gewinner)].join(", ") : "Das Haus räumt den Tisch ab."}` });
+        R.letzteZahl = R.zahl; R.phase = "warten"; R.einsaetze = []; R.endet = 0;
+      }
+    }
+    /* Blackjack: geben, Zug-Timeouts, Dealer, Abrechnung */
+    {
+      const B = G.gblackjack;
+      if (B.phase === "setzen" && G.tick >= B.endet) {
+        for (const s of B.spieler) { s.karten = [karteZiehen(), karteZiehen()]; s.fertig = bjSumme(s.karten) === 21; }
+        B.dealer = [karteZiehen()];
+        B.phase = "ziehen"; B.dran = -1;
+        gblackjackWeiter();
+      } else if (B.phase === "ziehen" && G.tick >= B.endet) {
+        const s = B.spieler[B.dran];
+        if (s) s.fertig = true;   // Zeit um -> automatisch halten
+        gblackjackWeiter();
+      } else if (B.phase === "vorbei" && G.tick >= B.endet) {
+        Object.assign(B, { phase: "warten", endet: 0, dran: -1, dealer: [], spieler: [] });
       }
     }
     /* Endbedingung: Wer 6 der 9 Bezirke hält, hat die Stadt. Die Familie

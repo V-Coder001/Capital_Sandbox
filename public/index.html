@@ -1782,6 +1782,14 @@ td:first-child{font-family:var(--font)}
   </div>
 </div>
 
+<div id="gcSpielModal" style="position:fixed;inset:0;z-index:53;display:none;place-items:center;background:rgba(6,9,15,.55);backdrop-filter:blur(2px)" onclick="if(event.target===this)gcSpielSchliessen()">
+  <div class="panel gcPanel" style="position:static;display:flex;width:min(430px,94vw);max-height:86vh;border-color:#c9a04e55">
+    <div class="phead" style="background:linear-gradient(135deg,rgba(201,160,78,.16),transparent)">
+      <h2 id="gcSpielTitel">Spieltisch</h2><button class="x" onclick="gcSpielSchliessen()">✕</button>
+    </div>
+    <div class="pbody gcSpielInhalt"></div>
+  </div>
+</div>
 <div id="gcasinoModal" style="position:fixed;inset:0;z-index:52;display:none;place-items:center;background:rgba(6,9,15,.6);backdrop-filter:blur(2px)" onclick="if(event.target===this)gcasinoSchliessen()">
   <div class="panel gcPanel" style="position:static;display:flex;width:min(470px,94vw);max-height:84vh;border-color:#c9a04e55;box-shadow:0 16px 48px rgba(0,0,0,.65), 0 0 30px rgba(201,160,78,.12)">
     <div class="phead" style="background:linear-gradient(135deg,rgba(201,160,78,.16),transparent)">
@@ -2210,19 +2218,24 @@ function gcasinoRender() {
       Bürger-Umsatz jede halbe Minute, Quoten, Ausbau — und Schwarzverkauf am Hehler und am Paten vorbei.</p></div>` : `
     <div class="bseite kauf" style="margin-bottom:10px">
       <div class="bseite-kopf"><span class="pfeil">▲</span>Spieltische — Gewinne zahlt ${herr.name}</div>
-      <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin:4px 0 9px">
-        <span class="meta">Einsatz</span>
-        <input id="gcEinsatz" type="number" min="50" max="2000" value="${einsatzAlt}" style="width:84px">
-        ${[100, 500, 1000, 2000].map(v => `<button class="mini" data-gceinsatz="${v}">${v >= 1000 ? (v / 1000) + "k" : v}</button>`).join("")}
-      </div>
-      ${Object.entries(gc.spiele).map(([k, sp]) => `
+      ${[
+        { k: "roulette", icon: "🎡", name: "Roulette — Live-Tisch", live: true,
+          info: "Alle setzen zusammen, ein Rad entscheidet · Rot/Schwarz ×2 · Volle Zahl ×36" },
+        { k: "blackjack", icon: "🃏", name: "Blackjack — Live-Tisch", live: true,
+          info: "Bis zu 4 Plätze · näher an 21 als der Dealer · ×2, Blackjack ×2.5" },
+        { k: "wuerfel", icon: "🎲", name: gc.spiele.wuerfel.name,
+          info: `${(gc.spiele.wuerfel.chance * 100).toFixed(1)} % Chance · zahlt ×${gc.spiele.wuerfel.faktor}` },
+        { k: "slots", icon: "🎰", name: gc.spiele.slots.name,
+          info: `${(gc.spiele.slots.chance * 100).toFixed(1)} % Chance · zahlt ×${gc.spiele.slots.faktor}` },
+        { k: "baccara", icon: "🎴", name: gc.spiele.baccara.name,
+          info: `${(gc.spiele.baccara.chance * 100).toFixed(1)} % Chance · zahlt ×${gc.spiele.baccara.faktor}` },
+      ].map(r => `
         <div style="display:flex;gap:9px;align-items:center;padding:6px 2px;border-top:1px solid rgba(26,37,53,.7)">
-          <span style="font-size:17px;flex:none">${ICONS[k] || "🎴"}</span>
-          <span style="flex:1;min-width:0">${sp.name}
-            <span class="meta" style="display:block;font-family:var(--mono)">${(sp.chance * 100).toFixed(1)} % Chance · zahlt ×${sp.faktor}</span></span>
-          <button class="bknopf kauf" data-gcspiel="${k}" style="flex:none">Setzen</button>
+          <span style="font-size:17px;flex:none">${r.icon}</span>
+          <span style="flex:1;min-width:0">${r.name}${r.live ? ` <span class="mini" style="pointer-events:none;border-color:#c9a04e66;color:#e8c268;padding:0 5px">LIVE</span>` : ""}
+            <span class="meta" style="display:block;font-family:var(--mono)">${r.info}</span></span>
+          <button class="bknopf kauf" data-gcfenster="${r.k}" style="flex:none">Spielen</button>
         </div>`).join("")}
-      <div id="gcErgebnis" style="min-height:22px;margin-top:7px;text-align:center;font-weight:700;font-family:var(--mono)">${window.GC_LETZTES || ""}</div>
       ${binHerr ? `<p class="note" style="margin:4px 0 0">Ihr spielt am eigenen Tisch — Gewinne zahlt eure eigene Familienkasse.</p>` : ""}
     </div>
     ${binHerr ? `
@@ -2269,6 +2282,264 @@ document.addEventListener("click", e => {
   const v = e.target.closest("button[data-gcverkauf]");
   if (v) { socket.emit("gcasinoVerkauf", { good: v.dataset.gcverkauf }, res => {
     toast(res?.error || `Das Volk zahlt ${fmt(res.erloes)} — kein Wort zum Paten.`, !!res?.error); gcasinoRender(); }); return; }
+});
+
+/* ================= Spieltische: eigene Fenster mit echtem Spiel =================
+ * Roulette und Blackjack sind Live-Tische (der Server führt die Runde, alle
+ * Spieler sitzen am selben Tisch), Würfel/Slots/Baccara laufen solo — der
+ * Server entscheidet, das Fenster animiert genau das Ergebnis. */
+let GC_SPIEL = null;
+const GC_RAD = { winkel: 0, raf: 0, ziel: null, laeuft: false };
+const GC_RAD_ORD = [0,32,15,19,4,21,2,25,17,34,6,27,13,36,11,30,8,23,10,5,24,16,33,1,20,14,31,9,22,18,29,7,28,12,35,3,26];
+const GC_ROT = new Set([1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36]);
+const GC_TITEL = { roulette: "🎡 Roulette — Live-Tisch", blackjack: "🃏 Blackjack — Live-Tisch",
+  wuerfel: "🎲 Hohe Neun", slots: "🎰 Slots „La Fortuna“", baccara: "🎴 Baccara" };
+const karteHtml = k => `<span style="display:inline-block;min-width:32px;padding:6px 4px;margin:2px;border-radius:5px;background:#f4f0e6;color:${k.rot ? "#c0392b" : "#1c2430"};font-family:var(--mono);font-weight:800;font-size:15px;text-align:center;box-shadow:0 2px 6px rgba(0,0,0,.45)">${k.txt}</span>`;
+const gcChips = ziel => [100, 500, 1000, 2000].map(v =>
+  `<button class="mini" data-gcchip="${ziel}" data-wert="${v}">${v >= 1000 ? (v / 1000) + "k" : v}</button>`).join("");
+const gcEinsatzZeile = id => `
+  <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin:4px 0 9px">
+    <span class="meta">Einsatz</span>
+    <input id="${id}" type="number" min="50" max="2000" value="200" style="width:84px">
+    ${gcChips(id)}
+  </div>`;
+
+function gcSpielOeffnen(art) {
+  GC_SPIEL = art;
+  document.getElementById("gcSpielTitel").innerHTML = GC_TITEL[art] || "Spieltisch";
+  const el = document.getElementById("gcSpielModal");
+  el.style.display = "grid";
+  gcSpielBauen();
+  gcSpielTick();
+}
+function gcSpielSchliessen() {
+  GC_SPIEL = null;
+  if (GC_RAD.raf) cancelAnimationFrame(GC_RAD.raf);
+  GC_RAD.raf = 0; GC_RAD.laeuft = false; GC_RAD.ziel = null;
+  document.getElementById("gcSpielModal").style.display = "none";
+}
+
+function gcSpielBauen() {
+  const el = document.querySelector("#gcSpielModal .gcSpielInhalt");
+  if (GC_SPIEL === "roulette") {
+    el.innerHTML = `
+      <div id="gcRadStatus" class="lbl" style="text-align:center;min-height:16px"></div>
+      <canvas id="gcRadCanvas" width="240" height="240" style="display:block;margin:6px auto 2px;width:240px;height:240px"></canvas>
+      <div id="gcRadLetzte" class="meta" style="text-align:center;font-family:var(--mono);min-height:18px"></div>
+      ${gcEinsatzZeile("gcRadEinsatz")}
+      <div style="display:flex;gap:6px;margin-bottom:7px">
+        <button class="bknopf" data-gcrad="rot" style="flex:1;background:linear-gradient(135deg,#7e1f1f,#a12a2a);border-color:#c0392b;color:#ffd8d0">ROT ×2</button>
+        <button class="bknopf" data-gcrad="schwarz" style="flex:1;background:linear-gradient(135deg,#14181f,#232a36);border-color:#4a5568;color:#dfe6f0">SCHWARZ ×2</button>
+      </div>
+      <div style="display:flex;gap:6px;align-items:center;margin-bottom:9px">
+        <input id="gcRadZahl" type="number" min="0" max="36" value="17" style="width:64px">
+        <button class="bknopf kauf" data-gcrad="zahl" style="flex:1">VOLLE ZAHL ×36</button>
+      </div>
+      <div class="lbl">Einsätze am Tisch</div>
+      <div id="gcRadWetten" class="meta" style="font-family:var(--mono)"></div>`;
+    gcRadMalen();
+  } else if (GC_SPIEL === "blackjack") {
+    el.innerHTML = `<div id="gcBjTisch"></div>`;
+  } else {
+    /* Solo-Tische: Würfel, Slots, Baccara */
+    const knopf = { wuerfel: "🎲 Würfeln", slots: "🎰 Drehen", baccara: "🎴 Karten geben" }[GC_SPIEL];
+    const buehne = GC_SPIEL === "slots"
+      ? `<div style="display:flex;gap:8px;justify-content:center;margin:14px 0">${[0,1,2].map(i =>
+          `<span id="gcWalze${i}" style="display:grid;place-items:center;width:64px;height:72px;font-size:34px;border-radius:9px;background:linear-gradient(180deg,#0d1420,#1a2535);border:1px solid #c9a04e44">❓</span>`).join("")}</div>`
+      : GC_SPIEL === "wuerfel"
+      ? `<div id="gcWuerfelFeld" style="display:flex;gap:14px;justify-content:center;font-size:62px;margin:10px 0;color:#f4f0e6">⚀⚀</div>
+         <div id="gcWuerfelSumme" class="meta" style="text-align:center;font-family:var(--mono);min-height:18px">Ziel: 9 oder mehr mit zwei Würfeln</div>`
+      : `<div style="margin:8px 0"><div class="lbl">Deine Hand</div><div id="gcBacSpieler" style="min-height:44px"></div>
+         <div class="lbl" style="margin-top:6px">Die Bank</div><div id="gcBacBank" style="min-height:44px"></div>
+         <p class="note" style="margin:4px 0 0">Punkte zählen modulo 10 — die höhere Hand gewinnt.</p></div>`;
+    el.innerHTML = `${buehne}${gcEinsatzZeile("gcSoloEinsatz")}
+      <button class="bknopf kauf" data-gcsolo="${GC_SPIEL}" style="width:100%">${knopf}</button>
+      <div id="gcSoloErgebnis" style="min-height:24px;margin-top:8px;text-align:center;font-weight:700;font-family:var(--mono)"></div>`;
+  }
+}
+
+/* ---- Roulette: Rad malen & drehen ---- */
+function gcRadMalen() {
+  const c = document.getElementById("gcRadCanvas");
+  if (!c) return;
+  const cx = c.getContext("2d"), M = 120, R = 112;
+  cx.clearRect(0, 0, 240, 240);
+  cx.save(); cx.translate(M, M); cx.rotate(GC_RAD.winkel);
+  const seg = Math.PI * 2 / 37;
+  for (let i = 0; i < 37; i++) {
+    const z = GC_RAD_ORD[i];
+    cx.beginPath(); cx.moveTo(0, 0); cx.arc(0, 0, R, i * seg - Math.PI / 2 - seg / 2, (i + 1) * seg - Math.PI / 2 - seg / 2);
+    cx.fillStyle = z === 0 ? "#1d7a45" : GC_ROT.has(z) ? "#a12a2a" : "#181d26";
+    cx.fill(); cx.strokeStyle = "#c9a04e55"; cx.lineWidth = 1; cx.stroke();
+    cx.save(); cx.rotate(i * seg - Math.PI / 2);
+    cx.fillStyle = "#e9e2d0"; cx.font = "700 9px ui-monospace,monospace"; cx.textAlign = "center";
+    cx.fillText(z, 0, -R + 13);
+    cx.restore();
+  }
+  cx.beginPath(); cx.arc(0, 0, 58, 0, Math.PI * 2); cx.fillStyle = "#0d1420"; cx.fill();
+  cx.strokeStyle = "#c9a04e"; cx.lineWidth = 2; cx.stroke();
+  const st2 = store.get().state;
+  cx.fillStyle = "#e8c268"; cx.font = "800 26px ui-monospace,monospace"; cx.textAlign = "center"; cx.textBaseline = "middle";
+  cx.rotate(-GC_RAD.winkel);
+  cx.fillText(GC_RAD.anzeige ?? (st2?.groulette?.letzteZahl ?? "–"), 0, 1);
+  cx.restore();
+  /* Zeiger oben */
+  cx.beginPath(); cx.moveTo(M - 8, 4); cx.lineTo(M + 8, 4); cx.lineTo(M, 20); cx.closePath();
+  cx.fillStyle = "#e8c268"; cx.fill();
+}
+function gcRadDrehen(zahl) {
+  if (GC_RAD.laeuft && GC_RAD.ziel === zahl) return;
+  GC_RAD.laeuft = true; GC_RAD.ziel = zahl; GC_RAD.anzeige = "…";
+  const idx = GC_RAD_ORD.indexOf(zahl), seg = Math.PI * 2 / 37;
+  const start = GC_RAD.winkel % (Math.PI * 2);
+  const zielWinkel = -idx * seg + Math.PI * 2 * 6;   // 6 Extradrehungen, Segment landet am Zeiger
+  const t0 = performance.now(), dauer = 6000;
+  const schritt = t => {
+    const f = Math.min(1, (t - t0) / dauer), e = 1 - Math.pow(1 - f, 3);
+    GC_RAD.winkel = start + (zielWinkel - start) * e;
+    gcRadMalen();
+    if (f < 1 && GC_SPIEL === "roulette") GC_RAD.raf = requestAnimationFrame(schritt);
+    else { GC_RAD.laeuft = false; GC_RAD.anzeige = zahl; gcRadMalen(); }
+  };
+  GC_RAD.raf = requestAnimationFrame(schritt);
+}
+function gcRouletteTick() {
+  const st = store.get().state, R = st?.groulette;
+  if (!R) return;
+  const status = document.getElementById("gcRadStatus");
+  if (status) status.innerHTML = R.phase === "setzen"
+    ? `Einsätze offen — die Kugel fällt in <b style="color:#e8c268">${R.rest}s</b>`
+    : R.phase === "drehen" ? `<b style="color:#e8c268">Rien ne va plus — das Rad dreht sich…</b>`
+    : "Setz einen Einsatz — das eröffnet die Runde für alle (20 s).";
+  const letzte = document.getElementById("gcRadLetzte");
+  if (letzte) letzte.textContent = R.letzteZahl == null ? "" :
+    `Letzte Zahl: ${R.letzteZahl} (${R.letzteZahl === 0 ? "Zero" : GC_ROT.has(R.letzteZahl) ? "Rot" : "Schwarz"})`;
+  const wetten = document.getElementById("gcRadWetten");
+  if (wetten) wetten.innerHTML = R.einsaetze.length ? R.einsaetze.map(e =>
+    `<div style="display:flex;gap:8px;padding:2px 0"><span style="color:${e.farbe}">●</span>
+     <span style="flex:1">${e.name}</span>
+     <span>${e.art === "zahl" ? "Zahl " + e.zahl : e.art === "rot" ? "Rot" : "Schwarz"}</span>
+     <b>${fmt(e.einsatz)}</b></div>`).join("")
+    : `<p class="note" style="margin:3px 0 0">Noch keine Einsätze — der Croupier wartet.</p>`;
+  if (R.phase === "drehen" && R.zahl != null) gcRadDrehen(R.zahl);
+  if (R.phase !== "drehen" && !GC_RAD.laeuft) { GC_RAD.ziel = null; gcRadMalen(); }
+}
+
+/* ---- Blackjack ---- */
+function gcBlackjackTick() {
+  const st = store.get().state, myId = store.get().myId, B = st?.gblackjack;
+  const el = document.getElementById("gcBjTisch");
+  if (!B || !el) return;
+  if (el.contains(document.activeElement) && /INPUT/.test(document.activeElement.tagName)) return;
+  const ich = B.spieler.find(s => s.pid === myId);
+  const dranS = B.spieler[B.dran];
+  const binDran = B.phase === "ziehen" && dranS && dranS.pid === myId;
+  const status = B.phase === "warten" ? "Der Tisch ist frei — nimm Platz, dann läuft die Uhr (12 s) für Mitspieler."
+    : B.phase === "setzen" ? `Karten kommen in <b style="color:#e8c268">${B.rest}s</b> — noch ${4 - B.spieler.length} Plätze frei.`
+    : B.phase === "ziehen" ? (binDran ? `<b style="color:#e8c268">Du bist dran — ${B.rest}s</b>` : `${dranS ? dranS.name : "…"} überlegt (${B.rest}s)…`)
+    : "Runde vorbei — der Tisch wird gleich neu eröffnet.";
+  const ergFarbe = e => e === "Verloren" || e === "Überkauft" ? "var(--down)" : e === "Push" ? "var(--dim)" : "var(--up)";
+  el.innerHTML = `
+    <div class="lbl" style="text-align:center;min-height:16px">${status}</div>
+    <div style="margin:9px 0;padding:9px;border-radius:9px;background:linear-gradient(180deg,#123524,#0c2418);border:1px solid #c9a04e33">
+      <div class="lbl">Dealer${B.dealerSumme != null && B.phase !== "ziehen" && B.phase !== "setzen" ? ` · ${B.dealerSumme}${B.dealerSumme > 21 ? " — überkauft!" : ""}` : ""}</div>
+      <div>${B.dealer.map(karteHtml).join("")}${B.phase === "ziehen" ? `<span style="display:inline-block;min-width:32px;padding:6px 4px;margin:2px;border-radius:5px;background:repeating-linear-gradient(45deg,#7e1f1f,#7e1f1f 4px,#5e1515 4px,#5e1515 8px);color:transparent">?</span>` : ""}</div>
+      ${B.spieler.map((s, i) => `
+        <div style="margin-top:7px;padding-top:6px;border-top:1px solid rgba(201,160,78,.18);${B.phase === "ziehen" && i === B.dran ? "background:rgba(232,194,104,.08);border-radius:6px;padding:6px" : ""}">
+          <div style="display:flex;gap:7px;align-items:center">
+            <span style="color:${s.farbe}">●</span><b style="flex:1">${s.name}${s.pid === myId ? " (du)" : ""}</b>
+            <span class="meta" style="font-family:var(--mono)">${fmt(s.einsatz)}</span>
+            ${s.ergebnis ? `<b style="color:${ergFarbe(s.ergebnis)}">${s.ergebnis}</b>` : s.karten.length ? `<b>${s.summe}</b>` : ""}
+          </div>
+          <div>${s.karten.map(karteHtml).join("")}</div>
+        </div>`).join("")}
+    </div>
+    ${binDran ? `<div style="display:flex;gap:6px">
+        <button class="bknopf kauf" data-gcbjzug="hit" style="flex:1">🃏 Karte</button>
+        <button class="bknopf" data-gcbjzug="stand" style="flex:1;border-color:#c9a04e;color:#e8c268">✋ Halten</button></div>`
+      : !ich && (B.phase === "warten" || B.phase === "setzen") ? `
+        ${gcEinsatzZeile("gcBjEinsatz")}
+        <button class="bknopf kauf" data-gcbjsitz style="width:100%">Platz nehmen</button>`
+      : ich && !ich.fertig && B.phase === "ziehen" ? `<p class="note" style="margin:0;text-align:center">Gleich bist du an der Reihe…</p>`
+      : ""}`;
+}
+
+function gcSpielTick() {
+  const st = store.get().state;
+  if (!st?.gcasino?.herrscher && GC_SPIEL) { gcSpielSchliessen(); return; }
+  if (GC_SPIEL === "roulette") gcRouletteTick();
+  else if (GC_SPIEL === "blackjack") gcBlackjackTick();
+}
+
+/* ---- Solo-Animationen ---- */
+const GC_AUGEN = ["⚀","⚁","⚂","⚃","⚄","⚅"];
+function gcSoloSpielen(art) {
+  const einsatz = +document.getElementById("gcSoloEinsatz")?.value || 100;
+  socket.emit("gcasinoSpielen", { spiel: art, einsatz }, res => {
+    if (res?.error) return toast(res.error, true);
+    const erg = document.getElementById("gcSoloErgebnis");
+    const fertigText = () => { if (erg) erg.innerHTML = res.gewonnen
+      ? `<span style="color:var(--up)">🎉 Gewonnen · +${fmt(res.betrag)}</span>`
+      : `<span style="color:var(--down)">✗ Verloren · −${fmt(res.betrag)}</span>`; };
+    if (erg) erg.innerHTML = "";
+    if (art === "wuerfel" && res.detail?.wuerfel) {
+      const feld = document.getElementById("gcWuerfelFeld"), summe = document.getElementById("gcWuerfelSumme");
+      let n = 0;
+      const iv = setInterval(() => {
+        n++;
+        if (!feld || GC_SPIEL !== "wuerfel") return clearInterval(iv);
+        if (n < 12) feld.textContent = GC_AUGEN[Math.floor(Math.random() * 6)] + " " + GC_AUGEN[Math.floor(Math.random() * 6)];
+        else {
+          clearInterval(iv);
+          const [a, b] = res.detail.wuerfel;
+          feld.textContent = GC_AUGEN[a - 1] + " " + GC_AUGEN[b - 1];
+          if (summe) summe.textContent = `${a} + ${b} = ${a + b} — ${a + b >= 9 ? "Hohe Neun!" : "zu wenig"}`;
+          fertigText();
+        }
+      }, 95);
+    } else if (art === "slots" && res.detail?.walzen) {
+      const SYM = ["🍋","🍒","🔔","⭐","🍇","7️⃣"];
+      [0, 1, 2].forEach(i => {
+        const w = document.getElementById("gcWalze" + i);
+        const iv = setInterval(() => { if (w) w.textContent = SYM[Math.floor(Math.random() * SYM.length)]; }, 70);
+        setTimeout(() => { clearInterval(iv); if (w) w.textContent = res.detail.walzen[i]; if (i === 2) fertigText(); }, 800 + i * 550);
+      });
+    } else if (art === "baccara" && res.detail) {
+      const sEl = document.getElementById("gcBacSpieler"), bEl = document.getElementById("gcBacBank");
+      if (sEl) sEl.innerHTML = ""; if (bEl) bEl.innerHTML = "";
+      const alle = [...res.detail.spieler.map(k => [sEl, k]), ...res.detail.bank.map(k => [bEl, k])];
+      alle.forEach(([el2, k], i) => setTimeout(() => { if (el2) el2.innerHTML += karteHtml(k); }, 280 * i));
+      setTimeout(() => {
+        if (sEl) sEl.innerHTML += ` <b style="font-family:var(--mono)">= ${res.detail.ps}</b>`;
+        if (bEl) bEl.innerHTML += ` <b style="font-family:var(--mono)">= ${res.detail.bs}</b>`;
+        fertigText();
+      }, 280 * alle.length + 150);
+    } else fertigText();
+  });
+}
+
+document.addEventListener("click", e => {
+  const fenster = e.target.closest("button[data-gcfenster]");
+  if (fenster) { gcSpielOeffnen(fenster.dataset.gcfenster); return; }
+  const chip = e.target.closest("button[data-gcchip]");
+  if (chip) { const f = document.getElementById(chip.dataset.gcchip); if (f) f.value = chip.dataset.wert; return; }
+  const rad = e.target.closest("button[data-gcrad]");
+  if (rad) {
+    const art = rad.dataset.gcrad;
+    socket.emit("grouletteSetzen", { art, zahl: +document.getElementById("gcRadZahl")?.value || 0,
+      einsatz: +document.getElementById("gcRadEinsatz")?.value || 100 },
+      res => { if (res?.error) toast(res.error, true); else gcRouletteTick(); });
+    return;
+  }
+  if (e.target.closest("button[data-gcbjsitz]")) {
+    socket.emit("gblackjackBeitreten", { einsatz: +document.getElementById("gcBjEinsatz")?.value || 100 },
+      res => { if (res?.error) toast(res.error, true); });
+    return;
+  }
+  const zug = e.target.closest("button[data-gcbjzug]");
+  if (zug) { socket.emit("gblackjackZug", { aktion: zug.dataset.gcbjzug }, res => { if (res?.error) toast(res.error, true); }); return; }
+  const solo = e.target.closest("button[data-gcsolo]");
+  if (solo) { gcSoloSpielen(solo.dataset.gcsolo); return; }
 });
 
 /* ---- Revierkampf-Inszenierung: Beben, Schüsse, Sieges-Banner ---- */
@@ -7590,6 +7861,7 @@ function kartellRendern(state, me, myId) {
   }
   const binPolizei = state.mode === "kartell" && state.players?.[myId]?.familie === "polizei";
   if (gcasinoOffen) gcasinoRender();
+  if (GC_SPIEL) gcSpielTick();
   if (nwEl) nwEl.style.display = hudFam ? "none" : "";
   if (nwEl && binPolizei && state.polizei) {
     nwEl.style.display = "none";
