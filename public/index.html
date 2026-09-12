@@ -1782,8 +1782,13 @@ td:first-child{font-family:var(--font)}
   </div>
 </div>
 
-<div id="gcasinoModal" style="position:fixed;inset:0;z-index:52;display:none;place-items:center;background:rgba(6,9,15,.55)" onclick="if(event.target===this)gcasinoSchliessen()">
-  <div class="gcInhalt" style="width:min(430px,92vw);max-height:80vh;overflow:auto;background:#101725;border:1px solid #c9a04e66;border-radius:14px;padding:16px;box-shadow:0 12px 40px rgba(0,0,0,.6)"></div>
+<div id="gcasinoModal" style="position:fixed;inset:0;z-index:52;display:none;place-items:center;background:rgba(6,9,15,.6);backdrop-filter:blur(2px)" onclick="if(event.target===this)gcasinoSchliessen()">
+  <div class="panel gcPanel" style="position:static;display:flex;width:min(470px,94vw);max-height:84vh;border-color:#c9a04e55;box-shadow:0 16px 48px rgba(0,0,0,.65), 0 0 30px rgba(201,160,78,.12)">
+    <div class="phead" style="background:linear-gradient(135deg,rgba(201,160,78,.16),transparent)">
+      <h2>🎰 Casino Municipale</h2><button class="x" onclick="gcasinoSchliessen()">✕</button>
+    </div>
+    <div class="pbody gcInhalt"></div>
+  </div>
 </div>
 <div id="kampfBanner" style="position:fixed;inset:0;z-index:55;display:none;place-items:center;pointer-events:none;background:radial-gradient(ellipse at center,rgba(10,6,6,.0),rgba(10,6,6,.55))">
   <div id="kampfBannerBox" style="text-align:center;transform:scale(.8);transition:transform .25s">
@@ -2178,53 +2183,79 @@ function gcasinoRender() {
   const meineFam = st.players?.[myId]?.familie;
   const herr = gc.herrscher ? st.familien?.find(f => f.id === gc.herrscher) : null;
   const binHerr = meineFam && meineFam === gc.herrscher;
-  const einsatzAlt = document.getElementById("gcEinsatz")?.value || 100;
+  const einsatzAlt = document.getElementById("gcEinsatz")?.value || 200;
+  const sterne = "★".repeat(gc.stufe) + "☆".repeat(5 - gc.stufe);
+  const quoteName = gc.quote === "fair" ? "fair" : gc.quote === "gierig" ? "gierig" : "großzügig";
+  const umsatz = (gc.quote === "gierig" ? 170 : gc.quote === "fair" ? 100 : 50) * gc.stufe;
+  const ICONS = { rot: "🎡", zahl: "🎯", wuerfel: "🎲", slots: "🎰", baccara: "🃏" };
   const illegale = Object.entries(GOODS()).filter(([, g]) => g.cat === "Illegal").map(([g2]) => g2);
-  const schwarz = binHerr ? illegale.filter(g => Math.floor(me.inv?.[g] || 0) > 0).map(g =>
-    `<div style="display:flex;gap:8px;align-items:center;margin:4px 0">
-      <span style="flex:1">${gname(g)} · ${Math.floor(me.inv[g])} Stück</span>
-      <button class="buyb" data-gcverkauf="${g}">ans Volk (130 %)</button></div>`).join("") : "";
   el.style.display = "grid";
   el.querySelector(".gcInhalt").innerHTML = `
-    <div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px">
-      <h3 style="margin:0">🎰 Casino Municipale</h3>
-      <button class="x" onclick="gcasinoSchliessen()">✕</button>
-    </div>
-    <div class="meta" style="margin:4px 0 10px">Stil <b>„${gc.stil}“</b> (Stufe ${gc.stufe}/5) ·
-      ${herr ? `Haus: <b style="color:${herr.farbe}">${herr.name}</b>` : "<b>geschlossen</b> — niemand hält die Piazza"} ·
-      Quote: <b>${gc.quote === "fair" ? "fair" : gc.quote === "gierig" ? "gierig" : "großzügig"}</b></div>
-    ${!herr ? `<p class="note">Wer die Piazza Grande kontrolliert, führt dieses Haus: Bürger-Umsatz jede halbe Minute, Quoten, Ausbau — und der Schwarzverkauf am Hehler (und am Paten!) vorbei.</p>` : binHerr ? `
-      <div class="lbl" style="margin-top:4px">Ihr führt das Haus</div>
-      <p class="note" style="margin:2px 0 6px">Bürger-Umsatz: ${gc.quote === "gierig" ? 170 : gc.quote === "fair" ? 100 : 50} $ × Stufe ${gc.stufe} je 30 s an eure Familie.
-        Gierig bringt mehr, heizt aber die Fahndung an; großzügig bringt Respekt.</p>
-      <div style="display:flex;gap:6px;flex-wrap:wrap">
-        ${["fair", "gierig", "grosszuegig"].map(q => `<button class="mini" data-gcquote="${q}" ${gc.quote === q ? 'style="border-color:var(--accent)"' : ""}>${q === "grosszuegig" ? "großzügig" : q}</button>`).join("")}
-        ${gc.upgradeKosten ? `<button class="mini" data-gcupgrade style="border-color:#c9a04e">✨ Ausbauen → „${["Spelunke","Salon Rosso","Belle Époque","Art déco","La Dorata"][gc.stufe]}“ (${fmt(gc.upgradeKosten)})</button>` : `<span class="meta">Vollausbau erreicht</span>`}
+    <div class="bkopf" style="border-color:#c9a04e44">
+      <div class="bkopf-oben">
+        <div class="bkopf-name"><b style="font-size:14px">„${gc.stil}“</b></div>
+        <span class="bkopf-rating" style="color:#c9a04e">${sterne}</span>
       </div>
-      ${schwarz ? `<div class="lbl" style="margin-top:10px">Unterm Tisch ans Volk (130 % Hehlerpreis, keine Paten-Abgabe, +2 Fahndung)</div>${schwarz}` : `<p class="note" style="margin-top:8px">Heiße Ware im Lager lässt sich hier zu 130 % ohne Paten-Abgabe verkaufen.</p>`}
-    ` : `
-      <div class="lbl" style="margin-top:4px">Spiele — Gewinne zahlt ${herr.name}</div>
-      <div style="display:flex;gap:8px;align-items:center;margin:6px 0">
+      <div class="bkopf-zahlen">
+        <div class="bkz"><b style="color:${herr ? herr.farbe : "var(--dim)"}">${herr ? herr.name : "geschlossen"}</b><span>führt das Haus</span></div>
+        <div class="bkz"><b>${quoteName}</b><span>Quoten</span></div>
+        <div class="bkz"><b>${herr ? fmt(umsatz) : "—"}</b><span>Bürger-Umsatz / 30 s</span></div>
+      </div>
+      <div class="bkopf-uhr"><span>Ausbau</span>
+        <div class="bkopf-balken"><i style="width:${gc.stufe * 20}%;background:linear-gradient(to right,#8a6a3a,#e8c268)"></i></div>
+        <b>${gc.stufe}/5</b></div>
+    </div>
+    ${!herr ? `<div class="joinbox"><div class="lbl">Geschlossen</div>
+      <p class="note" style="margin:4px 0 0">Niemand hält die Piazza Grande. Wer sie kontrolliert, führt dieses Haus:
+      Bürger-Umsatz jede halbe Minute, Quoten, Ausbau — und Schwarzverkauf am Hehler und am Paten vorbei.</p></div>` : `
+    <div class="bseite kauf" style="margin-bottom:10px">
+      <div class="bseite-kopf"><span class="pfeil">▲</span>Spieltische — Gewinne zahlt ${herr.name}</div>
+      <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin:4px 0 9px">
         <span class="meta">Einsatz</span>
-        <input id="gcEinsatz" type="number" min="50" max="2000" value="${einsatzAlt}" style="width:90px">
-        <span class="meta">50–2.000 $</span>
+        <input id="gcEinsatz" type="number" min="50" max="2000" value="${einsatzAlt}" style="width:84px">
+        ${[100, 500, 1000, 2000].map(v => `<button class="mini" data-gceinsatz="${v}">${v >= 1000 ? (v / 1000) + "k" : v}</button>`).join("")}
       </div>
       ${Object.entries(gc.spiele).map(([k, sp]) => `
-        <div style="display:flex;gap:8px;align-items:center;margin:5px 0">
-          <span style="flex:1">${sp.name}</span>
-          <span class="meta" style="font-family:var(--mono)">${(sp.chance * 100).toFixed(1)} % · ×${sp.faktor}</span>
-          <button class="buyb" data-gcspiel="${k}">Setzen</button>
+        <div style="display:flex;gap:9px;align-items:center;padding:6px 2px;border-top:1px solid rgba(26,37,53,.7)">
+          <span style="font-size:17px;flex:none">${ICONS[k] || "🎴"}</span>
+          <span style="flex:1;min-width:0">${sp.name}
+            <span class="meta" style="display:block;font-family:var(--mono)">${(sp.chance * 100).toFixed(1)} % Chance · zahlt ×${sp.faktor}</span></span>
+          <button class="bknopf kauf" data-gcspiel="${k}" style="flex:none">Setzen</button>
         </div>`).join("")}
-      <p class="note" style="margin-top:6px">Das Haus gehört ${herr.name} — jeder verlorene Einsatz landet in ihren Taschen. Sprengst du die Bank, müssen sie zahlen … so weit die Kassen reichen.</p>
-    `}`;
+      <div id="gcErgebnis" style="min-height:22px;margin-top:7px;text-align:center;font-weight:700;font-family:var(--mono)">${window.GC_LETZTES || ""}</div>
+      ${binHerr ? `<p class="note" style="margin:4px 0 0">Ihr spielt am eigenen Tisch — Gewinne zahlt eure eigene Familienkasse.</p>` : ""}
+    </div>
+    ${binHerr ? `
+    <div class="bseite verkauf">
+      <div class="bseite-kopf"><span class="pfeil">◆</span>Ihr führt das Haus</div>
+      <div class="lbl" style="margin-top:6px">Quoten <span class="meta" style="text-transform:none;letter-spacing:0">— gierig: +Umsatz, +Fahndung · großzügig: +Respekt</span></div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin:5px 0 9px">
+        ${["fair", "gierig", "grosszuegig"].map(q => `<button class="mini" data-gcquote="${q}"
+          style="${gc.quote === q ? "border-color:#c9a04e;color:#e8c268" : ""}">${q === "grosszuegig" ? "großzügig" : q}</button>`).join("")}
+      </div>
+      ${gc.upgradeKosten
+        ? `<button class="bknopf" data-gcupgrade style="border-color:#c9a04e;color:#e8c268;width:100%">✨ Ausbau: „${["Spelunke","Salon Rosso","Belle Époque","Art déco","La Dorata"][gc.stufe]}“ — ${fmt(gc.upgradeKosten)}</button>
+           <p class="note" style="margin:5px 0 0">Der Ausbau bleibt dem Haus — auch wenn die Piazza den Herrn wechselt.</p>`
+        : `<p class="note" style="margin:0">„La Dorata“ — prunkvoller geht es nicht.</p>`}
+      <div class="lbl" style="margin-top:10px">Unterm Tisch ans Volk <span class="meta" style="text-transform:none;letter-spacing:0">— 130 % Hehlerpreis, keine Paten-Abgabe, +2 Fahndung</span></div>
+      ${illegale.filter(g => Math.floor(me.inv?.[g] || 0) > 0).map(g =>
+        `<div style="display:flex;gap:8px;align-items:center;margin:5px 0">
+          <span style="flex:1">${gname(g)} <span class="meta">· ${Math.floor(me.inv[g])} Stück</span></span>
+          <button class="bknopf verkauf" data-gcverkauf="${g}">Verkaufen</button></div>`).join("")
+        || `<p class="note" style="margin:4px 0 0">Keine heiße Ware im Lager.</p>`}
+    </div>` : ""}`}`;
 }
 document.addEventListener("click", e => {
+  const schnell = e.target.closest("button[data-gceinsatz]");
+  if (schnell) { const f = document.getElementById("gcEinsatz"); if (f) f.value = schnell.dataset.gceinsatz; return; }
   const sp = e.target.closest("button[data-gcspiel]");
   if (sp) {
     const einsatz = +document.getElementById("gcEinsatz").value || 100;
     socket.emit("gcasinoSpielen", { spiel: sp.dataset.gcspiel, einsatz }, res => {
       if (res?.error) return toast(res.error, true);
-      toast(res.gewonnen ? `🎉 Gewonnen! +${fmt(res.betrag)}` : `Verloren — ${fmt(res.betrag)} ans Haus.`, !res.gewonnen);
+      window.GC_LETZTES = res.gewonnen
+        ? `<span style="color:var(--up)">🎉 Gewonnen · +${fmt(res.betrag)}</span>`
+        : `<span style="color:var(--down)">✗ Verloren · −${fmt(res.betrag)}</span>`;
       gcasinoRender();
     });
     return;

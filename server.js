@@ -3965,8 +3965,8 @@ io.on("connection", socket => {
     if (!sp) return ack?.({ error: "Dieses Spiel kennt das Haus nicht" });
     const herr = gcasinoHerrscher();
     if (!herr) return ack?.({ error: "Das Casino ist geschlossen — niemand beherrscht die Piazza Grande" });
-    if (p.familie === herr) return ack?.({ error: "Hausverbot fürs Haus — eure Familie führt die Bank" });
-    if (p.familie === "polizei") return ack?.({ error: "Nicht im Dienst, Commissario" });
+    /* Jeder darf ans Tableau — auch das Haus selbst (dann schiebt die Familie
+     * das Geld intern hin und her) und der Commissario nach Feierabend. */
     einsatz = Math.floor(+einsatz);
     if (!(einsatz >= 50 && einsatz <= GCASINO_EINSATZ_MAX))
       return ack?.({ error: `Einsatz zwischen 50 und ${GCASINO_EINSATZ_MAX} $` });
