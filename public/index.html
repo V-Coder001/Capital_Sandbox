@@ -2095,6 +2095,68 @@ setInterval(() => {
   letztesMe = Date.now();                         // nicht im Sekundentakt erneut versuchen
   socket.emit("rejoin", { token: myToken }, () => {});
 }, 5000);
+/* ---- Ambient-Sounds (echte Aufnahmen aus assets/ambient/) ----
+ * Drei leise Dauerschleifen, deren Lautstärke der Kameraposition folgt:
+ * Brandung + Möwen, wenn Wasser im Bild ist, Marktgemurmel nahe der Piazza
+ * (nur Kartellmodus, nur tagsüber). Sanfte Rampen statt harter Sprünge;
+ * der Stummschalter der Musik gilt auch hier. Start erst nach der ersten
+ * Nutzer-Geste (Autoplay-Regel) — und nur, wenn eine Runde läuft. */
+const AMBIENTE = (() => {
+  const mk = (datei, maxVol) => {
+    const a = new Audio(`assets/ambient/${datei}`);
+    a.loop = true; a.volume = 0; a.preload = "auto";
+    return { a, maxVol, ziel: 0, laeuft: false };
+  };
+  const quellen = {
+    brandung: mk("brandung.mp3", .30),
+    moewen:   mk("moewen.mp3",   .22),
+    markt:    mk("markt.mp3",    .28),
+  };
+  let bereit = false;
+  addEventListener("pointerdown", () => { bereit = true; }, { once: true });
+  setInterval(() => {
+    const st = store.get().state;
+    const stumm = !bereit || !st?.map || !st.started || document.hidden ||
+      (typeof MUSIC !== "undefined" && MUSIC.istStumm());
+    if (!stumm) {
+      /* Sichtbaren Wasser-Anteil zählen (eine Schleife pro Halbsekunde) */
+      let sichtbar = 0, wasser = 0;
+      for (const t of st.map) {
+        const sx = innerWidth / 2 + cam.x + (t.x - t.y) * (TW / 2) * cam.z;
+        const sy = 120 + cam.y + (t.x + t.y) * (TH / 2) * cam.z;
+        if (sx < -40 || sx > innerWidth + 40 || sy < -40 || sy > innerHeight + 40) continue;
+        sichtbar++;
+        if (t.water) wasser++;
+      }
+      const wAnteil = sichtbar ? wasser / sichtbar : 0;
+      quellen.brandung.ziel = Math.min(1, wAnteil * 4);
+      quellen.moewen.ziel = wAnteil > .03 ? Math.min(1, .3 + wAnteil * 2.5) : 0;
+      /* Markt: Nähe zur Piazza (13,12), nur Kartell, nachts schläft der Markt */
+      let markt = 0;
+      if (st.mode === "kartell" && LICHT > .35) {
+        const px2 = innerWidth / 2 + cam.x + (13 - 12) * (TW / 2) * cam.z;
+        const py2 = 120 + cam.y + (13 + 12) * (TH / 2) * cam.z;
+        const dist = Math.hypot(px2 - innerWidth / 2, py2 - innerHeight / 2);
+        markt = Math.max(0, 1 - dist / (innerHeight * .7));
+      }
+      quellen.markt.ziel = markt;
+    }
+    for (const q of Object.values(quellen)) {
+      const zielVol = stumm ? 0 : q.ziel * q.maxVol;
+      /* weiche Rampe: je Tick ein Drittel des Weges */
+      q.a.volume += (zielVol - q.a.volume) / 3;
+      if (q.a.volume < .004) {
+        q.a.volume = 0;
+        if (q.laeuft) { q.a.pause(); q.laeuft = false; }
+      } else if (!q.laeuft) {
+        q.laeuft = true;
+        q.a.play().catch(() => { q.laeuft = false; });
+      }
+    }
+  }, 500);
+  return { quellen };
+})();
+
 /* ---- Revierkampf-Inszenierung: Beben, Schüsse, Sieges-Banner ---- */
 let KAMPF_SHAKE = 0;
 function kampfSchuesse() {
