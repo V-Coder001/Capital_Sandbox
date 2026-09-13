@@ -1025,54 +1025,109 @@ function bezirkeBerechnen() {
    * siehe pateWahlTick(). Hier passiert dafür nichts mehr. */
 }
 
-/* ---- Patenwahl: alle 20 Minuten offene Abstimmung, 60 s Urnengang ----
- * Jeder Mafioso hat eine Stimme (offenes Votum, wie es sich gehört). Bei
- * Gleichstand entscheiden erst gehaltene Bezirke, dann der Respekt. */
-const PATE_WAHL_INTERVALL = 1200;   // Sekunden zwischen zwei Wahlen
-const PATE_WAHL_DAUER = 60;
+/* ---- Patenwahl in drei Phasen ----
+ * 1. Kandidatur (45 s): Wer Pate werden will, wirft den Hut in den Ring.
+ * 2. Versprechen (45 s): Jeder Kandidat gibt ein Wahlversprechen ab — das
+ *    Versprechen des Siegers gilt als DEKRET für die ganze Amtszeit.
+ * 3. Wahl (60 s): Offenes Votum. Bei Gleichstand an der Spitze folgt eine
+ *    Stichwahl (30 s) zwischen den besten beiden. */
+const PATE_WAHL_INTERVALL = 1200;
+const PATE_DEKRETE = {
+  steuer: { name: "Steuersenkung",  text: "Die Paten-Abgabe sinkt von 10 % auf 5 %." },
+  schutz: { name: "Starke Familien", text: "Schutzgeld bringt allen Familien +25 %." },
+  brot:   { name: "Brot & Spiele",   text: "Sofort 500 $ für jeden, Casino-Bürgerumsatz +50 %." },
+  ruhe:   { name: "Ruhige Stadt",    text: "Sofort −25 Fahndung für alle Familien." },
+};
+function pateWahlErgebnis(stimmen, kandidaten) {
+  const zaehl = {};
+  for (const kid of Object.values(stimmen)) zaehl[kid] = (zaehl[kid] || 0) + 1;
+  return kandidaten
+    .map(k => [k, zaehl[k.pid] || 0])
+    .sort((a, b2) => b2[1] - a[1]
+      || (bezirkeVon(b2[0].familie) - bezirkeVon(a[0].familie))
+      || ((G.familienRespekt[b2[0].familie] || 0) - (G.familienRespekt[a[0].familie] || 0)));
+}
+const bezirkeVon = fid => (G.bezirke || []).filter(b => b.kontrolle === fid).length;
+function pateKroenen(k, stimmen) {
+  G.pate = k.familie; G.pateName = k.name; G.pateDekret = k.versprechen || null;
+  const dek = k.versprechen && PATE_DEKRETE[k.versprechen];
+  io.emit("notice", { text: `\u{1F451} ${k.name} (${FAMILIEN[k.familie].name}) ist der neue Pate${stimmen != null ? ` — ${stimmen} Stimme${stimmen === 1 ? "" : "n"}` : " — ohne Gegenkandidat"}.${dek ? ` Dekret: „${dek.name}“ — ${dek.text}` : ""}` });
+  io.emit("pateGewaehlt", { familie: k.familie, name: `${k.name} (${FAMILIEN[k.familie].name})`, farbe: FAMILIEN[k.familie].farbe });
+  /* Einmal-Dekrete sofort vollstrecken */
+  if (k.versprechen === "brot")
+    for (const m of Object.values(G.players)) { m.cash += 500; logTx(m, "Kartell", "Dekret „Brot & Spiele“: Geschenk des Paten", 500); }
+  if (k.versprechen === "ruhe")
+    for (const fid of Object.keys(FAMILIEN)) G.fahndung[fid] = Math.max(0, (G.fahndung[fid] || 0) - 25);
+}
 function pateWahlTick() {
   const W = G.pateWahl;
-  if (!W.naechste) W.naechste = G.tick + 120;   // erste Wahl 2 min nach Rundenstart
-  if (!W.aktiv && G.tick >= W.naechste) {
-    W.aktiv = true; W.endet = G.tick + PATE_WAHL_DAUER; W.stimmen = {};
-    io.emit("notice", { text: `\u{1F5F3} PATENWAHL! ${PATE_WAHL_DAUER} Sekunden lang stimmt jeder Mafioso offen ab — wer stellt den Paten der nächsten 20 Minuten?` });
+  if (!W.naechste) W.naechste = G.tick + 120;
+  const bots = () => Object.values(G.players).filter(b => b.bot && b.familie && b.familie !== "polizei");
+  if (!W.phase && G.tick >= W.naechste) {
+    W.phase = "kandidatur"; W.endet = G.tick + 45; W.kandidaten = []; W.stimmen = {}; W.stich = null;
+    io.emit("notice", { text: "\u{1F3A9} PATENWAHL, Phase 1: Kandidatur! 45 Sekunden lang kann jeder Mafioso den Hut in den Ring werfen." });
+    return;
   }
-  if (!W.aktiv) return;
-  /* Bots geben ihre Stimme im Lauf der Minute ab: meist treu zur eigenen
-   * Familie, ein paar Opportunisten schielen auf den größten Respekt. */
-  for (const b of Object.values(G.players)) {
-    if (!b.bot || !b.familie || b.familie === "polizei" || W.stimmen[b.id]) continue;
-    if (Math.random() > .08) continue;
-    let fid = b.familie;
-    if (Math.random() < .2) {
-      const top = Object.entries(G.familienRespekt || {}).sort((a, b2) => b2[1] - a[1])[0];
-      if (top && FAMILIEN[top[0]]) fid = top[0];
+  if (!W.phase) return;
+  if (W.phase === "kandidatur") {
+    /* Je Familie schickt höchstens ein Bot einen Kandidaten ins Rennen. */
+    for (const b of bots()) {
+      if (W.kandidaten.some(k => k.familie === b.familie)) continue;
+      if (Math.random() < .04)
+        W.kandidaten.push({ pid: b.id, name: b.name, familie: b.familie, versprechen: null });
     }
-    W.stimmen[b.id] = fid;
+    if (G.tick < W.endet) return;
+    if (!W.kandidaten.length) {
+      W.phase = null; W.naechste = G.tick + PATE_WAHL_INTERVALL;
+      G.pate = null; G.pateName = null; G.pateDekret = null;
+      io.emit("notice", { text: "\u{1F3A9} Niemand will Pate sein — der Stuhl bleibt 20 Minuten verwaist." });
+      return;
+    }
+    if (W.kandidaten.length === 1) {
+      pateKroenen(W.kandidaten[0], null);
+      W.phase = null; W.naechste = G.tick + PATE_WAHL_INTERVALL;
+      return;
+    }
+    W.phase = "versprechen"; W.endet = G.tick + 45;
+    io.emit("notice", { text: `\u{1F4DC} Phase 2: Wahlversprechen! ${W.kandidaten.length} Kandidaten — 45 Sekunden für große Worte. Das Versprechen des Siegers gilt als Dekret.` });
+    return;
   }
-  if (G.tick < W.endet) return;
-  /* Auszählung */
-  W.aktiv = false; W.naechste = G.tick + PATE_WAHL_INTERVALL;
-  const zaehl = {};
-  for (const fid of Object.values(W.stimmen)) zaehl[fid] = (zaehl[fid] || 0) + 1;
-  const bezirke = {};
-  for (const b of G.bezirke || []) if (b.kontrolle) bezirke[b.kontrolle] = (bezirke[b.kontrolle] || 0) + 1;
-  const reihen = Object.entries(zaehl).sort((a, b2) =>
-    b2[1] - a[1]
-    || (bezirke[b2[0]] || 0) - (bezirke[a[0]] || 0)
-    || (G.familienRespekt[b2[0]] || 0) - (G.familienRespekt[a[0]] || 0));
-  const alter = G.pate;
-  if (!reihen.length) {
-    G.pate = null;
-    io.emit("notice", { text: "\u{1F5F3} Niemand ist zur Patenwahl erschienen — der Stuhl bleibt verwaist." });
-  } else {
-    G.pate = reihen[0][0];
-    const stichentscheid = reihen[1] && reihen[1][1] === reihen[0][1];
-    io.emit("notice", { text: `\u{1F451} ${FAMILIEN[G.pate].name} gewinnt die Patenwahl mit ${reihen[0][1]} Stimme${reihen[0][1] === 1 ? "" : "n"}${stichentscheid ? " (Stichentscheid über Bezirke und Respekt)" : ""} — ${G.pate === alter ? "der Pate bleibt im Amt" : "ein neuer Pate übernimmt"}. Die anderen Familien zahlen 20 Minuten lang Abgaben.` });
-    if (G.pate !== alter) io.emit("pateGewaehlt", { familie: G.pate, name: FAMILIEN[G.pate].name, farbe: FAMILIEN[G.pate].farbe });
+  if (W.phase === "versprechen") {
+    for (const k of W.kandidaten) {
+      const pl = G.players[k.pid];
+      if (pl?.bot && !k.versprechen && Math.random() < .1) {
+        const arten = Object.keys(PATE_DEKRETE);
+        k.versprechen = arten[Math.floor(Math.random() * arten.length)];
+      }
+    }
+    if (G.tick < W.endet) return;
+    W.phase = "wahl"; W.endet = G.tick + 60; W.stimmen = {};
+    io.emit("notice", { text: "\u{1F5F3} Phase 3: Die Wahl! 60 Sekunden offenes Votum — jeder Mafioso hat eine Stimme." });
+    return;
+  }
+  if (W.phase === "wahl" || W.phase === "stichwahl") {
+    const wahlbar = W.stich ? W.kandidaten.filter(k => W.stich.includes(k.pid)) : W.kandidaten;
+    for (const b of bots()) {
+      if (W.stimmen[b.id] || Math.random() > .08) continue;
+      let ziel = wahlbar.find(k => k.familie === b.familie);
+      if (!ziel || Math.random() < .2)
+        ziel = [...wahlbar].sort((a, b2) => (G.familienRespekt[b2.familie] || 0) - (G.familienRespekt[a.familie] || 0))[0];
+      if (ziel) W.stimmen[b.id] = ziel.pid;
+    }
+    if (G.tick < W.endet) return;
+    const reihen = pateWahlErgebnis(W.stimmen, wahlbar);
+    const patt = reihen.length > 1 && reihen[0][1] === reihen[1][1];
+    if (patt && W.phase === "wahl") {
+      W.phase = "stichwahl"; W.endet = G.tick + 30; W.stimmen = {};
+      W.stich = [reihen[0][0].pid, reihen[1][0].pid];
+      io.emit("notice", { text: `\u2694 STICHWAHL! ${reihen[0][0].name} gegen ${reihen[1][0].name} — 30 Sekunden, alle Stimmen zurückgesetzt.` });
+      return;
+    }
+    /* Endergebnis (bei erneutem Patt entscheiden Bezirke, dann Respekt — steckt in der Sortierung) */
+    pateKroenen(reihen[0][0], reihen[0][1]);
+    W.phase = null; W.naechste = G.tick + PATE_WAHL_INTERVALL; W.stich = null;
   }
 }
-
 /* ---- Werttransporte, Straßensperren, Fahndung (Kartellmodus) ----
  * Auf den Hauptstraßen rollen regelmäßig Werttransporte quer über die Karte.
  * Wer sich traut, überfällt sie: Erfolg bringt Bargeld, Pistolen oder
@@ -2622,7 +2677,8 @@ const G = {
   gblackjack: { phase: "warten", endet: 0, dran: -1, dealer: [], spieler: [] },
   gpoker: { phase: "warten", endet: 0, einsatz: 100, pot: 0, board: [], deck: [], strasse: 0, dran: -1, aktBet: 0, raises: 0, spieler: [] },
   brunnenPot: 0,        // Wunschbrunnen in den Giardini: Münzen aller Spieler
-  pateWahl: { aktiv: false, endet: 0, naechste: 0, stimmen: {} },   // Patenwahl alle 20 min
+  pateWahl: { phase: null, endet: 0, naechste: 0, kandidaten: [], stimmen: {}, stich: null },   // Patenwahl alle 20 min (3 Phasen + Stichwahl)
+  pateDekret: null, pateName: null,
   shareListings: [],     // {id, companyId, sellerId, count(1-4 = 25%-Schritte), price, ts, toId}
   shareBids: [],         // Kaufanfragen an eine Firma: {id, companyId, bidderId, count, price, ttl}
   nextDividendIn: DIVIDEND_INTERVAL,
@@ -3545,10 +3601,13 @@ function snapshot() {
         kx: x, ky: y, gestoppt: !!tr.gestoppt };
     }) : null,
     pate: MODE === "kartell" ? G.pate : null,
-    pateWahl: MODE === "kartell" ? { aktiv: G.pateWahl.aktiv,
+    pateWahl: MODE === "kartell" ? { phase: G.pateWahl.phase,
       rest: Math.max(0, G.pateWahl.endet - G.tick),
       naechsteIn: Math.max(0, (G.pateWahl.naechste || 0) - G.tick),
-      stimmen: G.pateWahl.stimmen } : null,
+      kandidaten: G.pateWahl.kandidaten, stimmen: G.pateWahl.stimmen,
+      stich: G.pateWahl.stich, dekrete: PATE_DEKRETE } : null,
+    pateDekret: MODE === "kartell" ? G.pateDekret : null,
+    pateName: MODE === "kartell" ? G.pateName : null,
     gcasino: MODE === "kartell" ? { stufe: G.gcasino.stufe, stil: GCASINO_STILE[G.gcasino.stufe - 1],
       quote: G.gcasino.quote, herrscher: gcasinoHerrscher(),
       spiele: Object.fromEntries(Object.entries(GCASINO_SPIELE).map(([k, sp]) => {
@@ -4274,7 +4333,7 @@ io.on("connection", socket => {
     if (G.pate && p.familie !== G.pate) {
       const paten = Object.values(G.players).filter(x2 => x2.familie === G.pate);
       if (paten.length) {
-        abgabe = Math.round(erloes * PATEN_ABGABE);
+        abgabe = Math.round(erloes * PATEN_ABGABE * (G.pateDekret === "steuer" ? .5 : 1));
         p.cash -= abgabe;
         const teil = Math.round(abgabe / paten.length);
         for (const x2 of paten) { x2.cash += teil; logTx(x2, "Kartell", `Abgabe von ${p.name} an den Paten`, teil); }
@@ -4589,14 +4648,38 @@ io.on("connection", socket => {
     ack?.(gpokerAktion(p, s, aktion));
   }));
 
-  /* --- Patenwahl: offene Stimmabgabe während des Urnengangs --- */
-  socket.on("patenStimme", guard((p, { fid }, ack) => {
+  /* --- Patenwahl: kandidieren, versprechen, abstimmen --- */
+  socket.on("pateKandidieren", guard((p, _x, ack) => {
     if (MODE !== "kartell") return ack?.({ error: "Nur in der Kartellwirtschaft" });
     const W = G.pateWahl;
-    if (!W.aktiv) return ack?.({ error: "Gerade läuft keine Patenwahl" });
+    if (W.phase !== "kandidatur") return ack?.({ error: "Gerade nimmt niemand Kandidaturen an" });
+    if (!p.familie || p.familie === "polizei") return ack?.({ error: "Die Questura kandidiert nicht" });
+    if (W.kandidaten.some(k => k.pid === p.id)) return ack?.({ error: "Du stehst schon auf der Liste" });
+    W.kandidaten.push({ pid: p.id, name: p.name, familie: p.familie, versprechen: null });
+    io.emit("notice", { text: `\u{1F3A9} ${p.name} (${FAMILIEN[p.familie].name}) kandidiert für das Amt des Paten.` });
+    ack?.({ ok: true });
+  }));
+
+  socket.on("pateVersprechen", guard((p, { art }, ack) => {
+    if (MODE !== "kartell") return ack?.({ error: "Nur in der Kartellwirtschaft" });
+    const W = G.pateWahl;
+    if (W.phase !== "versprechen") return ack?.({ error: "Jetzt ist nicht die Zeit für große Worte" });
+    const k = W.kandidaten.find(k2 => k2.pid === p.id);
+    if (!k) return ack?.({ error: "Nur Kandidaten geben Versprechen ab" });
+    if (!PATE_DEKRETE[art]) return ack?.({ error: "Dieses Versprechen kennt niemand" });
+    k.versprechen = art;
+    io.emit("notice", { text: `\u{1F4DC} ${p.name} verspricht: „${PATE_DEKRETE[art].name}“ — ${PATE_DEKRETE[art].text}` });
+    ack?.({ ok: true });
+  }));
+
+  socket.on("patenStimme", guard((p, { kandidat }, ack) => {
+    if (MODE !== "kartell") return ack?.({ error: "Nur in der Kartellwirtschaft" });
+    const W = G.pateWahl;
+    if (W.phase !== "wahl" && W.phase !== "stichwahl") return ack?.({ error: "Gerade läuft keine Abstimmung" });
     if (!p.familie || p.familie === "polizei") return ack?.({ error: "Die Questura wählt keinen Paten" });
-    if (!FAMILIEN[fid]) return ack?.({ error: "Diese Familie kennt niemand" });
-    W.stimmen[p.id] = fid;
+    if (!W.kandidaten.some(k => k.pid === kandidat)) return ack?.({ error: "Der steht nicht auf dem Zettel" });
+    if (W.stich && !W.stich.includes(kandidat)) return ack?.({ error: "In der Stichwahl stehen nur noch zwei zur Wahl" });
+    W.stimmen[p.id] = kandidat;
     ack?.({ ok: true });
   }));
 
@@ -5644,7 +5727,8 @@ io.on("connection", socket => {
     G.wm = {}; G.saisonRennen = 0; G.fanAuszahlungIn = FAN_TAKT;
     G.hofGespeichert = false;
     G.cartels = []; G.familienRespekt = {}; G.bezirke = null; G.pate = null;
-    G.pateWahl = { aktiv: false, endet: 0, naechste: 0, stimmen: {} };
+    G.pateWahl = { phase: null, endet: 0, naechste: 0, kandidaten: [], stimmen: {}, stich: null };
+    G.pateDekret = null; G.pateName = null;
     G.fahndung = {}; G.transporte = []; G.naechsterTransport = 30;
     G.started = false; G.hostId = null;   // neue Runde beginnt wieder im Warteraum
     G.groupOrder = null; G.nextGroupIn = 20;
@@ -5919,7 +6003,7 @@ function runTick() {
         if (!b.kontrolle) continue;
         const mitglieder = Object.values(G.players).filter(p2 => p2.familie === b.kontrolle);
         if (!mitglieder.length) continue;
-        const teil = Math.round(SCHUTZGELD_JE_BEZIRK / mitglieder.length);
+        const teil = Math.round(SCHUTZGELD_JE_BEZIRK * (G.pateDekret === "schutz" ? 1.25 : 1) / mitglieder.length);
         for (const m of mitglieder) {
           m.cash += teil;
           questProg(m, "schutzgeld");
@@ -5935,7 +6019,7 @@ function runTick() {
       const herr = gcasinoHerrscher();
       if (herr) {
         const q = GCASINO_QUOTEN[G.gcasino.quote];
-        const brutto = q.netto * G.gcasino.stufe;
+        const brutto = Math.round(q.netto * G.gcasino.stufe * (G.pateDekret === "brot" ? 1.5 : 1));
         const bank = Object.values(G.players).filter(m => m.familie === herr);
         const teil = Math.round(brutto / Math.max(1, bank.length));
         for (const m of bank) { m.cash += teil; logTx(m, "Casino", `Bürger-Umsatz (${GCASINO_STILE[G.gcasino.stufe - 1]})`, teil); }

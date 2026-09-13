@@ -2826,42 +2826,89 @@ function pateWahlWidget() {
   const st = store.get().state, myId = store.get().myId;
   const W = st?.pateWahl;
   let box = document.getElementById("pateWahlBox");
-  if (!W?.aktiv || !st.familien) { if (box) box.style.display = "none"; return; }
+  if (!W?.phase || !st.familien) { if (box) box.style.display = "none"; return; }
   if (!box) {
     box = document.createElement("div");
     box.id = "pateWahlBox";
-    box.style.cssText = "position:fixed;top:64px;left:50%;transform:translateX(-50%);z-index:46;width:min(330px,92vw);" +
+    box.style.cssText = "position:fixed;top:64px;left:50%;transform:translateX(-50%);z-index:46;width:min(350px,92vw);" +
       "background:linear-gradient(168deg,#171320,#0f0c14);border:1px solid #c9a04e88;border-radius:12px;padding:10px 12px;" +
       "box-shadow:0 14px 40px rgba(0,0,0,.6),0 0 22px rgba(201,160,78,.18)";
     document.body.appendChild(box);
   }
+  const famVon = fid => st.familien.find(f => f.id === fid);
+  const meineFam = st.players?.[myId]?.familie;
+  const binPolizei = meineFam === "polizei";
+  const binKandidat = W.kandidaten.some(k => k.pid === myId);
+  const dekrete = W.dekrete || {};
+  const TITEL = { kandidatur: "\u{1F3A9} PATENWAHL · KANDIDATUR", versprechen: "\u{1F4DC} PATENWAHL · VERSPRECHEN",
+    wahl: "\u{1F5F3} PATENWAHL · ABSTIMMUNG", stichwahl: "\u2694 STICHWAHL" };
   const zaehl = {};
-  for (const fid of Object.values(W.stimmen || {})) zaehl[fid] = (zaehl[fid] || 0) + 1;
+  for (const kid of Object.values(W.stimmen || {})) zaehl[kid] = (zaehl[kid] || 0) + 1;
   const max = Math.max(1, ...Object.values(zaehl));
-  const meine = W.stimmen?.[myId];
-  const binPolizei = st.players?.[myId]?.familie === "polizei";
+  const meineStimme = W.stimmen?.[myId];
+  const wahlbar = W.stich ? W.kandidaten.filter(k => W.stich.includes(k.pid)) : W.kandidaten;
+  let inhalt = "";
+  if (W.phase === "kandidatur") {
+    inhalt = `
+      ${W.kandidaten.length ? W.kandidaten.map(k => `
+        <div style="display:flex;gap:7px;align-items:center;margin:4px 0">
+          <span style="color:${famVon(k.familie)?.farbe}">\u25CF</span>
+          <b style="flex:1">${k.name}</b>
+          <span class="meta">${famVon(k.familie)?.name || ""}</span>
+        </div>`).join("") : `<p class="note" style="margin:4px 0;text-align:center">Noch wirft niemand den Hut in den Ring…</p>`}
+      ${!binPolizei && !binKandidat ? `<button class="bknopf gcGold" data-patekandidat style="width:100%;margin-top:6px">\u{1F3A9} Ich kandidiere!</button>`
+        : binKandidat ? `<p class="note" style="margin:6px 0 0;text-align:center;color:#e8c268">Du stehst auf der Liste — gleich zählen Versprechen.</p>` : ""}`;
+  } else if (W.phase === "versprechen") {
+    inhalt = `
+      ${W.kandidaten.map(k => `
+        <div style="display:flex;gap:7px;align-items:center;margin:4px 0">
+          <span style="color:${famVon(k.familie)?.farbe}">\u25CF</span>
+          <b style="flex:1">${k.name}${k.pid === myId ? " (du)" : ""}</b>
+          <span class="meta" style="font-style:italic">${k.versprechen ? "\u201E" + (dekrete[k.versprechen]?.name || k.versprechen) + "\u201C" : "überlegt noch…"}</span>
+        </div>`).join("")}
+      ${binKandidat ? `
+        <div class="lbl" style="margin-top:7px">Dein Versprechen <span class="meta" style="text-transform:none;letter-spacing:0">— gilt bei Sieg als Dekret</span></div>
+        <div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:5px">
+          ${Object.entries(dekrete).map(([id2, d]) => `<button class="mini ${W.kandidaten.find(k => k.pid === myId)?.versprechen === id2 ? "gcGold" : ""}" data-pateversprechen="${id2}" title="${d.text}">${d.name}</button>`).join("")}
+        </div>` : `<p class="note" style="margin:6px 0 0;text-align:center">Das Versprechen des Siegers gilt 20 Minuten als Dekret.</p>`}`;
+  } else {
+    inhalt = `
+      ${wahlbar.map(k => `
+        <div style="display:flex;align-items:center;gap:7px;margin:5px 0">
+          <button class="mini ${meineStimme === k.pid ? "gcGold" : ""}" data-patenstimme="${k.pid}" ${binPolizei ? "disabled" : ""}
+            style="min-width:118px;text-align:left;color:${famVon(k.familie)?.farbe}">${meineStimme === k.pid ? "\u2713 " : ""}${k.name}</button>
+          <div style="flex:1;min-width:0">
+            <div style="height:7px;border-radius:4px;background:rgba(201,160,78,.12);overflow:hidden">
+              <i style="display:block;height:100%;width:${((zaehl[k.pid] || 0) / max) * 100}%;background:${famVon(k.familie)?.farbe};box-shadow:0 0 6px ${famVon(k.familie)?.farbe}"></i>
+            </div>
+            <span class="meta" style="font-size:8.5px;font-style:italic">${k.versprechen ? "\u201E" + (dekrete[k.versprechen]?.name || "") + "\u201C" : ""}</span>
+          </div>
+          <b style="font-family:var(--mono);min-width:14px;text-align:right">${zaehl[k.pid] || 0}</b>
+        </div>`).join("")}
+      <p class="note" style="margin:5px 0 0;text-align:center">${binPolizei ? "Die Questura schaut nur zu." : W.phase === "stichwahl" ? "Nur noch zwei — alle Stimmen wurden zurückgesetzt." : "Offenes Votum — der Sieger regiert 20 Minuten mit seinem Dekret."}</p>`;
+  }
   box.style.display = "block";
   box.innerHTML = `
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:7px">
-      <b style="color:#e8c268;letter-spacing:1.5px;font-size:11px">\u{1F5F3} PATENWAHL</b>
+      <b style="color:#e8c268;letter-spacing:1.2px;font-size:11px">${TITEL[W.phase] || "PATENWAHL"}</b>
       <span style="flex:1"></span>
       <b style="font-family:var(--mono);color:${W.rest <= 10 ? "var(--down)" : "#e8c268"}">${W.rest}s</b>
-    </div>
-    ${st.familien.map(f => `
-      <div style="display:flex;align-items:center;gap:7px;margin:4px 0">
-        <button class="mini ${meine === f.id ? "gcGold" : ""}" data-patenstimme="${f.id}" ${binPolizei ? "disabled" : ""}
-          style="min-width:104px;text-align:left;color:${f.farbe}">${meine === f.id ? "✓ " : ""}${f.name}</button>
-        <div style="flex:1;height:7px;border-radius:4px;background:rgba(201,160,78,.12);overflow:hidden">
-          <i style="display:block;height:100%;width:${((zaehl[f.id] || 0) / max) * 100}%;background:${f.farbe};box-shadow:0 0 6px ${f.farbe}"></i>
-        </div>
-        <b style="font-family:var(--mono);min-width:14px;text-align:right">${zaehl[f.id] || 0}</b>
-      </div>`).join("")}
-    <p class="note" style="margin:5px 0 0;text-align:center">${binPolizei ? "Die Questura schaut nur zu." : "Offenes Votum — der Sieger kassiert 20 Minuten die Abgaben."}</p>`;
+    </div>${inhalt}`;
 }
 document.addEventListener("click", e => {
+  const kand = e.target.closest("button[data-patekandidat]");
+  if (kand) {
+    socket.emit("pateKandidieren", {}, res => { if (res?.error) toast(res.error, true); else { KTON.chip(); pateWahlWidget(); } });
+    return;
+  }
+  const ver = e.target.closest("button[data-pateversprechen]");
+  if (ver) {
+    socket.emit("pateVersprechen", { art: ver.dataset.pateversprechen }, res => { if (res?.error) toast(res.error, true); else { KTON.chip(); pateWahlWidget(); } });
+    return;
+  }
   const b = e.target.closest("button[data-patenstimme]");
   if (!b) return;
-  socket.emit("patenStimme", { fid: b.dataset.patenstimme }, res => {
+  socket.emit("patenStimme", { kandidat: b.dataset.patenstimme }, res => {
     if (res?.error) toast(res.error, true); else { KTON.chip(); pateWahlWidget(); }
   });
 });
