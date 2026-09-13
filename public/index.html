@@ -2844,7 +2844,7 @@ function wzSchliessen() {
   if (el) el.style.display = "none";
 }
 function wzRender() {
-  if (!WZ_OFFEN) return;
+  if (!WZ_OFFEN || window.WZ_RENNEN) return;
   const el = document.querySelector("#wzModal .wzInhalt");
   const w = WZ_CLIENT[WZ_OFFEN];
   if (!el || !w) return;
@@ -2885,6 +2885,15 @@ function wzRender() {
       <button class="bknopf verkauf" data-wzgo="kai" data-good="${g}">Verschiffen +40 %</button>
     </div>`).join("") || `<p class="note">Keine heiße Ware im Lager — das Boot wartet.</p>`;
   else if (WZ_OFFEN === "yacht") aktion = `
+    <div id="wzRegatta" style="position:relative;border-radius:11px;overflow:hidden;border:3px solid #57351d;box-shadow:0 0 0 2px #c9a04e,inset 0 0 22px rgba(0,0,0,.45);margin:4px 0 9px">
+      ${[1, 2, 3].map(y => `
+        <div style="position:relative;height:38px;background:linear-gradient(180deg,#17466e ${y % 2 ? "" : ","}#123a5c 60%,#0e3050);border-bottom:${y < 3 ? "1px dashed rgba(255,255,255,.18)" : "none"}">
+          <span class="meta" style="position:absolute;left:6px;top:11px;font-size:9px;opacity:.7">${y}</span>
+          <span id="wzBoot${y}" style="position:absolute;left:4%;top:5px;font-size:21px;transition:none;filter:drop-shadow(0 2px 3px rgba(0,0,0,.5))">⛵</span>
+        </div>`).join("")}
+      <div style="position:absolute;right:9%;top:0;bottom:0;width:4px;background:repeating-linear-gradient(180deg,#fff 0 5px,#111 5px 10px);opacity:.85"></div>
+      <span style="position:absolute;right:2%;top:4px;font-size:14px">🏁</span>
+    </div>
     <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin:4px 0 8px">
       <span class="meta">Einsatz</span>
       <input id="wzBetrag" type="number" min="100" max="1000" value="200" style="width:84px">
@@ -2916,6 +2925,55 @@ function wzRender() {
     ${aktion}
     <div id="wzErgebnis" style="min-height:24px;margin-top:8px;text-align:center;font-weight:700;font-family:var(--mono)">${window.WZ_LETZTES || ""}</div>`;
 }
+/* Die Regatta: Der Server hat die Siegerin schon gezogen — hier segeln die
+ * drei Boote sichtbar um die Wette, mit Wellen-Gewackel und Fotofinish. */
+function wzRegattaStart(res) {
+  const boote = [1, 2, 3].map(y => document.getElementById("wzBoot" + y));
+  const erg = document.getElementById("wzErgebnis");
+  if (boote.some(b => !b)) { wzRegattaErgebnis(res, erg); return; }
+  window.WZ_RENNEN = true;
+  document.querySelectorAll("button[data-wzgo=yacht]").forEach(b => b.disabled = true);
+  if (erg) erg.innerHTML = `<span style="color:#e8c268">⚓ Und sie sind unterwegs…</span>`;
+  /* Ziel bei 86 % Bahnbreite; Verliererinnen stranden bei 62-80 % */
+  const ziele = [1, 2, 3].map(y => y === res.sieger ? 86 : 62 + Math.random() * 18);
+  const phasen = [0, 1, 2].map(() => Math.random() * Math.PI * 2);
+  const tempo = [0, 1, 2].map(() => .75 + Math.random() * .5);
+  const t0 = performance.now(), dauer = 4600;
+  let letzterTick = 0;
+  const schritt = t => {
+    const f = Math.min(1, (t - t0) / dauer);
+    const e2 = 1 - Math.pow(1 - f, 2.2);
+    boote.forEach((b, i) => {
+      if (!b) return;
+      /* Zwischenspurts: Sinus-Wobble laesst die Fuehrung wechseln, erst auf
+       * den letzten Metern setzt sich die echte Siegerin ab. */
+      const wobble = Math.sin(f * 7 + phasen[i]) * 7 * (1 - f) * tempo[i];
+      const x = 4 + (ziele[i] - 4) * e2 + wobble * (f < .8 ? 1 : (1 - f) * 5);
+      b.style.left = Math.max(4, x) + "%";
+      b.style.top = (5 + Math.sin(t / 150 + i * 2) * 2.5) + "px";
+    });
+    if (t - letzterTick > 380) { KTON.tick(); letzterTick = t; }
+    if (f < 1 && WZ_OFFEN === "yacht") requestAnimationFrame(schritt);
+    else {
+      window.WZ_RENNEN = false;
+      const siegerBoot = boote[res.sieger - 1];
+      if (siegerBoot) siegerBoot.style.left = "88%";
+      wzRegattaErgebnis(res, document.getElementById("wzErgebnis"));
+      document.querySelectorAll("button[data-wzgo=yacht]").forEach(b => b.disabled = false);
+    }
+  };
+  requestAnimationFrame(schritt);
+}
+function wzRegattaErgebnis(res, erg) {
+  const text = res.gewonnen
+    ? `<span style="color:var(--up)">🏆 Yacht ${res.sieger} siegt — +${fmt(res.betrag)}!</span>`
+    : `<span style="color:var(--down)">Yacht ${res.sieger} siegt — Einsatz versenkt.</span>`;
+  if (res.gewonnen) { KTON.win(res.betrag >= 1000); gcKonfetti(); } else KTON.lose();
+  window.WZ_LETZTES = text;
+  if (erg) erg.innerHTML = text;
+  setTimeout(() => { window.WZ_LETZTES = ""; }, 6000);
+}
+
 document.addEventListener("click", e => {
   const go = e.target.closest("button[data-wzgo]");
   if (!go) return;
@@ -2929,12 +2987,8 @@ document.addEventListener("click", e => {
     if (res?.error) { toast(res.error, true); return; }
     KTON.chip();
     let text;
-    if (art === "yacht") {
-      text = res.gewonnen
-        ? `<span style="color:var(--up)">🏆 Yacht ${res.sieger} siegt — +${fmt(res.betrag)}!</span>`
-        : `<span style="color:var(--down)">Yacht ${res.sieger} siegt — Einsatz versenkt.</span>`;
-      if (res.gewonnen) { KTON.win(res.betrag >= 1000); gcKonfetti(); } else KTON.lose();
-    } else if (art === "brunnen") {
+    if (art === "yacht") { wzRegattaStart(res); return; }
+    if (art === "brunnen") {
       text = res.jackpot
         ? `<span style="color:var(--up)">🎉 Der Brunnen erhört dich — +${fmt(res.jackpot)}!</span>`
         : `<span class="meta">Platsch. Der Pot wächst auf ${fmt(res.pot)}.</span>`;
