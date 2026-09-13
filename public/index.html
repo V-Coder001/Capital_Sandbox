@@ -2267,11 +2267,9 @@ function gcasinoRender() {
   const meineFam = st.players?.[myId]?.familie;
   const herr = gc.herrscher ? st.familien?.find(f => f.id === gc.herrscher) : null;
   const binHerr = meineFam && meineFam === gc.herrscher;
-  const einsatzAlt = document.getElementById("gcEinsatz")?.value || 200;
   const sterne = "★".repeat(gc.stufe) + "☆".repeat(5 - gc.stufe);
   const quoteName = gc.quote === "fair" ? "fair" : gc.quote === "gierig" ? "gierig" : "großzügig";
   const umsatz = (gc.quote === "gierig" ? 170 : gc.quote === "fair" ? 100 : 50) * gc.stufe;
-  const ICONS = { rot: "🎡", zahl: "🎯", wuerfel: "🎲", slots: "🎰", baccara: "🃏" };
   const illegale = Object.entries(GOODS()).filter(([, g]) => g.cat === "Illegal").map(([g2]) => g2);
   el.style.display = "grid";
   el.querySelector(".gcInhalt").innerHTML = `
@@ -2332,20 +2330,6 @@ function gcasinoRender() {
         || `<p class="note" style="margin:6px 0 0">Keine heiße Ware im Lager.</p>`}` : ""}`}`;
 }
 document.addEventListener("click", e => {
-  const schnell = e.target.closest("button[data-gceinsatz]");
-  if (schnell) { const f = document.getElementById("gcEinsatz"); if (f) f.value = schnell.dataset.gceinsatz; return; }
-  const sp = e.target.closest("button[data-gcspiel]");
-  if (sp) {
-    const einsatz = +document.getElementById("gcEinsatz").value || 100;
-    socket.emit("gcasinoSpielen", { spiel: sp.dataset.gcspiel, einsatz }, res => {
-      if (res?.error) return toast(res.error, true);
-      window.GC_LETZTES = res.gewonnen
-        ? `<span style="color:var(--up)">🎉 Gewonnen · +${fmt(res.betrag)}</span>`
-        : `<span style="color:var(--down)">✗ Verloren · −${fmt(res.betrag)}</span>`;
-      gcasinoRender();
-    });
-    return;
-  }
   const q = e.target.closest("button[data-gcquote]");
   if (q) { socket.emit("gcasinoQuote", { quote: q.dataset.gcquote }, res => { if (res?.error) toast(res.error, true); gcasinoRender(); }); return; }
   if (e.target.closest("button[data-gcupgrade]")) {
@@ -6968,6 +6952,9 @@ DOCK.forEach(([pid, label]) => { const b = document.createElement("button");
   if (pid === "plan") { b.id = "dockPlan"; b.style.display = "none"; }
   /* Dasselbe für das Kartell: nur in der Kartellwirtschaft. */
   if (pid === "kartell") { b.id = "dockKartell"; b.style.display = "none"; }
+  /* Die Börse hat im Kartellmodus nichts verloren — dort läuft alles über
+   * Hehler, Markthalle und Frachtdepot. render() blendet sie aus. */
+  if (pid === "boerse") b.id = "dockBoerse";
   /* Motorsport erscheint erst mit dem ersten eigenen Rennstall — vorher wäre
    * es ein Knopf, hinter dem nichts steht. */
   if (pid === "motorsport") { b.id = "dockMotor"; b.style.display = "none"; }
@@ -6979,6 +6966,10 @@ DOCK.forEach(([pid, label]) => { const b = document.createElement("button");
  * Nachrichten, Lexikon. Fuer die ist das Oeffnen die Handlung. */
 const TUT_GESEHEN = new Set();
 function openPanel(pid, stumm = false) {
+  if (pid === "boerse" && store.get()?.state?.mode === "kartell") {
+    toast("Im Kartell gibt es keine Börse — gehandelt wird über Hehler, Markthalle und Frachtdepot.");
+    return;
+  }
   TUT_GESEHEN.add(pid);
   if (!stumm) SFX.spiel("klick");
   document.querySelectorAll(".panel").forEach(p => p.classList.remove("open"));
@@ -8710,6 +8701,9 @@ function kartellRendern(state, me, myId) {
   const knopf = document.getElementById("dockKartell");
   const aktiv = state.mode === "kartell";
   if (knopf) knopf.style.display = aktiv ? "" : "none";
+  const boerseKnopf = document.getElementById("dockBoerse");
+  if (boerseKnopf) boerseKnopf.style.display = aktiv ? "none" : "";
+  if (aktiv) document.getElementById("p-boerse")?.classList.remove("open");
   /* HUD-Chip: Familie und Respekt neben dem Nettovermögen. */
   const alterHud = document.getElementById("mafiaHud");
   if (!aktiv) { alterHud?.remove(); return; }
