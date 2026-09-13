@@ -712,13 +712,18 @@ function familienPflegen() {
       logTx(m, "Kartell", `Tribut an die Familienkasse (${Math.round(satz * 100)} %)`, -tribut);
     }
   }
-  /* Bot-Oberhäupter regieren: Soldaten anheuern, ab und zu ausschütten. */
+  /* Bot-Oberhäupter regieren — jede Familie mit eigener Strategie:
+   * Triade & Bratwa rüsten für die Vendetta, La Famiglia hortet fürs
+   * Imperium, das Syndikat spielt ausgewogen. */
   for (const fid of Object.keys(FAMILIEN)) {
     const bossId = famBoss(fid), boss = bossId && G.players[bossId];
     if (!boss?.bot) continue;
-    if (G.familienBank[fid] >= SOLDAT_KOSTEN + 400 && G.soldaten[fid] < SOLDATEN_MAX && Math.random() < .01)
+    const krieger = fid === "triade" || fid === "bratwa";
+    const hortet = fid === "famiglia";
+    const soldatChance = krieger ? .025 : hortet ? .004 : .01;
+    if (G.familienBank[fid] >= SOLDAT_KOSTEN + 400 && G.soldaten[fid] < SOLDATEN_MAX && Math.random() < soldatChance)
       famSoldatKaufen(fid);
-    else if (G.familienBank[fid] > 4000 && Math.random() < .004) famAusschuetten(fid);
+    else if (!hortet && G.familienBank[fid] > 4000 && Math.random() < .004) famAusschuetten(fid);
   }
 }
 const SOLDAT_KOSTEN = 600, SOLDATEN_MAX = 5;
@@ -1114,6 +1119,7 @@ function pateWahlErgebnis(stimmen, kandidaten) {
 const bezirkeVon = fid => (G.bezirke || []).filter(b => b.kontrolle === fid).length;
 function pateKroenen(k, stimmen) {
   G.pate = k.familie; G.pateName = k.name; G.pateDekret = k.versprechen || null;
+  G.wahlSiege[k.familie] = (G.wahlSiege[k.familie] || 0) + 1;
   const dek = k.versprechen && PATE_DEKRETE[k.versprechen];
   io.emit("notice", { text: `\u{1F451} ${k.name} (${FAMILIEN[k.familie].name}) ist der neue Pate${stimmen != null ? ` — ${stimmen} Stimme${stimmen === 1 ? "" : "n"}` : " — ohne Gegenkandidat"}.${dek ? ` Dekret: „${dek.name}“ — ${dek.text}` : ""}` });
   io.emit("pateGewaehlt", { familie: k.familie, name: `${k.name} (${FAMILIEN[k.familie].name})`, farbe: FAMILIEN[k.familie].farbe });
@@ -2758,6 +2764,7 @@ const G = {
   pateWahl: { phase: null, endet: 0, naechste: 0, kandidaten: [], stimmen: {}, stich: null },   // Patenwahl alle 20 min (3 Phasen + Stichwahl)
   pateDekret: null, pateName: null,
   familienBank: {}, familienBoss: {}, familienRang: {}, familienTribut: {}, soldaten: {},
+  wahlSiege: {}, kampfSiege: {}, siegWarnungen: {},
   shareListings: [],     // {id, companyId, sellerId, count(1-4 = 25%-Schritte), price, ts, toId}
   shareBids: [],         // Kaufanfragen an eine Firma: {id, companyId, bidderId, count, price, ttl}
   nextDividendIn: DIVIDEND_INTERVAL,
@@ -3728,6 +3735,8 @@ function snapshot() {
       tribut: G.familienTribut[fid] ?? .10,
       soldaten: G.soldaten[fid] || 0,
       bossPid: famBoss(fid),
+      wahlSiege: G.wahlSiege[fid] || 0,
+      kampfSiege: G.kampfSiege[fid] || 0,
       raenge: Object.values(G.players).filter(p2 => p2.familie === fid)
         .map(p2 => ({ pid: p2.id, name: p2.name, bot: !!p2.bot, rang: famRang(p2) })),
     })) : null,
@@ -5879,6 +5888,7 @@ io.on("connection", socket => {
     G.pateWahl = { phase: null, endet: 0, naechste: 0, kandidaten: [], stimmen: {}, stich: null };
     G.pateDekret = null; G.pateName = null;
     G.familienBank = {}; G.familienBoss = {}; G.familienRang = {}; G.familienTribut = {}; G.soldaten = {};
+    G.wahlSiege = {}; G.kampfSiege = {}; G.siegWarnungen = {};
     G.fahndung = {}; G.transporte = []; G.naechsterTransport = 30;
     G.started = false; G.hostId = null;   // neue Runde beginnt wieder im Warteraum
     G.groupOrder = null; G.nextGroupIn = 20;
@@ -6116,6 +6126,7 @@ function runTick() {
         for (const m of sieger) { m.cash += teil; logTx(m, "Kartell", `Plünderung im ${name}`, teil); }
         G.familienRespekt[k.angreifer] = (G.familienRespekt[k.angreifer] || 0) + 6;
         G.familienRespekt[k.verteidiger] = Math.max(0, (G.familienRespekt[k.verteidiger] || 0) - 3);
+        G.kampfSiege[k.angreifer] = (G.kampfSiege[k.angreifer] || 0) + 1;
         io.emit("revierErgebnis", { bezirk: idx, name, sieger: k.angreifer, verlierer: k.verteidiger,
           art: "erobert", beute, pa, pv, dauer: BESATZUNG_DAUER });
         io.emit("notice", { text: `⚔️ ${FAMILIEN[k.angreifer].name} EROBERT den ${name} (${pa}:${pv})! ${beute} $ geplündert — 5 min Besatzung, dann zählt wieder die Gebäudemehrheit.` });
@@ -6332,21 +6343,51 @@ function runTick() {
         }
       }
     }
-    /* Endbedingung: Wer 6 der 9 Bezirke hält, hat die Stadt. Die Familie
-     * gewinnt gemeinsam; den Titel trägt ihr vermögendstes Mitglied. */
+    /* Endbedingung — VIER Wege zur Macht:
+     *   Herrschaft: 6 der 9 Bezirke halten
+     *   Dynastie:   3 Patenwahlen gewinnen
+     *   Vendetta:   10 Bezirke im Revierkampf erobern
+     *   Imperium:   Casino „La Dorata“ + Piazza + 100.000 $ in der Familienkasse
+     * Die Familie gewinnt gemeinsam; den Titel trägt ihr vermögendstes Mitglied. */
     if (!G.winner && G.bezirke) {
+      const famSieg = (fid, grund) => {
+        const boss = Object.values(G.players).filter(p2 => p2.familie === fid)
+          .sort((x2, y2) => netWorth(y2) - netWorth(x2))[0];
+        if (!boss) return;
+        G.winner = boss.name;
+        G.winGrund = `${FAMILIEN[fid].name}: ${grund}`;
+        G.report = buildReport(boss.id);
+        io.emit("notice", { text: `\u{1F3C6} ${FAMILIEN[fid].name} — ${grund}! ${boss.name} ist der Boss der Bosse.` });
+      };
+      const warnung = (fid, art, text) => {
+        const key = fid + ":" + art;
+        if (G.siegWarnungen[key]) return;
+        G.siegWarnungen[key] = true;
+        io.emit("notice", { text: `\u26A0 ${text}` });
+      };
       const zaehl = {};
       for (const b of G.bezirke) if (b.kontrolle) zaehl[b.kontrolle] = (zaehl[b.kontrolle] || 0) + 1;
-      const beste = Object.entries(zaehl).sort((a, b2) => b2[1] - a[1])[0];
-      if (beste && beste[1] >= 6) {
-        const boss = Object.values(G.players).filter(p2 => p2.familie === beste[0])
-          .sort((x2, y2) => netWorth(y2) - netWorth(x2))[0];
-        if (boss) {
-          G.winner = boss.name;
-          G.winGrund = `${FAMILIEN[beste[0]].name} kontrolliert ${beste[1]} von 9 Bezirken — die Stadt gehört ihr`;
-          G.report = buildReport(boss.id);
-          io.emit("notice", { text: `🏆 ${FAMILIEN[beste[0]].name} kontrolliert ${beste[1]} von 9 Bezirken — die Stadt gehört ihr! ${boss.name} ist der Boss der Bosse.` });
+      for (const fid of Object.keys(FAMILIEN)) {
+        if (G.winner) break;
+        const bez = zaehl[fid] || 0;
+        /* Herrschaft */
+        if (bez >= 6) { famSieg(fid, `kontrolliert ${bez} von 9 Bezirken — die Stadt gehört ihr`); break; }
+        if (bez === 5) warnung(fid, "stadt", `${FAMILIEN[fid].name} hält 5 Bezirke — noch einer, und die Stadt fällt!`);
+        /* Dynastie */
+        const w = G.wahlSiege[fid] || 0;
+        if (w >= 3) { famSieg(fid, `stellt zum dritten Mal den Paten — die Dynastie regiert die Stadt`); break; }
+        if (w === 2) warnung(fid, "dynastie", `${FAMILIEN[fid].name} hat 2 Patenwahlen gewonnen — eine dritte besiegelt die Dynastie!`);
+        /* Vendetta */
+        const s = G.kampfSiege[fid] || 0;
+        if (s >= 10) { famSieg(fid, `hat 10 Bezirke im Revierkampf erobert — die Vendetta ist vollstreckt`); break; }
+        if (s === 8) warnung(fid, "vendetta", `${FAMILIEN[fid].name} steht bei 8 von 10 Vendetta-Siegen — stoppt sie!`);
+        /* Imperium */
+        const imperium = G.gcasino.stufe >= 5 && G.bezirke[GCASINO_BEZIRK]?.kontrolle === fid;
+        if (imperium && (G.familienBank[fid] || 0) >= 100000) {
+          famSieg(fid, `„La Dorata“, die Piazza und 100.000 $ in der Kasse — das Imperium steht`); break;
         }
+        if (imperium && (G.familienBank[fid] || 0) >= 80000)
+          warnung(fid, "imperium", `${FAMILIEN[fid].name} hortet ${Math.round(G.familienBank[fid] / 1000)}k $ im goldenen Casino — bei 100k steht das Imperium!`);
       }
     }
     /* Werttransporte: spawnen, rollen, an Sperren hängenbleiben, entkommen. */

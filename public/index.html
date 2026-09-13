@@ -2815,6 +2815,50 @@ function gcasinoBanner(d) {
 }
 socket.on("gcasinoEreignis", d => gcasinoBanner(d));
 
+/* ---- Wege zur Macht: vier Siegwege mit Fortschritt aller Familien ---- */
+function siegwegeHtml(state) {
+  if (state.mode !== "kartell" || !state.familien) return "";
+  const gc = state.gcasino;
+  const bezirke = {};
+  for (const b of state.bezirke || []) if (b.kontrolle) bezirke[b.kontrolle] = (bezirke[b.kontrolle] || 0) + 1;
+  const balken = (wert, ziel, farbe) => `
+    <div style="flex:1;height:6px;border-radius:3px;background:rgba(201,160,78,.12);overflow:hidden">
+      <i style="display:block;height:100%;width:${Math.min(100, (wert / ziel) * 100)}%;background:${farbe};box-shadow:0 0 5px ${farbe}"></i>
+    </div>`;
+  const zeile = (f, icon, wert, ziel, text) => `
+    <div style="display:flex;align-items:center;gap:7px;margin:3px 0">
+      <span style="width:14px;text-align:center">${icon}</span>
+      <span style="color:${f.farbe};min-width:86px;font-size:10.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${f.name}</span>
+      ${balken(wert, ziel, f.farbe)}
+      <b style="font-family:var(--mono);font-size:10px;min-width:38px;text-align:right">${text}</b>
+    </div>`;
+  const wege = [
+    { icon: "\u{1F3D9}", name: "Herrschaft", ziel: "6 von 9 Bezirken",
+      wert: f => bezirke[f.id] || 0, max: 6, text: f => `${bezirke[f.id] || 0}/6` },
+    { icon: "\u{1F451}", name: "Dynastie", ziel: "3 Patenwahlen gewinnen",
+      wert: f => f.wahlSiege || 0, max: 3, text: f => `${f.wahlSiege || 0}/3` },
+    { icon: "\u2694", name: "Vendetta", ziel: "10 Bezirke erobern",
+      wert: f => f.kampfSiege || 0, max: 10, text: f => `${f.kampfSiege || 0}/10` },
+    { icon: "\u{1F3B0}", name: "Imperium", ziel: "La Dorata + Piazza + 100k Kasse",
+      wert: f => gc?.herrscher !== f.id ? 0
+        : gc?.stufe >= 5 ? Math.min(100000, f.kasse)
+        : 15000 + (gc?.stufe || 0) * 7000,
+      max: 100000, text: f => gc?.herrscher === f.id && gc?.stufe >= 5 ? `${Math.round(f.kasse / 1000)}k/100k` : `${gc?.herrscher === f.id ? "\u2713" : "\u2717"} ${gc?.stufe || 0}/5\u2605` },
+  ];
+  return `
+    <div class="joinbox" style="margin-bottom:12px;border-color:#c9a04e44">
+      <div class="lbl" style="color:#e8c268">\u{1F3C6} Wege zur Macht <span class="meta" style="text-transform:none;letter-spacing:0">— der erste Weg, den eine Familie vollendet, gewinnt die Runde</span></div>
+      ${wege.map(w => `
+        <div style="margin-top:8px">
+          <div style="display:flex;gap:6px;align-items:baseline">
+            <b style="font-size:11px">${w.icon} ${w.name}</b>
+            <span class="meta" style="font-size:9px">${w.ziel}</span>
+          </div>
+          ${state.familien.map(f => zeile(f, "", w.wert(f), w.max, w.text(f))).join("")}
+        </div>`).join("")}
+    </div>`;
+}
+
 /* ================= Familienhaus: Rangordnung, Kasse, Soldaten ================= */
 let FAM_OFFEN = null;
 function famOeffnen(fid) {
@@ -8854,7 +8898,7 @@ function kartellRendern(state, me, myId) {
     const eingeladen = new Set((k.einladungen || []).map(e => e.id));
     const frei = Object.values(state.players)
       .filter(p => p.id !== myId && !drin.has(p.id) && !eingeladen.has(p.id));
-    inhalt.innerHTML = familienHtml + `
+    inhalt.innerHTML = siegwegeHtml(state) + familienHtml + `
       <div class="joinbox" style="margin-bottom:12px">
         <div class="lbl">Dein Kartell</div>
         <div style="font-size:15px;font-weight:600;margin-bottom:8px">${k.name}</div>
@@ -8924,7 +8968,7 @@ function kartellRendern(state, me, myId) {
   }
 
   const offene = me.kartellEinladungen || [];
-  inhalt.innerHTML = familienHtml + `
+  inhalt.innerHTML = siegwegeHtml(state) + familienHtml + `
     ${offene.length ? `<div class="joinbox" style="margin-bottom:12px">
       <div class="lbl">Einladungen an dich</div>
       ${offene.map(e => `<div style="display:flex;gap:9px;align-items:center;margin:6px 0">
