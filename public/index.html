@@ -2815,6 +2815,57 @@ function gcasinoBanner(d) {
 }
 socket.on("gcasinoEreignis", d => gcasinoBanner(d));
 
+/* ---- Patenwahl: alle 20 Minuten stimmt die Stadt ab ---- */
+socket.on("pateGewaehlt", d => {
+  gcasinoBanner({ art: "pate", name: d.name, betrag: 0 });
+  const t2 = document.getElementById("gcBannerTitel"), x2 = document.getElementById("gcBannerText");
+  if (t2) t2.textContent = "\u{1F451} NEUER PATE";
+  if (x2) { x2.textContent = `${d.name} übernimmt die Stadt`; x2.style.color = d.farbe || "#f3ead2"; }
+});
+function pateWahlWidget() {
+  const st = store.get().state, myId = store.get().myId;
+  const W = st?.pateWahl;
+  let box = document.getElementById("pateWahlBox");
+  if (!W?.aktiv || !st.familien) { if (box) box.style.display = "none"; return; }
+  if (!box) {
+    box = document.createElement("div");
+    box.id = "pateWahlBox";
+    box.style.cssText = "position:fixed;top:64px;left:50%;transform:translateX(-50%);z-index:46;width:min(330px,92vw);" +
+      "background:linear-gradient(168deg,#171320,#0f0c14);border:1px solid #c9a04e88;border-radius:12px;padding:10px 12px;" +
+      "box-shadow:0 14px 40px rgba(0,0,0,.6),0 0 22px rgba(201,160,78,.18)";
+    document.body.appendChild(box);
+  }
+  const zaehl = {};
+  for (const fid of Object.values(W.stimmen || {})) zaehl[fid] = (zaehl[fid] || 0) + 1;
+  const max = Math.max(1, ...Object.values(zaehl));
+  const meine = W.stimmen?.[myId];
+  const binPolizei = st.players?.[myId]?.familie === "polizei";
+  box.style.display = "block";
+  box.innerHTML = `
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:7px">
+      <b style="color:#e8c268;letter-spacing:1.5px;font-size:11px">\u{1F5F3} PATENWAHL</b>
+      <span style="flex:1"></span>
+      <b style="font-family:var(--mono);color:${W.rest <= 10 ? "var(--down)" : "#e8c268"}">${W.rest}s</b>
+    </div>
+    ${st.familien.map(f => `
+      <div style="display:flex;align-items:center;gap:7px;margin:4px 0">
+        <button class="mini ${meine === f.id ? "gcGold" : ""}" data-patenstimme="${f.id}" ${binPolizei ? "disabled" : ""}
+          style="min-width:104px;text-align:left;color:${f.farbe}">${meine === f.id ? "✓ " : ""}${f.name}</button>
+        <div style="flex:1;height:7px;border-radius:4px;background:rgba(201,160,78,.12);overflow:hidden">
+          <i style="display:block;height:100%;width:${((zaehl[f.id] || 0) / max) * 100}%;background:${f.farbe};box-shadow:0 0 6px ${f.farbe}"></i>
+        </div>
+        <b style="font-family:var(--mono);min-width:14px;text-align:right">${zaehl[f.id] || 0}</b>
+      </div>`).join("")}
+    <p class="note" style="margin:5px 0 0;text-align:center">${binPolizei ? "Die Questura schaut nur zu." : "Offenes Votum — der Sieger kassiert 20 Minuten die Abgaben."}</p>`;
+}
+document.addEventListener("click", e => {
+  const b = e.target.closest("button[data-patenstimme]");
+  if (!b) return;
+  socket.emit("patenStimme", { fid: b.dataset.patenstimme }, res => {
+    if (res?.error) toast(res.error, true); else { KTON.chip(); pateWahlWidget(); }
+  });
+});
+
 /* ================= Wahrzeichen: ein interaktives Gebäude je Bezirk ================= */
 const WZ_CLIENT = {
   kathedrale: { icon: "⛪", name: "Cattedrale", bezirk: 0,
@@ -8458,6 +8509,7 @@ function kartellRendern(state, me, myId) {
   if (gcasinoOffen) gcasinoRender();
   if (GC_SPIEL) gcSpielTick();
   if (WZ_OFFEN) wzRender();
+  pateWahlWidget();
   if (nwEl) nwEl.style.display = hudFam ? "none" : "";
   if (nwEl && binPolizei && state.polizei) {
     nwEl.style.display = "none";
