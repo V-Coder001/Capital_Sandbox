@@ -2815,6 +2815,110 @@ function gcasinoBanner(d) {
 }
 socket.on("gcasinoEreignis", d => gcasinoBanner(d));
 
+/* ================= Familienhaus: Rangordnung, Kasse, Soldaten ================= */
+let FAM_OFFEN = null;
+function famOeffnen(fid) {
+  FAM_OFFEN = fid;
+  let el = document.getElementById("famModal");
+  if (!el) {
+    el = document.createElement("div");
+    el.id = "famModal";
+    el.style.cssText = "position:fixed;inset:0;z-index:53;display:none;place-items:center;background:rgba(6,9,15,.55);backdrop-filter:blur(2px)";
+    el.addEventListener("click", e => { if (e.target === el) famSchliessen(); });
+    el.innerHTML = `<div class="panel gcPanel" style="position:static;display:flex;width:min(440px,94vw);max-height:86vh;border-color:#c9a04e55">
+      <div class="phead" style="background:linear-gradient(135deg,rgba(201,160,78,.16),transparent)">
+        <h2 id="famTitel">Familienhaus</h2><button class="x" onclick="famSchliessen()">✕</button></div>
+      <div class="pbody famInhalt"></div></div>`;
+    document.body.appendChild(el);
+  }
+  el.style.display = "grid";
+  famRender();
+}
+function famSchliessen() {
+  FAM_OFFEN = null;
+  const el = document.getElementById("famModal");
+  if (el) el.style.display = "none";
+}
+const FAM_RANG_ICON = { oberhaupt: "\u{1F451}", capo: "\u{1F396}", rekrut: "\u{1FAA6}" };
+const FAM_RANG_NAME = { oberhaupt: "Oberhaupt", capo: "Capo", rekrut: "Rekrut" };
+function famRender() {
+  if (!FAM_OFFEN) return;
+  const el = document.querySelector("#famModal .famInhalt");
+  const st = store.get().state, myId = store.get().myId, me = store.get().me;
+  const fam = st?.familien?.find(f => f.id === FAM_OFFEN);
+  if (!el || !fam) return;
+  document.getElementById("famTitel").innerHTML = `\u{1F3E0} Casa ${fam.name.replace(/^(La |Das |Die )/, "")}`;
+  const meinRang = fam.raenge?.find(r => r.pid === myId)?.rang;
+  const binBoss = fam.bossPid === myId;
+  const binMitglied = !!meinRang;
+  const ordnung = { oberhaupt: 0, capo: 1, rekrut: 2 };
+  const raenge = [...(fam.raenge || [])].sort((a, b) => ordnung[a.rang] - ordnung[b.rang]);
+  el.innerHTML = `
+    <div class="gcKopf" style="border-color:${fam.farbe}55">
+      <div class="orna" style="color:${fam.farbe}aa">✦ ✦ ✦</div>
+      <h3 style="color:${fam.farbe}">${fam.name}</h3>
+      <div class="gcStats">
+        <div class="gcStat"><b style="color:#e8c268">${fmt(fam.kasse)}</b><span>Familienkasse</span></div>
+        <div class="gcStat"><b>${Math.round(fam.tribut * 100)} %</b><span>Tribut / min</span></div>
+        <div class="gcStat"><b>${"\u{1FA96}".repeat(fam.soldaten) || "—"}</b><span>Soldaten (${fam.soldaten}/5)</span></div>
+      </div>
+      <p class="note" style="margin:7px 0 0">Mitglieder & Soldaten geben Startpunkte in Revierkämpfen. Tribut zahlen alle außer dem Oberhaupt — nur das Oberhaupt verfügt über die Kasse und darf zur Patenwahl antreten.</p>
+    </div>
+    <div class="gcTrenn">Rangordnung</div>
+    ${raenge.map(r => `
+      <div class="gcReihe" style="padding:6px 9px">
+        <span style="font-size:16px;flex:none">${FAM_RANG_ICON[r.rang]}</span>
+        <span style="flex:1;min-width:0"><b>${r.name}${r.pid === myId ? " (du)" : ""}</b>
+          <span class="meta" style="display:block">${FAM_RANG_NAME[r.rang]}${r.bot ? " · KI" : ""}</span></span>
+        ${binBoss && r.pid !== myId ? `
+          <button class="mini" data-famrang="capo" data-pid="${r.pid}" ${r.rang === "capo" ? "disabled" : ""}>Capo</button>
+          <button class="mini" data-famrang="rekrut" data-pid="${r.pid}" ${r.rang === "rekrut" ? "disabled" : ""}>Rekrut</button>
+          <button class="mini gcGold" data-famrang="oberhaupt" data-pid="${r.pid}" title="Führung übergeben">\u{1F451}</button>` : ""}
+      </div>`).join("")}
+    ${binMitglied ? `
+    <div class="gcTrenn">Kasse & Soldaten</div>
+    ${binBoss ? `
+      <div class="lbl" style="margin-top:6px">Tribut <span class="meta" style="text-transform:none;letter-spacing:0">— zahlen Capos & Rekruten jede Minute vom Bargeld</span></div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin:5px 0 9px">
+        ${[0, .05, .10, .15].map(s2 => `<button class="mini ${Math.abs(fam.tribut - s2) < .001 ? "gcGold" : ""}" data-famtribut="${s2}">${Math.round(s2 * 100)} %</button>`).join("")}
+      </div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
+        <button class="bknopf gcGold" data-famkasse="soldat" style="flex:1;min-width:46%;font-size:11px">\u{1FA96} Soldat (600 $)</button>
+        <button class="bknopf gcGold" data-famkasse="einzahlen" style="flex:1;min-width:46%;font-size:11px">\u{1F4B0} 1.000 $ einzahlen</button>
+        <button class="bknopf kauf" data-famkasse="ausschuetten" style="flex:1;min-width:46%;font-size:11px">Kasse ausschütten</button>
+        <button class="bknopf verkauf" data-famkasse="einsacken" style="flex:1;min-width:46%;font-size:11px" title="Alles in die eigene Tasche (−2 Respekt)">\u{1F911} Einsacken</button>
+      </div>` : `
+      <p class="note" style="margin:4px 0 8px">Du zahlst als ${FAM_RANG_NAME[meinRang]} jede Minute ${Math.round(fam.tribut * 100)} % Tribut. Freiwillig geht immer:</p>
+      <button class="bknopf gcGold" data-famkasse="einzahlen" style="width:100%">\u{1F4B0} 1.000 $ in die Kasse einzahlen</button>`}
+    <div id="famErgebnis" style="min-height:22px;margin-top:8px;text-align:center;font-weight:700;font-family:var(--mono)">${window.FAM_LETZTES || ""}</div>` : `
+    <p class="note" style="margin:8px 0 0;text-align:center">Du gehörst nicht zu dieser Familie — hier gibt es für dich nichts zu holen.</p>`}`;
+}
+document.addEventListener("click", e => {
+  const rg = e.target.closest("button[data-famrang]");
+  if (rg) {
+    socket.emit("famRang", { pid: rg.dataset.pid, rang: rg.dataset.famrang },
+      res => { if (res?.error) toast(res.error, true); else { KTON.chip(); famRender(); } });
+    return;
+  }
+  const tr = e.target.closest("button[data-famtribut]");
+  if (tr) {
+    socket.emit("famTribut", { satz: +tr.dataset.famtribut },
+      res => { if (res?.error) toast(res.error, true); else { KTON.chip(); famRender(); } });
+    return;
+  }
+  const ka = e.target.closest("button[data-famkasse]");
+  if (ka) {
+    socket.emit("famKasse", { aktion: ka.dataset.famkasse }, res => {
+      if (res?.error) return toast(res.error, true);
+      KTON.chip();
+      window.FAM_LETZTES = `<span style="color:var(--up)">${res.text || "Erledigt."}</span>`;
+      famRender();
+      setTimeout(() => { window.FAM_LETZTES = ""; }, 6000);
+    });
+    return;
+  }
+});
+
 /* ---- Patenwahl: alle 20 Minuten stimmt die Stadt ab ---- */
 socket.on("pateGewaehlt", d => {
   gcasinoBanner({ art: "pate", name: d.name, betrag: 0 });
@@ -6135,6 +6239,34 @@ function draw() {
           cx.globalAlpha = 1; cx.globalCompositeOperation = "source-over";
         }
       }
+      /* Familienhaus: Stammsitz mit Dach und Fahne in Familienfarbe */
+      if (t.famhaus && st.familien) {
+        const fam = st.familien.find(f2 => f2.id === t.famhaus);
+        if (fam) {
+          const bx2 = sx, by2 = sy + TH / 2;
+          cx.fillStyle = "rgba(0,0,0,.3)";
+          cx.beginPath(); cx.ellipse(bx2 + 1, by2 + 4, 18, 6.5, 0, 0, Math.PI * 2); cx.fill();
+          cx.fillStyle = "#4a3b2a";
+          cx.beginPath(); cx.moveTo(bx2, by2 + 7); cx.lineTo(bx2 - 17, by2 - 1); cx.lineTo(bx2 - 17, by2 - 22); cx.lineTo(bx2, by2 - 14); cx.closePath(); cx.fill();
+          cx.fillStyle = "#6b563b";
+          cx.beginPath(); cx.moveTo(bx2, by2 + 7); cx.lineTo(bx2 + 17, by2 - 1); cx.lineTo(bx2 + 17, by2 - 22); cx.lineTo(bx2, by2 - 14); cx.closePath(); cx.fill();
+          cx.fillStyle = fam.farbe;
+          cx.beginPath(); cx.moveTo(bx2, by2 - 14); cx.lineTo(bx2 + 17, by2 - 22); cx.lineTo(bx2, by2 - 31); cx.lineTo(bx2 - 17, by2 - 22); cx.closePath(); cx.fill();
+          cx.strokeStyle = "rgba(0,0,0,.35)"; cx.lineWidth = 1; cx.stroke();
+          /* Fahne */
+          cx.strokeStyle = "#2a2118"; cx.lineWidth = 1.5;
+          cx.beginPath(); cx.moveTo(bx2, by2 - 31); cx.lineTo(bx2, by2 - 42); cx.stroke();
+          cx.fillStyle = fam.farbe;
+          const weh = Math.sin(now / 300 + t.x) * 1.5;
+          cx.beginPath(); cx.moveTo(bx2, by2 - 42); cx.lineTo(bx2 + 10, by2 - 39 + weh); cx.lineTo(bx2, by2 - 36); cx.closePath(); cx.fill();
+          cx.font = "700 6.5px sans-serif"; cx.textAlign = "center";
+          cx.fillStyle = "rgba(9,13,20,.85)";
+          const bw2 = cx.measureText(fam.name).width + 8;
+          cx.fillRect(bx2 - bw2 / 2, by2 + 8, bw2, 9);
+          cx.fillStyle = fam.farbe;
+          cx.fillText(fam.name, bx2, by2 + 14.5);
+        }
+      }
       /* Wahrzeichen: goldener Sockel, großes Sinnbild, kleines Schild —
        * ein Blick auf die Karte verrät, wo es etwas zu holen gibt. */
       if (t.wz && typeof WZ_CLIENT !== "undefined" && WZ_CLIENT[t.wz]) {
@@ -6475,6 +6607,7 @@ function clickTile(e) {
   if (t?.news && me) { openPanel("news"); return; }
   if (t?.gcasino && me) { gcasinoOeffnen(); return; }
   if (t?.wz && me) { wzOeffnen(t.wz); return; }
+  if (t?.famhaus && me) { famOeffnen(t.famhaus); return; }
   /* Die Deko-Hochhaeuser sind reines Stadtbild. Ohne diese Zeile ginge beim
    * Klick das Baumenue auf und boete Gebaeude an, die der Server anschliessend
    * ablehnt — ein Versprechen, das nicht eingeloest werden kann. */
@@ -8556,6 +8689,7 @@ function kartellRendern(state, me, myId) {
   if (gcasinoOffen) gcasinoRender();
   if (GC_SPIEL) gcSpielTick();
   if (WZ_OFFEN) wzRender();
+  if (FAM_OFFEN) famRender();
   pateWahlWidget();
   if (nwEl) nwEl.style.display = hudFam ? "none" : "";
   if (nwEl && binPolizei && state.polizei) {
