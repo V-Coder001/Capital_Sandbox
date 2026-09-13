@@ -526,6 +526,157 @@ const GCASINO_QUOTEN = {
 const GCASINO_BEZIRK = 4;             // Piazza Grande
 const GCASINO_EINSATZ_MAX = 2000;
 const GCASINO_SCHWARZPREIS = 1.3;     // Faktor auf den Hehler-Basispreis
+/* --- Wahrzeichen: ein interaktives Gebäude je Bezirk. Jeder kann es nutzen,
+ * die Familie, die den Bezirk hält, verdient daran mit. --- */
+const WZ_DEF = {
+  kathedrale: { bezirk: 0, name: "Cattedrale",     icon: "\u26EA" },
+  depot:      { bezirk: 1, name: "Frachtdepot",    icon: "\u{1F682}" },
+  werft:      { bezirk: 2, name: "Alte Werft",     icon: "\u{1F3D7}" },
+  markthalle: { bezirk: 3, name: "Markthalle",     icon: "\u{1F3DB}" },
+  villa:      { bezirk: 5, name: "Villa del Capo", icon: "\u{1F3F0}" },
+  kai:        { bezirk: 6, name: "Schmuggelkai",   icon: "\u2693" },
+  yacht:      { bezirk: 7, name: "Yachtclub",      icon: "\u26F5" },
+  brunnen:    { bezirk: 8, name: "Wunschbrunnen",  icon: "\u26F2" },
+};
+const wzHerr = b => G.bezirke?.[b]?.kontrolle || G.besatzung?.[b]?.familie || null;
+/* Einnahmen eines Wahrzeichens an die kontrollierende Familie verteilen. */
+function wzKasse(bezirk, betrag, quelle) {
+  const fam = wzHerr(bezirk);
+  if (!fam || betrag <= 0) return;
+  const bank = Object.values(G.players).filter(m => m.familie === fam);
+  const teil = Math.round(betrag / Math.max(1, bank.length));
+  for (const m of bank) { m.cash += teil; logTx(m, "Kartell", `${quelle} (${BEZIRK_NAMEN[bezirk]})`, teil); }
+}
+/* Gewinne (Regatta) zahlt die kontrollierende Familie — gedeckelt wie im Casino. */
+function wzGewinn(p, bezirk, brutto, quelle) {
+  const fam = wzHerr(bezirk);
+  const bank = fam ? Object.values(G.players).filter(m => m.familie === fam) : [];
+  if (!bank.length) { p.cash += brutto; logTx(p, "Kartell", quelle, brutto); return brutto; }
+  let offen = brutto;
+  for (const m of bank) {
+    const teil = Math.min(m.cash, Math.ceil(offen / Math.max(1, bank.length)));
+    m.cash -= teil; offen -= teil;
+    logTx(m, "Kartell", `Auszahlung an ${p.name} (${quelle})`, -teil);
+    if (offen <= 0) break;
+  }
+  const gezahlt = brutto - Math.max(0, offen);
+  p.cash += gezahlt; logTx(p, "Kartell", quelle, gezahlt);
+  return gezahlt;
+}
+
+/* Eine Wahrzeichen-Aktion — Spieler (Socket) und Bots (Tick) gehen durch dieselbe Tür. */
+function wzAktion(p, { art, betrag, good, qty, yacht }) {
+  const def = WZ_DEF[art];
+  if (!def) return { error: "Dieses Wahrzeichen kennt die Stadt nicht" };
+  const bez = def.bezirk;
+  betrag = Math.floor(+betrag) || 0;
+
+  if (art === "kathedrale") {
+    if (p.familie === "polizei") return { error: "Der Commissario spendet dienstlich nicht" };
+    if (!(betrag >= 100 && betrag <= 2000)) return { error: "Spende zwischen 100 und 2000 $" };
+    if (p.cash < betrag) return { error: "Zu wenig Bargeld" };
+    p.cash -= betrag;
+    logTx(p, "Kartell", "Spende an die Cattedrale", -betrag);
+    G.fahndung[p.familie] = Math.max(0, (G.fahndung[p.familie] || 0) - betrag / 200);
+    const respekt = Math.round(betrag / 300);
+    G.familienRespekt[p.familie] = (G.familienRespekt[p.familie] || 0) + respekt;
+    wzKasse(bez, Math.round(betrag * .2), "Kollekte der Cattedrale");
+    return { ok: true, text: `Der Priester nickt — die Akten werden dünner. −${(betrag / 200).toFixed(1)} Fahndung, +${respekt} Respekt.` };
+  }
+  if (art === "depot") {
+    if (!GOODS[good] || ILLEGAL.includes(good)) return { error: "Das Depot liefert nur saubere Ware" };
+    qty = Math.min(50, Math.max(1, Math.floor(+qty) || 10));
+    const marktwert = Math.round(qty * MM[good].price);
+    const preis = Math.round(marktwert * 1.2);
+    if (p.cash < preis) return { error: `Expressfracht kostet ${preis} $` };
+    p.cash -= preis;
+    p.inv[good] = (p.inv[good] || 0) + qty;
+    logTx(p, "Kartell", `Expressfracht: ${qty}× ${GOODS[good].name}`, -preis);
+    wzKasse(bez, preis - marktwert, "Frachtmarge des Depots");
+    return { ok: true, text: `Der Zug pfeift — ${qty}× ${GOODS[good].name} liegen im Lager (${preis} $).` };
+  }
+  if (art === "werft") {
+    if (p.cash < 500) return { error: "Schrott ausschlachten kostet 500 $" };
+    p.cash -= 500;
+    const ziegel = 8 + Math.floor(Math.random() * 13), beton = 2 + Math.floor(Math.random() * 5);
+    p.inv.ziegel = (p.inv.ziegel || 0) + ziegel;
+    p.inv.beton = (p.inv.beton || 0) + beton;
+    logTx(p, "Kartell", `Alte Werft: Schrott ausgeschlachtet (+${ziegel} Ziegel, +${beton} Beton)`, -500);
+    wzKasse(bez, 500, "Werftgebühr");
+    return { ok: true, text: `Die Jungs schleppen an: +${ziegel} Ziegel, +${beton} Beton.` };
+  }
+  if (art === "markthalle") {
+    if (!GOODS[good] || ILLEGAL.includes(good)) return { error: "In der Halle zählt nur legale Ware" };
+    qty = Math.min(Math.floor(p.inv[good] || 0), Math.max(1, Math.floor(+qty) || Math.floor(p.inv[good] || 0)));
+    if (qty <= 0) return { error: `Kein ${GOODS[good].name} im Lager` };
+    const brutto = Math.round(qty * MM[good].price * 1.15);
+    const gebuehr = Math.round(brutto * .05);
+    p.inv[good] -= qty; p.cash += brutto - gebuehr;
+    logTx(p, "Kartell", `Großmarkt-Deal: ${qty}× ${GOODS[good].name} (+15 %, −5 % Standgebühr)`, brutto - gebuehr);
+    wzKasse(bez, gebuehr, "Standgebühr der Markthalle");
+    return { ok: true, text: `Deal! ${brutto - gebuehr} $ für ${qty}× ${GOODS[good].name}.` };
+  }
+  if (art === "villa") {
+    if (p.familie === "polizei") return { error: "Der Capo verhandelt nicht mit der Questura" };
+    if (p.cash < 800) return { error: "Ein Gefallen des Capo kostet 800 $ Tribut" };
+    p.cash -= 800;
+    logTx(p, "Kartell", "Tribut in der Villa del Capo", -800);
+    wzKasse(bez, 800, "Tribut an den Capo");
+    const kampf = Object.entries(G.revierKaempfe || {}).find(([, k]) => k.punkte?.[p.familie] != null);
+    if (kampf) {
+      kampf[1].punkte[p.familie] += 2;
+      return { ok: true, text: `Der Capo schickt zwei Schränke — +2 Punkte im Kampf um den ${BEZIRK_NAMEN[+kampf[0]]}.` };
+    }
+    G.familienRespekt[p.familie] = (G.familienRespekt[p.familie] || 0) + 3;
+    return { ok: true, text: "Der Capo legt ein gutes Wort ein — +3 Respekt für deine Familie." };
+  }
+  if (art === "kai") {
+    if (p.familie === "polizei") return { error: "Die Questura schmuggelt nicht — offiziell" };
+    if (!ILLEGAL.includes(good)) return { error: "Am Kai zählt nur heiße Ware" };
+    qty = Math.min(Math.floor(p.inv[good] || 0), Math.max(1, Math.floor(+qty) || Math.floor(p.inv[good] || 0)));
+    if (qty <= 0) return { error: `Kein ${GOODS[good].name} im Lager` };
+    const erloes = Math.round(qty * BASEP[good] * 1.4);
+    const zoll = Math.round(erloes * .1);
+    p.inv[good] -= qty; p.cash += erloes - zoll;
+    G.fahndung[p.familie] = (G.fahndung[p.familie] || 0) + 3;
+    logTx(p, "Kartell", `Nachtschmuggel am Kai: ${qty}× ${GOODS[good].name} (140 %, −10 % Zoll)`, erloes - zoll);
+    wzKasse(bez, zoll, "Hafenzoll");
+    questProg(p, "hehler");
+    return { ok: true, text: `Das Boot legt ab — ${erloes - zoll} $, keine Paten-Abgabe. Aber die Questura hört Motoren (+3 Fahndung).` };
+  }
+  if (art === "yacht") {
+    yacht = Math.floor(+yacht);
+    if (!(yacht >= 1 && yacht <= 3)) return { error: "Setz auf Yacht 1, 2 oder 3" };
+    if (!(betrag >= 100 && betrag <= 1000)) return { error: "Einsatz zwischen 100 und 1000 $" };
+    if (p.cash < betrag) return { error: "Zu wenig Bargeld" };
+    p.cash -= betrag;
+    logTx(p, "Kartell", `Regatta-Wette auf Yacht ${yacht}`, -betrag);
+    wzKasse(bez, betrag, "Wetteinnahme des Yachtclubs");
+    const sieger = 1 + Math.floor(Math.random() * 3);
+    if (sieger === yacht) {
+      const gezahlt = wzGewinn(p, bez, Math.round(betrag * 2.7), "Regatta gewonnen");
+      return { ok: true, gewonnen: true, sieger, betrag: gezahlt };
+    }
+    return { ok: true, gewonnen: false, sieger, betrag };
+  }
+  if (art === "brunnen") {
+    if (!(betrag >= 50 && betrag <= 500)) return { error: "Münzen zwischen 50 und 500 $" };
+    if (p.cash < betrag) return { error: "Zu wenig Bargeld" };
+    p.cash -= betrag; G.brunnenPot += betrag;
+    logTx(p, "Kartell", "Münze in den Wunschbrunnen", -betrag);
+    if (Math.random() < .07 && G.brunnenPot > betrag * 2) {
+      const fang = Math.round(G.brunnenPot * .7);
+      G.brunnenPot -= fang; p.cash += fang;
+      logTx(p, "Kartell", "Der Brunnen erhört dich!", fang);
+      io.emit("notice", { text: `\u26F2 ${p.name} fischt den Wunschbrunnen leer — ${fang} $!` });
+      if (fang >= 3000) io.emit("gcasinoEreignis", { art: "grossgewinn", name: p.name, betrag: fang });
+      return { ok: true, jackpot: fang, pot: G.brunnenPot };
+    }
+    return { ok: true, pot: G.brunnenPot };
+  }
+  return { error: "Diese Aktion kennt das Wahrzeichen nicht" };
+}
+
 /* Wer führt das Haus? Die Familie, die die Piazza kontrolliert — und während
  * dort gekämpft wird, läuft der Laden beim Besatzer bzw. Verteidiger weiter:
  * Das Casino schließt erst, wenn die Piazza wirklich verloren oder verwaist ist. */
@@ -2254,6 +2405,20 @@ function buildMap(mode = "sandbox") {
         break;
       }
     }
+    /* Ein Wahrzeichen je Bezirk: nahe der Bezirksmitte, spiralförmig gesucht. */
+    const belegt = t2 => !t2 || t2.water || t2.road || t2.bank || t2.questura || t2.piazza
+      || t2.gcasino || t2.pier || t2.leuchtturm || t2.fontana || t2.wz;
+    for (const [key, def] of Object.entries(WZ_DEF)) {
+      const bx = (def.bezirk % 3) * 9 + 4, by = Math.floor(def.bezirk / 3) * 9 + 4;
+      let ziel = null;
+      aussen: for (let r = 0; r < 5; r++)
+        for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) {
+          if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;
+          const t2 = at2(bx + dx, by + dy);
+          if (!belegt(t2)) { ziel = t2; break aussen; }
+        }
+      if (ziel) Object.assign(ziel, { wz: key, park: false, field: false, locked: false, unlockCost: 0 });
+    }
     return tiles;
   }
   MAP_W = 26; MAP_H = 26; MAP_ROUTES = null;
@@ -2416,6 +2581,7 @@ const G = {
   groulette: { phase: "warten", endet: 0, zahl: null, letzteZahl: null, einsaetze: [] },
   gblackjack: { phase: "warten", endet: 0, dran: -1, dealer: [], spieler: [] },
   gpoker: { phase: "warten", endet: 0, einsatz: 100, pot: 0, board: [], deck: [], strasse: 0, dran: -1, aktBet: 0, raises: 0, spieler: [] },
+  brunnenPot: 0,        // Wunschbrunnen in den Giardini: Münzen aller Spieler
   shareListings: [],     // {id, companyId, sellerId, count(1-4 = 25%-Schritte), price, ts, toId}
   shareBids: [],         // Kaufanfragen an eine Firma: {id, companyId, bidderId, count, price, ttl}
   nextDividendIn: DIVIDEND_INTERVAL,
@@ -3359,6 +3525,8 @@ function snapshot() {
         karten: s.karten.map(kartePub), summe: bjSumme(s.karten),
         karten2: s.karten2 ? s.karten2.map(kartePub) : null, summe2: s.karten2 ? bjSumme(s.karten2) : null,
         fertig: s.fertig, ergebnis: s.ergebnis })) } : null,
+    wzInfo: MODE === "kartell" ? { brunnenPot: G.brunnenPot,
+      herren: Object.fromEntries(Object.entries(WZ_DEF).map(([k, d]) => [k, wzHerr(d.bezirk)])) } : null,
     gpoker: MODE === "kartell" ? { phase: G.gpoker.phase, rest: Math.max(0, G.gpoker.endet - G.tick),
       einsatz: G.gpoker.einsatz, pot: G.gpoker.pot, aktBet: G.gpoker.aktBet, raises: G.gpoker.raises,
       strasse: G.gpoker.strasse, dran: G.gpoker.dran, board: G.gpoker.board.map(kartePub),
@@ -3379,7 +3547,7 @@ function snapshot() {
     lobby: G.started ? null : { winGoal: WIN_NW, bots: botAuswahl, botLevel: botLevelKey, mode: MODE, saison: SAISON_RENNEN, saisonWahl: SAISON_CHOICES },
     map: G.map.map(t => ({ x: t.x, y: t.y, zone: t.zone, road: t.road, water: t.water,
       park: t.park, field: t.field, sand: t.sand, deep: t.deep, rock: t.rock,
-      piazza: t.piazza, fontana: t.fontana, pier: t.pier, leuchtturm: t.leuchtturm, questura: t.questura, gcasino: t.gcasino,
+      piazza: t.piazza, fontana: t.fontana, pier: t.pier, leuchtturm: t.leuchtturm, questura: t.questura, gcasino: t.gcasino, wz: t.wz,
       bank: t.bank, news: t.news, schwarz: t.schwarz, deko: t.deko, locked: t.locked, unlockCost: t.unlockCost, owner: t.owner, btype: t.btype, lien: t.lien, shop: t.shop, paused: t.paused, level: t.level, autos: autosDyn(t), sperre: t.sperre ?? null })),
     players: Object.fromEntries(Object.entries(G.players).map(([sid, p]) =>
       [sid, { id: sid, name: p.name, color: p.color, lvl: p.lvl, xp: p.xp, industry: p.industry, industries: p.industries,
@@ -4376,6 +4544,12 @@ io.on("connection", socket => {
     ack?.(gpokerAktion(p, s, aktion));
   }));
 
+  /* --- Wahrzeichen: ein interaktives Gebäude je Bezirk --- */
+  socket.on("wahrzeichen", guard((p, payload, ack) => {
+    if (MODE !== "kartell") return ack?.({ error: "Nur in der Kartellwirtschaft" });
+    ack?.(wzAktion(p, payload || {}));
+  }));
+
   socket.on("gcasinoQuote", guard((p, { quote }, ack) => {
     if (MODE !== "kartell") return ack?.({ error: "Nur in der Kartellwirtschaft" });
     if (!GCASINO_QUOTEN[quote]) return ack?.({ error: "Diese Quote kennt das Haus nicht" });
@@ -4700,7 +4874,7 @@ io.on("connection", socket => {
   socket.on("build", guard((p, { x, y, btype }, ack) => {
     const t = tileAt(x, y), bt = BTYPES[btype];
     if (!t || !bt) return ack?.({ error: "Ungültig" });
-    if (t.water || t.road || t.park || t.piazza || t.pier || t.leuchtturm || t.questura || t.gcasino) return ack?.({ error: "Nicht bebaubar" });
+    if (t.water || t.road || t.park || t.piazza || t.pier || t.leuchtturm || t.questura || t.gcasino || t.wz) return ack?.({ error: "Nicht bebaubar" });
     if (t.bank) return ack?.({ error: "Die Stadtbank gehört der Stadt" });
     if (t.news) return ack?.({ error: "Die Nachrichtenzentrale gehört der Stadt" });
     if (t.deko) return ack?.({ error: "Das Hochhaus gehört der Stadt" });
@@ -5712,6 +5886,12 @@ function runTick() {
         if (q.fahndung) G.fahndung[herr] = (G.fahndung[herr] || 0) + q.fahndung;
       }
     }
+    /* Wunschbrunnen: Alle 2 Minuten fischt die Giardini-Familie Münzen heraus. */
+    if (G.tick % 120 === 0 && G.brunnenPot > 200) {
+      const anteil = Math.round(G.brunnenPot * .15);
+      G.brunnenPot -= anteil;
+      wzKasse(8, anteil, "Münzen aus dem Wunschbrunnen gefischt");
+    }
     /* Live-Roulette: Setzphase zu Ende -> Kugel fällt (Nummer steht fest, die
      * Clients drehen das Rad dorthin); nach der Drehphase wird ausgezahlt. */
     {
@@ -5806,12 +5986,46 @@ function runTick() {
         }
       }
       const P2 = G.gpoker;
-      if (casinoOffen && P2.phase === "setzen" && P2.spieler.length < 4) for (const b of tischBots) {
-        if (P2.spieler.some(s => s.pid === b.id) || b.cash < P2.einsatz * 8 || Math.random() > .07) continue;
+      const pokerSitz = b => {
         b.cash -= P2.einsatz; P2.pot += P2.einsatz;
         logTx(b, "Casino", "Poker: Ante", -P2.einsatz);
         P2.spieler.push({ pid: b.id, name: b.name, farbe: b.color, karten: [], gefoldet: false,
           gesetzt: 0, dranWar: false, ergebnis: null, wert: null });
+      };
+      /* Ab und zu eroeffnet ein Bot selbst einen Tisch — kleiner Grundeinsatz,
+       * damit auch die Kollegen (und Menschen) mithalten koennen. */
+      if (casinoOffen && P2.phase === "warten" && Math.random() < .012) {
+        const b = tischBots[Math.floor(Math.random() * tischBots.length)];
+        if (b && b.cash > 100 * 8 && !G.gblackjack.spieler.some(s => s.pid === b.id)) {
+          P2.einsatz = 100 * (1 + Math.floor(Math.random() * 2));
+          P2.pot = 0; P2.board = [];
+          pokerSitz(b);
+          P2.phase = "setzen"; P2.endet = G.tick + 15;
+          io.emit("notice", { text: `\u{1F0A1} ${b.name} eröffnet einen Poker-Tisch (Grundeinsatz ${P2.einsatz} $) — wer setzt sich dazu? (15 s)` });
+        }
+      }
+      if (casinoOffen && P2.phase === "setzen" && P2.spieler.length < 4) for (const b of tischBots) {
+        if (P2.spieler.some(s => s.pid === b.id) || b.cash < P2.einsatz * 6 || Math.random() > .12) continue;
+        pokerSitz(b);
+      }
+      /* Wahrzeichen: Bots spenden, schmuggeln, wetten und werfen Münzen. */
+      for (const b of tischBots) {
+        if (Math.random() > .012) continue;
+        const wurf = Math.random();
+        if (wurf < .3) {
+          if ((G.fahndung[b.familie] || 0) > 40 && b.cash > 1500)
+            wzAktion(b, { art: "kathedrale", betrag: 300 + 100 * Math.floor(Math.random() * 5) });
+        } else if (wurf < .5) {
+          if (b.cash > 600) wzAktion(b, { art: "brunnen", betrag: 50 + 50 * Math.floor(Math.random() * 4) });
+        } else if (wurf < .62) {
+          if (b.cash > 1500) wzAktion(b, { art: "yacht", yacht: 1 + Math.floor(Math.random() * 3), betrag: 100 + 100 * Math.floor(Math.random() * 3) });
+        } else if (wurf < .82) {
+          const heiss = ILLEGAL.find(g2 => Math.floor(b.inv[g2] || 0) >= 5);
+          if (heiss && Math.random() < .5) wzAktion(b, { art: "kai", good: heiss });
+        } else {
+          if (b.cash > 3000 && Object.values(G.revierKaempfe || {}).some(k => k.punkte?.[b.familie] != null))
+            wzAktion(b, { art: "villa" });
+        }
       }
       if (P2.phase === "wetten") {
         const s = P2.spieler[P2.dran], pl = s && G.players[s.pid];

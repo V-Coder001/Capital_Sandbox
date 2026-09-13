@@ -2752,7 +2752,11 @@ function gcTischSounds() {
 
 /* ---- Konfetti im Spielfenster ---- */
 function gcKonfetti() {
-  const ziel = document.querySelector("#gcSpielModal .gcPanel");
+  const kandidaten = ["gcSpielModal", "wzModal"]
+    .map(id => document.getElementById(id))
+    .filter(m => m && m.style.display !== "none")
+    .map(m => m.querySelector(".gcPanel"));
+  const ziel = kandidaten[0];
   if (!ziel || document.getElementById("gcKonfetti")) return;
   const box = document.createElement("div");
   box.id = "gcKonfetti";
@@ -2796,6 +2800,151 @@ function gcasinoBanner(d) {
   }, 3200);
 }
 socket.on("gcasinoEreignis", d => gcasinoBanner(d));
+
+/* ================= Wahrzeichen: ein interaktives Gebäude je Bezirk ================= */
+const WZ_CLIENT = {
+  kathedrale: { icon: "⛪", name: "Cattedrale", bezirk: 0,
+    text: "Eine Spende beruhigt die Questura und poliert den Ruf — 20 % gehen als Kollekte an die Familie des Bezirks." },
+  depot:      { icon: "🚂", name: "Frachtdepot", bezirk: 1,
+    text: "Expressfracht: saubere Ware sofort ins Lager, 20 % Aufschlag — die Marge kassiert die Familie des Bezirks." },
+  werft:      { icon: "🏗", name: "Alte Werft", bezirk: 2,
+    text: "Für 500 $ schlachten die Jungs einen Kahn aus: Ziegel und Beton fürs nächste Bauprojekt." },
+  markthalle: { icon: "🏛", name: "Markthalle", bezirk: 3,
+    text: "Großmarkt-Deal: legale Ware zu 115 % verkaufen, 5 % Standgebühr an die Familie des Bezirks." },
+  villa:      { icon: "🏰", name: "Villa del Capo", bezirk: 5,
+    text: "800 $ Tribut: Läuft ein Revierkampf deiner Familie, schickt der Capo zwei Schränke (+2 Punkte) — sonst +3 Respekt." },
+  kai:        { icon: "⚓", name: "Schmuggelkai", bezirk: 6,
+    text: "Nachtschmuggel: heiße Ware zu 140 % — ohne Paten-Abgabe, 10 % Zoll, aber +3 Fahndung." },
+  yacht:      { icon: "⛵", name: "Yachtclub", bezirk: 7,
+    text: "Regatta: Setz auf eine von drei Yachten — die Siegerin zahlt ×2.7. Buchmacher ist die Familie des Bezirks." },
+  brunnen:    { icon: "⛲", name: "Wunschbrunnen", bezirk: 8,
+    text: "Wirf eine Münze in den Pot. Mit etwas Glück (7 %) fischst du 70 % des ganzen Brunnens heraus." },
+};
+let WZ_OFFEN = null;
+function wzOeffnen(art) {
+  WZ_OFFEN = art;
+  let el = document.getElementById("wzModal");
+  if (!el) {
+    el = document.createElement("div");
+    el.id = "wzModal";
+    el.style.cssText = "position:fixed;inset:0;z-index:53;display:none;place-items:center;background:rgba(6,9,15,.55);backdrop-filter:blur(2px)";
+    el.addEventListener("click", e => { if (e.target === el) wzSchliessen(); });
+    el.innerHTML = `<div class="panel gcPanel" style="position:static;display:flex;width:min(430px,94vw);max-height:84vh;border-color:#c9a04e55">
+      <div class="phead" style="background:linear-gradient(135deg,rgba(201,160,78,.16),transparent)">
+        <h2 id="wzTitel">Wahrzeichen</h2><button class="x" onclick="wzSchliessen()">✕</button></div>
+      <div class="pbody wzInhalt"></div></div>`;
+    document.body.appendChild(el);
+  }
+  el.style.display = "grid";
+  wzRender();
+}
+function wzSchliessen() {
+  WZ_OFFEN = null;
+  const el = document.getElementById("wzModal");
+  if (el) el.style.display = "none";
+}
+function wzRender() {
+  if (!WZ_OFFEN) return;
+  const el = document.querySelector("#wzModal .wzInhalt");
+  const w = WZ_CLIENT[WZ_OFFEN];
+  if (!el || !w) return;
+  if (el.contains(document.activeElement) && /INPUT|SELECT/.test(document.activeElement.tagName)) return;
+  const st = store.get().state, me = store.get().me;
+  document.getElementById("wzTitel").textContent = `${w.icon} ${w.name}`;
+  const herrId = st?.wzInfo?.herren?.[WZ_OFFEN];
+  const herr = herrId ? st.familien?.find(f => f.id === herrId) : null;
+  const bezName = st?.bezirke?.[w.bezirk]?.name || "";
+  const legale = Object.entries(GOODS()).filter(([, g]) => g.cat !== "Illegal").map(([g2]) => g2);
+  const illegale = Object.entries(GOODS()).filter(([, g]) => g.cat === "Illegal").map(([g2]) => g2);
+  let aktion = "";
+  if (WZ_OFFEN === "kathedrale") aktion = `
+    <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin:4px 0 8px">
+      <span class="meta">Spende</span>
+      <input id="wzBetrag" type="number" min="100" max="2000" value="500" style="width:84px">
+      ${[100, 500, 1000, 2000].map(v => `<button class="mini" data-gcchip="wzBetrag" data-wert="${v}">${v >= 1000 ? (v / 1000) + "k" : v}</button>`).join("")}
+    </div>
+    <button class="bknopf gcGold" data-wzgo="kathedrale" style="width:100%">🕯 Kerze anzünden & spenden</button>`;
+  else if (WZ_OFFEN === "depot") aktion = `
+    <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin:4px 0 8px">
+      <select id="wzGood" style="flex:1">${legale.map(g => `<option value="${g}">${gname(g)}</option>`).join("")}</select>
+      <input id="wzQty" type="number" min="1" max="50" value="10" style="width:64px">
+    </div>
+    <button class="bknopf gcGold" data-wzgo="depot" style="width:100%">🚂 Expressfracht bestellen (+20 %)</button>`;
+  else if (WZ_OFFEN === "werft") aktion = `
+    <button class="bknopf gcGold" data-wzgo="werft" style="width:100%">🔧 Schrott ausschlachten — 500 $</button>`;
+  else if (WZ_OFFEN === "markthalle") aktion = legale.filter(g => Math.floor(me?.inv?.[g] || 0) > 0).map(g => `
+    <div class="gcReihe" style="padding:6px 9px">
+      <span style="flex:1">${gname(g)} <span class="meta">· ${Math.floor(me.inv[g])} Stück</span></span>
+      <button class="bknopf kauf" data-wzgo="markthalle" data-good="${g}">Verkaufen +15 %</button>
+    </div>`).join("") || `<p class="note">Keine legale Ware im Lager.</p>`;
+  else if (WZ_OFFEN === "villa") aktion = `
+    <button class="bknopf gcGold" data-wzgo="villa" style="width:100%">🤝 Gefallen erbitten — 800 $ Tribut</button>`;
+  else if (WZ_OFFEN === "kai") aktion = illegale.filter(g => Math.floor(me?.inv?.[g] || 0) > 0).map(g => `
+    <div class="gcReihe" style="padding:6px 9px">
+      <span style="flex:1">${gname(g)} <span class="meta">· ${Math.floor(me.inv[g])} Stück</span></span>
+      <button class="bknopf verkauf" data-wzgo="kai" data-good="${g}">Verschiffen +40 %</button>
+    </div>`).join("") || `<p class="note">Keine heiße Ware im Lager — das Boot wartet.</p>`;
+  else if (WZ_OFFEN === "yacht") aktion = `
+    <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin:4px 0 8px">
+      <span class="meta">Einsatz</span>
+      <input id="wzBetrag" type="number" min="100" max="1000" value="200" style="width:84px">
+      ${[100, 300, 500, 1000].map(v => `<button class="mini" data-gcchip="wzBetrag" data-wert="${v}">${v >= 1000 ? "1k" : v}</button>`).join("")}
+    </div>
+    <div style="display:flex;gap:6px">
+      ${[1, 2, 3].map(y => `<button class="bknopf gcGold" data-wzgo="yacht" data-yacht="${y}" style="flex:1">⛵ Yacht ${y}</button>`).join("")}
+    </div>`;
+  else if (WZ_OFFEN === "brunnen") aktion = `
+    <div style="text-align:center;margin:2px 0 8px">
+      <span class="gcLive" style="font-size:10px;padding:3px 10px"><i></i>POT ${fmt(st?.wzInfo?.brunnenPot || 0)}</span>
+    </div>
+    <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin:4px 0 8px">
+      <span class="meta">Münze</span>
+      <input id="wzBetrag" type="number" min="50" max="500" value="100" style="width:84px">
+      ${[50, 100, 250, 500].map(v => `<button class="mini" data-gcchip="wzBetrag" data-wert="${v}">${v}</button>`).join("")}
+    </div>
+    <button class="bknopf gcGold" data-wzgo="brunnen" style="width:100%">🪙 Münze werfen</button>`;
+  el.innerHTML = `
+    <div class="gcKopf">
+      <div class="orna">✦ ✦ ✦</div>
+      <h3>${w.icon} ${w.name}</h3>
+      <div class="gcStats">
+        <div class="gcStat"><b>${bezName}</b><span>Bezirk</span></div>
+        <div class="gcStat"><b style="color:${herr ? herr.farbe : "var(--dim)"}">${herr ? herr.name : "niemand"}</b><span>kassiert hier</span></div>
+      </div>
+    </div>
+    <p class="note" style="margin:8px 0 10px">${w.text}</p>
+    ${aktion}
+    <div id="wzErgebnis" style="min-height:24px;margin-top:8px;text-align:center;font-weight:700;font-family:var(--mono)">${window.WZ_LETZTES || ""}</div>`;
+}
+document.addEventListener("click", e => {
+  const go = e.target.closest("button[data-wzgo]");
+  if (!go) return;
+  const art = go.dataset.wzgo;
+  const payload = { art,
+    betrag: +document.getElementById("wzBetrag")?.value || 0,
+    good: go.dataset.good || document.getElementById("wzGood")?.value,
+    qty: +document.getElementById("wzQty")?.value || 0,
+    yacht: +go.dataset.yacht || 0 };
+  socket.emit("wahrzeichen", payload, res => {
+    if (res?.error) { toast(res.error, true); return; }
+    KTON.chip();
+    let text;
+    if (art === "yacht") {
+      text = res.gewonnen
+        ? `<span style="color:var(--up)">🏆 Yacht ${res.sieger} siegt — +${fmt(res.betrag)}!</span>`
+        : `<span style="color:var(--down)">Yacht ${res.sieger} siegt — Einsatz versenkt.</span>`;
+      if (res.gewonnen) { KTON.win(res.betrag >= 1000); gcKonfetti(); } else KTON.lose();
+    } else if (art === "brunnen") {
+      text = res.jackpot
+        ? `<span style="color:var(--up)">🎉 Der Brunnen erhört dich — +${fmt(res.jackpot)}!</span>`
+        : `<span class="meta">Platsch. Der Pot wächst auf ${fmt(res.pot)}.</span>`;
+      if (res.jackpot) { KTON.win(true); gcKonfetti(); }
+    } else text = `<span style="color:var(--up)">${res.text || "Erledigt."}</span>`;
+    window.WZ_LETZTES = text;
+    wzRender();
+    setTimeout(() => { window.WZ_LETZTES = ""; }, 6000);
+  });
+});
 
 /* ---- Solo-Animationen ---- */
 const GC_AUGEN = ["⚀","⚁","⚂","⚃","⚄","⚅"];
@@ -5808,6 +5957,31 @@ function draw() {
           cx.globalAlpha = 1; cx.globalCompositeOperation = "source-over";
         }
       }
+      /* Wahrzeichen: goldener Sockel, großes Sinnbild, kleines Schild —
+       * ein Blick auf die Karte verrät, wo es etwas zu holen gibt. */
+      if (t.wz && typeof WZ_CLIENT !== "undefined" && WZ_CLIENT[t.wz]) {
+        const w = WZ_CLIENT[t.wz], bx2 = sx, by2 = sy + TH / 2;
+        cx.fillStyle = "rgba(0,0,0,.3)";
+        cx.beginPath(); cx.ellipse(bx2 + 1, by2 + 4, 17, 6.5, 0, 0, Math.PI * 2); cx.fill();
+        /* Sockel als flache Raute */
+        cx.fillStyle = "#b99253";
+        cx.beginPath(); cx.moveTo(bx2, by2 + 7); cx.lineTo(bx2 + 15, by2); cx.lineTo(bx2, by2 - 7); cx.lineTo(bx2 - 15, by2); cx.closePath(); cx.fill();
+        cx.strokeStyle = "#7d6023"; cx.lineWidth = 1; cx.stroke();
+        cx.font = "22px sans-serif"; cx.textAlign = "center"; cx.textBaseline = "alphabetic";
+        cx.fillText(w.icon, bx2, by2 - 4);
+        cx.font = "700 6.5px sans-serif";
+        cx.fillStyle = "rgba(9,13,20,.85)";
+        const bw = cx.measureText(w.name).width + 8;
+        cx.fillRect(bx2 - bw / 2, by2 + 8, bw, 9);
+        cx.fillStyle = "#e8c268";
+        cx.fillText(w.name, bx2, by2 + 14.5);
+        if (LICHT < .6) {
+          cx.globalCompositeOperation = "lighter"; cx.globalAlpha = .16;
+          cx.beginPath(); cx.ellipse(bx2, by2, 20, 9, 0, 0, Math.PI * 2);
+          cx.fillStyle = "#ffca55"; cx.fill();
+          cx.globalAlpha = 1; cx.globalCompositeOperation = "source-over";
+        }
+      }
       /* Fischerboote an den Molen: sanft dümpelnd, jede zweite Kachel eins */
       if (t.pier && t.y % 2 === 0) {
         const bob = Math.sin(now / 700 + t.x * 2 + t.y) * 1.4;
@@ -6122,6 +6296,7 @@ function clickTile(e) {
   if (t?.bank && me) { openPanel("bank"); return; }
   if (t?.news && me) { openPanel("news"); return; }
   if (t?.gcasino && me) { gcasinoOeffnen(); return; }
+  if (t?.wz && me) { wzOeffnen(t.wz); return; }
   /* Die Deko-Hochhaeuser sind reines Stadtbild. Ohne diese Zeile ginge beim
    * Klick das Baumenue auf und boete Gebaeude an, die der Server anschliessend
    * ablehnt — ein Versprechen, das nicht eingeloest werden kann. */
@@ -8202,6 +8377,7 @@ function kartellRendern(state, me, myId) {
   const binPolizei = state.mode === "kartell" && state.players?.[myId]?.familie === "polizei";
   if (gcasinoOffen) gcasinoRender();
   if (GC_SPIEL) gcSpielTick();
+  if (WZ_OFFEN) wzRender();
   if (nwEl) nwEl.style.display = hudFam ? "none" : "";
   if (nwEl && binPolizei && state.polizei) {
     nwEl.style.display = "none";
