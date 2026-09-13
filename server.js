@@ -526,7 +526,14 @@ const GCASINO_QUOTEN = {
 const GCASINO_BEZIRK = 4;             // Piazza Grande
 const GCASINO_EINSATZ_MAX = 2000;
 const GCASINO_SCHWARZPREIS = 1.3;     // Faktor auf den Hehler-Basispreis
-const gcasinoHerrscher = () => G.bezirke?.[GCASINO_BEZIRK]?.kontrolle || null;
+/* Wer führt das Haus? Die Familie, die die Piazza kontrolliert — und während
+ * dort gekämpft wird, läuft der Laden beim Besatzer bzw. Verteidiger weiter:
+ * Das Casino schließt erst, wenn die Piazza wirklich verloren oder verwaist ist. */
+const gcasinoHerrscher = () =>
+  G.bezirke?.[GCASINO_BEZIRK]?.kontrolle
+  || G.besatzung?.[GCASINO_BEZIRK]?.familie
+  || G.revierKaempfe?.[GCASINO_BEZIRK]?.verteidiger
+  || null;
 
 /* --- Live-Spieltische: gemeinsames Roulette-Rad & Blackjack-Tisch ---
  * Ergebnisse würfelt der Server; die Clients animieren nur, was feststeht. */

@@ -1814,6 +1814,35 @@ td:first-child{font-family:var(--font)}
 .gcGold:hover{box-shadow:0 0 14px rgba(201,160,78,.35)}
 .gcZu{text-align:center;padding:22px 14px;border:1px dashed rgba(201,160,78,.3);border-radius:11px;margin-top:10px;background:rgba(10,13,20,.5)}
 .gcZu .tuer{font-size:30px;filter:grayscale(.4);opacity:.85}
+/* Spieltische: ovaler Filz, Sitze rundherum, Chips, Slot-Neon */
+.gcTischWrap{position:relative;width:100%;height:300px;margin:8px 0 4px}
+.gcOval{position:absolute;left:2%;right:2%;top:8%;bottom:6%;border-radius:50% / 46%;
+  background:radial-gradient(ellipse at 50% 30%,rgba(255,120,120,.26),transparent 65%),radial-gradient(ellipse at center,#8e1e2a,#5a1016 78%);
+  border:5px solid #57351d;box-shadow:0 0 0 2px #c9a04e,0 0 0 7px #3a2417,0 0 0 8px #c9a04e55,0 16px 34px rgba(0,0,0,.55),inset 0 0 46px rgba(0,0,0,.5)}
+.gcOval.gruen{background:radial-gradient(ellipse at 50% 30%,rgba(120,255,170,.18),transparent 65%),radial-gradient(ellipse at center,#1d7a45,#0b3a20 78%)}
+.gcOval .marke{position:absolute;inset:0;display:grid;place-items:center;font-weight:900;letter-spacing:7px;color:rgba(0,0,0,.3);font-size:21px;text-transform:uppercase;pointer-events:none}
+.gcOval .linie{position:absolute;left:9%;right:9%;top:14%;bottom:14%;border:1.5px solid rgba(232,194,104,.32);border-radius:50% / 46%;pointer-events:none}
+.gcSitz{position:absolute;transform:translate(-50%,-50%);text-align:center;z-index:2;max-width:122px}
+.gcSitz.foldd{opacity:.42;filter:grayscale(.6)}
+.gcAvatar{width:30px;height:30px;border-radius:50%;margin:0 auto;display:grid;place-items:center;font:900 13px system-ui;color:#0b0f16;border:2px solid #c9a04e;box-shadow:0 2px 8px rgba(0,0,0,.55)}
+.gcSitz.dran .gcAvatar{animation:gcDranPuls 1.1s infinite}
+@keyframes gcDranPuls{0%,100%{box-shadow:0 0 0 0 rgba(232,194,104,.85)}70%{box-shadow:0 0 0 9px rgba(232,194,104,0)}}
+.gcSName{display:inline-block;font-size:9px;font-weight:800;background:rgba(8,11,18,.9);border:1px solid rgba(201,160,78,.4);border-radius:6px;padding:1px 6px;margin-top:2px;max-width:116px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.gcSInfo{font:700 8.5px var(--mono);color:#e8c268;margin-top:1px;text-shadow:0 1px 3px rgba(0,0,0,.7)}
+.gcKS{display:inline-block;min-width:20px;padding:3px 2px;margin:1px;border-radius:4px;background:#f5f1e7;font:800 10.5px var(--mono);text-align:center;box-shadow:0 2px 5px rgba(0,0,0,.55)}
+.gcKS.rk{transform:rotate(-4deg)}.gcKS.rk2{transform:rotate(4deg)}
+.gcRueckS{display:inline-block;width:20px;height:25px;margin:1px;border-radius:4px;vertical-align:middle;background:repeating-linear-gradient(45deg,#28406e,#28406e 3px,#1c2f52 3px,#1c2f52 6px);border:1px solid #3d588f;box-shadow:0 2px 5px rgba(0,0,0,.5)}
+.gcChip{display:inline-block;width:12px;height:12px;border-radius:50%;border:2px dashed rgba(255,255,255,.75);vertical-align:-2px;margin-right:3px;background:radial-gradient(circle at 35% 30%,#e85555,#7e1b1b);box-shadow:0 1px 3px rgba(0,0,0,.5)}
+.gcPot{position:absolute;left:50%;top:33%;transform:translate(-50%,-50%);z-index:1;background:rgba(8,11,18,.85);border:1px solid #c9a04e;border-radius:99px;padding:2px 12px;font:800 11px var(--mono);color:#e8c268;box-shadow:0 0 12px rgba(201,160,78,.3);white-space:nowrap}
+.gcBoard{position:absolute;left:50%;top:54%;transform:translate(-50%,-50%);z-index:1;white-space:nowrap}
+/* Slots: Neon-Maschine */
+.gcSlot{border-radius:18px;padding:12px 12px 14px;background:linear-gradient(165deg,#2c1547,#170a2a);border:3px solid #ff9d2e;box-shadow:0 0 22px rgba(255,157,46,.5),inset 0 0 34px rgba(120,60,220,.35);margin:6px 0 10px}
+.gcSlotTitel{text-align:center;font:900 13px system-ui;letter-spacing:4px;color:#ffd75e;text-shadow:0 0 12px rgba(255,157,46,.85);margin-bottom:9px}
+.gcWalzen{display:flex;gap:7px;background:#0c0620;border-radius:12px;padding:10px;border:2px solid rgba(255,184,77,.5);box-shadow:inset 0 0 18px rgba(0,0,0,.7)}
+.gcWalzeN{flex:1;display:grid;place-items:center;height:92px;font-size:44px;border-radius:8px;background:linear-gradient(180deg,#150b2e,#311b5e 50%,#150b2e);box-shadow:inset 0 8px 16px rgba(0,0,0,.65),inset 0 -8px 16px rgba(0,0,0,.65),0 0 0 1px rgba(255,184,77,.25)}
+.gcSpin{display:block;width:100%;margin-top:11px;padding:12px;border-radius:99px;border:3px solid #ffb84d;background:linear-gradient(180deg,#ff5f8f,#c81e5b);color:#fff;font:900 15px system-ui;letter-spacing:3px;text-shadow:0 1px 4px rgba(0,0,0,.45);box-shadow:0 0 18px rgba(255,95,143,.5),0 4px 0 #8e1440;cursor:pointer}
+.gcSpin:active{transform:translateY(2px)}
+.gcFilzPad{border-radius:14px;border:4px solid #57351d;box-shadow:0 0 0 2px #c9a04e,inset 0 0 26px rgba(0,0,0,.5);background:radial-gradient(ellipse at 50% 30%,rgba(120,255,170,.16),transparent 65%),radial-gradient(ellipse at center,#1d7a45,#0b3a20 80%);padding:14px;margin:6px 0 10px}
 </style>
 <div id="gcSpielModal" style="position:fixed;inset:0;z-index:53;display:none;place-items:center;background:rgba(6,9,15,.55);backdrop-filter:blur(2px)" onclick="if(event.target===this)gcSpielSchliessen()">
   <div class="panel gcPanel" style="position:static;display:flex;width:min(430px,94vw);max-height:86vh;border-color:#c9a04e55">
@@ -2326,6 +2355,11 @@ const GC_TITEL = { roulette: "🎡 Roulette — Live-Tisch", blackjack: "🃏 Bl
   poker: "🂡 Poker — Live-Tisch",
   wuerfel: "🎲 Hohe Neun", slots: "🎰 Slots „La Fortuna“", baccara: "🎴 Baccara" };
 const karteHtml = k => `<span style="display:inline-block;min-width:32px;padding:6px 4px;margin:2px;border-radius:5px;background:#f4f0e6;color:${k.rot ? "#c0392b" : "#1c2430"};font-family:var(--mono);font-weight:800;font-size:15px;text-align:center;box-shadow:0 2px 6px rgba(0,0,0,.45)">${k.txt}</span>`;
+const karteKlein = (k, i) => `<span class="gcKS ${i % 2 ? "rk2" : "rk"}" style="color:${k.rot ? "#c0392b" : "#1c2430"}">${k.txt}</span>`;
+const rueckKlein = () => `<span class="gcRueckS"></span>`;
+const gcAvatar = (farbe, name) => `<span class="gcAvatar" style="background:${farbe}">${(name || "?")[0].toUpperCase()}</span>`;
+const GC_SITZE_BJ = [[16, 66], [38, 84], [62, 84], [84, 66]];
+const GC_SITZE_POKER = [[50, 88], [11, 46], [50, 13], [89, 46]];
 const gcChips = ziel => [100, 500, 1000, 2000].map(v =>
   `<button class="mini" data-gcchip="${ziel}" data-wert="${v}">${v >= 1000 ? (v / 1000) + "k" : v}</button>`).join("");
 const gcEinsatzZeile = id => `
@@ -2375,16 +2409,30 @@ function gcSpielBauen() {
     el.innerHTML = `<div id="gcPokerTisch"></div>`;
   } else {
     /* Solo-Tische: Würfel, Slots, Baccara */
-    const knopf = { wuerfel: "🎲 Würfeln", slots: "🎰 Drehen", baccara: "🎴 Karten geben" }[GC_SPIEL];
-    const buehne = GC_SPIEL === "slots"
-      ? `<div style="display:flex;gap:8px;justify-content:center;margin:14px 0">${[0,1,2].map(i =>
-          `<span id="gcWalze${i}" style="display:grid;place-items:center;width:64px;height:72px;font-size:34px;border-radius:9px;background:linear-gradient(180deg,#0d1420,#1a2535);border:1px solid #c9a04e44">❓</span>`).join("")}</div>`
-      : GC_SPIEL === "wuerfel"
-      ? `<div id="gcWuerfelFeld" style="display:flex;gap:14px;justify-content:center;font-size:62px;margin:10px 0;color:#f4f0e6">⚀⚀</div>
-         <div id="gcWuerfelSumme" class="meta" style="text-align:center;font-family:var(--mono);min-height:18px">Ziel: 9 oder mehr mit zwei Würfeln</div>`
-      : `<div style="margin:8px 0"><div class="lbl">Deine Hand</div><div id="gcBacSpieler" style="min-height:44px"></div>
-         <div class="lbl" style="margin-top:6px">Die Bank</div><div id="gcBacBank" style="min-height:44px"></div>
-         <p class="note" style="margin:4px 0 0">Punkte zählen modulo 10 — die höhere Hand gewinnt.</p></div>`;
+    if (GC_SPIEL === "slots") {
+      el.innerHTML = `
+        <div class="gcSlot">
+          <div class="gcSlotTitel">✦ LA FORTUNA ✦</div>
+          <div class="gcWalzen">${[0, 1, 2].map(i => `<span id="gcWalze${i}" class="gcWalzeN">❓</span>`).join("")}</div>
+          <div id="gcSoloErgebnis" style="min-height:24px;margin-top:9px;text-align:center;font-weight:700;font-family:var(--mono)"></div>
+        </div>
+        ${gcEinsatzZeile("gcSoloEinsatz")}
+        <button class="gcSpin" data-gcsolo="slots">🎰 SPIN</button>`;
+      return;
+    }
+    const knopf = { wuerfel: "🎲 Würfeln", baccara: "🎴 Karten geben" }[GC_SPIEL];
+    const buehne = GC_SPIEL === "wuerfel"
+      ? `<div class="gcFilzPad" style="text-align:center">
+           <div id="gcWuerfelFeld" style="font-size:64px;color:#f4f0e6;text-shadow:0 4px 10px rgba(0,0,0,.5);letter-spacing:12px">⚀⚀</div>
+           <div id="gcWuerfelSumme" style="font:700 11px var(--mono);color:#e8c268;min-height:18px;margin-top:4px">Ziel: 9 oder mehr mit zwei Würfeln</div>
+         </div>`
+      : `<div class="gcFilzPad">
+           <div style="font:800 9px system-ui;letter-spacing:2px;color:rgba(255,255,255,.55)">DEINE HAND</div>
+           <div id="gcBacSpieler" style="min-height:42px"></div>
+           <div style="font:800 9px system-ui;letter-spacing:2px;color:rgba(255,255,255,.55);margin-top:6px;text-align:right">DIE BANK</div>
+           <div id="gcBacBank" style="min-height:42px;text-align:right"></div>
+         </div>
+         <p class="note" style="margin:0 0 6px;text-align:center">Punkte zählen modulo 10 — die höhere Hand gewinnt.</p>`;
     el.innerHTML = `${buehne}${gcEinsatzZeile("gcSoloEinsatz")}
       <button class="bknopf gcGold" data-gcsolo="${GC_SPIEL}" style="width:100%">${knopf}</button>
       <div id="gcSoloErgebnis" style="min-height:24px;margin-top:8px;text-align:center;font-weight:700;font-family:var(--mono)"></div>`;
@@ -2561,18 +2609,21 @@ function gcBlackjackTick() {
   const ergFarbe = e => e === "Verloren" || e === "Überkauft" ? "var(--down)" : e === "Push" ? "var(--dim)" : "var(--up)";
   el.innerHTML = `
     <div class="lbl" style="text-align:center;min-height:16px">${status}</div>
-    <div style="margin:9px 0;padding:9px;border-radius:9px;background:linear-gradient(180deg,#123524,#0c2418);border:1px solid #c9a04e33">
-      <div class="lbl">Dealer${B.dealerSumme != null && B.phase !== "ziehen" && B.phase !== "setzen" ? ` · ${B.dealerSumme}${B.dealerSumme > 21 ? " — überkauft!" : ""}` : ""}</div>
-      <div>${B.dealer.map(karteHtml).join("")}${B.phase === "ziehen" ? `<span style="display:inline-block;min-width:32px;padding:6px 4px;margin:2px;border-radius:5px;background:repeating-linear-gradient(45deg,#7e1f1f,#7e1f1f 4px,#5e1515 4px,#5e1515 8px);color:transparent">?</span>` : ""}</div>
+    <div class="gcTischWrap">
+      <div class="gcOval"><span class="linie"></span><span class="marke">Blackjack</span></div>
+      <div class="gcSitz" style="left:50%;top:20%">
+        ${gcAvatar("#c9a04e", "D")}<br>
+        <span class="gcSName">Dealer${B.dealerSumme != null && B.phase !== "ziehen" && B.phase !== "setzen" ? ` · ${B.dealerSumme}${B.dealerSumme > 21 ? " 💥" : ""}` : ""}</span>
+        <div>${B.dealer.map(karteKlein).join("")}${B.phase === "ziehen" ? rueckKlein() : ""}</div>
+      </div>
       ${B.spieler.map((s, i) => `
-        <div style="margin-top:7px;padding-top:6px;border-top:1px solid rgba(201,160,78,.18);${B.phase === "ziehen" && i === B.dran ? "background:rgba(232,194,104,.08);border-radius:6px;padding:6px" : ""}">
-          <div style="display:flex;gap:7px;align-items:center">
-            <span style="color:${s.farbe}">●</span><b style="flex:1">${s.name}${s.pid === myId ? " (du)" : ""}</b>
-            <span class="meta" style="font-family:var(--mono)">${fmt(s.einsatz + (s.einsatz2 || 0))}</span>
-            ${s.ergebnis ? `<b style="color:${ergFarbe(s.ergebnis.split(" / ")[0])}">${s.ergebnis}</b>` : s.karten.length ? `<b>${s.summe}${s.karten2 ? " | " + s.summe2 : ""}</b>` : ""}
-          </div>
-          <div>${s.karten.map(karteHtml).join("")}${s.karten2 ? `<span class="meta" style="margin:0 5px">✂</span>${s.karten2.map(karteHtml).join("")}` : ""}
-          ${s.karten2 && B.phase === "ziehen" && i === B.dran ? `<span class="meta">(Hand ${s.aktiv})</span>` : ""}</div>
+        <div class="gcSitz ${B.phase === "ziehen" && i === B.dran ? "dran" : ""}" style="left:${GC_SITZE_BJ[i][0]}%;top:${GC_SITZE_BJ[i][1]}%">
+          <div>${s.karten.map(karteKlein).join("")}${s.karten2 ? `<span class="meta">✂</span>${s.karten2.map(karteKlein).join("")}` : ""}</div>
+          ${gcAvatar(s.farbe, s.name)}<br>
+          <span class="gcSName">${s.name}${s.pid === myId ? " (du)" : ""}</span>
+          <div class="gcSInfo">${s.ergebnis
+            ? `<b style="color:${ergFarbe(s.ergebnis.split(" / ")[0])}">${s.ergebnis}</b>`
+            : `<span class="gcChip"></span>${fmt(s.einsatz + (s.einsatz2 || 0))}${s.karten.length ? ` · ${s.summe}${s.karten2 ? " | " + s.summe2 : ""}` : ""}${s.karten2 && B.phase === "ziehen" && i === B.dran ? ` · Hand ${s.aktiv}` : ""}`}</div>
         </div>`).join("")}
     </div>
     ${binDran ? (() => {
@@ -2617,24 +2668,25 @@ function gcPokerTick() {
     : P.phase === "wetten" ? (binDran ? `<b style="color:#e8c268">Du bist dran (${STRASSEN[P.strasse]}) — ${P.rest}s</b>` : `${dranS ? dranS.name : "…"} überlegt (${STRASSEN[P.strasse]}, ${P.rest}s)…`)
     : "Showdown — gleich wird neu gemischt.";
   const ruecken = `<span style="display:inline-block;min-width:32px;padding:6px 4px;margin:2px;border-radius:5px;background:repeating-linear-gradient(45deg,#28406e,#28406e 4px,#1c2f52 4px,#1c2f52 8px);color:transparent">?</span>`;
+  const meinIdx = ich ? P.spieler.indexOf(ich) : 0;
+  const posVon = i => GC_SITZE_POKER[((i - meinIdx) + P.spieler.length * 2) % 4];
   el.innerHTML = `
     <div class="lbl" style="text-align:center;min-height:16px">${status}</div>
-    <div style="margin:9px 0;padding:9px;border-radius:9px;background:linear-gradient(180deg,#123524,#0c2418);border:1px solid #c9a04e33">
-      <div style="display:flex;justify-content:space-between;align-items:center">
-        <span class="lbl">Board</span>
-        <b style="font-family:var(--mono);color:#e8c268">Pot ${fmt(P.pot)}</b>
-      </div>
-      <div style="min-height:44px">${P.board.map(karteHtml).join("") || `<span class="meta">— noch keine Gemeinschaftskarten —</span>`}</div>
+    <div class="gcTischWrap">
+      <div class="gcOval gruen"><span class="linie"></span><span class="marke">Poker</span></div>
+      <span class="gcPot"><span class="gcChip" style="background:radial-gradient(circle at 35% 30%,#5ac47a,#1d6b3a)"></span>Pot ${fmt(P.pot)}</span>
+      <div class="gcBoard">${P.board.map(karteKlein).join("") || `<span class="meta" style="font-size:9px">— Karten kommen —</span>`}</div>
       ${P.spieler.map((s, i) => `
-        <div style="margin-top:7px;padding-top:6px;border-top:1px solid rgba(201,160,78,.18);${P.phase === "wetten" && i === P.dran ? "background:rgba(232,194,104,.08);border-radius:6px;padding:6px" : ""};${s.gefoldet ? "opacity:.45" : ""}">
-          <div style="display:flex;gap:7px;align-items:center">
-            <span style="color:${s.farbe}">●</span><b style="flex:1">${s.name}${s.pid === myId ? " (du)" : ""}</b>
-            ${s.gesetzt ? `<span class="meta" style="font-family:var(--mono)">gesetzt ${fmt(s.gesetzt)}</span>` : ""}
-            ${s.ergebnis ? `<b style="color:${s.ergebnis.startsWith("+") ? "var(--up)" : "var(--dim)"}">${s.ergebnis}</b>` : s.gefoldet ? `<b class="meta">Fold</b>` : ""}
-          </div>
-          <div>${s.karten ? s.karten.map(karteHtml).join("")
-            : s.pid === myId && me?.gpokerKarten ? me.gpokerKarten.map(karteHtml).join("")
-            : P.phase === "wetten" || P.phase === "setzen" ? ruecken + ruecken : ""}</div>
+        <div class="gcSitz ${P.phase === "wetten" && i === P.dran ? "dran" : ""} ${s.gefoldet ? "foldd" : ""}" style="left:${posVon(i)[0]}%;top:${posVon(i)[1]}%">
+          <div>${s.karten ? s.karten.map(karteKlein).join("")
+            : s.pid === myId && me?.gpokerKarten ? me.gpokerKarten.map(karteKlein).join("")
+            : P.phase === "wetten" || P.phase === "setzen" ? rueckKlein() + rueckKlein() : ""}</div>
+          ${gcAvatar(s.farbe, s.name)}<br>
+          <span class="gcSName">${s.name}${s.pid === myId ? " (du)" : ""}</span>
+          <div class="gcSInfo">${s.ergebnis
+            ? `<b style="color:${s.ergebnis.startsWith("+") ? "var(--up)" : "var(--dim)"}">${s.ergebnis}</b>`
+            : s.gefoldet ? "Fold"
+            : s.gesetzt ? `<span class="gcChip"></span>${fmt(s.gesetzt)}` : ""}</div>
         </div>`).join("")}
     </div>
     ${binDran ? `<div style="display:flex;gap:6px;flex-wrap:wrap">
