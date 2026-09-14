@@ -1,11 +1,12 @@
 <title>Geschichten</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
 <link rel="stylesheet" href="stil.css">
 <div class="huelle" id="huelle"><p class="hinweis">Einen Moment …</p></div>
 <script type="module">
-import { hole, anmeldung, dauer, datum } from './gemeinsam.js';
+import { hole, dauer, datum } from './gemeinsam.js';
 
 const huelle = document.getElementById('huelle');
-const rolle = await anmeldung(huelle);
 
 const GEHOERT = 'geschichten-gehoert';
 function gehoert() {
@@ -20,29 +21,24 @@ function merken(id) {
 function zeichnen(liste) {
   const schon = gehoert();
   huelle.innerHTML = `
-    <div class="kopf">
-      <h1>Geschichten</h1>
-      ${rolle === 'admin' ? '<a href="/aufnehmen">Neue aufnehmen →</a>' : ''}
-    </div>
-    <p class="unterzeile">${liste.length === 0 ? 'Noch nichts da.' :
-      `${liste.length} ${liste.length === 1 ? 'Geschichte' : 'Geschichten'} für dich.`}</p>
+    <div class="kopf"><h1>Geschichten</h1><a href="/aufnehmen">Neue aufnehmen →</a></div>
+    <p class="unterzeile">${liste.length === 0 ? 'Noch nichts da.'
+      : `${liste.length} ${liste.length === 1 ? 'Geschichte' : 'Geschichten'} für dich.`}</p>
     <div id="liste"></div>`;
 
   const ziel = huelle.querySelector('#liste');
   for (const g of liste) {
     const karte = document.createElement('article');
     karte.className = 'karte';
-    const neu = !schon.has(g.id);
     karte.innerHTML = `
       <h2></h2>
       <p class="meta"></p>
       <p class="notiz"></p>
-      <audio controls preload="none" src="/audio/${encodeURIComponent(g.id)}"></audio>
-      ${rolle === 'admin' ? '<div class="reihe" style="margin-top:10px"><button class="gefahr loeschen">Löschen</button></div>' : ''}`;
+      <audio controls preload="none" src="/audio/${encodeURIComponent(g.id)}"></audio>`;
 
     const h2 = karte.querySelector('h2');
     h2.textContent = g.titel;
-    if (neu) h2.insertAdjacentHTML('beforeend', '<span class="neu">neu</span>');
+    if (!schon.has(g.id)) h2.insertAdjacentHTML('beforeend', '<span class="neu">neu</span>');
     karte.querySelector('.meta').textContent = [datum(g.datum), dauer(g.sekunden)].filter(Boolean).join(' · ');
     const notiz = karte.querySelector('.notiz');
     if (g.notiz) notiz.textContent = g.notiz; else notiz.remove();
@@ -52,19 +48,10 @@ function zeichnen(liste) {
       karte.querySelector('.neu')?.remove();
     }, { once: true });
 
-    karte.querySelector('.loeschen')?.addEventListener('click', async () => {
-      if (!confirm(`„${g.titel}" wirklich löschen?`)) return;
-      await hole(`/api/geschichten/${encodeURIComponent(g.id)}`, { method: 'DELETE' });
-      laden();
-    });
-
     ziel.append(karte);
   }
 }
 
-async function laden() {
-  try { zeichnen(await hole('/api/geschichten')); }
-  catch (e) { huelle.innerHTML = `<p class="fehler">${e.message}</p>`; }
-}
-laden();
+try { zeichnen(await hole('/api/geschichten')); }
+catch (e) { huelle.innerHTML = `<p class="fehler">${e.message}</p>`; }
 </script>

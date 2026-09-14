@@ -1,13 +1,8 @@
 <title>Geschichte aufnehmen</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
 <link rel="stylesheet" href="stil.css">
-<div class="huelle" id="huelle"><p class="hinweis">Einen Moment …</p></div>
-<script type="module">
-import { hole, anmeldung, dauer } from './gemeinsam.js';
-
-const huelle = document.getElementById('huelle');
-await anmeldung(huelle, { brauchtAdmin: true });
-
-huelle.innerHTML = `
+<div class="huelle">
   <div class="kopf"><h1>Neue Geschichte</h1><a href="/">← Alle Geschichten</a></div>
   <p class="unterzeile">Direkt hier aufnehmen oder eine fertige Datei auswählen.</p>
 
@@ -37,31 +32,31 @@ huelle.innerHTML = `
       <button class="still" id="verwerfen" type="button" hidden>Aufnahme verwerfen</button>
     </div>
     <p class="hinweis" id="status"></p>
-  </section>`;
+  </section>
 
-const knopf = huelle.querySelector('#knopf');
-const zaehler = huelle.querySelector('#zaehler');
-const punkt = huelle.querySelector('#punkt');
-const vorhoeren = huelle.querySelector('#vorhoeren');
-const dateiFeld = huelle.querySelector('#datei');
-const titelFeld = huelle.querySelector('#titel');
-const notizFeld = huelle.querySelector('#notiz');
-const senden = huelle.querySelector('#senden');
-const verwerfen = huelle.querySelector('#verwerfen');
-const fehler = huelle.querySelector('#fehler');
-const status = huelle.querySelector('#status');
-const aufnahmehinweis = huelle.querySelector('#aufnahmehinweis');
+  <h2 style="margin:34px 0 10px;font-size:17px">Bisher hochgeladen</h2>
+  <div id="vorhanden"><p class="hinweis">Lädt …</p></div>
+</div>
 
-let aufnehmer = null;
-let stuecke = [];
-let spur = null;          // { blob, endung, sekunden }
-let startZeit = 0;
-let ticker = null;
-let vorschauUrl = null;
+<script type="module">
+import { hole, dauer, datum } from './gemeinsam.js';
+
+const STUECK = 3 * 1024 * 1024; // muss zur Function passen
+
+const $ = (id) => document.getElementById(id);
+const knopf = $('knopf'), zaehler = $('zaehler'), punkt = $('punkt'), vorhoeren = $('vorhoeren');
+const dateiFeld = $('datei'), titelFeld = $('titel'), notizFeld = $('notiz');
+const senden = $('senden'), verwerfen = $('verwerfen');
+const fehler = $('fehler'), status = $('status'), aufnahmehinweis = $('aufnahmehinweis');
+
+let aufnehmer = null, stuecke = [], spur = null, startZeit = 0, ticker = null, vorschauUrl = null;
 
 if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) {
   knopf.disabled = true;
   aufnahmehinweis.textContent = 'Dieser Browser kann nicht direkt aufnehmen — nimm bitte eine Datei.';
+} else if (!window.isSecureContext) {
+  knopf.disabled = true;
+  aufnahmehinweis.textContent = 'Aufnehmen geht nur über HTTPS. Nimm hier bitte eine Datei.';
 }
 
 function endungAus(typ, name) {
@@ -92,12 +87,9 @@ knopf.addEventListener('click', async () => {
   if (aufnehmer) { aufnehmer.stop(); return; }
   fehler.textContent = '';
   let strom;
-  try {
-    strom = await navigator.mediaDevices.getUserMedia({ audio: true });
-  } catch {
-    fehler.textContent = 'Kein Zugriff aufs Mikrofon. Erlaube ihn im Browser — oder nimm eine Datei.';
-    return;
-  }
+  try { strom = await navigator.mediaDevices.getUserMedia({ audio: true }); }
+  catch { fehler.textContent = 'Kein Zugriff aufs Mikrofon. Erlaube ihn im Browser — oder nimm eine Datei.'; return; }
+
   stuecke = [];
   aufnehmer = new MediaRecorder(strom);
   aufnehmer.addEventListener('dataavailable', (e) => { if (e.data.size) stuecke.push(e.data); });
@@ -131,11 +123,8 @@ dateiFeld.addEventListener('change', () => {
   spurSetzen(gewaehlt);
   aufnahmehinweis.textContent = 'Datei gewählt.';
   if (!titelFeld.value) titelFeld.value = datei.name.replace(/\.[^.]+$/, '');
-  // Länge nachträglich auslesen, damit sie in der Liste steht.
   vorhoeren.addEventListener('loadedmetadata', () => {
-    if (spur === gewaehlt && Number.isFinite(vorhoeren.duration)) {
-      gewaehlt.sekunden = Math.round(vorhoeren.duration);
-    }
+    if (spur === gewaehlt && Number.isFinite(vorhoeren.duration)) gewaehlt.sekunden = Math.round(vorhoeren.duration);
   }, { once: true });
 });
 
@@ -150,28 +139,80 @@ senden.addEventListener('click', async () => {
   if (!spur) return;
   fehler.textContent = '';
   senden.disabled = true;
-  status.textContent = 'Lädt hoch …';
-  const frage = new URLSearchParams({
-    titel: titelFeld.value.trim() || 'Ohne Titel',
-    notiz: notizFeld.value.trim(),
-    endung: spur.endung,
-    sekunden: String(spur.sekunden || 0),
-  });
+  verwerfen.disabled = true;
+
+  const id = crypto.randomUUID();
+  const gesamt = spur.blob.size;
+  const teile = Math.ceil(gesamt / STUECK);
   try {
-    await hole(`/api/hochladen?${frage}`, {
+    // Stück für Stück, damit kein Aufruf an der 6-MB-Grenze von Netlify scheitert.
+    for (let n = 0; n < teile; n++) {
+      status.textContent = teile > 1
+        ? `Lädt hoch … Teil ${n + 1} von ${teile}`
+        : 'Lädt hoch …';
+      const haeppchen = spur.blob.slice(n * STUECK, Math.min(gesamt, (n + 1) * STUECK));
+      await hole(`/api/hochladen?id=${id}&teil=${n}`, {
+        method: 'PUT',
+        headers: { 'content-type': 'application/octet-stream' },
+        body: haeppchen,
+      });
+    }
+    status.textContent = 'Fast fertig …';
+    await hole('/api/abschliessen', {
       method: 'POST',
-      headers: { 'content-type': 'application/octet-stream' },
-      body: spur.blob,
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        id, teile, bytes: gesamt,
+        endung: spur.endung,
+        titel: titelFeld.value.trim() || 'Ohne Titel',
+        notiz: notizFeld.value.trim(),
+        sekunden: spur.sekunden || 0,
+      }),
     });
     status.textContent = 'Fertig — sie kann es jetzt hören.';
     spurSetzen(null);
     titelFeld.value = '';
     notizFeld.value = '';
     zaehler.textContent = '0:00';
+    vorhandeneLaden();
   } catch (e) {
     fehler.textContent = e.message;
-    status.textContent = '';
+    status.textContent = 'Nichts veröffentlicht — du kannst es einfach nochmal versuchen.';
     senden.disabled = false;
+  } finally {
+    verwerfen.disabled = false;
   }
 });
+
+async function vorhandeneLaden() {
+  const ziel = document.getElementById('vorhanden');
+  try {
+    const liste = await hole('/api/geschichten');
+    if (!liste.length) { ziel.innerHTML = '<p class="hinweis">Noch nichts.</p>'; return; }
+    ziel.innerHTML = '';
+    for (const g of liste) {
+      const zeile = document.createElement('div');
+      zeile.className = 'karte reihe';
+      zeile.style.justifyContent = 'space-between';
+      const links = document.createElement('div');
+      links.innerHTML = '<strong></strong><p class="meta" style="margin:0"></p>';
+      links.querySelector('strong').textContent = g.titel;
+      links.querySelector('.meta').textContent = [datum(g.datum), dauer(g.sekunden)].filter(Boolean).join(' · ');
+      const weg = document.createElement('button');
+      weg.className = 'gefahr';
+      weg.textContent = 'Löschen';
+      weg.addEventListener('click', async () => {
+        if (!confirm(`„${g.titel}" wirklich löschen?`)) return;
+        weg.disabled = true;
+        try { await hole(`/api/geschichten/${encodeURIComponent(g.id)}`, { method: 'DELETE' }); vorhandeneLaden(); }
+        catch (e) { alert(e.message); weg.disabled = false; }
+      });
+      zeile.append(links, weg);
+      ziel.append(zeile);
+    }
+  } catch (e) {
+    ziel.innerHTML = `<p class="fehler">${e.message}</p>`;
+  }
+}
+vorhandeneLaden();
 </script>

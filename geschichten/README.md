@@ -1,47 +1,54 @@
 # Geschichten
 
-Kleine private Seite: du lädst (oder nimmst direkt auf) Hörgeschichten hoch,
-deine Freundin ruft die Seite auf und hört sie sich an. Kein WhatsApp mehr.
+Kleine private Seite: du nimmst eine Hörgeschichte auf (oder lädst eine fertige
+Datei hoch), deine Freundin ruft die Seite auf und hört sie sich an. Kein
+WhatsApp mehr.
 
-Läuft ohne Abhängigkeiten — nur Node ≥ 18 und die Standardbibliothek.
-
-## Starten
-
-```bash
-cd geschichten
-ADMIN_PASSWORT=… HOER_PASSWORT=… SESSION_GEHEIMNIS=$(openssl rand -hex 32) node server.js
-```
-
-Dann `http://localhost:3100`.
-
-| Variable | Bedeutung | Vorgabe |
-| --- | --- | --- |
-| `ADMIN_PASSWORT` | Passwort für dich: hochladen, löschen | `erzaehler` |
-| `HOER_PASSWORT` | Passwort für sie: nur hören | `gutenacht` |
-| `SESSION_GEHEIMNIS` | signiert das Login-Cookie; ohne das muss man sich nach jedem Neustart neu anmelden | zufällig |
-| `PORT` | Port | `3100` |
-| `MAX_MB` | maximale Dateigröße pro Geschichte | `200` |
-
-**Setz die Passwörter, bevor die Seite öffentlich erreichbar ist.** Die Vorgaben
-stehen in dieser Datei und sind damit kein Schutz.
+Läuft auf Netlify — Seite, Function und Speicher, alles dort, kein zweiter
+Dienst nötig.
 
 ## Seiten
 
-- `/` — Liste aller Geschichten mit Player. Neue sind mit „neu" markiert; die
-  Markierung verschwindet, sobald sie abgespielt wurden (pro Gerät gemerkt).
-- `/aufnehmen` — nur mit Erzähler-Passwort: direkt im Browser aufnehmen
-  (Mikrofon) oder eine fertige Audiodatei wählen, Titel + Notiz dazu, hochladen.
+- `/` — alle Geschichten mit Player. Neue tragen ein „neu"-Abzeichen, das
+  verschwindet, sobald sie abgespielt wurden (pro Gerät gemerkt).
+- `/aufnehmen` — direkt im Browser über das Mikrofon aufnehmen oder eine Datei
+  wählen, Titel und Notiz dazu, hochladen. Darunter die Liste des bereits
+  Hochgeladenen zum Löschen.
 
-## Wo liegen die Daten
+## Auf Netlify stellen
 
-In `geschichten/daten/` — die Audiodateien unter `daten/audio/`, der Index in
-`daten/geschichten.json`. Der Ordner ist per `.gitignore` ausgenommen; für ein
-Backup reicht es, ihn zu kopieren.
+1. Im Netlify-Dashboard eine neue Site aus diesem GitHub-Repo anlegen.
+2. Unter *Site configuration → Build & deploy → Build settings* als
+   **Base directory** `geschichten` eintragen. Den Rest liest Netlify aus
+   `netlify.toml` (Publish `public`, Functions `netlify/functions`).
+3. Deploy starten. Netlify Blobs ist ohne Einrichtung dabei.
 
-## Ins Internet stellen
+Lokal ausprobieren geht mit `npx netlify dev` in diesem Ordner — das startet
+Seite und Function zusammen samt nachgebautem Blob-Speicher.
 
-Der Server spricht reines HTTP. Damit Aufnahme im Browser funktioniert und die
-Passwörter nicht im Klartext über die Leitung gehen, muss er hinter HTTPS
-stehen — also hinter einem Reverse Proxy (Caddy, nginx) mit Zertifikat, auf
-einem kleinen Server mit eigener Domain. Ohne HTTPS erlauben Browser den
-Mikrofonzugriff nur auf `localhost`.
+## Kein Passwort
+
+Die Seite ist offen: wer die Adresse hat, hört alles und kann hochladen. Das
+war so gewollt. Zwei Dinge dazu, die du wissen solltest:
+
+- Die Adresse ist damit das einzige Geheimnis. Sie steht in deiner Netlify-
+  Übersicht und in der Browser-Historie von euch beiden — gib sie nicht
+  weiter und häng sie nirgends öffentlich hin.
+- Suchmaschinen halte ich mit `noindex` und `robots.txt` fern. Das hilft gegen
+  zufällige Funde, ist aber kein Schutz gegen jemanden, der die Adresse kennt.
+
+Wenn dir das später zu offen wird, ist ein Passwort schnell nachgerüstet —
+sag Bescheid.
+
+## Wie die großen Dateien durchkommen
+
+Netlify-Functions dürfen pro Aufruf nur rund 6 MB annehmen oder zurückgeben,
+eine Geschichte ist schnell größer. Deshalb schneidet der Browser die Aufnahme
+beim Hochladen in 3-MB-Häppchen, und beim Abspielen setzt die Function genau
+den Bereich zusammen, den der Player gerade anfragt (Range-Requests). Für dich
+und sie ist davon nichts zu merken — Spulen funktioniert normal.
+
+Eine Geschichte taucht in der Liste erst auf, wenn alle Häppchen angekommen
+sind. Bricht ein Upload ab, ist nichts halb veröffentlicht; einfach nochmal.
+
+Obergrenze pro Geschichte: 500 MB. Das sind grob 15 Stunden Sprachaufnahme.

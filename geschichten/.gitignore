@@ -1,1 +1,2 @@
-daten/
+node_modules/
+.netlify/
