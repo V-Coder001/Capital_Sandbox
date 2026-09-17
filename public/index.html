@@ -1436,7 +1436,8 @@ td:first-child{font-family:var(--font)}
       </div>
     </div>
     <p id="lwFamilieHint" style="display:none;font-size:11.5px;color:#8695ab;margin:2px 0 6px">
-      Höchstens ZWEI je Familie — freie Plätze übernehmen Mafia-KIs, unbesetzte Polizei ein KI-Kommissar.
+      Höchstens ZWEI Spieler je Familie — freie Plätze übernehmen Mafia-KIs (die machen Platz, sobald ein
+      echter Spieler dazukommt), unbesetzte Polizei ein KI-Kommissar.
       Die Polizei ist der Gegenspieler: Sie kontrolliert Transporte und räumt Bezirke per Razzia
       (25 Einsatzpunkte = Polizei-Sieg). Jede Familie hat ein eigenes illegales Produkt (Schwarzgebrannter, Falschgeld, Goldbarren,
       Schmuggelzigaretten) samt Gebäude, das nur sie bauen kann. Verkauft wird beim Hehler —
@@ -4033,6 +4034,27 @@ function lobbyWaitZeichnen() {
   document.getElementById("lwCode").textContent = myRoomCode || "—";
 
   const spieler = Object.values(state.players || {});
+  /* Kartellmodus für Gäste am Server-Stand erkennen, beim Host an der
+   * eigenen (sofort gespiegelten) Auswahl. */
+  /* Der Server-Stand ist die Wahrheit — die lokale Host-Variable ist nach
+   * einem Reload wieder auf dem Standard und würde hier lügen. */
+  const kartellAktiv = (state.lobby?.mode || lwMode) === "kartell";
+  const FAM_LOBBY = { famiglia: ["La Famiglia", "#e74c3c"], syndikat: ["Das Syndikat", "#a78bfa"],
+    bratwa: ["Die Bratwa", "#f5c542"], triade: ["Die Triade", "#2ecc71"], polizei: ["🚔 Polizei", "#4a90d9"] };
+  document.getElementById("lwFamilieRow").style.display = kartellAktiv ? "" : "none";
+  document.getElementById("lwFamilieHint").style.display = kartellAktiv ? "" : "none";
+  /* Im Kartell gibt es keine Branchen — jeder baut alles. Die Box verschwindet
+   * komplett, die Familienwahl ist die einzige Entscheidung. */
+  const brancheBox = document.getElementById("lwBrancheBox");
+  if (brancheBox) brancheBox.style.display = kartellAktiv ? "none" : "";
+  if (kartellAktiv) {
+    document.querySelectorAll("#lwFamilie button").forEach(b => {
+      const fid = b.dataset.familie;
+      const n = spieler.filter(p2 => p2.familie === fid).length;
+      b.textContent = `${FAM_LOBBY[fid]?.[0] || fid} · ${n}/2`;
+      b.classList.toggle("on", state.players?.[myId]?.familie === fid);
+    });
+  }
   document.getElementById("lwCount").textContent = spieler.length;
   document.getElementById("lwPlayers").innerHTML = spieler.map(p => `
     <div class="pl">
@@ -4040,9 +4062,11 @@ function lobbyWaitZeichnen() {
       <span>${escapeHtml(p.name)}</span>
       ${p.id === state.hostId ? '<span class="tag">Host</span>' : ""}
       ${p.id === myId ? '<span class="tag">du</span>' : ""}
-      <!-- Branche mit anzeigen: Erst dadurch bringt die Wahl im Warteraum
-           etwas — man sieht, was schon besetzt ist, und kann sich absprechen. -->
-      <span class="tag" style="margin-left:auto">${escapeHtml(BRANCHE_NAME[p.industry] || p.industry || "—")}</span>
+      <!-- Im Kartell zählt die Familie, sonst die Branche — man sieht, was
+           besetzt ist, und kann sich absprechen. -->
+      <span class="tag" style="margin-left:auto${kartellAktiv && p.familie ? `;color:${FAM_LOBBY[p.familie]?.[1]}` : ""}">${
+        kartellAktiv ? escapeHtml(FAM_LOBBY[p.familie]?.[0] || "wählt noch…")
+                     : escapeHtml(BRANCHE_NAME[p.industry] || p.industry || "—")}</span>
     </div>`).join("") || '<div class="leer">Noch niemand da.</div>';
 
   /* Solange man allein wartet, ist das Teilen des Codes der nächste Schritt —
@@ -4144,6 +4168,14 @@ document.getElementById("lwBotLevel").addEventListener("click", e => {
   const b = e.target.closest("button[data-lvl]"); if (!b) return;
   lwBotLevel = b.dataset.lvl; lwPickerSpiegeln(); lwSettingsSenden();
 });
+/* Die Familienwahl gehört ALLEN Spielern, nicht nur dem Host: raus aus dem
+ * (für Gäste versteckten) Settings-Block, direkt über die Einstellungen. */
+{
+  const s = document.getElementById("lwSettings");
+  const row = document.getElementById("lwFamilieRow");
+  const hint = document.getElementById("lwFamilieHint");
+  if (s && row && hint) { s.parentNode.insertBefore(row, s); s.parentNode.insertBefore(hint, s); }
+}
 document.getElementById("lwFamilie").addEventListener("click", e => {
   const b = e.target.closest("button[data-familie]"); if (!b) return;
   socket.emit("familieWaehlen", { fid: b.dataset.familie }, res => {

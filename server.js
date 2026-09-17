@@ -503,6 +503,23 @@ const POLIZEI_SOLD = 150;         // $ Sold je Minute und Polizist
 const GESICHERT_DAUER = 60;       // so lange ist ein Bezirk nach einer Razzia „gesichert"
 const famDef = fid => fid === "polizei" ? POLIZEI : FAMILIEN[fid];
 const famAnzahl = fid => Object.values(G.players).filter(x => x.familie === fid).length;
+const famMenschen = fid => Object.values(G.players).filter(x => x.familie === fid && !x.bot).length;
+/* Ein echter Spieler verdrängt die KI: Ist die Familie nur wegen eines Bots
+ * voll, packt der Bot seine Sachen — der Mensch übernimmt den Platz. */
+function famBotVerdraengen(fid) {
+  if (famAnzahl(fid) <= FAMILIE_MAX) return;
+  const bot = Object.values(G.players).find(x => x.familie === fid && x.bot);
+  if (!bot) return;
+  for (let i = botHandles.length - 1; i >= 0; i--) {
+    const h = botHandles[i];
+    if (G.socketToPid[h.socket.id] === bot.id) {
+      clearInterval(h.timer); h.socket.close(); botHandles.splice(i, 1);
+    }
+  }
+  if (G.familienBoss?.[fid] === bot.id) delete G.familienBoss[fid];
+  delete G.players[bot.id];
+  io.emit("notice", { text: `${bot.name} macht Platz für einen echten Mafioso und verlässt die Stadt.` });
+}
 /* ---- Casino Municipale ----
  * Das städtische Casino steht fest an der Piazza. Es GEHÖRT niemandem —
  * es gehorcht dem, der die Piazza Grande (Bezirk 4) kontrolliert: Die
@@ -4070,13 +4087,18 @@ io.on("connection", socket => {
       /* Wunsch aus der Registrierung (Bots wollen in IHRE Familie bzw. zur
        * Polizei); sonst die kleinste Familie mit freiem Platz — sind alle
        * voll, geht der Nachzügler zur Polizei. */
+      /* Für Menschen zählt nur die Zahl der MENSCHEN je Familie (max 2) —
+       * ein Bot auf dem zweiten Platz macht dem Neuling Platz. Bots selbst
+       * respektieren weiter die harte Obergrenze. */
+      const zaehler = G.players[pid].bot ? famAnzahl : famMenschen;
       const wunsch = ["polizei", ...fids].includes(familieWunsch) ? familieWunsch : null;
-      const frei = fids.filter(f => famAnzahl(f) < FAMILIE_MAX)
+      const frei = fids.filter(f => zaehler(f) < FAMILIE_MAX)
         .sort((a, b) => famAnzahl(a) - famAnzahl(b));
       G.players[pid].familie =
-        (wunsch && (wunsch === "polizei" || famAnzahl(wunsch) < FAMILIE_MAX)) ? wunsch
-        : frei[0] || (famAnzahl("polizei") < FAMILIE_MAX ? "polizei"
+        (wunsch && (wunsch === "polizei" || zaehler(wunsch) < FAMILIE_MAX)) ? wunsch
+        : frei[0] || (zaehler("polizei") < FAMILIE_MAX ? "polizei"
         : fids.slice().sort((a, b) => famAnzahl(a) - famAnzahl(b))[0]);
+      if (!G.players[pid].bot) famBotVerdraengen(G.players[pid].familie);
       /* Späteinsteiger bekommen dasselbe Familien-Startkapital wie alle. */
       G.players[pid].cash += 8000;
       logTx(G.players[pid], "Kartell", "Startkapital der Familie", 8000);
@@ -4396,9 +4418,10 @@ io.on("connection", socket => {
     if (MODE !== "kartell") return ack?.({ error: "Familien gibt es nur in der Kartellwirtschaft" });
     if (!famDef(fid)) return ack?.({ error: "Diese Familie kennt hier niemand" });
     if (G.started && p.familie) return ack?.({ error: "Der Familie schwört man nur einmal — ein Wechsel wäre Verrat" });
-    if (fid !== p.familie && famAnzahl(fid) >= FAMILIE_MAX)
-      return ack?.({ error: `${famDef(fid).name} ist voll (${FAMILIE_MAX} Plätze) — such dir eine andere Seite` });
+    if (fid !== p.familie && famMenschen(fid) >= FAMILIE_MAX)
+      return ack?.({ error: `${famDef(fid).name} hat schon ${FAMILIE_MAX} Spieler — such dir eine andere Seite` });
     p.familie = fid;
+    if (!p.bot) famBotVerdraengen(fid);
     io.emit("notice", { text: fid === "polizei"
       ? `${p.name} tritt in die Polizei ein — die Familien sind gewarnt.`
       : `${p.name} schwört „${famDef(fid).name}“ die Treue.` });
