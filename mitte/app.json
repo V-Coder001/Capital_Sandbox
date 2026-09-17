@@ -1,0 +1,15 @@
+{
+  "expo": {
+    "name": "Mitte",
+    "slug": "mitte",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "scheme": "mitte",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "ios": { "supportsTablet": false, "bundleIdentifier": "app.mitte.tracker" },
+    "android": { "package": "app.mitte.tracker" },
+    "plugins": ["expo-router"],
+    "experiments": { "typedRoutes": false }
+  }
+}

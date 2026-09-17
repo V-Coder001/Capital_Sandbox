@@ -1,0 +1,125 @@
+{
+  "version": 1,
+  "rules": [
+    {
+      "id": "water_low_afternoon",
+      "priority": 40,
+      "when": { "all": [{ "fact": "waterGlasses", "lt": 4 }, { "fact": "hour", "gte": 15 }] },
+      "text": "Trink jetzt ein großes Glas Wasser – über den Tag verteilt tut das dem Bauch gut."
+    },
+    {
+      "id": "bloating_small_portions",
+      "priority": 60,
+      "when": { "all": [{ "fact": "typesToday", "includes": "bloating" }] },
+      "text": "Heute eher kleinere Portionen und langsam essen."
+    },
+    {
+      "id": "coffee_empty_stomach",
+      "priority": 70,
+      "when": { "all": [{ "fact": "coffeeBeforeMorningPain", "isTrue": true }] },
+      "text": "Probier den Kaffee heute nach dem Frühstück statt auf leeren Magen."
+    },
+    {
+      "id": "cramps_lower_belly",
+      "priority": 65,
+      "when": {
+        "all": [
+          { "fact": "typesToday", "includes": "cramping" },
+          { "fact": "lowerBellyToday", "isTrue": true }
+        ]
+      },
+      "text": "Eine Wärmflasche und ein kurzer Spaziergang können entspannen."
+    },
+    {
+      "id": "fatty_yesterday",
+      "priority": 55,
+      "when": {
+        "all": [
+          { "fact": "fattyYesterday", "isTrue": true },
+          { "fact": "avgVasToday", "gt": "avgVasYesterday" }
+        ]
+      },
+      "text": "Heute leichter essen, z. B. Reis, gedünstetes Gemüse, Haferflocken."
+    },
+    {
+      "id": "high_streak",
+      "priority": 100,
+      "when": { "all": [{ "fact": "highDayStreak", "gte": 3 }] },
+      "text": "Deine Werte sind seit Tagen hoch – sprich das gern ärztlich ab."
+    },
+    {
+      "id": "alcohol_yesterday",
+      "priority": 45,
+      "when": { "all": [{ "fact": "alcoholYesterday", "isTrue": true }] },
+      "text": "Nach Alkohol hilft dem Bauch oft ein ruhiger Tag mit viel Wasser."
+    },
+    {
+      "id": "carbonated_today",
+      "priority": 35,
+      "when": {
+        "all": [
+          { "fact": "drinksToday", "includes": "carbonated" },
+          { "fact": "typesToday", "includes": "bloating" }
+        ]
+      },
+      "text": "Kohlensäure und Völlegefühl gehen oft zusammen – probier heute stilles Wasser."
+    },
+    {
+      "id": "no_entry_yet",
+      "priority": 30,
+      "when": { "all": [{ "fact": "painEntriesToday", "eq": 0 }, { "fact": "hour", "gte": 18 }] },
+      "text": "Noch kein Eintrag heute – wie war dein Bauch? Ein Tap genügt."
+    },
+    {
+      "id": "large_portion",
+      "priority": 50,
+      "when": { "all": [{ "fact": "foodsToday", "includes": "large_portion" }] },
+      "text": "Nach einer großen Portion tut eine kurze Bewegungspause gut – 10 Minuten gehen reichen."
+    },
+    {
+      "id": "burning_upper",
+      "priority": 60,
+      "when": {
+        "all": [
+          { "fact": "typesToday", "includes": "burning" },
+          { "fact": "upperBellyToday", "isTrue": true }
+        ]
+      },
+      "text": "Heute Abend eher früh und leicht essen – und nach dem Essen nicht gleich hinlegen."
+    },
+    {
+      "id": "nausea",
+      "priority": 65,
+      "when": { "all": [{ "fact": "typesToday", "includes": "nausea" }] },
+      "text": "Bei Übelkeit helfen oft kleine Schlucke Tee und frische Luft."
+    },
+    {
+      "id": "spicy_today",
+      "priority": 40,
+      "when": {
+        "all": [
+          { "fact": "foodsToday", "includes": "spicy" },
+          { "fact": "maxVasToday", "gte": 50 }
+        ]
+      },
+      "text": "Scharfes und ein höherer Wert am selben Tag – merk dir, ob das öfter zusammenfällt."
+    },
+    {
+      "id": "good_day",
+      "priority": 10,
+      "when": { "all": [{ "fact": "painEntriesToday", "gte": 1 }, { "fact": "maxVasToday", "lte": 20 }] },
+      "text": "Guter Tag! Merk dir, was heute anders war."
+    },
+    {
+      "id": "default_check_in",
+      "priority": 5,
+      "when": { "all": [] },
+      "text": "Kurz innehalten: Wie fühlt sich dein Bauch gerade an?"
+    }
+  ],
+  "safetyNet": {
+    "vasThreshold": 90,
+    "keywords": ["blut", "fieber", "erbrechen", "erbrochen", "teerstuhl", "ohnmacht"],
+    "text": "Sehr starke oder ungewöhnliche Beschwerden bitte ärztlich abklären. Im Notfall 112."
+  }
+}
