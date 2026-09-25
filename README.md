@@ -3,6 +3,11 @@
 Isometrische Wirtschaftssimulation als reines Spieler-Ökosystem: keine NPCs,
 keine künstlichen Preise. Server = Single Source of Truth.
 
+## Godot-3D-Version (Mafia)
+
+Im Ordner [`godot/`](godot/README.md) liegt eine 3D-Umsetzung in Godot 4 im Big-Ambitions-Stil
+(Mafia-Imperium, Multiplayer über ENet). Details und Start siehe `godot/README.md`.
+
 ## Setup (Host)
 
 Ein Befehl — findet/lädt Node automatisch, installiert Abhängigkeiten,

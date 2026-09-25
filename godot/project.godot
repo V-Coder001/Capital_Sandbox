@@ -1,0 +1,40 @@
+; Engine configuration file.
+; Godot 4.4+ (FBX-Import über ufbx ist ab 4.3 eingebaut).
+
+config_version=5
+
+[application]
+
+config/name="Capital Sandbox – Cosa Nostra"
+config/description="Mafia-Wirtschaftssimulation im Big-Ambitions-Stil mit Multiplayer"
+run/main_scene="res://scenes/main.tscn"
+config/features=PackedStringArray("4.4", "Forward Plus")
+config/icon="res://icon.svg"
+
+[autoload]
+
+Net="*res://scripts/core/net.gd"
+GameState="*res://scripts/core/game_state.gd"
+
+[display]
+
+window/size/viewport_width=1600
+window/size/viewport_height=900
+window/stretch/mode="canvas_items"
+window/stretch/aspect="expand"
+
+[physics]
+
+3d/physics_engine="Jolt Physics"
+common/physics_ticks_per_second=60
+
+[layer_names]
+
+3d_physics/layer_1="welt"
+3d_physics/layer_2="spieler"
+3d_physics/layer_3="autos"
+
+[rendering]
+
+anti_aliasing/quality/msaa_3d=2
+lights_and_shadows/directional_shadow/size=4096
