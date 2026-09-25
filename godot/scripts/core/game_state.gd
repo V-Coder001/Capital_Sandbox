@@ -307,7 +307,7 @@ func _do_action(pid: int, act: String, args: Dictionary) -> String:
 	var b: Dictionary = businesses[id]
 	var d: Dictionary = state.biz[id]
 	var remote_ok := act in ["toggle_launder", "stop_extort", "sell"]
-	if not remote_ok and not _in_range(pid, b.pos):
+	if not remote_ok and not _in_range(pid, b.pos) and not _in_range(pid, Interiors.counter_world(id)):
 		return "Dafür musst du vor Ort sein."
 	match act:
 		"buy":

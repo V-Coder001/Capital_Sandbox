@@ -227,7 +227,10 @@ func _unhandled_input(event: InputEvent) -> void:
 		if _panel.visible:
 			_close_panel()
 		elif not _nearest.is_empty():
-			_open_panel(_nearest, false)
+			match _nearest.kind:
+				"door": world.enter_business(_nearest.id)
+				"exit": world.exit_business(_nearest.id)
+				_: _open_panel(_nearest, false)
 	elif event.is_action_pressed("ui_cancel"):
 		if _panel.visible: _close_panel()
 		elif _empire.visible: toggle_empire()
@@ -312,7 +315,12 @@ func _process(_delta: float) -> void:
 	if local_player == null:
 		return
 	var pos := local_player.global_position
-	_location.text = "%s\n%s" % [CityBuilder.location_text(pos), Catalog.DISTRICTS[CityBuilder.district_at(pos)].name]
+	var room := Interiors.room_of(pos)
+	if room >= 0 and room < GameState.businesses.size():
+		var rb: Dictionary = GameState.businesses[room]
+		_location.text = "Im Laden: %s\n%s" % [rb.name, Catalog.DISTRICTS[rb.district].name]
+	else:
+		_location.text = "%s\n%s" % [CityBuilder.location_text(pos), Catalog.DISTRICTS[CityBuilder.district_at(pos)].name]
 	_nearest = _find_nearest(pos)
 	if world.camera_rig.map_mode or _panel.visible:
 		_prompt.text = ""
@@ -327,11 +335,18 @@ func _process(_delta: float) -> void:
 func _find_nearest(pos: Vector3) -> Dictionary:
 	var best := {}
 	var best_d := 3.2
+	var room := Interiors.room_of(pos)
+	if room >= 0 and room < GameState.businesses.size():
+		if pos.distance_to(Interiors.counter_world(room)) < 1.8:
+			return {"kind": "biz", "id": room}
+		if pos.distance_to(Interiors.exit_world(room)) < 1.8:
+			return {"kind": "exit", "id": room}
+		return {}
 	for b in GameState.businesses:
 		var d: float = (b.pos as Vector3).distance_to(pos)
 		if d < best_d:
 			best_d = d
-			best = {"kind": "biz", "id": b.id}
+			best = {"kind": "door", "id": b.id}
 	for p in GameState.pois:
 		var d2: float = (p.pos as Vector3).distance_to(pos)
 		if d2 < best_d:
@@ -341,15 +356,23 @@ func _find_nearest(pos: Vector3) -> Dictionary:
 
 
 func _target_title(t: Dictionary) -> String:
-	if t.kind == "biz":
+	if t.kind in ["biz", "door"]:
 		var b: Dictionary = GameState.businesses[t.id]
-		return "%s · %s" % [b.name, Catalog.BUSINESS_TYPES[b.type].label]
+		if t.kind == "door":
+			return "Betreten: %s · %s" % [b.name, Catalog.BUSINESS_TYPES[b.type].label]
+		return "Kasse: %s verwalten" % b.name
+	if t.kind == "exit":
+		return "Laden verlassen"
 	return "Polizeirevier 7 – mit dem Revierleiter reden" if t.kind == "police" else "Sal's Sport & Waffen – Hinterzimmer"
 
 
 func _panel_target_pos() -> Vector3:
 	if _panel_target.kind == "biz":
-		return GameState.businesses[_panel_target.id].pos
+		var door: Vector3 = GameState.businesses[_panel_target.id].pos
+		var inside := Interiors.counter_world(_panel_target.id)
+		if local_player and local_player.global_position.distance_to(inside) < local_player.global_position.distance_to(door):
+			return inside
+		return door
 	for p in GameState.pois:
 		if p.id == _panel_target.id:
 			return p.pos

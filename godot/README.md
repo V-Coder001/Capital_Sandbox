@@ -31,7 +31,9 @@ identisch generiert, übertragen wird nur der dynamische Zustand.
 | `scripts/city/traffic.gd` | KI-Verkehr mit Ampelphasen (lokal, reine Kulisse) |
 | `scripts/player/*` | Spieler, Kamera-Rig, Figuren-Rig (T-Pose-Modelle werden zur Laufzeit in Körper/Arme zerlegt) |
 | `scripts/ui/*` | Menü und HUD, komplett im Code gebaut |
+| `scripts/city/interiors.gd` | Begehbare Ladeninnenräume: Einrichtung je Branche, Kasse, Ausgang, Hinterzimmer je Betrieb |
 | `assets/mafia_pack/` | Mafia LowPoly Pack (FBX + Texturen) |
+| `assets/interior_pack/` | Low Poly Interior Pack (Möbel) |
 
 ## Test
 `godot --path godot -- --host --autotest` spielt Kaufen, Hinterzimmer, Wäsche, Schutzgeld, Schießen,

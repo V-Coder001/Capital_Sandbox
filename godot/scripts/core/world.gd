@@ -17,6 +17,8 @@ var _env: Environment
 var _sky: ProceduralSkyMaterial
 var _last_shot := {}      # Server: pid -> Zeitstempel (Feuerraten-Prüfung)
 var _drop_seq := 0
+var rooms := {}           # biz id -> Innenraum (lazy gebaut)
+var interiors_root: Node3D
 
 
 func _ready() -> void:
@@ -27,6 +29,17 @@ func _ready() -> void:
 	GameState.businesses = city.businesses
 	GameState.pois = city.pois
 	GameState.world = self
+
+	interiors_root = Node3D.new()
+	interiors_root.name = "Interiors"
+	add_child(interiors_root)
+	var void_floor := MeshInstance3D.new()
+	var vm := PlaneMesh.new()
+	vm.size = Vector2(Interiors.SPACING * 10, Interiors.SPACING * 10)
+	void_floor.mesh = vm
+	void_floor.material_override = CityBuilder.flat_material(Color(0.03, 0.03, 0.04))
+	void_floor.position = Vector3(Interiors.ZONE_X + Interiors.SPACING * 3.5, -0.3, Interiors.ZONE_Z + Interiors.SPACING * 3.5)
+	interiors_root.add_child(void_floor)
 
 	players = Node3D.new()
 	players.name = "Players"
@@ -95,6 +108,38 @@ func _on_local_player_ready(p: Player) -> void:
 		p.camera_rig = camera_rig
 	if hud:
 		hud.set_local_player(p)
+
+
+# ============================================================ Innenräume
+
+func ensure_room(id: int) -> Node3D:
+	if not rooms.has(id):
+		var b: Dictionary = GameState.businesses[id]
+		rooms[id] = Interiors.build(id, b.type, b.name, interiors_root)
+		city.building_materials.append_array(Interiors.wall_materials)
+		Interiors.wall_materials.clear()
+	var d: Dictionary = GameState.biz_dyn(id)
+	Interiors.set_backroom(rooms[id], d.get("op", ""))
+	return rooms[id]
+
+
+func enter_business(id: int) -> void:
+	if local_player == null:
+		return
+	ensure_room(id)
+	local_player.teleport(Interiors.spawn_world(id))
+	local_player.look_yaw = 0.0
+	if camera_rig:
+		camera_rig.snap()
+
+
+func exit_business(id: int) -> void:
+	if local_player == null:
+		return
+	var b: Dictionary = GameState.businesses[id]
+	local_player.teleport(b.pos + (b.normal as Vector3) * 1.2 + Vector3(0, 0.1, 0))
+	if camera_rig:
+		camera_rig.snap()
 
 
 func player_position(pid: int) -> Variant:
@@ -294,6 +339,10 @@ func _process(_delta: float) -> void:
 	if camera_rig and local_player:
 		var cut := 0.0 if camera_rig.map_mode else 3.4
 		city.set_cutout(local_player.global_position + Vector3(0, 1.0, 0), camera_rig.camera.global_position, cut)
+	for p in players.get_children():
+		var r := Interiors.room_of((p as Node3D).global_position)
+		if r >= 0 and r < city.businesses.size() and not rooms.has(r):
+			ensure_room(r)
 	if traffic and local_player:
 		traffic.set_alarm(GameState.me().get("heat", 0.0) >= 50.0)
 
@@ -320,5 +369,7 @@ func _refresh_markers() -> void:
 		elif d.ext_by == me: cat = "extort"
 		elif who != 0: cat = "rival"
 		pin.set_meta("category", cat)
+	for id in rooms:
+		Interiors.set_backroom(rooms[id], GameState.biz_dyn(id).get("op", ""))
 	if hud:
 		hud.apply_map_filters()

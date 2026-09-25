@@ -43,6 +43,11 @@ func _world() -> Node:
 
 func _run() -> void:
 	print("AUTOTEST start")
+	if "--menushot" in OS.get_cmdline_user_args():
+		await _wait(1.0)
+		await _shot("00_menu")
+		get_tree().quit()
+		return
 	var t := 0.0
 	while (_world() == null or _world().local_player == null or GameState.me().is_empty()) and t < 20.0:
 		await _wait(0.25)
@@ -98,6 +103,11 @@ func _run() -> void:
 	var biz: Dictionary = GameState.businesses[target]
 	player.teleport(biz.pos + biz.normal * 1.0)
 	await _wait(0.6)
+	w.enter_business(target)
+	await _wait(0.8)
+	_check(Interiors.room_of(player.global_position) == target, "Laden betreten (Innenraum)")
+	player.teleport(Interiors.counter_world(target) + Vector3(0, 0.1, 0))
+	await _wait(0.6)
 	GameState.action("buy", {"id": target})
 	await _wait(0.8)
 	_check(GameState.biz_dyn(target).owner == me, "Laden gekauft: " + biz.name)
@@ -108,10 +118,26 @@ func _run() -> void:
 	_check(GameState.biz_dyn(target).op == "speakeasy", "Speakeasy eingerichtet")
 	_check(GameState.biz_dyn(target).launder, "Geldwäsche an")
 	if w.hud:
+		await _wait(0.6)
+		await _shot("02a_interior")
 		w.hud._open_panel({"kind": "biz", "id": target}, false)
 		await _wait(0.5)
 		await _shot("02_business_panel")
 		w.hud._close_panel()
+	w.exit_business(target)
+	await _wait(0.4)
+	_check(Interiors.room_of(player.global_position) == -1, "Laden verlassen")
+	# Innenräume aller Branchen fotografieren
+	if w.hud and "--rooms" in OS.get_cmdline_user_args():
+		var seen := {}
+		for b in GameState.businesses:
+			if seen.has(b.type):
+				continue
+			seen[b.type] = true
+			w.enter_business(b.id)
+			await _wait(1.0)
+			await _shot("room_" + b.type)
+		w.exit_business(target)
 
 	# --- Schutzgeld bei einem freien Laden (mehrere Versuche, Ablehnung ist Zufall)
 	var extorted := false

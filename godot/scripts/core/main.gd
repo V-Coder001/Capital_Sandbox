@@ -20,8 +20,10 @@ func _ready() -> void:
 	world_spawner.spawn_path = NodePath("../WorldContainer")
 	world_spawner.add_spawnable_scene(WORLD_SCENE)
 	add_child(world_spawner)
+	var layer := CanvasLayer.new()   # Control unter einem Node-Parent hätte keine Bildschirmanker
+	add_child(layer)
 	menu = MainMenu.new()
-	add_child(menu)
+	layer.add_child(menu)
 	var args := OS.get_cmdline_user_args()
 	if "--autotest" in args:
 		add_child(load("res://tests/autotest.gd").new())
