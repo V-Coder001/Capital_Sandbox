@@ -500,7 +500,7 @@ export async function buildWorld(scene, quality, progress) {
   const far = new B.TransformNode("far", scene);    // folgt der Kamera → unendlich weit entfernt
   const earthPivot = new B.TransformNode("earthPivot", scene);
   earthPivot.parent = far;
-  earthPivot.position.set(0, -108, -45);
+  earthPivot.position.set(0, -100, -62);
   earthPivot.rotation.set(0.35, 0, 0.2);
   const earth = B.MeshBuilder.CreateSphere("earth", { diameter: 200, segments: 96 }, scene);
   earth.parent = earthPivot;
@@ -611,13 +611,11 @@ export async function buildWorld(scene, quality, progress) {
   }
   function castShadows(meshes) { if (shadowGen) for (const m of meshes) shadowGen.addShadowCaster(m, false); }
 
-  /* ===== Umgebungsreflexionen: einmal gerenderte Reflexionssonde ===== */
-  const probe = new B.ReflectionProbe("envProbe", Q >= 2 ? 256 : 128, scene, true, true);
-  probe.position = V3(19, 2, 0);
-  for (const m of scene.meshes) if (m !== sun && !m.name.startsWith("glass")) probe.renderList.push(m);
-  probe.refreshRate = B.RenderTargetTexture.REFRESHRATE_RENDER_ONCE;
-  scene.environmentTexture = probe.cubeTexture;
-  scene.environmentIntensity = 0.55;
+  /* ===== Umgebungslicht: dezente Aufhellung (Sterne/Erde reflektieren kaum) ===== */
+  const fill = new B.HemisphericLight("fill", V3(0, 1, 0), scene);
+  fill.intensity = 0.25; fill.diffuse = new B.Color3(0.75, 0.82, 0.95); fill.groundColor = new B.Color3(0.15, 0.15, 0.17);
+  fill.specular = B.Color3.Black();
+  fill.excludedMeshes = [earth, clouds, atmo, sun];
 
   progress(0.98, "DRUCKAUSGLEICH");
 
