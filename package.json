@@ -6,9 +6,11 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "gateway": "node gateway.js"
+    "gateway": "node gateway.js",
+    "orbital": "node orbital-breach/server.js"
   },
   "dependencies": {
+    "babylonjs": "^9.29.0",
     "express": "^4.19.0",
     "http-proxy": "^1.18.1",
     "peerjs": "^1.5.5",
