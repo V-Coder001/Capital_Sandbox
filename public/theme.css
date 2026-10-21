@@ -286,3 +286,69 @@ html[data-theme="papier"] .tmGrund{color:#8a5a00}
 .tmBild{overflow:hidden}
 .tmBild,.tmBau img{image-rendering:auto}
 .tmBau img{width:58px;height:58px;transform:scale(1.25);transform-origin:center 70%}
+
+/* ================================================================
+ * Übersichtlichere Spieloberfläche
+ * ================================================================ */
+/* Aufgaben-Karte: Fortschritt + nächste Aufgabe, Rest aufklappbar */
+#quests{position:fixed;left:16px;top:118px;z-index:14;width:280px;box-sizing:border-box;padding:12px 14px;
+  background:var(--glass);border:var(--rand);border-radius:var(--radius);box-shadow:var(--schatten-s);
+  -webkit-backdrop-filter:var(--blur);backdrop-filter:var(--blur);font-family:var(--font)}
+.qKopf{font:600 11px var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--accent);margin-bottom:8px}
+#questlist{display:flex;flex-direction:column;gap:8px}
+.qStand{display:flex;flex-direction:column;gap:5px;font-size:12px;color:var(--dim)}
+.qBalken{display:block;height:4px;border-radius:2px;background:rgba(125,211,252,.14);overflow:hidden}
+.qBalken > i{display:block;height:100%;background:var(--accent);border-radius:2px}
+.qZeile{display:grid;grid-template-columns:1fr auto;gap:4px 10px;font-size:12.5px;color:var(--dim);align-items:baseline}
+.qZeile .qWert{font:12px var(--mono);white-space:nowrap}
+.qZeile .qWert b{color:var(--up);font-weight:600}
+.qZeile.gross{padding:9px 10px;border-radius:10px;background:rgba(125,211,252,.06);border:1px solid rgba(125,211,252,.14);color:var(--text);font-size:13.5px;font-weight:500}
+.qZeile.gross .qBalken{grid-column:1 / -1;margin-top:3px}
+.qMehr{background:none;border:0;padding:2px 0;color:var(--accent);font:600 12px var(--font);cursor:pointer;text-align:left}
+.qMehr:hover{text-decoration:underline}
+@media(max-width:600px){#quests{top:76px;left:8px;width:min(260px,70vw)}}
+html[data-theme="papier"] #quests{border-radius:0}
+html[data-theme="papier"] .qKopf{color:#9c3b1f}
+html[data-theme="papier"] .qBalken{background:#fffdf7;border:1px solid #1f1a14;border-radius:0;height:6px}
+html[data-theme="papier"] .qBalken > i{background:#9c3b1f;border-radius:0}
+html[data-theme="papier"] .qZeile.gross{background:#fffdf7;border:1.5px solid #1f1a14;border-radius:0}
+html[data-theme="papier"] .qMehr{color:#9c3b1f}
+
+/* Kopfleisten-Menü */
+#hudMenuWrap{position:relative}
+#hudMenuBtn{width:34px;height:34px;display:grid;place-items:center;border:1px solid var(--line);border-radius:10px;
+  background:none;color:var(--dim);cursor:pointer}
+#hudMenuBtn:hover,#hudMenuBtn.on{color:var(--text);border-color:var(--accent)}
+#hudMenu{position:absolute;right:-14px;top:calc(100% + 14px);z-index:30;width:250px;padding:8px;
+  background:var(--glass-strong);border:var(--rand);border-radius:14px;box-shadow:var(--schatten);
+  -webkit-backdrop-filter:var(--blur);backdrop-filter:var(--blur);font-family:var(--font)}
+#hudMenu[hidden]{display:none}
+.hmZeile{display:flex;align-items:center;justify-content:space-between;gap:10px;min-height:44px;padding:0 8px;border-radius:9px}
+.hmZeile + .hmZeile{border-top:1px solid rgba(125,211,252,.08)}
+.hmZeile > span{font-size:13px;color:var(--text);font-weight:500}
+.hmZeile #help,.hmZeile #bugBtn{width:32px!important;height:28px!important}
+.hmZeile #themeBtn,.hmZeile #langBtn{height:28px!important;padding:0 10px!important}
+html[data-theme="papier"] #hudMenu{border-radius:0}
+html[data-theme="papier"] #hudMenuBtn{border-radius:0;border:1.5px solid #1f1a14;color:#1f1a14;background:#fffdf7}
+html[data-theme="papier"] .hmZeile + .hmZeile{border-top:1px dotted rgba(31,26,20,.4)}
+/* Kopfleiste selbst: etwas mehr Luft zwischen den verbliebenen Teilen */
+@media(min-width:601px){ #status .right{gap:14px} }
+
+/* Panels: ruhigere Typografie, mehr Luft */
+.pbody{font-size:13px;line-height:1.5}
+.pbody .sec{margin:18px 0 8px}
+.pbody .sec:first-child{margin-top:4px}
+.pbody .note,.pbody p{line-height:1.55}
+/* Börsen-Orderformular als sauberes Raster statt Knopfreihe */
+.panel .formrow{display:grid;grid-template-columns:repeat(auto-fit,minmax(90px,1fr));gap:8px;margin:12px 0}
+.panel .formrow input,.panel .formrow select{width:100%;max-width:none;height:38px;box-sizing:border-box}
+.panel .formrow button{height:38px}
+/* Börse: Orderformular */
+.orderform{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:4px 0 14px}
+.orderform label{display:flex;flex-direction:column;gap:4px;min-width:0}
+.orderform label span{font:11px var(--mono);color:var(--dim);letter-spacing:.06em;text-transform:uppercase}
+.orderform select,.orderform input{width:100%;height:40px;box-sizing:border-box}
+.orderform #oPlace{grid-column:1 / -1;height:44px;font-size:14px;font-weight:700}
+.orderfilter{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 0;border-top:1px solid var(--line);margin-bottom:6px}
+.orderfilter select{height:36px;min-width:160px}
+html[data-theme="papier"] .orderfilter{border-top:1.5px solid #1f1a14}

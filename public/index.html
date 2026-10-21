@@ -1543,6 +1543,15 @@ td:first-child{font-family:var(--font)}
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="8" y="6" width="8" height="12" rx="4"/><path d="M12 6V3M8 10H4M8 15H5M16 10h4M16 15h3M9 6l-2-2M15 6l2-2"/></svg>
       </button>
       <button id="help" title="Tutorial erneut ansehen" style="background:none;border:1px solid var(--line);border-radius:7px;color:var(--dim);width:24px;height:24px;cursor:pointer;font-size:13px">?</button>
+      <!-- Menü für Nebensachen (Ton, Kartenstil, Sprache, Fehler melden, Tutorial).
+           Die Knöpfe oben werden beim Laden hier hineingehängt — ihre bestehenden
+           Klick-Funktionen bleiben dabei erhalten. -->
+      <div id="hudMenuWrap">
+        <button id="hudMenuBtn" type="button" aria-haspopup="true" aria-expanded="false" aria-label="Einstellungen und Hilfe" title="Einstellungen und Hilfe">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+        </button>
+        <div id="hudMenu" role="menu" hidden></div>
+      </div>
     </div>
   </div>
 </div>
@@ -1630,16 +1639,17 @@ td:first-child{font-family:var(--font)}
 <div class="panel" id="p-boerse">
   <div class="phead"><h2>Warenbörse (P2P)</h2><button class="x" data-close>✕</button></div>
   <div class="pbody">
-    <div class="formrow">
-      <select id="oGood"></select>
-      <select id="oSide"><option value="sell">Verkauf</option><option value="buy">Kauf</option></select>
-      <input id="oQty" type="number" min="1" placeholder="Menge">
-      <input id="oPrice" type="number" min="0.01" step="0.01" placeholder="Preis $">
+    <!-- Orderformular: beschriftete Felder im Raster, ein klarer Knopf darunter -->
+    <div class="orderform">
+      <label><span>Ware</span><select id="oGood"></select></label>
+      <label><span>Richtung</span><select id="oSide"><option value="sell">Verkauf</option><option value="buy">Kauf</option></select></label>
+      <label><span>Menge</span><input id="oQty" type="number" min="1" placeholder="Menge"></label>
+      <label><span>Preis $</span><input id="oPrice" type="number" min="0.01" step="0.01" placeholder="Preis $"></label>
       <button class="buyb" id="oPlace">Order platzieren</button>
     </div>
-    <div class="formrow" style="margin-top:0">
-      <span class="meta">Anzeigen:</span>
-      <select id="exFilter"><option value="">${t("Alle Waren")}</option></select>
+    <div class="orderfilter">
+      <label for="exFilter" class="meta">Orderbuch zeigen</label>
+      <select id="exFilter"><option value="">Alle Waren</option></select>
     </div>
     <div id="exbook"></div>
   </div>
@@ -1751,9 +1761,10 @@ td:first-child{font-family:var(--font)}
   <form id="chatform"><input id="chatin" placeholder="Nachricht…" autocomplete="off"><button>➤</button></form>
 </div>
 
-<div id="quests" style="position:fixed;top:84px;left:14px;z-index:14;width:236px;background:rgba(10,15,22,.9);border:1px solid #1c2637;border-left:2px solid var(--accent2);border-radius:0 3px 3px 0;padding:11px 12px;display:none;backdrop-filter:blur(6px)">
-  <div style="font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--accent2);margin-bottom:7px">Starter-Aufgaben</div>
-  <div id="questlist" style="display:flex;flex-direction:column;gap:6px;font-size:12px"></div>
+<!-- Aufgaben: kompakt — Fortschritt + nächste Aufgabe, Rest aufklappbar. -->
+<div id="quests" style="display:none">
+  <div class="qKopf">Starter-Aufgaben</div>
+  <div id="questlist"></div>
 </div>
 
 <div id="tut">
@@ -1968,6 +1979,32 @@ td:first-child{font-family:var(--font)}
 <script src="vendor/peerjs.min.js"></script>
 <script src="topo.js"></script>
 <script src="flaeche.js"></script>
+<script>
+/* ---- Kopfleisten-Menü ----
+ * Ton, Kartenstil, Sprache, Fehler melden und Tutorial stehen nicht mehr als
+ * neun Einzelknöpfe in der Leiste, sondern hinter einem Menüknopf. Die
+ * vorhandenen Elemente werden nur umgehängt — ihre Klick-Logik bleibt. */
+document.addEventListener("DOMContentLoaded", () => {
+  const menu = document.getElementById("hudMenu"), btn = document.getElementById("hudMenuBtn");
+  if (!menu || !btn) return;
+  const ZEILEN = [["tonPill", "Ton"], ["themeBtn", "Kartenstil"], ["langBtn", "Sprache"], ["help", "Tutorial ansehen"], ["bugBtn", "Fehler melden"]];
+  for (const [id, text] of ZEILEN) {
+    const el = document.getElementById(id); if (!el) continue;
+    const zeile = document.createElement("div"); zeile.className = "hmZeile";
+    const lab = document.createElement("span"); lab.textContent = text;
+    zeile.append(lab, el); menu.append(zeile);
+  }
+  const auf = an => { menu.hidden = !an; btn.setAttribute("aria-expanded", String(an)); btn.classList.toggle("on", an); };
+  btn.addEventListener("click", e => { e.stopPropagation(); auf(menu.hidden); });
+  document.addEventListener("click", e => { if (!menu.hidden && !e.target.closest("#hudMenuWrap")) auf(false); });
+  document.addEventListener("keydown", e => { if (e.key === "Escape") auf(false); });
+});
+document.addEventListener("click", e => {
+  if (!e.target.closest("[data-quests-toggle]")) return;
+  let alle = false; try { alle = localStorage.getItem("cs_quests_alle") === "1"; localStorage.setItem("cs_quests_alle", alle ? "0" : "1"); } catch {}
+  if (window.store) store.set({});   // neu zeichnen
+});
+</script>
 <script>
 /* ---- Themenwechsel: Vermessung (Standard) <-> Kartenpapier ----
  * Setzt <html data-theme>, merkt die Wahl und sagt der Topo-Karte und der
@@ -9575,12 +9612,22 @@ function render({ state, me, myId, chat, room }) {
    * der Planwirtschaft nicht, dort bleibt das Widget aus. */
   if (!polizeiWidget && open.length && !state.winner && state.mode !== "plan") {
     qEl.style.display = "block";
-    document.getElementById("questlist").innerHTML = open.map(d => {
+    /* Übersicht statt Liste: Fortschritt, die NÄCHSTE Aufgabe groß, der Rest
+     * nur auf Wunsch (Zustand wird gemerkt). */
+    const fertig = qdefs.length - open.length;
+    let alle = false; try { alle = localStorage.getItem("cs_quests_alle") === "1"; } catch {}
+    const zeile = (d, gross) => {
       const n = Math.min(d.target, Math.floor(me.quests?.[d.id]?.n || 0));
-      return `<div style="display:flex;justify-content:space-between;gap:8px">
+      return `<div class="qZeile${gross ? " gross" : ""}">
         <span>${SPRACHE === "en" ? (d.en ?? d.text) : d.text}</span>
-        <span style="font-family:var(--mono);color:var(--dim);white-space:nowrap">${d.target > 1 ? `${n}/${d.target}` : ""} <b style="color:var(--accent)">+$${d.reward}</b></span></div>`;
-    }).join("");
+        <span class="qWert">${d.target > 1 ? `${n}/${d.target} · ` : ""}<b>+$${d.reward}</b></span>
+        ${gross && d.target > 1 ? `<i class="qBalken"><i style="width:${Math.round(n / d.target * 100)}%"></i></i>` : ""}</div>`;
+    };
+    document.getElementById("questlist").innerHTML = `
+      <div class="qStand"><span>${fertig} von ${qdefs.length} erledigt</span><i class="qBalken"><i style="width:${Math.round(fertig / Math.max(1, qdefs.length) * 100)}%"></i></i></div>
+      ${zeile(open[0], true)}
+      ${open.length > 1 ? `${alle ? open.slice(1).map(d => zeile(d, false)).join("") : ""}
+        <button type="button" class="qMehr" data-quests-toggle>${alle ? "Weniger anzeigen" : `+ ${open.length - 1} weitere`}</button>` : ""}`;
   } else if (!polizeiWidget) qEl.style.display = "none";
   document.getElementById("players").innerHTML = Object.values(state.players)
     /* Chips oben: Logo statt Buchstabe, wo eines vorliegt. Entscheidend ist das
