@@ -5506,7 +5506,7 @@ function finanzamtRendern(state, me, myId) {
     <div class="sec">Portfolio des Finanzamts <span class="meta">· nur Branchenfonds</span></div>
     ${(F.portfolio || []).length ? `<div class="faPortfolio">${F.portfolio.map(f => `<div class="kzrow"><span>${f.fonds}-Fonds <span class="meta">· ${f.anteile} Anteile</span></span><b>${fmt(f.wert)} <span class="meta">Buchwert ${fmt(f.buchwert)}</span></b></div>`).join("")}</div>`
       : `<div class="meta">Noch keine Fondsanteile.</div>`}
-    <div class="meta faLageText">Das Finanzamt kauft keine einzelnen Aktien, nur Anteile der Branchenfonds. Liegen die Kurse einer Branche zusammen mehr als ${Math.round((F.theta ?? 0.1) * 100)} % unter ihrem Wert, kauft es deren Fonds — der Fonds kauft damit echte Aktien und hebt die Kurse der ganzen Branche. Liegen sie mehr als ${Math.round((F.theta ?? 0.1) * 100)} % darüber, gibt es Anteile zurück. Bezahlt wird nur mit Geld über der Projektschwelle — Stadtprojekte gehen vor.</div>
+    <div class="meta faLageText">Das Finanzamt kauft keine einzelnen Aktien, nur Anteile der Branchenfonds. Sobald Geld übrig ist, investiert es — verteilt auf alle Branchen, unterbewertete bekommen mehr. Der Fonds kauft damit echte Aktien und hebt die Kurse der Branche. Liegen sie mehr als ${Math.round((F.theta ?? 0.1) * 100)} % darüber, gibt es Anteile zurück. Bezahlt wird nur mit Geld über der Projektschwelle — Stadtprojekte gehen vor.</div>
     <div class="sec">So arbeitet das Finanzamt</div>
     <div class="faRegeln">
       <div><b>${Math.round(F.satz * 1000) / 10} %</b><span>Gewinnsteuer alle 10 min, die ersten ${fmt(F.frei)} frei</span></div>

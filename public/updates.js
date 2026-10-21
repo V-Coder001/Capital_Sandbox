@@ -21,7 +21,7 @@ window.UPDATES = [
         en: "Tax: construction and upgrades are depreciated over 30 minutes instead of lowering profit immediately." },
       { art: "neu", de: "Branchen-ETFs: Je Branche ein Fonds. Dein Geld kauft echte Aktien der Firmen dieser Branche, der Anteilspreis folgt dem Fondswert.",
         en: "Industry ETFs: one fund per industry. Your money buys real shares of that industry's companies; the unit price follows the fund's value." },
-      { art: "neu", de: "Das Finanzamt baut ein eigenes Portfolio aus Branchenfonds auf: Liegt eine Branche deutlich unter Wert, kauft es ihren Fonds, liegt sie deutlich darüber, gibt es Anteile zurück — nur mit Geld, das nach den Stadtprojekten übrig ist.",
+      { art: "neu", de: "Das Finanzamt baut ein eigenes Portfolio aus Branchenfonds auf: Hat es Geld übrig, investiert es immer — unterbewertete Branchen bekommen mehr; liegt sie deutlich darüber, gibt es Anteile zurück — nur mit Geld, das nach den Stadtprojekten übrig ist.",
         en: "The tax office builds its own portfolio of industry funds: if an industry is well below value it buys its fund, if well above it returns units — only with money left after city projects." },
       { art: "besser", de: "Stadtbank zeigt Kurs, Wert je Aktie, Abstand dazu und das Marktgeschehen.",
         en: "The city bank shows price, value per share, the gap between them and market activity." }

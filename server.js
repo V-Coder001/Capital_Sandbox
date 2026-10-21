@@ -3167,18 +3167,24 @@ function finanzamtBoerse() {
   G.shareBids = G.shareBids.filter(b => b.bidderId !== FA_ID);
   G.faEtf ??= {};
   let budget = faFrei() * MARKT.FA_ANTEIL_TAG;
+  const gesamtBudget = budget;
   for (const br of Object.keys(INDUSTRIES)) {
     const g = brancheLuecke(br); if (g == null) continue;
     const hat = G.faEtf[br] || 0, preis = etfPreis(br);
-    const gut = g > 0 && etfFirmen(br).some(co => ertragVon(co) > 0) && Math.random() < MARKT.FA_GUT;
-    if ((g > MARKT.THETA || gut) && budget >= 100) {
+    /* Investiert immer, sobald Geld über der Projektschwelle liegt — verteilt
+     * auf alle Branchen, die nicht deutlich überbewertet sind. Unterbewertete
+     * Branchen (Lücke > 0) bekommen mehr: Gewicht 1 + 5 × Lücke. */
+    const offen = Object.keys(INDUSTRIES).filter(b2 => { const g2 = brancheLuecke(b2); return g2 != null && g2 >= -MARKT.THETA; });
+    const gew = b2 => 1 + 5 * Math.max(0, brancheLuecke(b2));
+    const summe = offen.reduce((x, b2) => x + gew(b2), 0) || 1;
+    if (g >= -MARKT.THETA && budget >= 100) {
       const raum = MARKT.FA_MAX_FONDS - hat * preis;
-      const betrag = Math.floor(Math.min(budget / (g > MARKT.THETA ? 2 : 4), raum, faFrei()));
+      const betrag = Math.floor(Math.min(gesamtBudget * gew(br) / summe, raum, faFrei()));
       if (betrag >= 100) {
         const n = fondsEinzahlen(br, betrag);
         G.stadtkasse -= betrag; budget -= betrag;
         G.faEtf[br] = hat + n;
-        marktLog("fa-kauf", `Finanzamt kauft ${INDUSTRIES[br].name}-Fonds für ${betrag.toLocaleString("de-DE")} $ (Branche ${Math.round(g * 100)} % unter Wert)`, { branche: br, betrag });
+        marktLog("fa-kauf", `Finanzamt kauft ${INDUSTRIES[br].name}-Fonds für ${betrag.toLocaleString("de-DE")} $ (Branche ${g >= 0 ? Math.round(g * 100) + " % unter" : Math.round(-g * 100) + " % über"} Wert)`, { branche: br, betrag });
       }
     } else if (g < -MARKT.THETA && hat > 0) {
       const n = hat * 0.25;
