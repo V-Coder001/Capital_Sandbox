@@ -4394,7 +4394,15 @@ function buildReport(siegerId) {
   return { zeilen, auszeichnungen, dauerMin: Math.round(G.tick / 60), ziel: WIN_NW };
 }
 
+/* Throttle: pushState() wird max. alle 100ms aufgerufen. Dazwischen werden
+ * Calls ignoriert, aber als "pending" markiert — beim nächsten echten Push
+ * wird dann sofort nochmal gepusht. Das reduziert Network-Load massiv. */
+let pushScheduled = false, pushPending = false;
 function pushState() {
+  if (pushScheduled) { pushPending = true; return; }
+  pushScheduled = true;
+  pushPending = false;
+
   const t0 = PERF ? process.hrtime.bigint() : 0n;
   const voll = snapshot();
   const delta = tileDelta();
@@ -4413,6 +4421,11 @@ function pushState() {
     io.to(p.socketId).emit("me", ps);
   }
   if (PERF) { perf.pushes++; perf.snapMs += Number(process.hrtime.bigint() - t0) / 1e6; }
+
+  setTimeout(() => {
+    pushScheduled = false;
+    if (pushPending) pushState();  // Wenn zwischendrin nochmal aufgerufen wurde → nochmal pushen
+  }, 100);
 }
 if (PERF) setInterval(() => {
   const mb = (process.memoryUsage().heapUsed / 1048576).toFixed(1);
