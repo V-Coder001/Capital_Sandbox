@@ -2848,6 +2848,7 @@ const G = {
   wettLetzte: [],        // Ergebnis der letzten Runde je Firma
   wettReserve: 20000,    // Bankreserve für die Kurswetten (WETT_RESERVE)
   markt: {}, marktLog: [], panikTag: null, panikErledigt: false,   // Aktienkurse (siehe marktTag)
+  fonds: {}, etfHist: {},   // Branchenfonds (ETFs)
   stadtkasse: 20000, steuerStufe: 2, boerseGebuehren: 0,         // Finanzamt: Anteil der Steuern für Großauftrags-Prämien und Stadtprojekte
   steuernGesamt: 0,
   stadtprojekt: null, projektPause: 120, stadtprojekteFertig: [],
@@ -2971,6 +2972,7 @@ function netWorth(p) {
     const co = G.players[l.companyId];
     if (co && (l.sellerId ?? l.companyId) === p.id) nw += substance(co) * (l.count / AKTIEN);
   }
+  for (const [br, n] of Object.entries(p.etf || {})) if (n > 0) nw += n * (etfPreis(br, true) || 0);   // Fondsanteile zum Buchwert, wie direkte Beteiligungen
   return nw;
 }
 /* Jeder Erlös läuft hierüber, damit er sowohl in die Dividende als auch in das
@@ -3021,6 +3023,17 @@ const MARKT = Object.assign({
   BETA: 0.5,            // Preiswirkung: P × (1 ± β × Anteil gehandelter Aktien)
   BAU_DAUER: 30,        // Sekunden Bauzeit (Anlage in Arbeit)
   AFA_DAUER: 1800,      // Sekunden Abschreibung von Bau/Ausbau für die Steuer
+  /* Finanzamt als Stabilisator (siehe finanzamtBoerse) */
+  THETA: 0.10,          // ab dieser Lücke g = (F − P)/F wird gekauft bzw. verkauft
+  SCHRITT: 2,           // Aktien je Schritt
+  MAX_SCHRITTE: 3,      // Schritte je Firma und Tag
+  MAX_ANTEIL: 20,       // höchstens so viele Aktien je Firma
+  FA_ANTEIL_TAG: 0.2,   // je Tag höchstens dieser Teil des Geldes über dem Grundstock
+  FA_GUT: 0.15,         // Chance je Tag, eine gut laufende Firma auch ohne große Lücke zu kaufen
+  FA_AUFSCHLAG: 0.05,   // stehendes Verkaufsangebot: max(Kurs, Wert) + 5 % — Übernahmen bleiben möglich
+  /* Branchen-ETFs (siehe etfPreis) */
+  ETF_GEBUEHR: 0.01,    // je Kauf und Verkauf, bleibt bei der Bank
+  ETF_MAX_RESERVE: 0.5, // alle ETFs zusammen höchstens dieser Teil der Bankreserve
 }, (() => { try { return JSON.parse(process.env.MARKT || "{}"); } catch { return {}; } })());
 
 /* Marktdaten je Firma: Kurs, Verlauf von F (für die Verzögerung) und von S
@@ -3067,11 +3080,201 @@ function marktTag() {
     if (panik) P *= 1 - MARKT.PANIK;
     m.kurs = Math.max(0.01, P);
   }
+  finanzamtBoerse();   // feste Reihenfolge: erst F und P, dann die Reaktion des Finanzamts
+  fondsTag();          // dann die Branchenfonds
+  for (const br of Object.keys(INDUSTRIES)) {
+    const pr = etfPreis(br); if (pr == null) continue;
+    const h = ((G.etfHist ??= {})[br] ??= []); h.push(Math.round(pr * 100) / 100); if (h.length > 60) h.shift();
+  }
   if (panik) {
     G.panikErledigt = true;
     marktLog("panik", `Panik an der Börse: alle Kurse −${Math.round(MARKT.PANIK * 100)} %`);
     io.emit("notice", { text: `PANIK an der Börse — alle Aktienkurse fallen um ${Math.round(MARKT.PANIK * 100)} %. Die Firmen selbst sind nicht weniger wert.` });
   }
+}
+/* ---------- Finanzamt als Stabilisator ----------
+ * Das Finanzamt hält eigene Aktien (Halter FA_ID) und zahlt aus der Stadtkasse,
+ * aber nur aus dem Geld über der Projektschwelle. Einmal je Markttag, je Firma:
+ *  - Lücke g = (F − P·Aktien) / F
+ *  - g > θ: kaufen, in Schritten, bis höchstens MAX_ANTEIL Aktien — erst aus
+ *    offenen Angeboten bis zum Wert F je Aktie, sonst per Kaufanfrage an die
+ *    Firma (die nie unter 50 % fallen muss). Gut laufende Firmen kauft es
+ *    gelegentlich auch ohne große Lücke: es baut ein eigenes Portfolio auf.
+ *  - g < −θ: verkaufen, höchstens den eigenen Bestand, zum Kurs.
+ *  - sonst steht sein Bestand zum Wert + 5 % im Angebot — wer eine Firma
+ *    übernehmen will, kommt an die Aktien des Finanzamts heran.
+ * Jede Ausführung bewegt den Kurs: Kauf des Finanzamts hebt, Verkauf senkt.
+ * Dividenden auf seine Aktien fließen in die Stadtkasse. */
+/* Rangfolge: erst Stadtprojekte, dann Aktien. Gemessen (je 3 Bot-Runden):
+ * Kaufte das Finanzamt aus dem ganzen Überschuss über dem Grundstock, wurde
+ * kein einziges Projekt mehr fertig (vorher 2). Jetzt nur mit Geld über der
+ * Projektschwelle. */
+const faFrei = () => Math.max(0, G.stadtkasse - PROJEKT_SCHWELLE);
+const faBestand = co => co.equity[FA_ID] || 0;
+const faVerwahrt = co => G.shareListings.filter(l => l.companyId === co.id && l.sellerId === FA_ID).reduce((a, l) => a + l.count, 0);
+const faGesamt = co => faBestand(co) + faVerwahrt(co);
+const faBuchwert = () => Object.values(G.players).reduce((a, co) => a + substance(co) * faGesamt(co) / AKTIEN, 0);
+/* Institutionen als Aktionäre: das Finanzamt und die Branchenfonds. */
+const istInstitution = hid => hid === FA_ID || istFonds(hid);
+const institutionName = hid => hid === FA_ID ? "Finanzamt" : `${INDUSTRIES[fondsBranche(hid)]?.name ?? "?"}-Fonds`;
+function institutionZahlt(hid, betrag) { if (hid === FA_ID) G.stadtkasse -= betrag; else fondsVon(fondsBranche(hid)).cash -= betrag; }
+function institutionErhaelt(hid, betrag) { if (hid === FA_ID) G.stadtkasse += betrag; else fondsVon(fondsBranche(hid)).cash += betrag; }
+const institutionFrei = hid => hid === FA_ID ? faFrei() : fondsVon(fondsBranche(hid)).cash;
+const faKauftAngebot = l => institutionKauftAngebot(FA_ID, l);
+/* Kauf eines offenen Angebots durch eine Institution */
+function institutionKauftAngebot(hid, l) {
+  const company = G.players[l.companyId], sellerId = l.sellerId ?? l.companyId, seller = G.players[sellerId];
+  if (!company) return false;
+  institutionZahlt(hid, l.price);
+  company.equity[hid] = (company.equity[hid] || 0) + l.count;
+  G.shareListings.splice(G.shareListings.indexOf(l), 1);
+  if (sellerId === company.id) {
+    company.cash += l.price; company.stats.kapitalNetto = (company.stats.kapitalNetto || 0) + l.price;
+    logTx(company, "Aktien", `${l.count} eigene Aktien an ${institutionName(hid)} ausgegeben`, l.price);
+  } else if (istInstitution(sellerId)) {
+    institutionErhaelt(sellerId, l.price);
+  } else if (seller) {
+    seller.cash += l.price;
+    logTx(seller, "Aktien", `${l.count} Aktien von ${company.name} an ${institutionName(hid)} verkauft`, l.price);
+  }
+  if (seller && !seller.bot) emitTo(sellerId, "notice", { text: `${institutionName(hid)} kauft dein Angebot: ${l.count} Aktien von ${company.name} für ${Math.round(l.price)} $.` });
+  kursWirkung(company, l.count, +1);
+  marktLog(hid === FA_ID ? "fa-kauf" : "etf-kauf", `${institutionName(hid)} kauft ${l.count} Aktien von ${company.name} (Angebot)`, { firmaId: company.id, aktien: l.count, preis: Math.round(l.price) });
+  return true;
+}
+function finanzamtBoerse() {
+  if (!finanzamtAktiv()) return;
+  /* Eigene Angebote zurückholen — sie werden zu aktuellen Preisen neu gestellt */
+  for (const l of G.shareListings) if (l.sellerId === FA_ID) returnListingToSeller(l);
+  G.shareListings = G.shareListings.filter(l => l.sellerId !== FA_ID);
+  let budget = faFrei() * MARKT.FA_ANTEIL_TAG;
+  for (const co of Object.values(G.players)) {
+    const F = fundament(co), P = kursVon(co), Fa = F / AKTIEN;
+    const g = (F - P * AKTIEN) / F;
+    const gutLaufend = g > 0 && ertragVon(co) > 0 && Math.random() < MARKT.FA_GUT;
+    if (g > MARKT.THETA || gutLaufend) {
+      const schritte = g > MARKT.THETA ? MARKT.MAX_SCHRITTE : 1;
+      for (let i = 0; i < schritte; i++) {
+        const frei = MARKT.MAX_ANTEIL - faGesamt(co);
+        if (frei <= 0) break;
+        const n = Math.min(MARKT.SCHRITT, frei);
+        const l = G.shareListings
+          .filter(x => x.companyId === co.id && !x.toId && x.sellerId !== FA_ID && x.count <= frei && x.price / x.count <= Fa)
+          .sort((a, b) => a.price / a.count - b.price / b.count)[0];
+        if (l && l.price <= budget && l.price <= faFrei()) { budget -= l.price; faKauftAngebot(l); continue; }
+        /* Kaufanfrage an die Firma: Preis zwischen Kurs und Wert. Eine je Firma. */
+        if ((co.equity[co.id] || 0) - n < AKTIEN / 2) break;
+        if (G.shareBids.some(b => b.companyId === co.id && b.bidderId === FA_ID)) break;
+        const preis = Math.round(n * P * (1 + Math.min(Math.max(g, 0), 0.3) / 2) * 100) / 100;
+        if (preis > budget) break;
+        budget -= preis;
+        G.shareBids.push({ id: id(), companyId: co.id, bidderId: FA_ID, count: n, price: preis, ttl: SHARE_BID_TTL });
+        if (!co.bot) emitTo(co.id, "notice", { text: `Das Finanzamt bietet ${Math.round(preis)} $ für ${n} Aktien deiner Firma (Kurs liegt ${Math.round(g * 100)} % unter dem Wert) — an der Stadtbank entscheiden.` });
+        marktLog("fa-anfrage", `Finanzamt fragt ${n} Aktien von ${co.name} an`, { firmaId: co.id, aktien: n, preis: Math.round(preis) });
+        break;
+      }
+    }
+    /* Verkaufen bzw. stehendes Angebot */
+    const bestand = faBestand(co);
+    if (bestand > 0) {
+      const teuer = g < -MARKT.THETA;
+      const n = teuer ? Math.min(bestand, MARKT.SCHRITT * MARKT.MAX_SCHRITTE) : bestand;
+      const jeAktie = teuer ? P : Math.max(P, Fa) * (1 + MARKT.FA_AUFSCHLAG);
+      co.equity[FA_ID] = bestand - n;
+      G.shareListings.push({ id: id(), companyId: co.id, sellerId: FA_ID, count: n, price: Math.round(n * jeAktie), ts: Date.now(), toId: null });
+      if (teuer) marktLog("fa-verkauf", `Finanzamt bietet ${n} Aktien von ${co.name} zum Kurs an (Kurs ${Math.round(-g * 100)} % über Wert)`, { firmaId: co.id, aktien: n });
+    }
+  }
+}
+function fondsTag() {
+  for (const br of Object.keys(INDUSTRIES)) {
+    const f = fondsVon(br), fid = fondsId(br);
+    if (!(f.anteile > 0) && !(f.cash > 0)) continue;
+    /* eigene Angebote zurückholen, neu stellen */
+    for (const l of G.shareListings) if (l.sellerId === fid) returnListingToSeller(l);
+    G.shareListings = G.shareListings.filter(l => l.sellerId !== fid);
+    fondsInvestieren(br);
+    const nav = fondsWert(br), knapp = f.cash < nav * 0.1 && f.anteile > 0;
+    for (const co of Object.values(G.players)) {
+      const n = co.equity[fid] || 0;
+      if (n <= 0) continue;
+      const P = kursVon(co), Fa = fundament(co) / AKTIEN;
+      const anzahl = knapp ? Math.min(n, MARKT.SCHRITT * MARKT.MAX_SCHRITTE) : n;
+      const je = knapp ? P : Math.max(P, Fa) * (1 + MARKT.FA_AUFSCHLAG);
+      co.equity[fid] = n - anzahl;
+      G.shareListings.push({ id: id(), companyId: co.id, sellerId: fid, count: anzahl, price: Math.round(anzahl * je), ts: Date.now(), toId: null });
+    }
+  }
+}
+function faPortfolio() {
+  return Object.values(G.players).filter(co => faGesamt(co) > 0).map(co => ({ firma: co.name, firmaId: co.id, aktien: faGesamt(co),
+    kurs: Math.round(kursVon(co) * 100) / 100, wert: Math.round(kursVon(co) * faGesamt(co)), buchwert: Math.round(substance(co) * faGesamt(co) / AKTIEN) }));
+}
+/* ---------- Branchen-ETFs: echte Fonds ----------
+ * Je Branche ein Fonds. Wer Anteile kauft, zahlt in den Fonds ein; der Fonds
+ * kauft damit ECHTE Aktien der Firmen dieser Branche, gewichtet nach Wert F —
+ * aus offenen Angeboten bis zum Wert F je Aktie, sonst per Kaufanfrage (die
+ * Eigentümer fallen dadurch nie unter 50 %). Jeder dieser Käufe hebt den Kurs.
+ *   Anteilspreis = (Fondskasse + Aktien × Kurs) / Anteile, zu Beginn 100.
+ * Kein neues Geld, keine Haftung der Bank: Steigen die Kurse, ist der Gewinn
+ * durch die Aktien im Fonds gedeckt. (Eine erste Fassung als Zertifikat der
+ * Bank machte aus 4.000 $ in zehn Minuten einen Anspruch von 18.400 $ gegen
+ * die Bankreserve.) Dividenden auf Fondsaktien fließen in die Fondskasse.
+ * Auszahlen kann der Fonds nur aus seiner Kasse; wird sie knapp, bietet er
+ * Aktien zum Kurs an. Seine Aktien stehen sonst zum Wert + 5 % im Angebot —
+ * Übernahmen bleiben möglich. */
+const FONDS_PREFIX = "__etf_";
+const fondsId = br => FONDS_PREFIX + br;
+const istFonds = holderId => typeof holderId === "string" && holderId.startsWith(FONDS_PREFIX);
+const fondsBranche = holderId => holderId.slice(FONDS_PREFIX.length);
+const fondsVon = br => ((G.fonds ??= {})[br] ??= { cash: 0, anteile: 0 });
+const etfFirmen = br => Object.values(G.players).filter(p => p.industry === br);
+const fondsAktien = (br, co) => (co.equity[fondsId(br)] || 0)
+  + G.shareListings.filter(l => l.companyId === co.id && l.sellerId === fondsId(br)).reduce((a, l) => a + l.count, 0);
+function fondsWert(br, buch = false) {
+  const f = fondsVon(br);
+  return f.cash + Object.values(G.players).reduce((a, co) => a + fondsAktien(br, co) * (buch ? substance(co) / AKTIEN : kursVon(co)), 0);
+}
+function etfPreis(br, buch = false) {
+  if (!etfFirmen(br).length && !(fondsVon(br).anteile > 0)) return null;
+  const f = fondsVon(br);
+  return f.anteile > 1e-9 ? Math.max(0.01, fondsWert(br, buch) / f.anteile) : 100;
+}
+/* Fonds legt seine Kasse in Aktien an (Zielgewicht nach F), wird bei jedem
+ * Kauf und einmal je Markttag aufgerufen. */
+function fondsInvestieren(br) {
+  const f = fondsVon(br), fid = fondsId(br), fi = etfFirmen(br);
+  if (!fi.length || f.cash < 1) return;
+  const Fs = fi.map(fundament), sumF = Fs.reduce((a, b) => a + b, 0) || 1, nav = fondsWert(br);
+  fi.forEach((co, i) => {
+    const P = kursVon(co), Fa = Fs[i] / AKTIEN;
+    let fehlt = Math.floor((nav * Fs[i] / sumF - fondsAktien(br, co) * P) / P);
+    fehlt = Math.min(fehlt, MARKT.MAX_ANTEIL - fondsAktien(br, co));
+    if (fehlt < 1) return;
+    /* a) günstigstes offenes Angebot bis zum Wert F je Aktie */
+    const l = G.shareListings.filter(x => x.companyId === co.id && !x.toId && x.sellerId !== fid && x.count <= fehlt && x.price / x.count <= Fa)
+      .sort((a, b) => a.price / a.count - b.price / b.count)[0];
+    if (l && l.price <= f.cash) { institutionKauftAngebot(fid, l); return; }
+    /* b) Kaufanfrage an die Firma — eine je Firma, Eigentümer bleibt über 50 % */
+    const n = Math.min(fehlt, MARKT.SCHRITT * MARKT.MAX_SCHRITTE);
+    if ((co.equity[co.id] || 0) - n < AKTIEN / 2) return;
+    if (G.shareBids.some(b => b.companyId === co.id && b.bidderId === fid)) return;
+    const preis = Math.round(n * P * 1.02 * 100) / 100;
+    if (preis > f.cash) return;
+    G.shareBids.push({ id: id(), companyId: co.id, bidderId: fid, count: n, price: preis, ttl: SHARE_BID_TTL });
+    if (!co.bot) emitTo(co.id, "notice", { text: `Der ${INDUSTRIES[br].name}-Fonds bietet ${Math.round(preis)} $ für ${n} Aktien deiner Firma — an der Stadtbank entscheiden.` });
+  });
+}
+const etfOffenWert = () => 0;   // Fonds haften selbst, die Bank schuldet niemandem etwas
+const bankEigen = () => G.wettReserve;
+function etfPublic() {
+  return Object.keys(INDUSTRIES).map(br => {
+    const pr = etfPreis(br); if (pr == null) return null;
+    const f = fondsVon(br);
+    return { branche: br, name: INDUSTRIES[br].name, preis: pr, kasse: Math.round(f.cash), wert: Math.round(fondsWert(br)),
+      firmen: etfFirmen(br).map(p => p.name), aktien: etfFirmen(br).map(co => ({ firma: co.name, aktien: fondsAktien(br, co) })).filter(x => x.aktien > 0),
+      verlauf: (G.etfHist?.[br] || []).slice(-30) };
+  }).filter(Boolean);
 }
 /* Öffentliche Kursdaten je Firma */
 function marktPublic(p) {
@@ -3084,7 +3287,7 @@ function marktPublic(p) {
 function returnListingToSeller(l) {
   const company = G.players[l.companyId];
   const sellerId = l.sellerId ?? l.companyId;
-  if (!company || !G.players[sellerId]) return;
+  if (!company || (!G.players[sellerId] && !istInstitution(sellerId))) return;
   company.equity[sellerId] = (company.equity[sellerId] || 0) + l.count;
 }
 function debtOf(p) {
@@ -3383,14 +3586,18 @@ function distributeDividends() {
     const pool = Math.min(wunsch, Math.max(0, p.cash));
     let paidOut = 0;
     if (pool > 0.01) {
+      /* Das Finanzamt hält seinen Bestand fast immer im stehenden Angebot
+       * (Verwahrung) — er zählt trotzdem voll für die Dividende. */
+      const fa = faGesamt(p);
+      if (fa > 0) { const share = pool * (fa / AKTIEN); p.cash -= share; paidOut += share; G.stadtkasse += share; }
+      for (const br of Object.keys(G.fonds || {})) {
+        const n = fondsAktien(br, p);
+        if (n > 0) { const share = pool * (n / AKTIEN); p.cash -= share; paidOut += share; fondsVon(br).cash += share; }
+      }
       for (const [holderId, count] of Object.entries(p.equity)) {
-        if (holderId === p.id || !(count > 0)) continue;
+        if (holderId === p.id || istInstitution(holderId) || !(count > 0)) continue;
         const share = pool * (count / AKTIEN);
         const pct = Math.round(count / AKTIEN * 1000) / 10;
-        if (holderId === FA_ID) {
-          p.cash -= share; paidOut += share; G.stadtkasse += share;
-          continue;
-        }
         const holder = G.players[holderId];
         if (!holder) continue;
         p.cash -= share; holder.cash += share; paidOut += share;
@@ -3469,7 +3676,7 @@ const STUFE_TEXT = {
  * sie sah die Stadt während jeder Wettrunde ärmer aus, als sie war, und das
  * Finanzamt erhöhte die Steuern wegen Geld, das nur gebunden war. */
 const bankImEinsatz = () => G.wetten.reduce((a, w) => a + (w.bank ? w.einsatz : 0), 0);
-const stadtVermoegen = () => G.stadtkasse + Math.max(-WETT_RESERVE, G.wettReserve + bankImEinsatz() - WETT_RESERVE);
+const stadtVermoegen = () => G.stadtkasse + faBuchwert() + Math.max(-WETT_RESERVE, bankEigen() + bankImEinsatz() - WETT_RESERVE);
 const steuerStufe = () => STEUER_STUFEN[G.steuerStufe ?? 2];
 const steuerFaktor = () => steuerStufe().faktor;
 const satzGewinn = () => STEUER_SATZ * steuerFaktor();
@@ -3524,7 +3731,8 @@ function finanzamtEinnahme(betrag) {
     finanzamtEinnahme.gesamt = Object.values(G.players).reduce((a, q) => a + netWorth(q), 0);
   }
   const cap = Math.max(WETT_RESERVE, finanzamtEinnahme.gesamt * RESERVE_MAX_ANTEIL);
-  if (G.wettReserve > cap) { G.stadtkasse += G.wettReserve - cap; G.wettReserve = cap; }
+  const ueber = bankEigen() - cap;   // ETF-Gelder der Anleger fließen nie in die Stadtkasse
+  if (ueber > 0) { G.stadtkasse += ueber; G.wettReserve -= ueber; }
 }
 function steuernErheben() {
   if (!finanzamtAktiv()) return;
@@ -3640,7 +3848,8 @@ function finanzamtPublic() {
     faktor: steuerFaktor(), lage: Math.round(stadtVermoegen()), stufen: STEUER_STUFEN.map(st => ({ key: st.key, name: st.name, faktor: st.faktor, bis: isFinite(st.bis) ? st.bis : null })),
     boerseGesamt: Math.round(G.boerseGebuehren || 0),
     reserveAnteil: STEUER_RESERVE_ANTEIL, praemieAnteil: PRAEMIE_ANTEIL, praemieMax: PRAEMIE_MAX, schwelle: PROJEKT_SCHWELLE, grundstock: STADT_GRUNDSTOCK,
-    naechsterIn: G.nextDividendIn, fertig: G.stadtprojekteFertig };
+    naechsterIn: G.nextDividendIn, fertig: G.stadtprojekteFertig,
+    portfolio: faPortfolio(), theta: MARKT.THETA, maxAnteil: MARKT.MAX_ANTEIL };
 }
 
 /* ---------- Kurswetten (long / short auf Firmenwerte) ----------
@@ -3757,7 +3966,7 @@ function bankGegenpartei() {
     const { long, short } = wettPools(fid);
     /* Pro Firma höchstens ein Viertel der Reserve — sonst bindet eine einzige
      * Runde mit großen Bot-Einsätzen die ganze Bank. */
-    const b = Math.min(Math.abs(long - short), Math.floor(G.wettReserve * 0.25));
+    const b = Math.min(Math.abs(long - short), Math.floor(Math.max(0, bankEigen()) * 0.25));   // nur eigenes Geld, nicht das der ETF-Anleger
     if (b < WETT_MIN) continue;
     G.wettReserve -= b;
     G.wetten.push({ id: wettSeq++, spielerId: BANK_ID, firmaId: fid, richtung: long > short ? "short" : "long", einsatz: b, bank: true });
@@ -4243,6 +4452,7 @@ function snapshot() {
   const rankOf = Object.fromEntries(ranked.map(([pid], i) => [pid, i + 1]));
   return {
     tick: G.tick, winner: G.winner, winGoal: WIN_NW, report: G.report || null,
+    etf: etfPublic(),
     marktLog: (G.marktLog || []).slice(0, 20), marktCfg: { aktien: AKTIEN, tag: MARKT.TAG, beta: MARKT.BETA, bauDauer: MARKT.BAU_DAUER, afaDauer: MARKT.AFA_DAUER },
     /* Countdown bis zum naechsten Renntag — ohne ihn sieht man erst bei der
      * Ankuendigung, dass etwas ansteht, und kann nichts vorbereiten. */
@@ -4339,18 +4549,18 @@ function snapshot() {
               buchwert: Math.round(substance(p)), aktien: AKTIEN, ausschuettung: p.ausschuettung ?? null,
               ownPct: Math.round((p.equity[sid] || 0) / AKTIEN * 1000) / 10,
               equity: Object.fromEntries(Object.entries(p.equity).filter(([, c]) => c > 0)
-                .map(([hid, c]) => [hid === FA_ID ? "Finanzamt" : (G.players[hid]?.name ?? "—"), Math.round(c / AKTIEN * 1000) / 10])) }])),
+                .map(([hid, c]) => [istInstitution(hid) ? institutionName(hid) : (G.players[hid]?.name ?? "—"), Math.round(c / AKTIEN * 1000) / 10])) }])),
     orders: G.orders,
     bonds: G.bonds.map(b => ({ ...b, issuer: G.players[b.issuerId]?.name ?? "—",
       holder: b.holderId ? (G.players[b.holderId]?.name ?? "—") : null,
       issuerRating: G.players[b.issuerId] ? rating(G.players[b.issuerId]) : "D" })),
     shareBids: G.shareBids.map(b => ({ ...b,
       company: G.players[b.companyId]?.name ?? "—",
-      bidder: G.players[b.bidderId]?.name ?? "—" })),
+      bidder: istInstitution(b.bidderId) ? institutionName(b.bidderId) : (G.players[b.bidderId]?.name ?? "—") })),
     shareListings: G.shareListings.map(l => ({ ...l,
       sellerId: l.sellerId ?? l.companyId,
       company: G.players[l.companyId]?.name ?? "—",
-      seller: G.players[l.sellerId ?? l.companyId]?.name ?? "—",
+      seller: istInstitution(l.sellerId) ? institutionName(l.sellerId) : (G.players[l.sellerId ?? l.companyId]?.name ?? "—"),
       isIssue: (l.sellerId ?? l.companyId) === l.companyId,   // Emission der Firma statt Weiterverkauf
       toName: l.toId ? (G.players[l.toId]?.name ?? "—") : null })),
     nextDividendIn: G.nextDividendIn,
@@ -4456,6 +4666,8 @@ function privateState(p) {
       schuld: Math.round(p.steuerSchuld || 0), gezahlt: Math.round(p.stats.steuern || 0) } : null,
     ownPct: Math.round((p.equity[p.id] || 0) / AKTIEN * 1000) / 10, ownAktien: p.equity[p.id] || 0, aktien: AKTIEN,
     portfolio, revenue: Math.round(p.revenue), ausschuettung: p.ausschuettung,
+    etf: Object.entries(p.etf || {}).map(([br, n]) => ({ branche: br, name: INDUSTRIES[br]?.name ?? br, anteile: Math.round(n * 100) / 100,
+      wert: Math.round(n * (etfPreis(br) || 0)), buchwert: Math.round(n * (etfPreis(br, true) || 0)), einstand: Math.round(p.etfEinstand?.[br] || 0) })),
     marketValue: Math.round(companyValue(p)), rev10: Math.round(rev10(p)), ...marktPublic(p),
     /* Bilanz: erst die Substanz der eigenen Firma, dann der Anteil daran, den man
      * selbst noch hält, plus die Beteiligungen an fremden Firmen. Nur so passt
@@ -6412,6 +6624,40 @@ io.on("connection", socket => {
     ack?.({ ok: true });
   }));
 
+  /* Branchen-ETF kaufen: Betrag in $ → Anteile am Branchenfonds */
+  socket.on("etfKaufen", guard((p, { branche, betrag } = {}, ack) => {
+    betrag = Math.floor(+betrag);
+    if (!INDUSTRIES[branche] || !etfFirmen(branche).length) return ack?.({ error: "In dieser Branche gibt es keine Firma" });
+    if (!(betrag >= 100)) return ack?.({ error: "Mindestens 100 $" });
+    if (p.cash < betrag) return ack?.({ error: "Zu wenig Kapital" });
+    const preis = etfPreis(branche), geb = betrag * MARKT.ETF_GEBUEHR, n = (betrag - geb) / preis;
+    const f = fondsVon(branche);
+    p.cash -= betrag; f.cash += betrag - geb; G.wettReserve += geb;   // Gebühr an die Bank
+    f.anteile += n;
+    (p.etf ??= {})[branche] = (p.etf[branche] || 0) + n;
+    (p.etfEinstand ??= {})[branche] = (p.etfEinstand[branche] || 0) + betrag;
+    fondsInvestieren(branche);   // der Fonds legt das Geld sofort an, soweit es Aktien gibt
+    logTx(p, "ETF", `${INDUSTRIES[branche].name}-Fonds: ${n.toFixed(2)} Anteile zu ${preis.toFixed(2)} $`, -betrag);
+    marktLog("etf-kauf", `${p.name} zahlt ${betrag.toLocaleString("de-DE")} $ in den ${INDUSTRIES[branche].name}-Fonds ein`, { branche, betrag });
+    ack?.({ ok: true });
+  }));
+  /* Branchen-ETF verkaufen: Anteil 0–1 des Bestands — ausgezahlt aus der Fondskasse */
+  socket.on("etfVerkaufen", guard((p, { branche, anteil = 1 } = {}, ack) => {
+    const hat = p.etf?.[branche] || 0;
+    if (!(hat > 0)) return ack?.({ error: "Keine Anteile" });
+    anteil = Math.max(0, Math.min(1, +anteil || 1));
+    const f = fondsVon(branche), preis = etfPreis(branche);
+    const n = hat * anteil, brutto = n * preis, geb = brutto * MARKT.ETF_GEBUEHR;
+    if (brutto - geb > f.cash + 0.01)
+      return ack?.({ error: `Der Fonds hat gerade nur ${Math.round(f.cash).toLocaleString("de-DE")} $ flüssig — verkaufe weniger, er bietet Aktien an, um Geld zu beschaffen` });
+    f.cash -= brutto; G.wettReserve += geb; p.cash += brutto - geb; f.anteile -= n;
+    p.etf[branche] = hat - n; if (p.etf[branche] < 1e-9) delete p.etf[branche];
+    if (p.etfEinstand?.[branche]) p.etfEinstand[branche] *= 1 - anteil;
+    logTx(p, "ETF", `${INDUSTRIES[branche].name}-Fonds: ${n.toFixed(2)} Anteile verkauft`, brutto - geb);
+    marktLog("etf-verkauf", `${p.name} zieht ${Math.round(brutto - geb).toLocaleString("de-DE")} $ aus dem ${INDUSTRIES[branche].name}-Fonds ab`, { branche, betrag: Math.round(brutto - geb) });
+    ack?.({ ok: true });
+  }));
+
   socket.on("listShares", guard((p, { companyId, count, price, toId }, ack) => {
     companyId = companyId || p.id;   // ohne Angabe: eigene Anteile emittieren (Rückwärtskompatibilität)
     count = Math.floor(+count); price = +price; toId = toId || null;
@@ -6464,6 +6710,22 @@ io.on("connection", socket => {
     const i = G.shareBids.findIndex(b => b.id === bidId && b.companyId === p.id);
     if (i < 0) return ack?.({ error: "Anfrage nicht gefunden" });
     const bid = G.shareBids[i];
+    if (istInstitution(bid.bidderId)) {
+      /* Kaufanfrage des Finanzamts (aus dem Geld über der Projektschwelle)
+       * oder eines Branchenfonds (aus seiner Kasse) */
+      const hid = bid.bidderId;
+      if (institutionFrei(hid) < bid.price) { G.shareBids.splice(i, 1); return ack?.({ error: `${institutionName(hid)} hat dafür gerade kein Geld mehr` }); }
+      if ((p.equity[p.id] || 0) < bid.count) return ack?.({ error: "Du hältst nicht mehr genug eigene Aktien" });
+      institutionZahlt(hid, bid.price); p.cash += bid.price;
+      p.stats.kapitalNetto = (p.stats.kapitalNetto || 0) + bid.price;
+      p.equity[p.id] -= bid.count; p.equity[hid] = (p.equity[hid] || 0) + bid.count;
+      G.shareBids.splice(i, 1);
+      kursWirkung(p, bid.count, +1);   // Kauf der Institution hebt den Kurs
+      logTx(p, "Aktien", `${bid.count} eigene Aktien an ${institutionName(hid)} verkauft`, bid.price);
+      p.stats.anteileVerkauft += bid.count;
+      marktLog(hid === FA_ID ? "fa-kauf" : "etf-kauf", `${institutionName(hid)} kauft ${bid.count} Aktien von ${p.name}`, { firmaId: p.id, aktien: bid.count, preis: Math.round(bid.price) });
+      return ack?.({ ok: true });
+    }
     const bidder = G.players[bid.bidderId];
     if (!bidder) { G.shareBids.splice(i, 1); return ack?.({ error: "Bieter ist nicht mehr im Spiel" }); }
     if (bidder.cash < bid.price) return ack?.({ error: `${bidder.name} hat nicht mehr genug Kapital` });
@@ -6538,7 +6800,7 @@ io.on("connection", socket => {
     company.equity[p.id] = (company.equity[p.id] || 0) + l.count;
     G.shareListings.splice(G.shareListings.indexOf(l), 1);
     logTx(p, "Aktien", `${l.count} Aktien von ${company.name} gekauft`, -l.price);
-    kursWirkung(company, l.count, +1);   // jemand kauft: Kurs zieht an
+    kursWirkung(company, l.count, sellerId === FA_ID ? -1 : +1);   // jemand kauft: Kurs zieht an — verkauft das Finanzamt, gibt er nach
     marktLog("kauf", `${p.name} kauft ${l.count} Aktien von ${company.name}`, { firmaId: company.id, aktien: l.count, preis: Math.round(l.price) });
     p.stats.anteileGekauft += l.count;
     questProg(p, "shares");
@@ -6549,6 +6811,9 @@ io.on("connection", socket => {
       company.cash += l.price;
       company.stats.kapitalNetto = (company.stats.kapitalNetto || 0) + l.price;   // kein Ertrag — für F herausrechnen
       logTx(company, "Aktien", `${l.count} eigene Aktien an ${p.name} ausgegeben`, l.price);
+    } else if (istInstitution(sellerId)) {
+      institutionErhaelt(sellerId, l.price);   // Finanzamt → Stadtkasse, Fonds → Fondskasse
+      marktLog(sellerId === FA_ID ? "fa-verkauf" : "etf-verkauf", `${institutionName(sellerId)} verkauft ${l.count} Aktien von ${company.name} an ${p.name}`, { firmaId: company.id, aktien: l.count, preis: Math.round(l.price) });
     } else if (seller) {
       /* Weiterverkauf: der Erlös geht an den Aktionär — hier entsteht der
        * Kursgewinn oder -verlust aus dem Anteilshandel. */
@@ -6597,7 +6862,7 @@ io.on("connection", socket => {
     G.groupOrder = null; G.nextGroupIn = 20;
     G.nextDividendIn = DIVIDEND_INTERVAL;
     G.wettrunde = { nr: 1, phase: "annahme", rest: WETT_ANNAHME, start: {} }; G.wetten = []; G.wettLetzte = []; G.wettReserve = WETT_RESERVE;
-    G.markt = {}; G.marktLog = []; G.panikTag = null; G.panikErledigt = false;
+    G.markt = {}; G.marktLog = []; G.panikTag = null; G.panikErledigt = false; G.fonds = {}; G.etfHist = {};
     G.stadtkasse = STADT_GRUNDSTOCK; G.steuerStufe = 2; G.boerseGebuehren = 0; G.steuernGesamt = 0; G.stadtprojekt = null; G.projektPause = 120; G.stadtprojekteFertig = [];
     for (const pl of Object.values(G.players)) { pl.steuerStand = undefined; pl.steuerSchuld = 0; pl.steuerLetzter = null; }
     for (const pl of Object.values(G.players)) { pl.wettOffen = 0; pl.wettLog = []; }
@@ -8015,6 +8280,14 @@ async function spawnBot(cfg, lvl = BOT_LEVELS[BOT_LEVEL_DEFAULT]) {
             pp.kurs * PAKET < me.cash * 0.3 && !(st.shareBids || []).some(b => b.bidderId === myId && b.companyId === pp.id));
           if (ziel) await em("bidShares", { companyId: ziel.id, count: PAKET, price: Math.round(ziel.kurs * PAKET * 1.05) });
         }
+      }
+      /* Branchen-ETFs: Überschuss breit streuen, in der Klemme wieder verkaufen */
+      if (me.cash < 1000 && (me.etf || []).length) {
+        await em("etfVerkaufen", { branche: me.etf[0].branche, anteil: 1 });
+      } else if (me.cash > 9000 && Math.random() < 0.08 && (st.etf || []).length) {
+        const fremd = st.etf.filter(e => e.branche !== cfg.industry);
+        const e = fremd[Math.floor(Math.random() * fremd.length)];
+        if (e) await em("etfKaufen", { branche: e.branche, betrag: Math.round(me.cash * 0.1 / 100) * 100 });
       }
       /* Expansion: nächstes Gebäude, inkl. Zonen-Freischaltung + Materialkauf.
        * Reihenfolge IMMER: erst jedes Produkt der Branche einmal abdecken

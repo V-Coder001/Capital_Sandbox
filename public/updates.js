@@ -19,6 +19,10 @@ window.UPDATES = [
         en: "Building takes 30 seconds. Until then the building is an asset under construction — it does not produce yet but already counts fully towards company value. Building no longer lowers your company's value." },
       { art: "besser", de: "Steuer: Bau und Ausbau werden über 30 Minuten abgeschrieben, statt den Gewinn sofort zu senken.",
         en: "Tax: construction and upgrades are depreciated over 30 minutes instead of lowering profit immediately." },
+      { art: "neu", de: "Branchen-ETFs: Je Branche ein Fonds. Dein Geld kauft echte Aktien der Firmen dieser Branche, der Anteilspreis folgt dem Fondswert.",
+        en: "Industry ETFs: one fund per industry. Your money buys real shares of that industry's companies; the unit price follows the fund's value." },
+      { art: "neu", de: "Das Finanzamt kauft Aktien, wenn ein Kurs deutlich unter dem Wert liegt, und verkauft, wenn er deutlich darüber liegt — aber nur mit Geld, das nach den Stadtprojekten übrig ist.",
+        en: "The tax office buys shares when a price is well below value and sells when it is well above — but only with money left over after city projects." },
       { art: "besser", de: "Stadtbank zeigt Kurs, Wert je Aktie, Abstand dazu und das Marktgeschehen.",
         en: "The city bank shows price, value per share, the gap between them and market activity." }
     ]

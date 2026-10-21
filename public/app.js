@@ -1941,7 +1941,7 @@ const EN = {
   "Wert F je Aktie": "Value F per share", "Automatisch": "Automatic", "Festlegen": "Set",
   "Marktgeschehen": "Market activity", "Wert je Aktie (Fundament F)": "Value per share (fundamental F)",
   "Buchwert der Firma": "Book value of the company", "Dividende je Aktie": "Dividend per share",
-  "Dividendenrendite zum Kurs": "Dividend yield at price",
+  "Dividendenrendite zum Kurs": "Dividend yield at price", "Branchen-ETFs": "Industry ETFs", "Aktien des Finanzamts": "Tax office shares",
   "Umsatz 10 min": "Revenue 10 min", "Anteile abgeben": "Sell shares",
   "Anteile übernehmen": "Acquire shares", "Anbieten": "Offer", "Anfragen": "Request",
   "Kurstafel": "Price board", "Offene Angebote": "Open offers", "Dein Depot": "Your portfolio",
@@ -5503,6 +5503,10 @@ function finanzamtRendern(state, me, myId) {
             <input type="number" min="1" id="sp-${g}" placeholder="Menge">
             <button class="buyb" data-sp="${g}" ${(me.inv[g] || 0) < 1 || n.have >= n.req ? "disabled" : ""}>Liefern</button></div></div>`; }).join("")}
       <div class="faLieferanten">${Object.values(P.contrib).map(c => `<span style="--f:${c.color || "#888"}">${c.name}${c.bot ? " · Bot" : ""}</span>`).join("") || `<span class="meta">Noch keine Lieferungen — Spieler und Bots liefern gemeinsam.</span>`}</div>` : ""}
+    <div class="sec">Aktien des Finanzamts <span class="meta">· Stabilisator</span></div>
+    ${(F.portfolio || []).length ? `<div class="faPortfolio">${F.portfolio.map(f => `<div class="kzrow"><span>${f.firma} <span class="meta">· ${f.aktien} Aktien</span></span><b>${fmt(f.wert)} <span class="meta">Buchwert ${fmt(f.buchwert)}</span></b></div>`).join("")}</div>`
+      : `<div class="meta">Noch keine Aktien.</div>`}
+    <div class="meta faLageText">Liegt der Kurs einer Firma mehr als ${Math.round((F.theta ?? 0.1) * 100)} % unter ihrem Wert F, kauft das Finanzamt — aus Angeboten oder per Kaufanfrage, höchstens ${F.maxAnteil ?? 20} Aktien je Firma, bezahlt nur aus dem Geld über der Projektschwelle — Stadtprojekte gehen vor. Liegt der Kurs mehr als ${Math.round((F.theta ?? 0.1) * 100)} % darüber, verkauft es. Seine Aktien stehen immer zum Wert + 5 % im Angebot, Übernahmen bleiben also möglich. Dividenden darauf fließen in die Stadtkasse.</div>
     <div class="sec">So arbeitet das Finanzamt</div>
     <div class="faRegeln">
       <div><b>${Math.round(F.satz * 1000) / 10} %</b><span>Gewinnsteuer alle 10 min, die ersten ${fmt(F.frei)} frei</span></div>
@@ -8284,6 +8288,22 @@ function render({ state, me, myId, chat, room }) {
          <button class="mini" data-shcancel="${l.id}">${t("Storno")}</button></div>`).join("") : "") +
       (toMe.length ? `<div class="sec">Nur für dich</div>` + toMe.map(offerRow).join("") : "") +
       `<div class="sec bTafelKopf"><span>Kurstafel</span><span class="meta">${open.length ? `${open.length} offene Angebote — Firma antippen` : "keine offenen Angebote"}</span></div>`;
+    /* Branchen-ETFs: Index je Branche (Kurse gewichtet nach Wert F, Start 100) */
+    const etfs = state.etf || [];
+    document.getElementById("etfboard").innerHTML = etfs.length ? `<div class="sec bTafelKopf"><span>Branchen-ETFs</span><span class="meta">ein Kauf streut über alle Firmen der Branche</span></div>` +
+      etfs.map(e => {
+        const h = e.verlauf || [], seit = h.length > 1 ? (h[h.length - 1] / h[0] - 1) * 100 : null;
+        const meins = (me.etf || []).find(x => x.branche === e.branche);
+        return `<div class="bond etfrow">
+          <div style="min-width:0;flex:1"><b>${e.name}-Fonds</b>
+            <div class="meta">Fondswert ${fmt(e.wert || 0)} · davon flüssig ${fmt(e.kasse || 0)}${(e.aktien || []).length ? ` · hält ${e.aktien.map(a => `${a.aktien} ${a.firma}`).join(", ")}` : " · noch keine Aktien"}${meins ? ` · <b style="color:var(--accent)">du: ${fmt(meins.wert)}</b>` : ""}</div></div>
+          <span style="display:flex;align-items:center;gap:8px">
+            ${h.length > 1 ? sparklineVon(h, 52, 16) : ""}
+            <span class="fpreis">${(e.preis || 0).toFixed(1)}${seit == null ? "" : ` <em class="${seit >= 0 ? "plus" : "minus"}" style="font-size:11px">${seit >= 0 ? "+" : ""}${seit.toFixed(1)} %</em>`}</span>
+            <input type="number" class="etfBetrag" data-etf-betrag="${e.branche}" min="100" step="100" placeholder="$" style="width:84px">
+            <button class="buyb" data-etf-kauf="${e.branche}">Kaufen</button>
+          </span></div>`; }).join("") +
+      `<div class="meta" style="padding-top:4px">Jede Branche hat einen Fonds. Dein Geld kauft echte Aktien der Firmen dieser Branche (gewichtet nach Wert F) — das hebt ihre Kurse. Anteilspreis = Fondswert ÷ Anteile, Start 100. Auszahlen kann der Fonds nur aus seiner Kasse; ist sie knapp, bietet er Aktien an. 1 % Gebühr je Kauf und Verkauf.</div>` : "";
     /* Marktgeschehen: Käufe, Verkäufe, Ausschüttungen, Bauten, Flauten, Panik */
     const mlog = (state.marktLog || []).slice(0, 8);
     document.getElementById("marktlog").innerHTML = mlog.length
@@ -8357,6 +8377,14 @@ function render({ state, me, myId, chat, room }) {
               ${gv == null ? "" : `<b style="color:${gv >= 0 ? "var(--up)" : "var(--down)"}">${gv >= 0 ? "+" : "−"}${fmt(Math.abs(gv))}</b>`}</span></div>`;
         })()
       : `<span class="meta">Du hältst keine fremden Aktien. Kauf welche — liegt der Kurs unter dem Wert F, holt er meist auf, und du kannst teurer weiterverkaufen.</span>`;
+    /* ETF-Bestände */
+    if ((me.etf || []).length) document.getElementById("bankdepot").insertAdjacentHTML("beforeend",
+      `<div class="sec">Branchen-ETFs</div>` + me.etf.map(x => {
+        const gv = x.einstand > 0 ? x.wert - x.einstand : null;
+        return `<div class="bond"><div><b>${x.name}-Fonds</b><div class="depotzahlen"><span>${x.anteile} Anteile</span>
+          <span>Einstand <b>${fmt(x.einstand)}</b></span><span>zum Kurs <b>${fmt(x.wert)}</b></span><span class="meta">Buchwert ${fmt(x.buchwert || 0)}</span>
+          ${gv == null ? "" : `<span style="color:${gv >= 0 ? "var(--up)" : "var(--down)"}">${gv >= 0 ? "+" : "−"}${fmt(Math.abs(gv))}</span>`}</div></div>
+          <div style="display:flex;gap:5px"><button class="mini" data-etf-verkauf="${x.branche}" data-anteil="0.5">Hälfte</button><button class="buyb" data-etf-verkauf="${x.branche}" data-anteil="1">Verkaufen</button></div></div>`; }).join(""));
   }
 
   /* Firmen-Dashboard: Kennzahlen oben, Verlauf, Bilanz; Details eingeklappt.
@@ -9419,4 +9447,18 @@ document.getElementById("firmabody").addEventListener("click", e => {
     if (v === "") return toast("Betrag eingeben — 0 setzt die Ausschüttung aus", true);
     act("setAusschuettung", { betrag: +v });
   }
+});
+
+/* Branchen-ETFs kaufen und verkaufen */
+document.getElementById("p-bank").addEventListener("click", e => {
+  const k = e.target.closest("[data-etf-kauf]");
+  if (k) {
+    const feld = document.querySelector(`[data-etf-betrag="${k.dataset.etfKauf}"]`);
+    const betrag = +feld?.value || 0;
+    if (betrag < 100) return toast("Betrag eingeben — mindestens 100 $", true);
+    act("etfKaufen", { branche: k.dataset.etfKauf, betrag }); if (feld) feld.value = "";
+    return;
+  }
+  const v = e.target.closest("[data-etf-verkauf]");
+  if (v) act("etfVerkaufen", { branche: v.dataset.etfVerkauf, anteil: +v.dataset.anteil });
 });
