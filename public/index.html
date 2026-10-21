@@ -5210,6 +5210,12 @@ const SPRITE_LEIHE = { fanhub: "werbeagentur",
    * inhaltlich: illegale Betriebe SOLLEN aussehen wie legale. */
   destille: "saftpresse", druckerei: "chipfabrik", goldschmelze: "stahlwerk",
   schmuggellager: "bauhandel", casino: "autohaus" };
+/* Bild-URL zum Sprite — fürs Kachelmenü (die geladenen Sprites sind Canvas). */
+const spriteUrl = (btype, x, y) => {
+  const b = SPRITE_VARIANTS[btype] ? btype : SPRITE_LEIHE[btype];
+  const n = SPRITE_VARIANTS[b];
+  return n ? `assets/${SPRITE_ALIAS[b] || b}-${(x * 7 + y * 13) % n}.png` : null;
+};
 const spriteFor = (btype, x, y) => {
   const arr = SPRITES[btype] || SPRITES[SPRITE_LEIHE[btype]];
   return arr?.length ? arr[(x * 7 + y * 13) % arr.length] : null;
@@ -6819,14 +6825,14 @@ function clickTile(e) {
           const rest = s.qty != null ? ` · noch ${Math.ceil(s.qty)} Stk (~${Math.ceil(s.qty / Math.max(0.001, rate))} s)` : " · unbegrenzt";
           return `verkauft ~${rate.toFixed(2)}/s ≈ ${fp(rate * s.price)}/s${rest}`;
         })() : "Slot inaktiv — Ware, Menge &amp; Preis wählen";
-        return `<div style="background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:8px;margin-bottom:6px">
-          <div style="display:flex;gap:5px;margin-bottom:5px">
-            <select id="sg-${i}" style="flex:1">${goodOpts}</select>
-            <input id="sq-${i}" type="number" min="1" value="${s?.qty != null ? Math.ceil(s.qty) : ""}" placeholder="∞" style="width:56px" title="Menge (leer = unbegrenzt)">
-            <input id="sp-${i}" type="number" min="0.01" step="0.01" value="${s?.price ?? (avg[bt.retail.goods[0]] ?? 1).toFixed(2)}" style="width:64px" title="Stückpreis $">
-            <button class="mini" data-slot="${i}">OK</button>
+        return `<div class="tmSlot">
+          <div class="tmSlotZeile">
+            <label><span>Ware</span><select id="sg-${i}">${goodOpts}</select></label>
+            <label><span>Menge</span><input id="sq-${i}" type="number" min="1" value="${s?.qty != null ? Math.ceil(s.qty) : ""}" placeholder="∞" title="Menge (leer = unbegrenzt)"></label>
+            <label><span>Preis $</span><input id="sp-${i}" type="number" min="0.01" step="0.01" value="${s?.price ?? (avg[bt.retail.goods[0]] ?? 1).toFixed(2)}" title="Stückpreis $"></label>
+            <button class="mini tmOk" data-slot="${i}" aria-label="Regal ${i + 1} übernehmen">✓</button>
           </div>
-          <div class="note" style="margin:0">${info}</div></div>`;
+          <div class="tmSlotInfo">${info}</div></div>`;
       }).join("");
     }
     const lvl = t.level || 1;
@@ -6835,12 +6841,17 @@ function clickTile(e) {
     let upgradeHtml = "";
     if (canLevel && mine) {
       if (lvl >= 5) {
-        upgradeHtml = `<div class="note" style="margin-top:6px">Stufe 5/5 — Höchststufe erreicht</div>`;
+        upgradeHtml = `<div class="tmHinweis">Höchststufe erreicht</div>`;
       } else {
         const ec = Math.ceil(bt.cost / 2500 * lvl), cc = Math.round(bt.cost * 0.35 * lvl);
         const afford = me.inv.elektronik >= ec && me.cash >= cc;
         const nutzen = bt.racing ? `${lvl + 1} Stellplätze statt ${lvl}` : "+30 % Ausstoß";
-        upgradeHtml = `<button class="opt" id="upgrade" ${afford ? "" : "disabled"}>Auflevel auf Stufe ${lvl + 1} <small>${ec} Elektronik + ${fmt(cc)} · ${nutzen}</small></button>`;
+        const fehlt = [me.inv.elektronik < ec ? `${ec - (me.inv.elektronik || 0)} Elektronik` : "",
+                       me.cash < cc ? fmt(cc - me.cash) : ""].filter(Boolean).join(" + ");
+        upgradeHtml = `<button class="tmHaupt" id="upgrade" ${afford ? "" : "disabled"}>
+            <span>Auf Stufe ${lvl + 1} ausbauen</span>
+            <small>${nutzen} · ${ec} Elektronik · ${fmt(cc)}</small></button>`
+          + (afford ? "" : `<div class="tmHinweis">Dir fehlen ${fehlt}</div>`);
       }
     }
     /* Rennstall: die Garage. Ein Fahrzeug, das hier steht, ist keine Ware mehr —
@@ -6887,11 +6898,51 @@ function clickTile(e) {
           Ohne neue Kampagne ist die Reichweite in gut zwei Minuten aufgebraucht.
         </div>` + pakete;
     }
-    tm.innerHTML = `<h3>${bname(t.btype)}${canLevel ? ` <span style="color:var(--accent);font-size:12px">★${lvl}</span>` : ""}</h3><div class="note">Besitzer: ${mine ? "Du" : ownerName}${t.lien ? "<br>Pfandrecht aktiv" : ""}${t.paused ? "<br>Pausiert" : ""}${bt.out ? `<br>Produziert ${gname(bt.out)} (${(bt.rate*lvlMult).toFixed(2)}/s${lvl>1 ? ` · Basis ${bt.rate} ×${lvlMult.toFixed(1)}` : ""})` : ""}${bt.boosts ? `<br>Boost durch ${bt.boosts.map(r => gname(r)).join(" + ")} im Lager (+75 % je Rohstoff, wird verbraucht)` : ""}${bt.proc ? `<br>Verarbeitet ${Object.entries(bt.proc.in).map(([g,n]) => `${(n*lvlMult).toFixed(2)} ${gname(g)}`).join(" + ")}/s → <b>${(bt.proc.rate*lvlMult).toFixed(2)} ${gname(bt.proc.out)}/s</b>` : ""}${bt.retail ? `<br>Dein Preis bestimmt das Tempo: Ø-Kurs = volle Rate, teurer = langsamer, billiger = schneller (max. ×2)${(me.ad?.boost || 1) > 1.001 ? `<br><b style="color:var(--accent2)">Werbung aktiv: bis ${Math.round(((me.ad.boost)-1)*100)} % über Ø-Kurs ohne Tempoverlust</b>` : ""}` : ""}</div>`
-      + shopHtml + stallHtml + adHtml
-      + ((bt.retail || bt.proc) && mine ? `<button class="opt" id="pause">${t.paused ? "Fortsetzen" : "Pausieren"} <small>${bt.retail ? "Verkauf" : "Weiterverarbeitung"}</small></button>` : "")
-      + upgradeHtml
-      + (mine && !t.lien ? `<button class="opt" id="dem">Abreißen &amp; verkaufen <small>${fmt(bt.cost*.5)}</small></button>` : "");
+    /* Übersichtliche Gebäudekarte: Kopf (Bild, Name, Stufe, Besitzer, Status),
+     * zwei bis drei Kennzahlen, EIN Hauptknopf, kleine Nebenknöpfe. Die
+     * Erklärtexte stehen eingeklappt unter „Mehr erfahren". */
+    const ownerCol = store.get().state.players[t.owner]?.color || "#666";
+    const sprSrc = spriteUrl(t.btype, t.x, t.y);
+    const status = t.lien ? ["warn", "Pfandrecht"] : t.paused ? ["aus", "Pausiert"]
+      : (bt.out || bt.proc || bt.retail) ? ["an", "Läuft"] : null;
+    const kennzahlen = [];
+    if (bt.out) kennzahlen.push(["Produziert", `${(bt.rate * lvlMult).toFixed(2)}/s`, gname(bt.out)]);
+    if (bt.proc) kennzahlen.push(
+      ["Stellt her", `${(bt.proc.rate * lvlMult).toFixed(2)}/s`, gname(bt.proc.out)],
+      ["Verbraucht", Object.entries(bt.proc.in).map(([g, n]) => `${(n * lvlMult).toFixed(2)} ${gname(g)}`).join(" + "), "pro Sekunde"]);
+    if (bt.racing) kennzahlen.push(["Garage", `${(t.autos || []).length}/${lvl}`, "Stellplätze"]);
+    const mehr = [];
+    if (bt.out && lvl > 1) mehr.push(`Basisrate ${bt.rate}/s × ${lvlMult.toFixed(1)} durch Stufe ${lvl}.`);
+    if (bt.boosts) mehr.push(`<b>Boost:</b> ${bt.boosts.map(r => gname(r)).join(" + ")} im Lager bringen je +75 % Tempo und werden dabei verbraucht.`);
+    if (bt.retail) mehr.push(`Dein Preis bestimmt das Tempo: Ø-Kurs = volle Rate, teurer = langsamer, billiger = schneller (max. ×2).`
+      + ((me.ad?.boost || 1) > 1.001 ? ` <b style="color:var(--accent2)">Werbung aktiv: bis ${Math.round((me.ad.boost - 1) * 100)} % über Ø-Kurs ohne Tempoverlust.</b>` : ""));
+    if (t.lien) mehr.push("Auf dem Gebäude liegt ein Pfandrecht — Abreißen ist gesperrt, bis die Anleihe bedient ist.");
+    const nebenKnoepfe = [
+      (bt.retail || bt.proc) && mine ? `<button class="tmKlein" id="pause">${t.paused ? "▶ Fortsetzen" : "❚❚ Pausieren"}</button>` : "",
+      mine && !t.lien ? `<button class="tmKlein gefahr" id="dem" data-preis="${fmt(bt.cost * .5)}">Abreißen</button>` : "",
+    ].filter(Boolean).join("");
+    tm.innerHTML = `
+      <div class="tmKopf">
+        ${sprSrc ? `<img class="tmBild" src="${sprSrc}" alt="">` : ""}
+        <div class="tmTitel">
+          <b>${bname(t.btype)}</b>
+          <span class="tmBesitzer"><i style="background:${ownerCol}"></i>${mine ? "Deine Firma" : ownerName}</span>
+        </div>
+        <button class="tmZu" type="button" aria-label="Schließen">×</button>
+      </div>
+      <div class="tmChips">
+        ${canLevel ? `<span class="tmStufe" title="Stufe ${lvl} von 5">${[1, 2, 3, 4, 5].map(i => `<i class="${i <= lvl ? "on" : ""}"></i>`).join("")}<em>Stufe ${lvl}</em></span>` : ""}
+        ${status ? `<span class="tmStatus ${status[0]}">${status[1]}</span>` : ""}
+      </div>
+      ${kennzahlen.length ? `<div class="tmZahlen">${kennzahlen.map(([k, v, u]) => `<div><span>${k}</span><b class="${String(v).length > 10 ? "lang" : ""}">${v}</b><small>${u}</small></div>`).join("")}</div>` : ""}
+      ${shopHtml ? `<div class="tmAbschnitt">Regale</div>${shopHtml}` : ""}
+      ${stallHtml ? `<div class="tmAbschnitt">Garage</div>${stallHtml}` : ""}
+      ${adHtml ? `<div class="tmAbschnitt">Werbung</div>${adHtml}` : ""}
+      ${mine ? upgradeHtml : ""}
+      ${nebenKnoepfe ? `<div class="tmNeben">${nebenKnoepfe}</div>` : ""}
+      ${mehr.length ? `<details class="tmMehr"><summary>Mehr erfahren</summary>${mehr.map(x => `<p>${x}</p>`).join("")}</details>` : ""}`;
+    tm.querySelector(".tmZu").addEventListener("click", () => { tm.style.display = "none"; });
+    tmPlatzieren(e);
     tm.querySelectorAll("[data-ad]").forEach(b => b.addEventListener("click", () => {
       act("bookAd", { paket: b.dataset.ad }); tm.style.display = "none";
     }));
@@ -6908,7 +6959,12 @@ function clickTile(e) {
     tm.querySelectorAll("[data-auto]").forEach(b => b.addEventListener("click", () => {
       act("stallEinstellen", { x: t.x, y: t.y, good: b.dataset.auto }); tm.style.display = "none";
     }));
-    tm.querySelector("#dem")?.addEventListener("click", () => { act("demolish", { x:t.x, y:t.y }); tm.style.display="none"; });
+    /* Abreißen ist endgültig — erster Klick fragt nach, zweiter führt aus. */
+    tm.querySelector("#dem")?.addEventListener("click", ev => {
+      const b = ev.currentTarget;
+      if (!b.classList.contains("sicher")) { b.classList.add("sicher"); b.textContent = `Wirklich abreißen? +${b.dataset.preis}`; return; }
+      act("demolish", { x:t.x, y:t.y }); tm.style.display = "none";
+    });
     return;
   }
   const myInds = store.get().state?.players?.[myId]?.industries || [store.get().meta?.industry];
@@ -6969,17 +7025,51 @@ function clickTile(e) {
   const casaNote = kartellModus && CASAS?.has(t.x + "," + t.y)
     ? `<div class="note" style="border-left:3px solid var(--accent);padding-left:7px">🏠 Hier steht ein <b>Geschäft des Viertels</b> — solche Läden zahlen das <b>Schutzgeld</b> (Kartell-Panel → Bezirke). Baust du hier, weicht es deinem Betrieb.</div>`
     : "";
-  tm.innerHTML = `<h3>${t.locked ? "Gesperrt · " : ""}Bauen — ${t.zone}</h3>` + casaNote + (opts.length ? `<div class="note">${kartellModus ? "Bezahlt wird bar — die Handwerker der Stadt stellen keine Fragen." : "Baumaterial: Ziegel und Beton — Nachschub über die Börse. Später mit Elektronik auflevelbar."}${lockNote}</div>` : `<div class="note">${store.get().state?.mode === "renntag"
-        ? "Deine Rolle baut hier nichts — Teile und Rohstoffe gehen über die Börse."
-        : "Deine Industrie kann hier nichts bauen — handle stattdessen an der Börse."}</div>`)
-    + opts.map(([bid, b]) => `<button class="opt" data-b="${bid}" ${canAfford(b) ? "" : "disabled"}>${b.name}<small>${
-        !gesperrt(b) ? `${fmt(totalCost(b))}${matTxt(b) ? ` · ${matTxt(b)}` : ""}`
-        : hatStall && b.racing ? "Du betreibst bereits einen Rennstall — mehr als einer ist nicht erlaubt"
-        : `Motorsport ab ${fmt(nwSchwelle)} Nettovermögen — dir fehlen ${fmt(nwSchwelle - meinNW)}`}</small></button>`).join("");
+  /* Baumenü als Kacheln: Bild, Name, was es herstellt, Preis. Wer etwas nicht
+   * bauen kann, sieht in einer Zeile, warum — statt nur einen grauen Knopf. */
+  const ZONENNAME = { agrar: "Agrar", zentrum: "Zentrum", industrie: "Industrie", kueste: "Küste" };
+  const liefert = b => b.out ? `→ ${gname(b.out)}` : b.proc ? `→ ${gname(b.proc.out)}` : b.retail ? "Laden" : b.racing ? "Motorsport" : b.ad ? "Werbung" : "";
+  const warumNicht = b => {
+    if (gesperrt(b)) return hatStall && b.racing ? "Nur ein Rennstall erlaubt" : `Ab ${fmt(nwSchwelle)} Vermögen`;
+    const fehlt = Object.entries(mats(b)).filter(([g, n]) => (me.inv[g] || 0) < n).map(([g, n]) => `${n - (me.inv[g] || 0)} ${matName[g] || g}`);
+    if (me.cash < totalCost(b)) fehlt.unshift(fmt(totalCost(b) - me.cash));
+    return fehlt.length ? "Fehlt: " + fehlt.join(" + ") : "";
+  };
+  tm.innerHTML = `
+    <div class="tmKopf">
+      <div class="tmTitel"><b>Bauplatz</b><span class="tmBesitzer">${ZONENNAME[t.zone] || t.zone}${t.locked ? ` · gesperrt, Freischaltung ${fmt(t.unlockCost)}` : ""}</span></div>
+      <button class="tmZu" type="button" aria-label="Schließen">×</button>
+    </div>` + casaNote
+    + (opts.length
+      ? `<div class="tmBauGrid">` + opts.map(([bid, b]) => {
+          const ok = canAfford(b), src = spriteUrl(bid, t.x, t.y), grund = ok ? "" : warumNicht(b);
+          return `<button class="opt tmBau" data-b="${bid}" ${ok ? "" : "disabled"}>
+            ${src ? `<img src="${src}" alt="">` : `<span class="tmBauLeer"></span>`}
+            <b>${bname(bid)}</b>
+            <span class="tmLiefert">${liefert(b)}</span>
+            <span class="tmPreis">${gesperrt(b) ? "—" : fmt(totalCost(b))}${!gesperrt(b) && matTxt(b) ? `<small>${matTxt(b)}</small>` : ""}</span>
+            ${grund ? `<span class="tmGrund">${grund}</span>` : ""}
+          </button>`; }).join("") + `</div>`
+        + `<div class="tmFuss">${kartellModus ? "Bezahlt wird bar." : "Ziegel und Beton gibt es an der Börse."}${lockNote}</div>`
+      : `<div class="tmHinweis">${store.get().state?.mode === "renntag"
+          ? "Deine Rolle baut hier nichts — Teile und Rohstoffe gehen über die Börse."
+          : "Deine Industrie kann hier nichts bauen — handle stattdessen an der Börse."}</div>`);
+  tm.querySelector(".tmZu").addEventListener("click", () => { tm.style.display = "none"; });
+  tmPlatzieren(e);
   tm.querySelectorAll(".opt").forEach(btn => btn.addEventListener("click", () => {
     act("build", { x:t.x, y:t.y, btype: btn.dataset.b }); tm.style.display = "none"; }));
 }
 addEventListener("keydown", e => { if (e.key === "Escape") tm.style.display = "none"; });
+/* Menü neben den Klickpunkt legen, aber immer ganz im Bild — gemessen nach
+ * dem Befüllen, weil Gebäudekarte und Baumenü unterschiedlich groß sind. */
+function tmPlatzieren(e) {
+  const r = tm.getBoundingClientRect(), rand = 12;
+  let x = e.clientX + 14, y = e.clientY - 20;
+  if (x + r.width > innerWidth - rand) x = e.clientX - r.width - 14;
+  x = Math.max(rand, Math.min(x, innerWidth - r.width - rand));
+  y = Math.max(rand + 90, Math.min(y, innerHeight - r.height - 96));
+  tm.style.left = x + "px"; tm.style.top = y + "px";
+}
 
 /* ---- Preistafel auf-/zuklappen ----
  * Der Zustand wird gemerkt: Wer die Tafel offen haben will, soll sie nicht
