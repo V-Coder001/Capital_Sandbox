@@ -2847,6 +2847,7 @@ const G = {
   wetten: [],            // {id, spielerId, firmaId, richtung, einsatz}
   wettLetzte: [],        // Ergebnis der letzten Runde je Firma
   wettReserve: 20000,    // Bankreserve für die Kurswetten (WETT_RESERVE)
+  markt: {}, marktLog: [], panikTag: null, panikErledigt: false,   // Aktienkurse (siehe marktTag)
   stadtkasse: 20000, steuerStufe: 2, boerseGebuehren: 0,         // Finanzamt: Anteil der Steuern für Großauftrags-Prämien und Stadtprojekte
   steuernGesamt: 0,
   stadtprojekt: null, projektPause: 120, stadtprojekteFertig: [],
@@ -2880,7 +2881,7 @@ function newPlayer(pid, name, color, industry, socketId) {
     inv.obst = 150; inv.wasser = 150; inv.erze = 150; inv.kannabis = 80; inv.strom = 200; inv.elektronik = 20; }
   return { id: pid, name, color, industry, industries: [industry], cash: START_CASH, xp: 0, lvl: 1,
     inv,
-    equityAvg: {},     // companyId -> Ø-Einstand je 25-%-Block (Durchschnittsmethode)
+    equityAvg: {},     // companyId -> Ø-Einstand je Aktie (Durchschnittsmethode)
     quests: {},        // Starter-Aufgaben: {id: {n, done}}
     tx: [],            // Transaktions-Log: {t, cat, text, amt}
     sales: {},         // je Ware: {botQty, botRev, playerQty, playerRev, buyQty, buyCost}
@@ -2890,10 +2891,13 @@ function newPlayer(pid, name, color, industry, socketId) {
     stats: { produziert: {}, umsatz: 0, ausgaben: 0, gebaut: 0, abgerissen: 0,
              grossauftraege: 0, besterHandel: null, dividendeRein: 0, dividendeRaus: 0,
              werbung: 0, anteileGekauft: 0, anteileVerkauft: 0, fusionen: 0,
-             zinsErtrag: 0, zinsAufwand: 0, aufgelevelt: 0, steuern: 0, projekte: 0 },
+             zinsErtrag: 0, zinsAufwand: 0, aufgelevelt: 0, steuern: 0, projekte: 0,
+             investiert: 0, kapitalNetto: 0 },   // kapitalNetto: Emissionen − Ausschüttungen (für den Ertrag in F)
     fin: { zinsErtrag: 0, zinsAufwand: 0 },
     nwHist: [],        // Nettovermögens-Verlauf für den Chart
-    equity: { [pid]: 4 },   // Cap-Table: holderId -> Anzahl 25%-Anteile (Summe immer 4)
+    equity: { [pid]: AKTIEN },   // Cap-Table: holderId -> Anzahl Aktien (Summe immer AKTIEN)
+    ausschuettung: null,   // null = automatisch (DIVIDEND_RATE des Umsatzes), sonst fester Betrag je Periode
+    afa: [],           // Investitionen für die Abschreibung: {b: Betrag, t: Tick}
     adReach: 0,        // Werbe-Reichweite 0–100, zerfällt laufend (siehe AD_DECAY)
     fans: 0,           // Fanbasis (Race Day), zerfällt laufend (siehe FAN_ZERFALL)
     revenue: 0,        // Erlös seit letzter Dividendenausschüttung (Handel/Shop/Großaufträge)
@@ -2920,6 +2924,12 @@ function emitTo(pid, event, payload) {
  * Dadurch ist ein gekaufter Anteil ein echter Vermögenswert, und Anteilshandel
  * bläht das Gesamtvermögen im Spiel nicht künstlich auf: was der Käufer an
  * Beteiligung gewinnt, gibt der Verkäufer ab. */
+/* Anlagen zählen mit dem, was sie gekostet haben: Kaufpreis, Freischaltung,
+ * verbautes Material und Ausbauten (t.anlagewert). Damit ändert ein Bau den
+ * Buchwert nicht — Geld und Material werden zu Anlage, auch während der Bauzeit
+ * ("Anlage in Arbeit"). Ältere Kacheln ohne Eintrag: Baukosten. */
+const anlageWert = t => t.anlagewert ?? BTYPES[t.btype]?.cost ?? 0;
+const imBau = t => (t.bauBis || 0) > G.tick;
 let bldCache = { tick: -1, byOwner: null };
 function buildingValueOf(pid) {
   /* Gebäudewerte einmal je Tick über die ganze Karte summieren statt für jede
@@ -2928,7 +2938,7 @@ function buildingValueOf(pid) {
   if (bldCache.tick !== G.tick) {
     const by = {};
     for (const t of G.map) if (t.owner && t.btype) {
-      by[t.owner] = (by[t.owner] || 0) + BTYPES[t.btype].cost * 0.7;
+      by[t.owner] = (by[t.owner] || 0) + anlageWert(t);
       /* Fahrzeuge im Rennstall sind Vermögen, auch wenn sie das Warenlager
        * verlassen haben. Ohne diese Zeile würde ein Einzug das Nettovermögen
        * senken — der Wagen wäre aus `inv` verschwunden und nirgends wieder
@@ -2952,14 +2962,14 @@ function substance(p) {
 function netWorth(p) {
   let nw = 0;
   for (const o of Object.values(G.players)) {
-    const blocks = o.equity[p.id] || 0;
-    if (blocks > 0) nw += substance(o) * (blocks / 4);
+    const aktien = o.equity[p.id] || 0;
+    if (aktien > 0) nw += substance(o) * (aktien / AKTIEN);   // Buchwert, nicht Kurs
   }
   /* Anteile, die gerade zum Verkauf angeboten sind, liegen in Verwahrung und
    * fehlen in der Cap-Table — sie gehören aber weiter dem Anbieter. */
   for (const l of G.shareListings) {
     const co = G.players[l.companyId];
-    if (co && (l.sellerId ?? l.companyId) === p.id) nw += substance(co) * (l.count / 4);
+    if (co && (l.sellerId ?? l.companyId) === p.id) nw += substance(co) * (l.count / AKTIEN);
   }
   return nw;
 }
@@ -2979,8 +2989,95 @@ const rev10 = p => p.revBuckets.reduce((a, b) => a + b, 0);
  * letzten 10 Minuten fließt NICHT in den Preis ein, sondern wird nur angezeigt —
  * er ist der Hinweis darauf, wie schnell diese Substanz gerade wächst.
  * Nach unten begrenzt, damit auch eine überschuldete Firma handelbar bleibt. */
-const companyValue = p => Math.max(500, substance(p));
-const blockPrice = p => Math.round(companyValue(p) / 4);   // Preis für 25 %
+/* ============================================================
+ * Aktien, Fundamentalwert F und Kurs P
+ * ------------------------------------------------------------
+ * Jede Firma hat AKTIEN Aktien (statt früher 4 Blöcken à 25 %).
+ *
+ *  Buchwert   S = Kasse + Inventar + Anlagen + Anlagen in Arbeit ± Anleihen
+ *                 − Steuerschuld                       (substance)
+ *  Ertrag     E = Zuwachs von S in den letzten ERTRAG_FENSTER Tagen,
+ *                 bereinigt um Ausschüttungen und Kapitalzuflüsse
+ *  Fundament  F = S + max(0, E) × M_ERTRAG
+ *  Kurs       P(t+1) = P + α·(F(t−d)/AKTIEN − P) + Rauschen, je Tag
+ *
+ * Das Nettovermögen (Siegbedingung) bewertet Beteiligungen zum BUCHWERT S,
+ * nicht zum Kurs: Kursschwankungen erzeugen so kein Vermögen aus dem Nichts.
+ * Gehandelt wird dagegen zu Preisen um P; Kurswetten laufen auf P.
+ * Alle Parameter hier, überschreibbar per Umgebung MARKT='{"ALPHA":0.3}'.
+ * ============================================================ */
+const AKTIEN = 100;
+const MARKT = Object.assign({
+  TAG: 60,              // Sekunden je Markttag (Kurs-Takt)
+  ALPHA: 0.25,          // Anpassung an F je Tag
+  DELAY: 3,             // Verzögerung in Tagen
+  NOISE: 0.02,          // Rauschen ±2 % je Tag
+  M_ERTRAG: 1,          // Ertragsmultiplikator
+  ERTRAG_FENSTER: 10,   // Tage für den Ertrag
+  P_FLAUTE: 0.02,       // Chance je Firma und Tag auf eine Nachfrageflaute
+  FLAUTE: 0.08,         // Kursverlust bei Flaute
+  PANIK: 0.15,          // einmaliger Panikschock je Runde
+  PANIK_VON: 20, PANIK_BIS: 40,   // Spielminute des Schocks (zufällig dazwischen)
+  BETA: 0.5,            // Preiswirkung: P × (1 ± β × Anteil gehandelter Aktien)
+  BAU_DAUER: 30,        // Sekunden Bauzeit (Anlage in Arbeit)
+  AFA_DAUER: 1800,      // Sekunden Abschreibung von Bau/Ausbau für die Steuer
+}, (() => { try { return JSON.parse(process.env.MARKT || "{}"); } catch { return {}; } })());
+
+/* Marktdaten je Firma: Kurs, Verlauf von F (für die Verzögerung) und von S
+ * samt bereinigtem Kapitalfluss (für den Ertrag). */
+const marktVon = p => (G.markt[p.id] ??= { kurs: null, fHist: [], sHist: [] });
+function ertragVon(p) {
+  const h = marktVon(p).sHist;
+  if (h.length < 2) return 0;
+  const alt = h[Math.max(0, h.length - 1 - MARKT.ERTRAG_FENSTER)], neu = [substance(p), p.stats.kapitalNetto || 0];
+  return (neu[0] - alt[0]) - (neu[1] - alt[1]);
+}
+const fundament = p => Math.max(500, substance(p) + Math.max(0, ertragVon(p)) * MARKT.M_ERTRAG);
+/* Kurs je Aktie. Neue Firmen starten bei F — keine festen Startwerte. */
+function kursVon(p) { const m = marktVon(p); if (!(m.kurs > 0)) m.kurs = fundament(p) / AKTIEN; return m.kurs; }
+/* Marktwert = Kurs × Aktien. Heißt aus Kompatibilität weiter companyValue:
+ * Kurswetten, Nachrichten und die Kurstafel laufen darüber. */
+const companyValue = p => kursVon(p) * AKTIEN;
+/* Ein Handel bewegt den Kurs: Kauf hebt, Verkauf senkt (β × Anteil). */
+function kursWirkung(company, aktien, richtung) {
+  const m = marktVon(company);
+  m.kurs = Math.max(0.01, kursVon(company) * (1 + richtung * MARKT.BETA * aktien / AKTIEN));
+}
+function marktLog(art, text, daten = {}) {
+  (G.marktLog ??= []).unshift({ tick: G.tick, ts: Date.now(), art, text, ...daten });
+  if (G.marktLog.length > 60) G.marktLog.length = 60;
+}
+/* Einmal je Markttag, feste Reihenfolge: F messen, dann P nachführen. */
+function marktTag() {
+  const tag = Math.floor(G.tick / MARKT.TAG);
+  if (G.panikTag == null) G.panikTag = Math.floor((MARKT.PANIK_VON + Math.random() * (MARKT.PANIK_BIS - MARKT.PANIK_VON)) * 60 / MARKT.TAG);
+  const panik = !G.panikErledigt && tag >= G.panikTag;
+  for (const p of Object.values(G.players)) {
+    const m = marktVon(p), F = fundament(p);
+    m.sHist.push([substance(p), p.stats.kapitalNetto || 0]); if (m.sHist.length > MARKT.ERTRAG_FENSTER + 1) m.sHist.shift();
+    m.fHist.push(F); if (m.fHist.length > MARKT.DELAY + 1) m.fHist.shift();
+    const Fd = m.fHist.length > MARKT.DELAY ? m.fHist[0] : m.fHist[0];   // F vor d Tagen (anfangs der älteste)
+    let P = kursVon(p);
+    P += MARKT.ALPHA * (Fd / AKTIEN - P);
+    P *= 1 + (Math.random() * 2 - 1) * MARKT.NOISE;
+    if (Math.random() < MARKT.P_FLAUTE) {
+      P *= 1 - MARKT.FLAUTE;
+      marktLog("flaute", `Nachfrageflaute bei ${p.name}: −${Math.round(MARKT.FLAUTE * 100)} %`, { firmaId: p.id });
+    }
+    if (panik) P *= 1 - MARKT.PANIK;
+    m.kurs = Math.max(0.01, P);
+  }
+  if (panik) {
+    G.panikErledigt = true;
+    marktLog("panik", `Panik an der Börse: alle Kurse −${Math.round(MARKT.PANIK * 100)} %`);
+    io.emit("notice", { text: `PANIK an der Börse — alle Aktienkurse fallen um ${Math.round(MARKT.PANIK * 100)} %. Die Firmen selbst sind nicht weniger wert.` });
+  }
+}
+/* Öffentliche Kursdaten je Firma */
+function marktPublic(p) {
+  const F = fundament(p), P = kursVon(p);
+  return { kurs: Math.round(P * 100) / 100, fundament: Math.round(F / AKTIEN * 100) / 100, luecke: Math.round((F - P * AKTIEN) / F * 1000) / 1000 };
+}
 /* Ein zurückgezogenes oder hinfälliges Angebot gibt die verwahrten Anteile an
  * den Verkäufer zurück — sonst verschwänden sie aus der Cap-Table und die Summe
  * der Anteile einer Firma wäre nicht mehr 100 %. */
@@ -3237,8 +3334,8 @@ function marktbericht(sp) {
   if (firmen.length) {
     const spitze = firmen.slice(0, 3);
     absaetze.push(en
-      ? `On the exchange, ${liste(spitze.map(x => `${x.p.name} ${proz(x.v)}`))} gained in value. A 25 percent block in ${spitze[0].p.name} now costs $${zahl(blockPrice(spitze[0].p))}.`
-      : `An der Börse ${spitze.length > 1 ? "gewannen" : "gewann"} ${liste(spitze.map(x => `${x.p.name} ${proz(x.v)}`))} an Wert. Ein 25-Prozent-Block an ${spitze[0].p.name} kostet inzwischen ${zahl(blockPrice(spitze[0].p))} $.`);
+      ? `On the exchange, ${liste(spitze.map(x => `${x.p.name} ${proz(x.v)}`))} gained in value. One share of ${spitze[0].p.name} now trades at $${zahl(kursVon(spitze[0].p))}.`
+      : `An der Börse ${spitze.length > 1 ? "gewannen" : "gewann"} ${liste(spitze.map(x => `${x.p.name} ${proz(x.v)}`))} an Wert. Eine Aktie von ${spitze[0].p.name} kostet inzwischen ${zahl(kursVon(spitze[0].p))} $.`);
   }
 
   if (rang.length) {
@@ -3273,26 +3370,41 @@ function sendeMarktbericht() {
   pushState();
 }
 
+/* Aktionär "Finanzamt": hält eigene Aktien (Stabilisator, siehe Etappe 2);
+ * seine Dividenden fließen in die Stadtkasse. */
+const FA_ID = "__fa";
 function distributeDividends() {
   for (const p of Object.values(G.players)) {
-    const revenue = p.revenue;
-    if (revenue > 0) {
-      const pool = Math.min(revenue * DIVIDEND_RATE, Math.max(0, p.cash));
-      let paidOut = 0;
-      if (pool > 0.01) {
-        for (const [holderId, count] of Object.entries(p.equity)) {
-          if (holderId === p.id || !(count > 0)) continue;
-          const holder = G.players[holderId];
-          if (!holder) continue;
-          const share = pool * (count / 4);
-          p.cash -= share; holder.cash += share; paidOut += share;
-          holder.stats.dividendeRein += share; p.stats.dividendeRaus += share;
-          logTx(holder, "Dividende", `${count * 25}% Anteil an ${p.name}`, share);
-          emitTo(holderId, "notice", { text: `Dividende von ${p.name}: +${Math.round(share)} $ (${count * 25}% Anteil)` });
+    /* Die Firma legt die Ausschüttung selbst fest: automatisch ein Anteil des
+     * Umsatzes der Periode (wie bisher) oder ein fester Betrag — höchstens so
+     * viel, wie in der Kasse liegt. Verteilt wird nach Aktien; was auf die
+     * eigenen Aktien entfiele, bleibt einfach in der Firma. */
+    const wunsch = p.ausschuettung == null ? (p.revenue > 0 ? p.revenue * DIVIDEND_RATE : 0) : p.ausschuettung;
+    const pool = Math.min(wunsch, Math.max(0, p.cash));
+    let paidOut = 0;
+    if (pool > 0.01) {
+      for (const [holderId, count] of Object.entries(p.equity)) {
+        if (holderId === p.id || !(count > 0)) continue;
+        const share = pool * (count / AKTIEN);
+        const pct = Math.round(count / AKTIEN * 1000) / 10;
+        if (holderId === FA_ID) {
+          p.cash -= share; paidOut += share; G.stadtkasse += share;
+          continue;
         }
-        /* Nur loggen, wenn wirklich Geld an externe Aktionäre floss — bei 100 %
-         * Eigenbesitz bleibt das Geld komplett in der Firma, keine Ausschüttung. */
-        if (paidOut > 0.01) logTx(p, "Dividende", "Dividenden an Aktionäre ausgeschüttet", -paidOut);
+        const holder = G.players[holderId];
+        if (!holder) continue;
+        p.cash -= share; holder.cash += share; paidOut += share;
+        holder.stats.dividendeRein += share;
+        logTx(holder, "Dividende", `${count} Aktien (${pct} %) an ${p.name}`, share);
+        emitTo(holderId, "notice", { text: `Dividende von ${p.name}: +${Math.round(share)} $ (${count} Aktien)` });
+      }
+      if (paidOut > 0.01) {
+        p.stats.dividendeRaus += paidOut;
+        /* Ausschüttung verlässt die Firma: senkt F um genau diesen Betrag.
+         * Für den Ertrag in F wird sie herausgerechnet (kapitalNetto). */
+        p.stats.kapitalNetto = (p.stats.kapitalNetto || 0) - paidOut;
+        logTx(p, "Dividende", "Dividenden an Aktionäre ausgeschüttet", -paidOut);
+        marktLog("ausschuettung", `${p.name} schüttet ${Math.round(paidOut)} $ aus`, { firmaId: p.id, betrag: Math.round(paidOut) });
       }
     }
     p.revenue = 0;
@@ -3372,10 +3484,26 @@ function steuerStufePruefen() {
   const st = steuerStufe();
   io.emit("notice", { text: `Finanzamt: ${STUFE_TEXT[st.key]} Börsengebühr jetzt ${Math.round(satzBoerse() * 1000) / 10} %, Gewinnsteuer ${Math.round(satzGewinn() * 1000) / 10} %.` });
 }
+/* Abschreibung: Bau und Ausbau mindern den steuerlichen Gewinn nicht mehr
+ * sofort, sondern gleichmäßig über MARKT.AFA_DAUER. Vorher stellten die Bots
+ * jeden Gewinn sofort in Gebäude, und die Gewinnsteuer brachte in 40 Minuten
+ * keine 1.000 $ — obwohl die Firmen auf das Neunfache wuchsen. */
+function investieren(p, betrag) {
+  if (!(betrag > 0)) return;
+  p.stats.investiert = (p.stats.investiert || 0) + betrag;
+  (p.afa ??= []).push({ b: betrag, t: G.tick });
+}
+function abschreibungBisher(p) {
+  let s = 0;
+  for (const a of p.afa || []) s += Math.min(a.b, a.b * Math.max(0, G.tick - a.t) / MARKT.AFA_DAUER);
+  return s + (p.afaFertig || 0);
+}
 function steuerBasis(p) {
   const st = p.stats;
+  /* Ausgaben ohne Investitionen, dafür die bisher angefallene Abschreibung.
+   * Dividenden an Aktionäre sind Gewinnverwendung — sie mindern ihn nicht. */
   return (st.umsatz || 0) + (st.dividendeRein || 0) + (st.zinsErtrag || 0)
-       - (st.ausgaben || 0) - (st.dividendeRaus || 0) - (st.zinsAufwand || 0);
+       - ((st.ausgaben || 0) - (st.investiert || 0)) - abschreibungBisher(p) - (st.zinsAufwand || 0);
 }
 function steuerSchaetzung(p) {
   const gewinn = steuerBasis(p) - (p.steuerStand ?? 0);
@@ -3401,6 +3529,11 @@ function finanzamtEinnahme(betrag) {
 function steuernErheben() {
   if (!finanzamtAktiv()) return;
   for (const p of Object.values(G.players)) {
+    /* Voll abgeschriebene Posten zusammenfassen, damit die Liste nicht wächst */
+    if (p.afa?.length) {
+      const fertig = p.afa.filter(a => G.tick - a.t >= MARKT.AFA_DAUER);
+      if (fertig.length) { p.afaFertig = (p.afaFertig || 0) + fertig.reduce((x, a) => x + a.b, 0); p.afa = p.afa.filter(a => G.tick - a.t < MARKT.AFA_DAUER); }
+    }
     const basis = steuerBasis(p);
     const gewinn = basis - (p.steuerStand ?? 0);
     p.steuerStand = basis;
@@ -3532,7 +3665,7 @@ function wettMax(p) { return Math.max(0, Math.floor(Math.min(p.cash, netWorth(p)
 function wettVerbot(p, firma) {
   if (!firma) return "Firma existiert nicht";
   if (firma.id === p.id) return "Auf die eigene Firma kannst du nicht wetten";
-  if ((firma.equity[p.id] || 0) >= 2) return "Du hältst 50 % oder mehr an dieser Firma";
+  if ((firma.equity[p.id] || 0) >= AKTIEN / 2) return "Du hältst 50 % oder mehr an dieser Firma";
   return null;
 }
 function wetteBuchen(p, firma, richtung, einsatz) {
@@ -4110,6 +4243,7 @@ function snapshot() {
   const rankOf = Object.fromEntries(ranked.map(([pid], i) => [pid, i + 1]));
   return {
     tick: G.tick, winner: G.winner, winGoal: WIN_NW, report: G.report || null,
+    marktLog: (G.marktLog || []).slice(0, 20), marktCfg: { aktien: AKTIEN, tag: MARKT.TAG, beta: MARKT.BETA, bauDauer: MARKT.BAU_DAUER, afaDauer: MARKT.AFA_DAUER },
     /* Countdown bis zum naechsten Renntag — ohne ihn sieht man erst bei der
      * Ankuendigung, dass etwas ansteht, und kann nichts vorbereiten. */
     /* Im Kartellmodus zählt der Countdown gar nicht mehr herunter — ihn trotzdem
@@ -4195,16 +4329,17 @@ function snapshot() {
     map: G.map.map(t => ({ x: t.x, y: t.y, zone: t.zone, road: t.road, water: t.water,
       park: t.park, field: t.field, sand: t.sand, deep: t.deep, rock: t.rock,
       piazza: t.piazza, fontana: t.fontana, pier: t.pier, leuchtturm: t.leuchtturm, questura: t.questura, gcasino: t.gcasino, wz: t.wz, famhaus: t.famhaus,
-      bank: t.bank, news: t.news, finanzamt: t.finanzamt, denkmal: t.denkmal, denkmalName: t.denkmalName, schwarz: t.schwarz, deko: t.deko, locked: t.locked, unlockCost: t.unlockCost, owner: t.owner, btype: t.btype, lien: t.lien, shop: t.shop, paused: t.paused, level: t.level, autos: autosDyn(t), sperre: t.sperre ?? null })),
+      bank: t.bank, news: t.news, finanzamt: t.finanzamt, denkmal: t.denkmal, denkmalName: t.denkmalName, schwarz: t.schwarz, deko: t.deko, locked: t.locked, unlockCost: t.unlockCost, owner: t.owner, btype: t.btype, lien: t.lien, shop: t.shop, paused: t.paused, level: t.level, autos: autosDyn(t), sperre: t.sperre ?? null, bauBis: imBau(t) ? t.bauBis : null })),
     players: Object.fromEntries(Object.entries(G.players).map(([sid, p]) =>
       [sid, { id: sid, name: p.name, color: p.color, lvl: p.lvl, xp: p.xp, industry: p.industry, industries: p.industries,
               familie: p.familie || null,
               netWorth: Math.round(netWorth(p)), rating: rating(p), rank: rankOf[sid],
               /* Kennzahlen für den Aktienhandel an der Bank */
-              marketValue: Math.round(companyValue(p)), blockPrice: blockPrice(p), rev10: Math.round(rev10(p)),
-              ownPct: (p.equity[sid] || 0) * 25,
+              marketValue: Math.round(companyValue(p)), rev10: Math.round(rev10(p)), ...marktPublic(p),
+              buchwert: Math.round(substance(p)), aktien: AKTIEN, ausschuettung: p.ausschuettung ?? null,
+              ownPct: Math.round((p.equity[sid] || 0) / AKTIEN * 1000) / 10,
               equity: Object.fromEntries(Object.entries(p.equity).filter(([, c]) => c > 0)
-                .map(([hid, c]) => [G.players[hid]?.name ?? "—", c * 25])) }])),
+                .map(([hid, c]) => [hid === FA_ID ? "Finanzamt" : (G.players[hid]?.name ?? "—"), Math.round(c / AKTIEN * 1000) / 10])) }])),
     orders: G.orders,
     bonds: G.bonds.map(b => ({ ...b, issuer: G.players[b.issuerId]?.name ?? "—",
       holder: b.holderId ? (G.players[b.holderId]?.name ?? "—") : null,
@@ -4268,7 +4403,7 @@ function privateState(p) {
    * geändert hat. Dieselbe Rechnung wie in buildingValueOf(). */
   let bldVal = 0;
   for (const t of G.map) if (t.owner === p.id && t.btype) {
-    bldVal += BTYPES[t.btype].cost * 0.7;
+    bldVal += anlageWert(t);
     if (t.autos) for (const a of t.autos) bldVal += autoWert(a);
   }
   let bondVal = 0, debtVal = 0;
@@ -4281,8 +4416,9 @@ function privateState(p) {
   const portfolio = Object.values(G.players)
     .filter(other => other.id !== p.id && (other.equity[p.id] || 0) > 0)
     .map(other => ({ id: other.id, company: other.name, industry: other.industry,
-      count: other.equity[p.id], pct: other.equity[p.id] * 25,
-      blockPrice: blockPrice(other), value: blockPrice(other) * other.equity[p.id],
+      count: other.equity[p.id], pct: Math.round(other.equity[p.id] / AKTIEN * 1000) / 10,
+      kurs: Math.round(kursVon(other) * 100) / 100, value: Math.round(kursVon(other) * other.equity[p.id]),
+      buchwert: Math.round(substance(other) * other.equity[p.id] / AKTIEN),
       einstand: Math.round((p.equityAvg[other.id] || 0) * other.equity[p.id]),
       marketValue: Math.round(companyValue(other)), rev10: Math.round(rev10(other)) }));
   /* Kartell-Innensicht: der Verdachtswert und die offenen Einladungen gehen
@@ -4318,16 +4454,17 @@ function privateState(p) {
     wettLog: p.wettLog || [], wettMax: wettMax(p),
     steuer: finanzamtAktiv() ? { ...steuerSchaetzung(p), letzter: p.steuerLetzter || null,
       schuld: Math.round(p.steuerSchuld || 0), gezahlt: Math.round(p.stats.steuern || 0) } : null,
-    ownPct: (p.equity[p.id] || 0) * 25, portfolio, revenue: Math.round(p.revenue),
-    marketValue: Math.round(companyValue(p)), blockPrice: blockPrice(p), rev10: Math.round(rev10(p)),
+    ownPct: Math.round((p.equity[p.id] || 0) / AKTIEN * 1000) / 10, ownAktien: p.equity[p.id] || 0, aktien: AKTIEN,
+    portfolio, revenue: Math.round(p.revenue), ausschuettung: p.ausschuettung,
+    marketValue: Math.round(companyValue(p)), rev10: Math.round(rev10(p)), ...marktPublic(p),
     /* Bilanz: erst die Substanz der eigenen Firma, dann der Anteil daran, den man
      * selbst noch hält, plus die Beteiligungen an fremden Firmen. Nur so passt
      * die Summe zum Nettovermögen in der Kopfzeile. */
     balance: { cash: Math.round(p.cash), invVal: Math.round(invVal), bldVal: Math.round(bldVal),
                bondVal, debtVal,
                firmVal: Math.round(substance(p)),
-               ownShare: (p.equity[p.id] || 0) / 4,
-               holdings: Math.round(portfolio.reduce((sum, h) => sum + h.value, 0)),
+               ownShare: (p.equity[p.id] || 0) / AKTIEN,
+               holdings: Math.round(portfolio.reduce((sum, h) => sum + h.buchwert, 0)),   // Buchwert — wie im Nettovermögen
                total: Math.round(netWorth(p)) } };
 }
 /* Diagnose: mit DEBUG_PERF=1 alle 30 s eine Kennzahlenzeile ins Log. Damit lässt
@@ -4353,7 +4490,7 @@ function dropContract(c) {
  * Nach dem ersten Snapshot reist die Karte nur noch als Differenz über diese
  * Liste. Der Vergleich läuft über JSON, verschachtelte Arrays sind also
  * abgedeckt (derselbe Grund, aus dem `shop` hier steht). */
-const DYNAMIC_TILE_KEYS = ["locked", "owner", "btype", "lien", "shop", "paused", "level", "autos", "sperre", "denkmal", "denkmalName"];
+const DYNAMIC_TILE_KEYS = ["locked", "owner", "btype", "lien", "shop", "paused", "level", "autos", "sperre", "denkmal", "denkmalName", "bauBis"];
 /* undefined wird zu null normalisiert, damit auch "Feld gelöscht" (z. B. der
  * Abriss räumt t.shop weg) beim Empfänger sicher ankommt. */
 /* Fahrzeuge gehen MIT ihren gerechneten Werten über die Leitung. Sie hier
@@ -4363,7 +4500,7 @@ const DYNAMIC_TILE_KEYS = ["locked", "owner", "btype", "lien", "shop", "paused",
  * unverändert, weil die Rohdaten gleich aussehen. */
 const autosDyn = t => t.autos ? t.autos.map(a => ({ ...a, werte: autoWerte(a),
   wert: Math.round(autoWert(a)), reparatur: reparaturKosten(a) })) : null;
-const tileDyn = t => { const d = {}; for (const k of DYNAMIC_TILE_KEYS) d[k] = k === "autos" ? autosDyn(t) : (t[k] ?? null); return d; };
+const tileDyn = t => { const d = {}; for (const k of DYNAMIC_TILE_KEYS) d[k] = k === "autos" ? autosDyn(t) : k === "bauBis" ? (imBau(t) ? t.bauBis : null) : (t[k] ?? null); return d; };
 let lastTileSigs = null;
 function tileDelta() {
   const sigs = new Array(G.map.length);
@@ -4392,7 +4529,7 @@ function buildReport(siegerId) {
     const geb = G.map.filter(t => t.owner === p.id && t.btype);
     const beteiligungen = Object.values(G.players)
       .filter(o => o.id !== p.id && (o.equity[p.id] || 0) > 0)
-      .map(o => ({ firma: o.name, pct: o.equity[p.id] * 25, wert: blockPrice(o) * o.equity[p.id] }));
+      .map(o => ({ firma: o.name, pct: Math.round(o.equity[p.id] / AKTIEN * 1000) / 10, wert: Math.round(substance(o) * o.equity[p.id] / AKTIEN) }));
     return {
       id: p.id, name: p.name, color: p.color, industrien: p.industries || [p.industry],
       sieger: p.id === siegerId,
@@ -4408,7 +4545,7 @@ function buildReport(siegerId) {
       werbung: Math.round(st.werbung), fusionen: st.fusionen,
       anteileGekauft: st.anteileGekauft, anteileVerkauft: st.anteileVerkauft,
       beteiligungen, beteiligungswert: Math.round(beteiligungen.reduce((a, b) => a + b.wert, 0)),
-      eigenanteil: (p.equity[p.id] || 0) * 25,
+      eigenanteil: Math.round((p.equity[p.id] || 0) / AKTIEN * 1000) / 10,
     };
   }).sort((a, b) => b.netWorth - a.netWorth);
 
@@ -5744,13 +5881,20 @@ io.on("connection", socket => {
     const missing = Object.entries(mats).filter(([g, n]) => p.inv[g] < n);
     if (missing.length) return ack?.({ error: "Baumaterial fehlt: " +
       missing.map(([g, n]) => `${Math.ceil(n - p.inv[g])}× ${GOODS[g].name}`).join(", ") + " — an der Börse kaufen" });
+    const matWert = Object.entries(mats).reduce((a, [g, n]) => a + n * MM[g].price, 0);
     for (const [g, n] of Object.entries(mats)) p.inv[g] -= n;
     if (t.locked) { t.locked = false; gainXp(p, 30); }
     if (MODE === "kartell" && p.familie) kampfPunkte(bezirkVon(x, y), p.familie, 2);   // Tauziehen
     if (bt.out || bt.proc) questProg(p, "build");
     if (bt.familie) questProg(p, "familiebau");
     p.cash -= bt.cost + unlockCost; t.owner = p.id; t.btype = btype; t.level = 1; gainXp(p, 20);
+    /* Geld und Material werden zur Anlage — der Buchwert bleibt gleich. Während
+     * der Bauzeit ist es eine "Anlage in Arbeit" und produziert noch nichts. */
+    t.anlagewert = bt.cost + unlockCost + matWert;
+    t.bauBis = G.tick + MARKT.BAU_DAUER;
     p.stats.gebaut++; p.stats.ausgaben += bt.cost + unlockCost;
+    investieren(p, bt.cost + unlockCost);
+    marktLog("bau", `${p.name} baut ${bt.name}`, { firmaId: p.id, betrag: Math.round(t.anlagewert) });
     if (bt.retail) t.shop = Array.from({ length: bt.retail.slots }, () => null);
     logTx(p, "Bau", `${bt.name} gebaut${unlockCost ? " (inkl. Freischaltung)" : ""}`, -(bt.cost + unlockCost));
     ack?.({ ok: true });
@@ -5769,7 +5913,9 @@ io.on("connection", socket => {
     if (p.inv.elektronik < cost.elektronik) return ack?.({ error: `Zu wenig Elektronik (${cost.elektronik} nötig)` });
     if (p.cash < cost.cash) return ack?.({ error: "Zu wenig Kapital" });
     p.inv.elektronik -= cost.elektronik; p.cash -= cost.cash; t.level = level + 1; gainXp(p, 25);
+    t.anlagewert = anlageWert(t) + cost.cash + cost.elektronik * MM.elektronik.price;   // Ausbau erhöht die Anlage
     p.stats.aufgelevelt++; p.stats.ausgaben += cost.cash;
+    investieren(p, cost.cash);
     questProg(p, "upgrade");
     logTx(p, "Ausbau", bt.racing
       ? `${bt.name} auf Stufe ${t.level} — jetzt ${stallKapazitaet(t.level)} Stellplätze`
@@ -6103,7 +6249,7 @@ io.on("connection", socket => {
     p.cash += BTYPES[t.btype].cost * 0.5;
     logTx(p, "Bau", `Abriss ${BTYPES[t.btype].name}`, BTYPES[t.btype].cost * 0.5);
     p.stats.abgerissen++;
-    t.owner = null; t.btype = null; t.shop = undefined;
+    t.owner = null; t.btype = null; t.shop = undefined; t.anlagewert = undefined; t.bauBis = undefined;
     ack?.({ ok: true });
   }));
 
@@ -6255,27 +6401,38 @@ io.on("connection", socket => {
   /* --- Aktien: eigene 25%-Anteile verkaufen, um Kapital zu bekommen.
    * Käufer erhalten dafür alle 10 min eine Dividende vom laufenden Erlös
    * der Firma (siehe distributeDividends im Server-Tick). --- */
+  /* Ausschüttung festlegen: null/"auto" = automatisch (DIVIDEND_RATE des Umsatzes
+   * der Periode), sonst ein fester Betrag je Periode (gedeckelt durch die Kasse). */
+  socket.on("setAusschuettung", guard((p, { betrag } = {}, ack) => {
+    if (betrag == null || betrag === "auto") { p.ausschuettung = null; return ack?.({ ok: true }); }
+    betrag = Math.round(+betrag);
+    if (!(betrag >= 0) || betrag > 1e7) return ack?.({ error: "Ungültiger Betrag" });
+    p.ausschuettung = betrag;
+    logTx(p, "Aktien", betrag ? `Ausschüttung auf ${betrag.toLocaleString("de-DE")} $ je ${DIVIDEND_INTERVAL / 60} min festgelegt` : "Ausschüttung ausgesetzt", 0);
+    ack?.({ ok: true });
+  }));
+
   socket.on("listShares", guard((p, { companyId, count, price, toId }, ack) => {
     companyId = companyId || p.id;   // ohne Angabe: eigene Anteile emittieren (Rückwärtskompatibilität)
     count = Math.floor(+count); price = +price; toId = toId || null;
     const company = G.players[companyId];
     if (!company) return ack?.({ error: "Firma unbekannt" });
-    if (!(count >= 1 && count <= 4)) return ack?.({ error: "1–4 Anteile (je 25 %)" });
+    if (!(count >= 1 && count <= AKTIEN)) return ack?.({ error: `1–${AKTIEN} Aktien` });
     if (!(price > 0)) return ack?.({ error: "Ungültiger Preis" });
     /* Verkaufen darf jeder, der die Anteile hält — die Firma ihre eigenen (Emission)
      * genauso wie ein Aktionär seine zugekauften (Weiterverkauf). */
     if ((company.equity[p.id] || 0) < count)
-      return ack?.({ error: `So viele Anteile an ${company.name} hältst du nicht` });
+      return ack?.({ error: `So viele Aktien von ${company.name} hältst du nicht` });
     if (toId && (toId === p.id || !G.players[toId])) return ack?.({ error: "Ungültiger Empfänger" });
     company.equity[p.id] -= count;   // in Verwahrung, bis gekauft oder zurückgezogen
     const listing = { id: id(), companyId, sellerId: p.id, count, price, ts: Date.now(), toId };
     G.shareListings.push(listing);
-    const what = companyId === p.id ? "eigene Anteile" : `Anteile an ${company.name}`;
+    const what = companyId === p.id ? "eigene Aktien" : `Aktien von ${company.name}`;
     if (toId) {
       emitTo(toId, "shareOffer", { ...listing, from: p.name, company: company.name });
-      logTx(p, "Aktien", `${count * 25}% ${what} an ${G.players[toId].name} angeboten`, 0);
+      logTx(p, "Aktien", `${count} ${what} an ${G.players[toId].name} angeboten`, 0);
     } else {
-      logTx(p, "Aktien", `${count * 25}% ${what} an der Bank angeboten`, 0);
+      logTx(p, "Aktien", `${count} ${what} an der Bank angeboten`, 0);
     }
     ack?.({ ok: true });
   }));
@@ -6289,17 +6446,17 @@ io.on("connection", socket => {
     const company = G.players[companyId];
     if (!company) return ack?.({ error: "Firma unbekannt" });
     if (companyId === p.id) return ack?.({ error: "Das ist deine eigene Firma" });
-    if (!(count >= 1 && count <= 4)) return ack?.({ error: "1–4 Anteile (je 25 %)" });
+    if (!(count >= 1 && count <= AKTIEN)) return ack?.({ error: `1–${AKTIEN} Aktien` });
     if (!(price > 0)) return ack?.({ error: "Ungültiger Preis" });
     if (p.cash < price) return ack?.({ error: "So viel Kapital hast du nicht" });
     if ((company.equity[companyId] || 0) < count)
-      return ack?.({ error: `${company.name} hält selbst nur noch ${(company.equity[companyId] || 0) * 25} %` });
+      return ack?.({ error: `${company.name} hält selbst nur noch ${company.equity[companyId] || 0} Aktien` });
     if (G.shareBids.some(b => b.companyId === companyId && b.bidderId === p.id))
       return ack?.({ error: "Du hast dieser Firma bereits eine Anfrage geschickt" });
     const bid = { id: id(), companyId, bidderId: p.id, count, price, ttl: SHARE_BID_TTL };
     G.shareBids.push(bid);
-    emitTo(companyId, "notice", { text: `${p.name} bietet ${Math.round(price)} $ für ${count * 25} % deiner Firma — an der Stadtbank entscheiden.` });
-    logTx(p, "Aktien", `Kaufanfrage über ${count * 25}% an ${company.name}`, 0);
+    emitTo(companyId, "notice", { text: `${p.name} bietet ${Math.round(price)} $ für ${count} Aktien deiner Firma — an der Stadtbank entscheiden.` });
+    logTx(p, "Aktien", `Kaufanfrage über ${count} Aktien von ${company.name}`, 0);
     ack?.({ ok: true });
   }));
 
@@ -6314,16 +6471,19 @@ io.on("connection", socket => {
       return ack?.({ error: "Du hältst nicht mehr genug eigene Anteile" });
     bidder.cash -= bid.price;
     p.cash += bid.price;                    // Verkauf eigener Anteile = frisches Firmenkapital
+    p.stats.kapitalNetto = (p.stats.kapitalNetto || 0) + bid.price;   // kein Ertrag — für F herausrechnen
     p.equity[p.id] -= bid.count;
+    kursWirkung(p, bid.count, -1);          // Firma gibt Aktien ab: Kurs gibt nach
+    marktLog("verkauf", `${p.name} gibt ${bid.count} eigene Aktien an ${bidder.name} ab`, { firmaId: p.id, aktien: bid.count, preis: Math.round(bid.price) });
     merkeEinstand(bidder, p, bid.count, bid.price);
     p.equity[bidder.id] = (p.equity[bidder.id] || 0) + bid.count;
     G.shareBids.splice(i, 1);
-    logTx(p, "Aktien", `${bid.count * 25}% eigene Anteile an ${bidder.name} verkauft`, bid.price);
-    logTx(bidder, "Aktien", `${bid.count * 25}% an ${p.name} gekauft`, -bid.price);
+    logTx(p, "Aktien", `${bid.count} eigene Aktien an ${bidder.name} verkauft`, bid.price);
+    logTx(bidder, "Aktien", `${bid.count} Aktien von ${p.name} gekauft`, -bid.price);
     bidder.stats.anteileGekauft += bid.count; p.stats.anteileVerkauft += bid.count;
     questProg(bidder, "shares");
-    emitTo(bidder.id, "notice", { text: `${p.name} nimmt deine Kaufanfrage an — du hältst jetzt ${p.equity[bidder.id] * 25} % an ${p.name}.` });
-    io.emit("notice", { text: `${bidder.name} übernimmt ${bid.count * 25} % von ${p.name} für ${Math.round(bid.price)} $` });
+    emitTo(bidder.id, "notice", { text: `${p.name} nimmt deine Kaufanfrage an — du hältst jetzt ${p.equity[bidder.id]} Aktien von ${p.name}.` });
+    io.emit("notice", { text: `${bidder.name} übernimmt ${bid.count} Aktien von ${p.name} für ${Math.round(bid.price)} $` });
     ack?.({ ok: true });
   }));
 
@@ -6377,7 +6537,9 @@ io.on("connection", socket => {
     merkeEinstand(p, company, l.count, l.price);   // vor dem Erhöhen: braucht den alten Stand
     company.equity[p.id] = (company.equity[p.id] || 0) + l.count;
     G.shareListings.splice(G.shareListings.indexOf(l), 1);
-    logTx(p, "Aktien", `${l.count * 25}% an ${company.name} gekauft`, -l.price);
+    logTx(p, "Aktien", `${l.count} Aktien von ${company.name} gekauft`, -l.price);
+    kursWirkung(company, l.count, +1);   // jemand kauft: Kurs zieht an
+    marktLog("kauf", `${p.name} kauft ${l.count} Aktien von ${company.name}`, { firmaId: company.id, aktien: l.count, preis: Math.round(l.price) });
     p.stats.anteileGekauft += l.count;
     questProg(p, "shares");
     if (sellerId === l.companyId) {
@@ -6385,15 +6547,16 @@ io.on("connection", socket => {
        * Firmenkapital. Es zählt NICHT als Umsatz — sonst würde eine Firma sich
        * über den Verkauf eigener Anteile selbst hochbewerten. */
       company.cash += l.price;
-      logTx(company, "Aktien", `${l.count * 25}% eigene Anteile an ${p.name} ausgegeben`, l.price);
+      company.stats.kapitalNetto = (company.stats.kapitalNetto || 0) + l.price;   // kein Ertrag — für F herausrechnen
+      logTx(company, "Aktien", `${l.count} eigene Aktien an ${p.name} ausgegeben`, l.price);
     } else if (seller) {
       /* Weiterverkauf: der Erlös geht an den Aktionär — hier entsteht der
        * Kursgewinn oder -verlust aus dem Anteilshandel. */
       seller.cash += l.price;
-      logTx(seller, "Aktien", `${l.count * 25}% an ${company.name} an ${p.name} verkauft`, l.price);
-      emitTo(sellerId, "notice", { text: `${p.name} hat deine ${l.count * 25}% an ${company.name} für ${Math.round(l.price)} $ gekauft.` });
+      logTx(seller, "Aktien", `${l.count} Aktien von ${company.name} an ${p.name} verkauft`, l.price);
+      emitTo(sellerId, "notice", { text: `${p.name} hat deine ${l.count} Aktien von ${company.name} für ${Math.round(l.price)} $ gekauft.` });
     }
-    io.emit("notice", { text: `${p.name} kauft ${l.count * 25}% von ${company.name} für ${Math.round(l.price)} $` });
+    io.emit("notice", { text: `${p.name} kauft ${l.count} Aktien von ${company.name} für ${Math.round(l.price)} $` });
     ack?.({ ok: true });
   }));
 
@@ -6434,6 +6597,7 @@ io.on("connection", socket => {
     G.groupOrder = null; G.nextGroupIn = 20;
     G.nextDividendIn = DIVIDEND_INTERVAL;
     G.wettrunde = { nr: 1, phase: "annahme", rest: WETT_ANNAHME, start: {} }; G.wetten = []; G.wettLetzte = []; G.wettReserve = WETT_RESERVE;
+    G.markt = {}; G.marktLog = []; G.panikTag = null; G.panikErledigt = false;
     G.stadtkasse = STADT_GRUNDSTOCK; G.steuerStufe = 2; G.boerseGebuehren = 0; G.steuernGesamt = 0; G.stadtprojekt = null; G.projektPause = 120; G.stadtprojekteFertig = [];
     for (const pl of Object.values(G.players)) { pl.steuerStand = undefined; pl.steuerSchuld = 0; pl.steuerLetzter = null; }
     for (const pl of Object.values(G.players)) { pl.wettOffen = 0; pl.wettLog = []; }
@@ -6469,7 +6633,8 @@ io.on("connection", socket => {
   socket.on("mergeCompany", guard((p, { targetId }, ack) => {
     const target = G.players[targetId];
     if (!target || targetId === p.id) return ack?.({ error: "Ungültige Zielfirma" });
-    if ((target.equity[p.id] || 0) < 4) return ack?.({ error: "Du brauchst 100 % der Anteile für eine Fusion" });
+    if ((target.equity[p.id] || 0) < AKTIEN) return ack?.({ error: `Du brauchst alle ${AKTIEN} Aktien für eine Fusion` });
+    p.afa.push(...(target.afa || []));   // Abschreibungen laufen bei der übernehmenden Firma weiter
     /* Vermögen zusammenlegen */
     p.cash += target.cash;
     for (const g of Object.keys(target.inv)) p.inv[g] = (p.inv[g] || 0) + target.inv[g];
@@ -6510,7 +6675,7 @@ io.on("connection", socket => {
     }
     /* Zielfirma auflösen: bestehende Verbindung trennen (falls online) und entfernen */
     if (target.socketId) { const ts = io.sockets.sockets.get(target.socketId); if (ts) ts.disconnect(true); delete G.socketToPid[target.socketId]; }
-    delete G.players[targetId];
+    delete G.players[targetId]; delete G.markt[targetId];
     ack?.({ ok: true });
   }));
 
@@ -6994,6 +7159,7 @@ function runTick() {
     if (!t.btype || !t.owner) continue;
     const p = G.players[t.owner], bt = BTYPES[t.btype];
     if (!p) continue;
+    if (imBau(t)) continue;   // Anlage in Arbeit: produziert und verkauft noch nichts
     if (bt.retail) {   // Shop: verkauft konfigurierte Ware zum selbstgesetzten Preis
       if (t.paused) continue;
       t.shop?.forEach((slot, i) => {
@@ -7166,6 +7332,7 @@ function runTick() {
   /* Aktien: Dividendenausschüttung alle 10 min */
   if (--G.nextDividendIn <= 0) { distributeDividends(); steuernErheben(); G.nextDividendIn = DIVIDEND_INTERVAL; }
   finanzamtTick();
+  if (G.tick % MARKT.TAG === 0) marktTag();   // Aktienkurse: F messen, P nachführen
   /* Kurswetten: Annahme → Laufzeit → Abrechnung */
   wettTick();
   /* Fahrergehälter: eine laufende Verpflichtung, kein Einmalkauf. Wer nicht
@@ -7814,14 +7981,16 @@ async function spawnBot(cfg, lvl = BOT_LEVELS[BOT_LEVEL_DEFAULT]) {
        * den der Server ohnehin mitliefert — vorher boten die Bots ihre eigene
        * Firma pauschal für 12 % des Nettovermögens an, also für rund die Hälfte
        * des fairen Preises. */
-      const meinBlock = st.players[myId]?.blockPrice || 0;
+      const PAKET = 25;   // Bots handeln in Paketen zu 25 Aktien (wie früher ein 25-%-Block)
+      const meinBlock = (st.players[myId]?.kurs || 0) * PAKET;
       const eigeneOffen = st.shareListings.some(l => l.sellerId === myId);
       if (me.cash < 1500 && !eigeneOffen) {
         const depot = (me.portfolio || []).filter(h => h.count > 0);
         if (depot.length) {
           /* Beteiligung abstoßen — leicht unter Marktwert, damit sie zügig weggeht */
           const h = depot.sort((a, b) => b.value - a.value)[0];
-          await em("listShares", { companyId: h.id, count: 1, price: Math.max(200, Math.round(h.blockPrice * 0.95)) });
+          const n = Math.min(PAKET, h.count);
+          await em("listShares", { companyId: h.id, count: n, price: Math.max(200, Math.round(h.kurs * n * 0.95)) });
         } else if ((st.players[myId]?.ownPct ?? 0) > 50 && meinBlock > 0) {
           /* Notverkauf eigener Anteile: 10 % Abschlag auf den Marktwert, nicht mehr.
            * Untergrenze 50 %: Vorher stand hier nur "> 0", ein dauerhaft klammer
@@ -7830,21 +7999,21 @@ async function spawnBot(cfg, lvl = BOT_LEVELS[BOT_LEVEL_DEFAULT]) {
            * Umsatz und Bonität D — netWorth summiert ausschliesslich GEHALTENE
            * Anteile, und er hielt keinen einzigen mehr an sich selbst. Die
            * Anzeige war korrekt, die Firma hatte sich selbst aufgelöst. */
-          await em("listShares", { count: 1, price: Math.max(400, Math.round(meinBlock * 0.9)) });
+          await em("listShares", { count: PAKET, price: Math.max(400, Math.round(meinBlock * 0.9)) });
         }
       } else if (me.cash > 6000) {
         /* Günstige fremde Anteile aufsammeln: nur unter Marktwert zugreifen */
         const guenstig = (st.shareListings || [])
           .filter(l => l.sellerId !== myId && !l.toId && l.price <= me.cash * 0.3)
-          .find(l => { const co = st.players[l.companyId]; return co && l.price < co.blockPrice * l.count * 0.95; });
+          .find(l => { const co = st.players[l.companyId]; return co && l.price < (co.kurs || 0) * l.count * 0.95; });
         if (guenstig) await em("buyShares", { listingId: guenstig.id });
         else if (lvl.leveln && Math.random() < 0.25) {
           /* Ab "Mittel" auch von sich aus Kaufanfragen stellen — sonst bleibt der
            * Handelsplatz tot, wenn gerade niemand etwas eingestellt hat. */
           const ziel = Object.values(st.players).find(pp =>
-            pp.id !== myId && pp.ownPct > 0 && pp.blockPrice > 0 &&
-            pp.blockPrice < me.cash * 0.3 && !(st.shareBids || []).some(b => b.bidderId === myId && b.companyId === pp.id));
-          if (ziel) await em("bidShares", { companyId: ziel.id, count: 1, price: Math.round(ziel.blockPrice * 1.05) });
+            pp.id !== myId && pp.ownPct >= PAKET && pp.kurs > 0 &&
+            pp.kurs * PAKET < me.cash * 0.3 && !(st.shareBids || []).some(b => b.bidderId === myId && b.companyId === pp.id));
+          if (ziel) await em("bidShares", { companyId: ziel.id, count: PAKET, price: Math.round(ziel.kurs * PAKET * 1.05) });
         }
       }
       /* Expansion: nächstes Gebäude, inkl. Zonen-Freischaltung + Materialkauf.
@@ -8013,10 +8182,10 @@ async function spawnBot(cfg, lvl = BOT_LEVELS[BOT_LEVEL_DEFAULT]) {
        * der verlangte Aufschlag — Kontrolle gibt niemand zum Nennwert her.
        * Klemmt es beim Kapital, wird auch zum fairen Preis verkauft. */
       for (const b of (st.shareBids || []).filter(b => b.companyId === myId)) {
-        const block = st.players[myId]?.blockPrice || 0;
+        const block = st.players[myId]?.kurs || 0;   // je Aktie
         const fair = block * b.count;
         const klamm = me.cash < 1500;
-        const verlangt = fair * (klamm ? 1 : 1 + 0.08 * b.count);
+        const verlangt = fair * (klamm ? 1 : 1 + 0.08 * b.count / 25);   // je 25 Aktien 8 % Aufschlag
         if (block > 0 && b.price >= verlangt) await em("acceptShareBid", { bidId: b.id });
         else await em("declineShareBid", { bidId: b.id });
       }

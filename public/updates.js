@@ -5,6 +5,25 @@
  * `art`: "neu" (neue Funktion), "besser" (Verbesserung), "fix" (Fehler behoben). */
 window.UPDATES = [
   {
+    id: "2026-10-21f", datum: "2026-10-21",
+    titel: { de: "Aktien mit Kurs und Wert", en: "Shares with price and value" },
+    punkte: [
+      { art: "neu", de: "Jede Firma hat jetzt 100 Aktien statt vier 25-%-Blöcke. Gehandelt wird in beliebigen Stückzahlen.",
+        en: "Every company now has 100 shares instead of four 25 % blocks. Trade any number of them." },
+      { art: "neu", de: "Wert F und Kurs: F ist, was die Firma wirklich wert ist (Kasse, Lager, Anlagen, Ertrag). Der Kurs folgt F mit Verzögerung, schwankt und kann bei Flauten oder einer Panik fallen. Jeder Kauf hebt ihn, jeder Verkauf senkt ihn.",
+        en: "Value F and price: F is what the company is really worth (cash, stock, assets, earnings). The price follows F with a delay, wobbles and can drop in slumps or a panic. Every purchase lifts it, every sale lowers it." },
+      { art: "neu", de: "Kurswetten laufen auf den Aktienkurs.", en: "Stock bets now run on the share price." },
+      { art: "neu", de: "Ausschüttung selbst festlegen: im Firmen-Panel automatisch nach Umsatz oder als fester Betrag.",
+        en: "Set your own payout: in the company panel, automatic by revenue or a fixed amount." },
+      { art: "neu", de: "Bauen kostet 30 Sekunden Bauzeit. Bis dahin ist das Gebäude eine Anlage in Arbeit — es produziert noch nicht, zählt aber schon voll zum Firmenwert. Bauen senkt den Wert der Firma nicht mehr.",
+        en: "Building takes 30 seconds. Until then the building is an asset under construction — it does not produce yet but already counts fully towards company value. Building no longer lowers your company's value." },
+      { art: "besser", de: "Steuer: Bau und Ausbau werden über 30 Minuten abgeschrieben, statt den Gewinn sofort zu senken.",
+        en: "Tax: construction and upgrades are depreciated over 30 minutes instead of lowering profit immediately." },
+      { art: "besser", de: "Stadtbank zeigt Kurs, Wert je Aktie, Abstand dazu und das Marktgeschehen.",
+        en: "The city bank shows price, value per share, the gap between them and market activity." }
+    ]
+  },
+  {
     id: "2026-10-21e", datum: "2026-10-21",
     titel: { de: "Grundstock für die Stadt und schnelleres Laden", en: "City base fund and faster loading" },
     punkte: [
