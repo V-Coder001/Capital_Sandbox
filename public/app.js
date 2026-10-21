@@ -5486,7 +5486,7 @@ function finanzamtRendern(state, me, myId) {
       <div><b>${Math.round(F.boerse * 1000) / 10} %</b><span>Börsengebühr vom Erlös jedes Verkaufs an der Warenbörse</span></div>
       <div><b>${Math.round(F.wettSteuer * 1000) / 10} %</b><span>auf Gewinne aus Kurswetten</span></div>
       <div><b>${Math.round(F.reserveAnteil * 100)} / ${Math.round(100 - F.reserveAnteil * 100)}</b><span>Bankreserve / Stadtkasse</span></div>
-      <div><b>${Math.round(F.praemieAnteil * 100)} %</b><span>des Geldes über dem Grundstock als Prämie je Großauftrag</span></div>
+      <div><b>${Math.round(F.praemieAnteil * 100)} %</b><span>des Geldes über dem Grundstock als Prämie je Großauftrag${F.praemieMax ? `, höchstens ${fmt(F.praemieMax)}` : ""}</span></div>
     </div>
     ${F.fertig.length ? `<div class="sec">Gebaute Stadtprojekte</div>${F.fertig.map(f => `<div class="kzrow"><span>${f.name}</span><b class="meta">${f.lieferanten.join(", ")}</b></div>`).join("")}` : ""}
     <div class="meta" style="padding-top:10px">Insgesamt eingenommen: ${fmt(F.gesamt)} — alle Firmen zahlen, auch die Bots.</div>`;

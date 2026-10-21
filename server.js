@@ -2941,6 +2941,7 @@ function buildingValueOf(pid) {
 }
 function substance(p) {
   let v = p.cash + buildingValueOf(p.id) + (p.wettOffen || 0);   // laufende Kurswetten gehören weiter dem Spieler
+  v -= p.steuerSchuld || 0;   // gestundete Steuern sind Schulden — sonst gewänne man mit offenen Steuern
   for (const k in p.inv) v += p.inv[k] * MM[k].price;
   for (const b of G.bonds) {
     if (b.holderId === p.id) v += b.principal;
@@ -3317,8 +3318,12 @@ const STEUER_RESERVE_ANTEIL = 0.4, RESERVE_MAX_ANTEIL = 0.10;
  * Lage nur noch durch echte Verluste fallen (etwa Kurswetten gegen die Bank). */
 const STADT_GRUNDSTOCK = 20000;
 const stadtFrei = () => Math.max(0, G.stadtkasse - STADT_GRUNDSTOCK);
-/* Projekt erst, wenn 15.000 $ über dem Grundstock liegen (Kasse ab 35.000 $). */
-const PRAEMIE_ANTEIL = 0.2, PROJEKT_SCHWELLE = STADT_GRUNDSTOCK + 15000, PROJEKT_BUDGET = 0.8, PROJEKT_TTL = 600, PROJEKT_PAUSE = 300;
+/* Abgestimmt per Simulation (12 Bots, je 45 min, Zeitraffer): Mit 20 % je
+ * Großauftrag frassen die Prämien jeden Überschuss — in sieben Läufen startete
+ * kein einziges Projekt. Mit 10 %, höchstens 1.500 $, und Projekten ab 10.000 $
+ * über dem Grundstock (Kasse ab 30.000 $) kommen ~2 Projekte je 45 min. */
+const PRAEMIE_MAX = 1500;
+const PRAEMIE_ANTEIL = 0.1, PROJEKT_SCHWELLE = STADT_GRUNDSTOCK + 10000, PROJEKT_BUDGET = 0.8, PROJEKT_TTL = 600, PROJEKT_PAUSE = 300;
 const STADTPROJEKTE = [
   { key: "stadion", name: "Stadion" }, { key: "krankenhaus", name: "Krankenhaus" },
   { key: "hafen", name: "Hafenterminal" }, { key: "bibliothek", name: "Stadtbibliothek" },
@@ -3346,7 +3351,13 @@ const STUFE_TEXT = {
   knapp:     "Die Stadtkasse wird knapp — Steuern und Gebühren steigen um 10 %.",
   normal:    "Die Stadtfinanzen sind im Lot — Steuern und Gebühren wieder normal.",
 };
-const stadtVermoegen = () => G.stadtkasse + Math.max(-WETT_RESERVE, G.wettReserve - WETT_RESERVE);
+/* Lage der Stadt: Kasse plus das, was die Bank über ihrem Startkapital hat.
+ * Die Einsätze der Bank in laufenden Kurswetten zählen MIT — beim Einfrieren
+ * gehen sie aus der Reserve und kommen erst bei der Abrechnung zurück. Ohne
+ * sie sah die Stadt während jeder Wettrunde ärmer aus, als sie war, und das
+ * Finanzamt erhöhte die Steuern wegen Geld, das nur gebunden war. */
+const bankImEinsatz = () => G.wetten.reduce((a, w) => a + (w.bank ? w.einsatz : 0), 0);
+const stadtVermoegen = () => G.stadtkasse + Math.max(-WETT_RESERVE, G.wettReserve + bankImEinsatz() - WETT_RESERVE);
 const steuerStufe = () => STEUER_STUFEN[G.steuerStufe ?? 2];
 const steuerFaktor = () => steuerStufe().faktor;
 const satzGewinn = () => STEUER_SATZ * steuerFaktor();
@@ -3414,7 +3425,7 @@ function steuerVorwarnung() {
 /* Großauftrag: Prämie aus der Stadtkasse beim Erscheinen reservieren */
 function grossauftragPraemie(o) {
   if (!finanzamtAktiv() || G.stadtkasse < 100) return;
-  o.praemie = Math.floor(stadtFrei() * PRAEMIE_ANTEIL);
+  o.praemie = Math.floor(Math.min(PRAEMIE_MAX, stadtFrei() * PRAEMIE_ANTEIL));
   G.stadtkasse -= o.praemie;
 }
 /* Stadtprojekt: großer Auftrag mit drei Waren, komplett aus der Stadtkasse */
@@ -3424,16 +3435,29 @@ function stadtprojektStarten() {
   /* Budget: bis 80 % des Geldes über dem Grundstock, aber in einer Größe, die die Runde in zehn
    * Minuten auch liefern kann — skaliert wie die Großaufträge mit der Spielerzahl. */
   const playerScale = Math.max(1, 0.5 + Object.keys(G.players).length * 0.5);
-  const budget = Math.floor(Math.min(stadtFrei() * PROJEKT_BUDGET, 7000 * playerScale));
-  G.stadtkasse -= budget;
-  /* Keine Billigware (Strom, Wasser …), sonst wären es Tausende Stück */
+  let budget = Math.floor(Math.min(stadtFrei() * PROJEKT_BUDGET, 7000 * playerScale));
+  /* Nur Waren, die es in dieser Runde wirklich gibt: jemand stellt sie her oder
+   * hat sie auf Lager. Vorher wurde rein zufällig gewählt — in der Simulation
+   * verlangte die Stadt Panzer, obwohl kein einziger existierte; Hanf und Honig
+   * kamen komplett, das Projekt scheiterte trotzdem. Keine Billigware (Strom,
+   * Wasser …), sonst wären es Tausende Stück. */
+  const bestand = g => Object.values(G.players).reduce((a, q) => a + (q.inv[g] || 0), 0);
+  const hergestellt = new Set(G.map.filter(t => t.owner && t.btype).map(t => BTYPES[t.btype]?.out).filter(Boolean));
   const teuer = PRODUCTS.filter(g => BASEP[g] >= 6);
-  const goods = [...(teuer.length >= 3 ? teuer : PRODUCTS)].sort(() => Math.random() - 0.5).slice(0, 3);
+  const da = teuer.filter(g => hergestellt.has(g) || bestand(g) >= 5);
+  if (!da.length) { G.projektPause = 60; return; }   // noch nichts Brauchbares in der Stadt — in einer Minute wieder schauen
+  const goods = da.sort(() => Math.random() - 0.5).slice(0, 3);
   const needs = {};
   for (const g of goods) {
     const pay = Math.round(MM[g].price * GROUP_PAYOUT_MULT * 100) / 100;
-    needs[g] = { req: Math.max(5, Math.floor(budget / goods.length / pay)), have: 0, pay };
+    /* Höchstens so viel, wie in zehn Minuten realistisch zusammenkommt: der
+     * heutige Bestand plus etwas Nachproduktion — sonst bleibt es unerfüllbar. */
+    const machbar = Math.max(5, Math.floor(bestand(g) * 0.6) + (hergestellt.has(g) ? 20 : 0));
+    needs[g] = { req: Math.max(5, Math.min(machbar, Math.floor(budget / goods.length / pay))), have: 0, pay };
   }
+  /* Nur so viel Budget binden, wie die Bestellung wirklich kostet */
+  budget = Math.min(budget, Math.ceil(Object.values(needs).reduce((a, n) => a + n.req * n.pay, 0)));
+  G.stadtkasse -= budget;
   G.stadtprojekt = { id: id(), key: art.key, name: art.name, budget, needs, contrib: {}, ttl: PROJEKT_TTL };
   const txt = Object.entries(needs).map(([g, n]) => `${n.req}× ${GOODS[g].name}`).join(", ");
   io.emit("notice", { text: `STADTPROJEKT: Die Stadt baut ein ${art.name}! Gebraucht: ${txt} — Budget ${budget.toLocaleString("de-DE")} $ aus der Stadtkasse, 10 Minuten Zeit.` });
@@ -3482,7 +3506,7 @@ function finanzamtPublic() {
     boerse: satzBoerse(), boerseBasis: BOERSE_GEBUEHR, stufe: steuerStufe().key, stufeName: steuerStufe().name,
     faktor: steuerFaktor(), lage: Math.round(stadtVermoegen()), stufen: STEUER_STUFEN.map(st => ({ key: st.key, name: st.name, faktor: st.faktor, bis: isFinite(st.bis) ? st.bis : null })),
     boerseGesamt: Math.round(G.boerseGebuehren || 0),
-    reserveAnteil: STEUER_RESERVE_ANTEIL, praemieAnteil: PRAEMIE_ANTEIL, schwelle: PROJEKT_SCHWELLE, grundstock: STADT_GRUNDSTOCK,
+    reserveAnteil: STEUER_RESERVE_ANTEIL, praemieAnteil: PRAEMIE_ANTEIL, praemieMax: PRAEMIE_MAX, schwelle: PROJEKT_SCHWELLE, grundstock: STADT_GRUNDSTOCK,
     naechsterIn: G.nextDividendIn, fertig: G.stadtprojekteFertig };
 }
 
