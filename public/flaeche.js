@@ -93,8 +93,13 @@
   /* ---- Vorberechnete Linien-Ebene (Höhenlinien, Mittelstreifen, Grenzen) ---- */
   let EBENE = null;   // { key, canvas, ox, oy, s }
   function kartenKey(map) {
+    /* Über ALLE Kacheln: Zone und Sperre. Ändert sich eins davon (Freischaltung),
+     * wird der gebackene Boden neu erzeugt. 900 Ganzzahl-Schritte je Bild. */
     let h = map.length;
-    for (let i = 0; i < map.length; i += 7) h = (h * 31 + (map[i].x * 3 + map[i].y) + (map[i].zone || "").length) >>> 0;
+    for (let i = 0; i < map.length; i++) {
+      const t = map[i];
+      h = (h * 31 + t.x * 7 + t.y * 13 + (t.zone ? t.zone.charCodeAt(0) : 0) + (t.locked ? 101 : 0) + (t.road ? 3 : 0) + (t.water ? 5 : 0)) >>> 0;
+    }
     return thema() + ":" + h;
   }
   function noise2(seed) {
@@ -118,13 +123,32 @@
     const P = pal();
     // Weltausschnitt der Karte (iso: Spitze der Raute bei (sx, sy))
     const ox = -(maxY + 1) * TW / 2, oy = 0;
-    const breite = (maxX + maxY + 2) * TW / 2, hoehe = (maxX + maxY + 2) * TH / 2;
+    const breite = (maxX + maxY + 2) * TW / 2, hoehe = (maxX + maxY + 2) * TH / 2 + TH;   // + Sockel
     const s = Math.min(2, 8192 / Math.max(breite, hoehe));
     const c = document.createElement("canvas");
     c.width = Math.ceil(breite * s); c.height = Math.ceil(hoehe * s);
     const g = c.getContext("2d");
     g.scale(s, s); g.translate(-ox, -oy);
+    g.imageSmoothingQuality = "high";
     const mitte = (fx, fy) => { const [x, y] = iso(fx, fy); return [x, y + TH / 2]; };
+
+    /* ---- Boden einmal backen (Performance) ----
+     * Vorher: je Bild 900 Kachel-drawImage + Sockel-Pfade + diese Ebene. Jetzt
+     * steckt alles Statische in EINEM Bild, das je Bild einmal platziert wird. */
+    sockelZeichnen(g, map, T, iso, TW, TH, P);
+    for (const t of map) {
+      const [sx, sy] = iso(t.x, t.y);
+      g.drawImage(kachel(t, TW, TH, makeDiamond), sx - TW / 2, sy, TW, TH);
+      if (t.locked) {
+        g.beginPath(); g.moveTo(sx, sy); g.lineTo(sx + TW / 2, sy + TH / 2); g.lineTo(sx, sy + TH); g.lineTo(sx - TW / 2, sy + TH / 2); g.closePath();
+        g.fillStyle = P.gesperrt; g.fill();
+        // kleines Schloss (wie drawLock im Hauptskript)
+        const lx = sx, ly = sy + TH / 2 - 1;
+        g.globalAlpha = .42; g.fillStyle = g.strokeStyle = thema() === "papier" ? "#4a4134" : "#7d97b5"; g.lineWidth = 1.4;
+        g.beginPath(); g.arc(lx, ly - 2.6, 2.4, Math.PI, 0); g.stroke(); g.fillRect(lx - 3.6, ly - 2.4, 7.2, 5.4);
+        g.globalAlpha = 1; g.lineWidth = 1;
+      }
+    }
 
     // Höhenlinien — Rauschfeld über das Kachelgitter, 2 Proben je Kachel
     const nz = noise2(9), R = 2, NX = (maxX + 1) * R + 1, NY = (maxY + 1) * R + 1;
@@ -199,15 +223,26 @@
     return { key: kartenKey(map), canvas: c, ox, oy, s, w: breite, h: hoehe, maxX, maxY, T, schilder };
   }
 
-  function ebene(cx, map, iso, TW, TH) {
-    if (!EBENE || EBENE.key !== kartenKey(map)) EBENE = ebeneBauen(map, iso, TW, TH);
-    cx.drawImage(EBENE.canvas, EBENE.ox, EBENE.oy, EBENE.w, EBENE.h);
+  /* Gebackenen Boden zeichnen. Als ImageBitmap liegt er fertig auf der
+   * Grafikkarte; bis die Umwandlung fertig ist, dient das Canvas selbst.
+   * Glättung "low": das Bild wird nur skaliert, nicht gedreht — die teure
+   * Hochqualitäts-Filterung (vorher je Bild auf ~4000 px) bringt hier nichts. */
+  function boden(cx, map, iso, TW, TH) {
+    const key = kartenKey(map);
+    if (!EBENE || EBENE.key !== key) {
+      EBENE = ebeneBauen(map, iso, TW, TH);
+      const e = EBENE;
+      if (window.createImageBitmap) createImageBitmap(e.canvas).then(bm => { if (EBENE === e) e.bitmap = bm; }).catch(() => {});
+    }
+    const q = cx.imageSmoothingQuality;
+    cx.imageSmoothingQuality = "low";
+    cx.drawImage(EBENE.bitmap || EBENE.canvas, EBENE.ox, EBENE.oy, EBENE.w, EBENE.h);
+    cx.imageSmoothingQuality = q;
   }
 
   /* ---- Sockel: Seitenflächen an den unteren Kartenkanten ---- */
-  function sockel(cx, map, iso, TW, TH) {
-    if (!EBENE || EBENE.key !== kartenKey(map)) EBENE = ebeneBauen(map, iso, TW, TH);
-    const P = pal(), H = TH * .9, T = EBENE.T;
+  function sockelZeichnen(cx, map, T, iso, TW, TH, P) {
+    const H = TH * .9;
     const flaechen = [[new Path2D(), P.seite1], [new Path2D(), P.seite2]];
     const linien = new Path2D();
     for (const t of map) {
@@ -247,9 +282,10 @@
   /* iso, TW, TH, makeDiamond: globale Namen aus dem Hauptskript, erst beim
    * Aufruf aufgelöst (dieses Skript lädt davor). */
   window.FLAECHE = {
-    unter: (cx, map) => sockel(cx, map, iso, TW, TH),
+    /* boden(): Sockel, Kacheln, Schlösser, Linien — alles in einem Bild */
+    boden: (cx, map) => boden(cx, map, iso, TW, TH),
     tile: t => kachel(t, TW, TH, makeDiamond),
-    ueber: (cx, map) => ebene(cx, map, iso, TW, TH),
+    unter: () => {}, ueber: () => {},          // in boden() aufgegangen
     schilder: (cx, map) => schilder(cx, map, iso, TW, TH),
     gesperrt: () => pal().gesperrt,
     thema,
