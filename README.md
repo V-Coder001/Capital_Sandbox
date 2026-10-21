@@ -74,7 +74,14 @@ game/
 │                       · Orderbuch-Matching-Engine (Preis-Zeit-Priorität, Escrow)
 │                       · P2P-Anleihen, dynamische Ratings, Pfändung + Auktion
 │                       · Chat-Broadcast, Direktverträge
-└── public/index.html  Client (Canvas-Isometrie + Socket-Layer + Observable-Store)
+│                       · Push: voller Stand nur beim Verbinden, danach nur
+│                         geänderte Felder (teil: true), Client führt zusammen
+├── statisch.js        Dateiauslieferung für server.js und gateway.js
+│                       (Brotli/Gzip, ETag, app.js?v=… wird beim Ausliefern gesetzt)
+└── public/
+    ├── index.html     Markup des Clients
+    ├── app.js         Client-Logik (Canvas-Isometrie, Socket-Layer, Store)
+    └── app.css        Hauptstile (theme.css / theme-papier.css darüber)
 ```
 
 ### Socket-Events (Client → Server, alle mit Ack `{ok}` / `{error}`)

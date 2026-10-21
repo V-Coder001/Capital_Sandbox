@@ -1,0 +1,1143 @@
+/* Hauptstile des Spiels — aus index.html ausgelagert, damit der Browser sie
+ * zwischenspeichern kann. Reihenfolge im <head> bleibt gleich. */
+:root{
+  --bg:#0a0e15; --panel:#121824; --panel2:#1a2231; --line:#273144;
+  --text:#e3e9f4; --dim:#8695ab; --accent:#38bdf8; --accent2:#a78bfa;
+  --up:#34d399; --down:#fb7185; --font:"Archivo",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{background:var(--bg);color:var(--text);font-family:var(--font);overflow:hidden}
+canvas{display:block;cursor:grab} canvas.drag{cursor:grabbing}
+button{font-family:var(--font)}
+input,select{background:var(--panel2);border:1px solid var(--line);border-radius:8px;color:var(--text);padding:7px 9px;font-size:12.5px;font-family:var(--font)}
+
+/* ---- Intro-Video ----
+ * Liegt über allem, bis es durchgelaufen oder übersprungen ist. */
+#intro{position:fixed;inset:0;z-index:200;background:#000;display:grid;place-items:center}
+#intro[hidden]{display:none}
+#introVideo{width:100%;height:100%;object-fit:contain;background:#000}
+#introBar{position:absolute;right:22px;bottom:20px;display:flex;gap:8px}
+#introBar button{background:rgba(10,14,21,.72);border:1px solid rgba(255,255,255,.16);border-radius:9px;
+  color:#e3e9f4;padding:8px 15px;font-size:12.5px;font-weight:600;cursor:pointer;font-family:var(--font);
+  backdrop-filter:blur(6px);transition:background .15s,border-color .15s}
+#introBar button:hover{background:rgba(20,28,40,.9);border-color:rgba(56,189,248,.5)}
+#introBar button[hidden]{display:none}
+
+/* ---------------- Startscreen (Lobby) ----------------
+ * Übernommenes Figma-Design: dunkle Karte mit Lichtschein, Skyline aus echten
+ * Spiel-Sprites, zweispaltiger Aufbau, Branchenkarten mit eigener Akzentfarbe.
+ * Alle Element-IDs und Klassen bleiben, damit die bestehende Spiellogik
+ * unverändert weiterläuft. */
+#join{position:fixed;inset:0;z-index:100;overflow:auto;padding:10px 16px;
+  background:transparent;display:flex;align-items:flex-start;justify-content:center}
+/* Vignette, Scanlines und Lichtschein von oben liegen hinter der Karte */
+#join::before{content:"";position:fixed;inset:0;pointer-events:none;z-index:1;
+  background:radial-gradient(ellipse at center, transparent 45%, rgba(0,0,0,.55) 100%)}
+/* ---- Gemeinsamer Hintergrund: lebende Höhenlinien-Karte (public/topo.js) ----
+ * Liegt hinter ALLEM — Startbildschirm, Warteraum und im Spiel um die Karte
+ * herum. Auf Start/Warteraum hebt die Maus einen Hügel an und ein Klick ins
+ * Freie schickt eine Welle übers Gelände; im Spiel läuft sie nur ruhig mit. */
+body{background:#070b10}
+/* Auf Start/Warteraum liegt die Karte VOR dem Spiel (das sonst mit Leiste
+ * und Stadt durch die durchsichtigen Bildschirme scheinen würde) — samt
+ * deckendem Grund darunter. Im Spiel selbst wieder ganz hinten. */
+#bgDeck{position:fixed;inset:0;z-index:97;background:#070b10;display:none;pointer-events:none}
+body.topoVorn #bgDeck{display:block}
+body.topoVorn #bgTopo{z-index:98}
+#bgTopo{position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:-1;
+  color:#7dd3fc;opacity:0;transition:opacity .8s ease-out;
+  -webkit-mask-image:radial-gradient(ellipse 120% 100% at 50% 45%,#000 55%,transparent 100%);
+          mask-image:radial-gradient(ellipse 120% 100% at 50% 45%,#000 55%,transparent 100%)}
+#joinGlow{position:fixed;top:0;left:50%;transform:translateX(-50%);width:1000px;height:320px;pointer-events:none;z-index:1;
+  background:radial-gradient(ellipse at 50% 0%, rgba(56,189,248,.08) 0%, rgba(167,139,250,.04) 50%, transparent 75%)}
+/* ---- Werbeplakate links und rechts ----
+ * Füllen den leeren Raum neben der Karte auf breiten Bildschirmen. Bewusst
+ * abgedunkelt und leicht gekippt: sie sollen nach angeklebten Plakaten in der
+ * Spielwelt aussehen, nicht mit dem Formular um Aufmerksamkeit konkurrieren. */
+.posterWall{position:fixed;top:50%;z-index:2;width:clamp(170px,13vw,250px);
+  aspect-ratio:495/700;pointer-events:none;
+  border-radius:3px;background-size:cover;background-position:center;
+  box-shadow:0 18px 50px rgba(0,0,0,.75), 0 0 0 1px rgba(255,255,255,.05);
+  opacity:0;transition:opacity 1.1s ease, filter .5s ease}
+.posterWall.da{opacity:.72}
+.posterWall::after{content:"";position:absolute;inset:0;border-radius:3px;
+  background:linear-gradient(160deg,rgba(10,14,21,.05),rgba(10,14,21,.42));
+  box-shadow:inset 0 0 34px rgba(0,0,0,.42)}
+#posterL{left:max(18px,calc(50% - 500px - 13vw - 26px));transform:translateY(-50%) rotate(-2.4deg)}
+#posterR{right:max(18px,calc(50% - 500px - 13vw - 26px));transform:translateY(-50%) rotate(2deg)}
+/* Unter ~1360px reicht der Platz neben der 1000px-Karte nicht mehr — dann
+ * würden die Plakate das Formular überlappen statt es zu rahmen. */
+@media(max-width:1360px){.posterWall{display:none}}
+@media(prefers-reduced-motion:reduce){.posterWall{transition:none}}
+
+#join .card{position:relative;z-index:10;width:min(1000px,100%);min-width:0;
+  background:linear-gradient(160deg,rgba(19,28,43,.78) 0%,rgba(14,21,32,.84) 40%,rgba(12,18,32,.88) 100%);
+  -webkit-backdrop-filter:blur(10px) saturate(1.1);backdrop-filter:blur(10px) saturate(1.1);
+  border:1px solid rgba(56,189,248,.16);border-radius:22px;overflow:hidden;
+  box-shadow:0 0 0 1px rgba(56,189,248,.06), 0 24px 80px rgba(0,0,0,.8), 0 0 60px rgba(56,189,248,.04)}
+#joinParticles{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;opacity:.45}
+
+/* ---- Kopfbereich ---- */
+#join .hero{position:relative;padding:14px 28px 0}
+#joinStatus{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;font-family:var(--mono)}
+#joinStatus .left,#joinStatus .right{display:flex;align-items:center;gap:11px}
+.pulse{position:relative;display:inline-flex;width:8px;height:8px;flex:none}
+.pulse i{position:absolute;inset:0;border-radius:50%;background:var(--up);opacity:.5;animation:ping 1.2s cubic-bezier(0,0,.2,1) infinite}
+.pulse b{position:relative;width:8px;height:8px;border-radius:50%;background:var(--up);box-shadow:0 0 6px var(--up)}
+@keyframes ping{75%,100%{transform:scale(2);opacity:0}}
+#joinStatusText{font-size:10.5px;font-weight:600;color:var(--up);letter-spacing:.08em;text-transform:uppercase}
+#joinSlots{display:flex;align-items:center;gap:6px}
+#joinSlots .slot{width:8px;height:8px;border-radius:50%;background:#1a2231;border:1px solid #273144;transition:all .2s}
+#joinSlots .slot.on{background:var(--accent);border:none;box-shadow:0 0 6px rgba(56,189,248,.6)}
+#joinSlots .count{font-size:10.5px;color:var(--dim);margin-left:4px}
+/* Bestenliste auf dem Startbildschirm */
+.hofzeile{display:flex;align-items:center;gap:10px;padding:7px 10px;margin:5px 0;
+  background:rgba(16,24,40,.6);border:1px solid rgba(45,60,88,.5);border-radius:10px;font-size:12.5px}
+.hofplatz{width:22px;height:22px;flex:none;border-radius:50%;display:grid;place-items:center;
+  font:800 11px var(--font);background:#1a2438;color:#8ea0bd;border:1px solid rgba(90,110,150,.4)}
+.hofplatz.p1{background:linear-gradient(135deg,#8a6d1d,#fbbf24);color:#241a03;border-color:#fbbf24}
+.hofplatz.p2{background:linear-gradient(135deg,#6d7683,#cdd6e2);color:#1a2028;border-color:#cdd6e2}
+.hofplatz.p3{background:linear-gradient(135deg,#6e4a26,#c98a4b);color:#22150a;border-color:#c98a4b}
+.hofname{flex:1;min-width:0}
+.hofname .meta{display:block;font-size:10.5px}
+.hofwert{text-align:right}
+.hofwert b{font-family:var(--mono,ui-monospace);color:var(--accent)}
+.hofwert .meta{display:block;font-size:10.5px}
+/* Öffentliche Runden */
+.oeffSchalter{display:flex;gap:10px;align-items:flex-start;cursor:pointer;
+  padding:10px 12px;border:1px solid #1a2535;border-radius:3px;background:#070b10}
+/* Mit ID im Selektor, sonst gewinnt "#join input{width:100%}" — das dehnte den
+ * Haken ueber die ganze Zeile und schob den Text aus dem Kasten. */
+#join .oeffSchalter input[type=checkbox]{flex:none;width:16px;height:16px;margin:2px 0 0;
+  padding:0;border-radius:3px;box-shadow:none;accent-color:var(--accent);cursor:pointer}
+.oeffSchalter span{min-width:0}
+.oeffSchalter b{display:block;font-size:12.5px;font-weight:650;color:#c0cfe3}
+.oeffSchalter em{display:block;font-style:normal;font-size:11.5px;color:#5a708f;margin-top:2px;line-height:1.45}
+#oeffListe{margin-bottom:10px}
+#oeffListe .kopf{font-size:10.5px;letter-spacing:.13em;text-transform:uppercase;color:#5a708f;
+  font-stretch:82%;margin-bottom:6px}
+.oeffRunde{display:flex;align-items:center;gap:10px;width:100%;text-align:left;
+  padding:9px 11px;margin-bottom:5px;background:#070b10;border:1px solid #1a2535;border-radius:3px;
+  color:var(--text);font:inherit;cursor:pointer;transition:border-color .12s,background .12s}
+.oeffRunde:hover:not(:disabled){border-color:var(--accent);background:#0c1420}
+.oeffRunde:disabled{cursor:default;opacity:.5}
+.oeffRunde .wer{flex:1;min-width:0}
+.oeffRunde .wer b{display:block;font-size:12.5px;font-weight:650;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.oeffRunde .wer span{display:block;font-size:11px;color:#5a708f;font-family:var(--mono)}
+.oeffRunde .zahl{flex:none;font-family:var(--mono);font-size:12px;color:var(--accent);text-align:right}
+.oeffRunde .zahl .bots{display:block;font-size:10px;color:#5a708f}
+.oeffRunde .lage{flex:none;font-size:10px;letter-spacing:.08em;text-transform:uppercase;
+  padding:2px 7px;border-radius:2px;background:#111a2c;color:#5a708f}
+.oeffRunde .lage.offen{color:var(--up)}
+#oeffListe .leer{font-size:11.5px;color:#5a708f;padding:8px 0 12px}
+#rundenZahl{font-size:10.5px;color:var(--dim);font-family:var(--mono);letter-spacing:.04em}
+#join h1{position:relative;display:flex;align-items:baseline;gap:10px;margin-bottom:11px;
+  font-size:28px;font-weight:800;letter-spacing:-.045em;line-height:1;color:#f0f6ff}
+#join h1 span{color:var(--accent);text-shadow:0 0 30px rgba(56,189,248,.5)}
+#join h1::after{content:"";position:absolute;bottom:-6px;left:0;width:180px;height:1px;
+  background:linear-gradient(to right, rgba(56,189,248,.4), transparent)}
+#join h1 .beta{font-style:normal;align-self:center;font-size:10.5px;font-weight:700;
+  font-stretch:78%;letter-spacing:.16em;text-transform:uppercase;color:#f0b429;
+  border:1px solid rgba(240,180,41,.45);background:rgba(240,180,41,.08);
+  border-radius:2px;padding:3px 7px 2px;line-height:1;letter-spacing:.16em}
+/* Die Zeile darunter traegt die eigentliche Aussage: Was "Beta" fuer den
+ * Spieler konkret bedeutet — Fehler und verlorene Runden. */
+#join .betaZeile{font-size:12px;color:#8a7a4e;line-height:1.55;max-width:560px;
+  margin-bottom:10px;padding-left:11px;border-left:2px solid rgba(240,180,41,.35)}
+#join .betaZeile b{color:#c9a648;font-weight:650}
+#join .tag{font-size:12.5px;color:#6a7f9a;line-height:1.6;max-width:560px;margin-bottom:12px}
+/* Umschalter hosten / beitreten */
+#netmode{display:inline-flex;gap:0;padding:3px;background:#070b10;border:1px solid #1a2535;
+  border-radius:11px;box-shadow:inset 0 1px 4px rgba(0,0,0,.5)}
+#netmode .netopt{padding:7px 20px;border-radius:8px;font-size:12.5px;font-weight:600;letter-spacing:-.01em;
+  cursor:pointer;border:none;background:none;color:#4a6080;transition:all .18s;font-family:var(--font);white-space:nowrap}
+#netmode .netopt:hover{color:#7e97b8}
+#netmode .netopt.on{background:linear-gradient(135deg,#1e3a5a 0%,#164060 100%);color:var(--accent);
+  box-shadow:0 0 16px rgba(56,189,248,.2), inset 0 1px 0 rgba(56,189,248,.15)}
+#tutBuchAuf{display:inline-flex;align-items:center;gap:7px;margin-left:10px;padding:8px 16px;
+  border-radius:11px;border:1px solid #243348;background:#0b1119;color:#8695ab;
+  font-family:var(--font);font-size:12.5px;font-weight:600;cursor:pointer;transition:all .18s;vertical-align:top}
+#tutBuchAuf:hover{color:var(--accent2);border-color:rgba(167,139,250,.45);background:#101827}
+#tutBuchAuf svg{opacity:.8}
+@media(max-width:560px){#tutBuchAuf{margin:8px 0 0}}
+/* Auf sehr schmalen Geräten sind die beiden Modus-Reiter der letzte Engpass:
+ * Sie brauchten 331 px Mindestbreite und hielten damit die ganze Startkarte
+ * über der Breite eines kleinen Handys. */
+@media(max-width:430px){
+  #netmode{width:100%}
+  #netmode .netopt{padding:8px 10px;font-size:11.5px;flex:1}
+  #tutBuchAuf{width:100%;justify-content:center}
+}
+/* Skyline aus echten Gebäude-Sprites des Spiels */
+/* Die Gebäude-PNGs haben viel durchsichtigen Rand — bei Originalgröße wirken sie
+ * verloren. Deshalb vergrößert dargestellt und der Streifen oben beschnitten. */
+/* contain:inline-size — die Breite der Skyline richtet sich NICHT mehr nach
+ * ihren 16 Sprites. Ohne das erzwang der Streifen eine Mindestbreite von
+ * 575 px und zog die ganze Startkarte auf 631 px, also über jedes Handy
+ * hinaus. Geclippt wurde er ohnehin schon. */
+.skyline{position:relative;height:50px;margin-top:8px;overflow:hidden;contain:inline-size}
+.skyline .row{display:flex;align-items:flex-end;justify-content:center;gap:7px;height:100%;padding-bottom:2px}
+/* Zugeschnittene Sprites (assets/skyline/): der untere Bildrand IST die
+ * Gebäudekante, dadurch stehen alle auf einer gemeinsamen Grundlinie.
+ * Nur die Höhe wird gesetzt, die Breite folgt dem Seitenverhältnis. */
+.skyline img{flex:none;width:auto;opacity:.92;filter:drop-shadow(0 3px 8px rgba(0,0,0,.6))}
+.skyline .fade{position:absolute;top:0;bottom:0;width:144px;pointer-events:none}
+.skyline .fade.l{left:0;background:linear-gradient(to right,#0e1520,transparent)}
+.skyline .fade.r{right:0;background:linear-gradient(to left,#0e1520,transparent)}
+.skyline .fog{position:absolute;left:0;right:0;bottom:0;height:22px;pointer-events:none;
+  background:linear-gradient(to top,#0e1520 0%,transparent 100%)}
+.rule{height:1px;background:linear-gradient(to right,transparent 0%,var(--accent) 25%,var(--accent2) 75%,transparent 100%);opacity:.35}
+
+/* ---- Zweispaltiger Rumpf ---- */
+#join .body{display:grid;grid-template-columns:1fr 1px 1fr}
+#join .divider{width:1px;background:linear-gradient(to bottom,transparent,#1e2d45 20%,#1e2d45 80%,transparent)}
+#join .col{padding:13px 26px;display:flex;flex-direction:column;gap:10px}
+@media(max-width:820px){#join .body{grid-template-columns:1fr}
+  #join .divider{width:auto;height:1px;background:linear-gradient(to right,transparent,#1e2d45 20%,#1e2d45 80%,transparent)}
+  #join .col{padding:22px 22px}
+  .skyline{height:54px}}
+/* Feldbeschriftung in Versalien */
+.flabel{display:block;font-size:11px;font-weight:700;color:var(--dim);letter-spacing:.08em;
+  text-transform:uppercase;font-family:var(--mono);margin-bottom:6px}
+#join p{font-size:11px;color:#4a6080;line-height:1.5}
+/* Eingaben mit eingelassenem Look und Fokus-Schein */
+#join input,#join select{background:#0a1018;border:1px solid #1e2d45;border-radius:10px;
+  padding:9px 13px;font-size:13.5px;color:var(--text);outline:none;font-family:var(--font);
+  box-shadow:inset 0 1px 3px rgba(0,0,0,.4);transition:border-color .15s,box-shadow .15s;width:100%}
+#join input:focus,#join select:focus{border-color:var(--accent);
+  box-shadow:0 0 0 3px rgba(56,189,248,.1), inset 0 1px 3px rgba(0,0,0,.4)}
+#join select{appearance:none;cursor:pointer;padding-right:36px;font-size:13px;
+  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='7' viewBox='0 0 12 7' fill='none'><path d='M1 1l5 5 5-5' stroke='%234a6080' stroke-width='1.5' stroke-linecap='round'/></svg>");
+  background-repeat:no-repeat;background-position:right 12px center}
+/* Farbwahl */
+#join .colors{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+#join .colors button{width:22px;height:22px;border-radius:50%;border:2px solid transparent;cursor:pointer;
+  padding:0;transition:transform .12s,box-shadow .12s,border-color .12s}
+#join .colors button:hover{transform:scale(1.25)}
+#join .colors button.on{border-color:#fff}
+/* Einladen / Beitreten */
+.joinbox{background:#080d14;border:1px solid #1a2535;border-radius:12px;padding:10px 13px}
+.joinbox+.joinbox{margin-top:8px}
+.joinbox .lbl{display:flex;align-items:center;gap:8px;font-size:10.5px;color:#4a6080;font-weight:600;
+  text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px}
+.joinbox .lbl svg{flex:none}
+.joinbox .row{display:flex;gap:8px;align-items:center}
+#inviteUrl{flex:1;min-width:0;background:#0d1522;border:1px solid #1a2535;border-radius:7px;
+  padding:6px 10px;font-size:11px;color:#4a6080;font-family:var(--mono);box-shadow:none}
+.copybtn{background:#0d1522;border:1px solid #1a2535;border-radius:7px;padding:6px 12px;font-size:11px;
+  font-weight:600;color:#4a6080;cursor:pointer;transition:all .15s;white-space:nowrap;font-family:var(--font)}
+.copybtn:hover{color:#7e97b8;border-color:#243348}
+.copybtn.done{background:rgba(52,211,153,.15);border-color:var(--up);color:var(--up)}
+#hostCode{font-family:var(--mono);font-size:24px;font-weight:700;color:var(--accent);
+  letter-spacing:.28em;text-shadow:0 0 20px rgba(56,189,248,.45)}
+/* ---- Warteraum: zwischen Anmeldung und Rundenstart ---- */
+#lobbyWait{position:fixed;inset:0;z-index:99;display:none;overflow:auto;padding:20px 16px;
+  background:radial-gradient(ellipse at center, transparent 45%, rgba(0,0,0,.55) 100%);align-items:flex-start;justify-content:center}
+#lobbyWait.on{display:flex}
+#lobbyWait .card{position:relative;width:min(540px,100%);margin:auto;
+  background:linear-gradient(160deg,#131c2b 0%,#0e1520 40%,#0c1220 100%);
+  border:1px solid #1e2d45;border-radius:22px;padding:24px 26px 22px;
+  box-shadow:0 0 0 1px rgba(56,189,248,.06), 0 24px 80px rgba(0,0,0,.8)}
+#lwHead{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:3px}
+#lobbyWait h2{font-size:20px}
+#lwPulse{display:flex;align-items:center;gap:7px;font-family:var(--mono);font-size:10.5px;
+  color:#4a6080;text-transform:uppercase;letter-spacing:.07em;white-space:nowrap}
+#lobbyWait .sub{color:var(--dim);font-size:12.5px;margin-bottom:15px}
+
+/* Code: der wichtigste Inhalt des Screens — bekommt entsprechend Gewicht */
+#lwCodeBox{background:linear-gradient(135deg,rgba(56,189,248,.07),rgba(56,189,248,.02));
+  border-color:#1d3a52}
+#lwCode{font-family:var(--mono);font-size:30px;font-weight:700;color:var(--accent);
+  letter-spacing:.3em;text-shadow:0 0 20px rgba(56,189,248,.45)}
+
+#lwPlayers{display:flex;flex-direction:column;gap:7px;margin-top:2px}
+#lwPlayers .pl{display:flex;align-items:center;gap:9px;font-size:13px}
+#lwPlayers .dot{width:11px;height:11px;border-radius:4px;flex:none;
+  box-shadow:0 0 0 1px rgba(255,255,255,.13), 0 0 9px currentColor}
+#lwPlayers .tag{font-size:9.5px;color:#4a6080;font-weight:700;text-transform:uppercase;
+  letter-spacing:.07em;border:1px solid #1a2535;border-radius:5px;padding:1px 5px}
+#lwPlayers .leer{color:var(--dim);font-size:12.5px}
+
+/* Einstellungen: eigene Regeln, weil die des Startbildschirms an #join bzw.
+ * #botLevel hängen und hier sonst als nackte Browser-Buttons erscheinen. */
+#lwSettings.hide{display:none}
+.lwRow{display:flex;align-items:center;gap:9px;margin-bottom:9px}
+.lwRow>label{flex:none;width:52px;font-size:11px;color:#4a6080;font-weight:600;
+  text-transform:uppercase;letter-spacing:.06em}
+#lwGoal{flex:1;min-width:0}
+#lwBotLevel{display:inline-flex;padding:2px;background:#050810;border:1px solid #1a2535;border-radius:9px}
+#lwBotLevel button{padding:4px 12px;border:none;background:none;border-radius:7px;font-size:11px;
+  font-weight:600;color:#4a6080;cursor:pointer;font-family:var(--font);transition:all .16s}
+#lwBotLevel button:hover{color:#7e97b8}
+#lwBotLevel button.on{background:linear-gradient(135deg,#1e3a5a 0%,#164060 100%);color:var(--accent);
+  box-shadow:0 0 12px rgba(56,189,248,.18), inset 0 1px 0 rgba(56,189,248,.15)}
+
+/* Das Adminpanel liegt ueber dem Warteraum (z-index 99). Alle anderen Panels
+ * gehoeren zum Spielbildschirm und duerfen darunter bleiben — dieses eine soll
+ * sich auch dann oeffnen lassen, wenn die Runde noch gar nicht laeuft. */
+#p-admin{z-index:110}
+
+/* ---- Adminpanel: eine Zeile je Firma ----
+ * Drei Bloecke nebeneinander (wer, Zahlen, Eingriff), die bei schmalem Panel
+ * untereinander rutschen. Eine Tabelle waere hier falsch: Die Eingriffsspalte
+ * enthaelt Formulare, keine Werte, und wuerde jede Zeile auseinanderziehen. */
+.adminZeile{display:flex;flex-wrap:wrap;gap:9px;align-items:center;
+  padding:8px 0;border-bottom:1px solid rgba(36,48,68,.5)}
+.adminZeile:last-of-type{border-bottom:0}
+.adminWer{display:flex;gap:8px;align-items:center;flex:1 1 150px;min-width:0}
+.adminZahlen{display:flex;gap:14px;font-family:var(--mono);font-size:12px;text-align:right}
+.adminTun{display:flex;gap:7px;flex-wrap:wrap}
+.adminTun select{max-width:118px}
+
+/* ---- Modus-Auswahl als Plakate ----
+ * Die Zeile bricht um, statt zu schrumpfen: Bei fünf Kacheln nebeneinander
+ * wären die Plakate auf einem schmalen Fenster nur noch Farbflächen. Das Raster
+ * legt eine Mindestbreite fest und setzt um, was nicht mehr passt. */
+.lwModeRow{display:block}
+.lwModeRow>label{display:block;margin-bottom:7px}
+#lwMode{display:grid;grid-template-columns:repeat(auto-fit,minmax(78px,1fr));gap:6px}
+#lwMode button{padding:0;border:1px solid #1a2535;background:#050810;border-radius:10px;overflow:hidden;
+  cursor:pointer;font-family:var(--font);transition:border-color .16s,box-shadow .16s,transform .16s;
+  display:flex;flex-direction:column;text-align:left}
+#lwMode button img{display:block;width:100%;aspect-ratio:1587/2245;object-fit:cover;
+  /* Unausgewählte Plakate treten zurück — sonst kämpfen fünf Poster gleichzeitig
+   * um die Aufmerksamkeit und die getroffene Wahl geht darin unter. */
+  filter:saturate(.55) brightness(.62);transition:filter .16s}
+
+/* Die Beschriftung darf umbrechen statt abzureissen: "Planwirtschaft" passt
+ * knapp, die englische Fassung "Planned economy" nicht mehr — und die naechste
+ * Uebersetzung ist wieder anders lang. Da alle Kacheln einer Zeile ohnehin auf
+ * gleiche Hoehe gezogen werden, kostet die zweite Zeile keine Ordnung. */
+#lwMode button>span:last-child{padding:6px 6px 7px;font-size:10.5px;font-weight:600;color:#4a6080;
+  transition:color .16s;line-height:1.25;flex:1}
+#lwMode button:hover{border-color:#26405e;transform:translateY(-1px)}
+#lwMode button:hover img{filter:saturate(.8) brightness(.82)}
+#lwMode button:hover>span:last-child{color:#7e97b8}
+#lwMode button.on{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent),0 4px 16px rgba(56,189,248,.22)}
+/* Familienwahl im Warteraum (Kartellmodus) */
+#lwFamilie{display:grid;grid-template-columns:1fr 1fr;gap:6px;width:100%}
+#lwFamilie button{padding:8px 10px;border:1px solid #1a2535;background:#050810;border-radius:9px;
+  color:#8695ab;font:600 12px var(--font);cursor:pointer;text-align:left;transition:all .15s;
+  border-left:3px solid var(--fc)}
+#lwFamilie button:hover{color:var(--text);border-color:#26405e;border-left-color:var(--fc)}
+#lwFamilie button.on{color:var(--text);background:#0d1524;border-color:var(--fc);
+  box-shadow:0 0 10px color-mix(in srgb, var(--fc) 35%, transparent)}
+#lwMode button.on img{filter:none}
+#lwMode button.on>span:last-child{color:var(--accent);background:linear-gradient(135deg,#1e3a5a 0%,#164060 100%)}
+#lwBotCounts{display:grid;grid-template-columns:1fr 1fr;gap:7px 14px}
+#lwBotCounts .botrow{justify-content:space-between;gap:9px}
+#lwBotCounts .botrow>span{font-size:11.5px;color:#8695ab}
+#lwBotSum{margin:10px 0 0;font-size:11.5px;color:var(--dim)}
+#lwBotSum b{color:#8695ab}
+
+/* Startknopf: dieselbe Optik wie "Firma gründen" auf dem Startbildschirm */
+#lwStart{position:relative;overflow:hidden;width:100%;border:none;border-radius:13px;padding:12px 0;
+  margin-top:15px;font-size:14.5px;font-weight:700;font-family:var(--font);cursor:pointer;
+  color:#04121e;background:linear-gradient(135deg,#7dd3fc 0%,#38bdf8 50%,#0ea5e9 100%);
+  box-shadow:0 6px 22px rgba(56,189,248,.3);transition:transform .16s, box-shadow .16s}
+#lwStart:hover:not(:disabled){transform:translateY(-1px);box-shadow:0 9px 28px rgba(56,189,248,.42)}
+#lwStart:disabled{opacity:.6;cursor:default}
+#lwHint{text-align:center;color:var(--dim);font-size:12px;margin-top:13px;line-height:1.5}
+@media(max-width:520px){#lwBotCounts{grid-template-columns:1fr}#lobbyWait .card{padding:20px 18px}}
+#jcode{text-align:center;text-transform:uppercase;font-family:var(--mono);font-size:22px;
+  letter-spacing:.22em;padding:12px}
+/* Branchenkarten */
+#jind{display:flex;flex-direction:column;gap:6px}
+.indopt{position:relative;display:flex;align-items:center;gap:12px;text-align:left;overflow:hidden;
+  background:#07090f;border:1px solid #141d2c;border-radius:12px;padding:7px 11px;cursor:pointer;
+  transition:all .15s;font-family:var(--font)}
+.indopt img{flex:none;width:34px;height:34px;object-fit:contain;position:relative;z-index:1;
+  filter:drop-shadow(0 4px 6px rgba(0,0,0,.5))}
+.indopt .txt{position:relative;z-index:1}
+.indopt b{display:block;font-size:13px;font-weight:700;color:#c0cfe3;letter-spacing:-.01em}
+.indopt small{display:block;font-size:11px;color:#4a6080;line-height:1.45;margin-top:2px}
+.indopt .chosen{display:none;font-size:9.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;
+  font-family:var(--mono);border-radius:4px;padding:2px 7px;margin-left:8px;vertical-align:2px}
+.indopt .head{display:flex;align-items:center}
+.indopt:hover{border-color:#22314a}
+.indopt.on{background:var(--ac08);border-color:var(--ac50);box-shadow:0 0 20px var(--ac18), inset 0 1px 0 var(--ac15)}
+.indopt.on b{color:var(--ac)}
+.indopt.on .chosen{display:inline-block;color:var(--ac);background:var(--ac18);border:1px solid var(--ac35)}
+/* Bot-Leiste */
+/* Bot-Zahlenwähler — steht jetzt nur noch im Warteraum, die Regeln bleiben
+ * aber allgemein, damit .botrow dort weiter greift. */
+.botrow{display:flex;align-items:center;gap:7px}
+.botrow>span{font-size:11.5px;color:#8695ab}
+.botrow .pick{display:inline-flex;gap:2px;padding:2px;background:#050810;border:1px solid #1a2535;border-radius:7px}
+.botrow .pick button{width:19px;height:18px;border:none;background:none;border-radius:5px;font-size:10.5px;
+  font-weight:700;color:#3d5170;cursor:pointer;font-family:var(--mono);transition:all .14s}
+.botrow .pick button:hover{color:#7e97b8}
+.botrow .pick button.on{background:rgba(56,189,248,.14);color:var(--accent);box-shadow:inset 0 0 0 1px rgba(56,189,248,.3)}
+/* Hinweis über dem Startknopf, wohin Ziel und Bots gewandert sind */
+#foothint{margin:0 0 10px;text-align:center;font-size:12px;color:var(--dim)}
+/* Ablauf in drei Schritten */
+/* Ablauf: bewusst OHNE nummerierte Kreise. Eine Nummer behauptet eine
+ * Reihenfolge, die es nicht gibt — gebaut, gehandelt und gewonnen wird
+ * durcheinander. Stattdessen drei Zeilen mit schmal gesetztem Schlagwort und
+ * Trennlinie: liest sich wie eine Legende, nicht wie ein Assistent. */
+.how{border-top:1px solid #17202e;padding-top:12px;margin-top:auto;
+  display:flex;flex-direction:column}
+/* Die Spalte ist schmal — Schlagwort und Erläuterung stehen deshalb
+ * untereinander, nicht nebeneinander. */
+.how .hrow{display:block;padding:8px 0;border-bottom:1px solid #121a26}
+.how .hrow:last-child{border-bottom:0}
+.how .hrow span{display:none}
+.how .hrow b{display:block;margin-bottom:2px;font-size:11px;font-weight:700;color:#9fb3cc;
+  font-stretch:80%;text-transform:uppercase;letter-spacing:.13em}
+.how .hrow em{display:block;font-style:normal;font-size:12px;color:#5a708f;line-height:1.5}
+/* Fußbereich */
+#join .foot{position:relative;padding:2px 28px 14px}
+#join .foot .rule{background:linear-gradient(to right,transparent,#1e2d45 20%,#1e2d45 80%,transparent);
+  opacity:1;margin-bottom:14px}
+#join .go{position:relative;overflow:hidden;width:100%;border:none;border-radius:13px;padding:12px 0;
+  font-size:15px;font-weight:800;letter-spacing:-.025em;color:#05101a;cursor:pointer;font-family:var(--font);
+  background:linear-gradient(90deg,#7dd3fc 0%,var(--accent) 60%,#0ea5e9 100%);
+  box-shadow:0 0 28px rgba(56,189,248,.25), 0 2px 8px rgba(56,189,248,.15), inset 0 1px 0 rgba(255,255,255,.2);
+  transition:all .2s}
+#join .go:hover{transform:translateY(-1px);
+  background:linear-gradient(90deg,#93dcfd 0%,var(--accent) 50%,#0ea5e9 100%);
+  box-shadow:0 0 50px rgba(56,189,248,.5), 0 4px 20px rgba(56,189,248,.3), inset 0 1px 0 rgba(255,255,255,.25)}
+#join .go::after{content:"";position:absolute;inset:0;transform:translateX(-100%);
+  background:linear-gradient(90deg,transparent 0%,rgba(255,255,255,.1) 50%,transparent 100%)}
+#join .go:hover::after{animation:shimmer .6s ease-out}
+@keyframes shimmer{from{transform:translateX(-100%)}to{transform:translateX(100%)}}
+#joinFoot{display:flex;align-items:center;justify-content:space-between;margin-top:9px;
+  font-family:var(--mono);font-size:10.5px;color:#273144}
+#joinFoot .right{display:flex;align-items:center;gap:8px}
+#joinErr{color:var(--down);font-size:12.5px;min-height:0;text-align:center;margin-bottom:6px}
+
+#topbar{position:fixed;top:0;left:0;right:0;height:74px;z-index:20;display:flex;flex-direction:column;pointer-events:none}
+/* Preistafel. Vorher lag der Track absolut in einem overflow:hidden-Kasten —
+ * alles hinter der Bildschirmkante war damit unerreichbar abgeschnitten, bei
+ * 23 Waren rund zwei Drittel.
+ * Jetzt: zugeklappt eine seitlich scrollbare Zeile, aufgeklappt ein Raster mit
+ * allen Waren samt Kursverlauf. Das Raster liegt bewusst als Ausklappmenue
+ * UEBER der Karte statt im Fluss: #ticker steckt in der fest positionierten
+ * #topbar mit 74 px Hoehe — ein wachsender Ticker wuerde dort schlicht
+ * herausquellen, waehrend die ebenfalls fest positionierten Panels stehen
+ * bleiben und sich ueberlagern. */
+#ticker{height:32px;background:rgba(9,13,20,.92);border-bottom:1px solid var(--line);position:relative;pointer-events:auto;z-index:21}
+#tickerScroll{height:32px;overflow-x:auto;overflow-y:hidden;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+#tickerScroll::-webkit-scrollbar{display:none}
+#ticker.auf #tickerScroll{position:absolute;left:0;right:0;top:0;height:auto;max-height:min(46vh,340px);
+  overflow-x:hidden;overflow-y:auto;scrollbar-width:thin;background:#0d131c;
+  border-bottom:1px solid var(--line);box-shadow:0 14px 34px rgba(0,0,0,.62);z-index:1}
+#tickerTrack{display:flex;gap:0;white-space:nowrap;height:32px;align-items:center;padding:0 44px 0 4px;font-family:var(--mono);font-size:12.5px;font-variant-numeric:tabular-nums}
+/* Trennlinien statt blosser Abstaende: Bei 23 Waren dicht nebeneinander
+ * verschwimmen sonst Preis der einen und Name der naechsten zu einer Zeile. */
+#ticker:not(.auf) .tk{padding:0 15px;border-right:1px solid rgba(36,48,68,.75)}
+#ticker:not(.auf) .tk:last-child{border-right:0}
+/* Spaltenbreite nach dem Inhalt bemessen, nicht geschaetzt: Name (~95) +
+ * Preis (~55) + Sparkline (46) + Innenabstand = rund 200 px. Zu schmale
+ * Spalten schneiden die Ellipse am PREIS ab — also genau an der Zahl, wegen
+ * der man die Tafel aufklappt. */
+#ticker.auf #tickerTrack{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));
+  gap:0;height:auto;padding:4px 44px 6px 8px}
+#ticker:not(.auf) .tk svg{display:none}
+#ticker.auf .tk{display:flex;align-items:center;gap:8px;height:27px;overflow:hidden;
+  padding:0 12px;border-right:1px solid rgba(36,48,68,.6);border-bottom:1px solid rgba(36,48,68,.6)}
+#ticker.auf .tk .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tk{color:var(--dim)} .tk b{color:var(--text);margin:0 4px}
+/* Depot: Kennzahlen einer Beteiligung nebeneinander, umbrechend statt gekürzt */
+.depotzahlen{display:flex;flex-wrap:wrap;gap:3px 12px;font-size:11.5px;color:var(--dim);margin-top:2px}
+.depotzahlen b{font-family:var(--mono);color:var(--text)}
+.depotsumme{display:flex;justify-content:space-between;align-items:baseline;gap:10px;
+  margin-top:8px;padding:9px 12px;border:1px solid var(--accent);border-radius:10px;
+  background:rgba(56,189,248,.07);font-size:12.5px}
+.depotsumme b{font-family:var(--mono)}
+/* Kurstafel-Kopfzeile: Seit die Sparkline dazwischensteht, ist rechts weniger
+ * Platz — ohne diese Regeln brach "$4.888 /25 %" auf zwei Zeilen um und die
+ * Kennzahlen darunter rutschten mit. Der Name darf stattdessen kuerzen. */
+.firmrow{gap:12px;padding-top:9px;padding-bottom:9px}
+.firmrow .firmlogo{margin-bottom:3px}
+.firmrow > div:first-child{min-width:0}
+.firmrow > div:first-child .meta{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fpreis{font-family:var(--mono);color:var(--accent);white-space:nowrap}
+/* Logos liegen als helle Wortmarken auf Transparenz vor — auf dem dunklen
+ * Panel stehen sie ohne weitere Behandlung richtig.
+ * Breite MUSS frei bleiben: Mit max-width:100% wurde jedes Logo auf ein
+ * Quadrat gequetscht, weil der umgebende Flex-Kasten min-width:0 hat und
+ * damit auf nahezu null schrumpfen darf — aus 200x79 wurde 26x26. */
+/* Nicht ".logo" — diese Klasse gibt es im Stylesheet bereits als 26x26-Quadrat
+ * fuer die Branchen-Kachel. Sie steht weiter unten und gewann, wodurch jedes
+ * Firmenlogo auf ein Quadrat gequetscht wurde (aus 200x79 wurde 26x26). */
+.firmlogo{display:block;width:auto;height:auto;max-width:none;flex:none}
+/* Die Stadtbank ist das einzige Panel mit Bildmarken — bei den 440 px der
+ * uebrigen Panels blieben je Zeile nur rund 26 px Hoehe fuer ein Logo, auf
+ * denen von einer Wortmarke nichts zu erkennen war. */
+#p-bank{width:min(640px,94vw)}
+@media(max-width:700px){ #p-bank{width:94vw} }
+/* Firmenchip in der Kopfleiste: feste Höhe, freie Breite. */
+.plLogo{height:24px;width:auto;flex:none;object-fit:contain;vertical-align:middle}
+/* Sprachumschalter auf dem Startbildschirm */
+.sprachwahl{display:inline-flex;gap:0;margin-left:10px;border:1px solid var(--line);
+  border-radius:9px;overflow:hidden;vertical-align:middle}
+.sprachwahl button{background:none;border:0;color:var(--dim);font-family:var(--font);
+  font-size:12px;font-weight:600;padding:8px 13px;cursor:pointer;transition:all .15s}
+.sprachwahl button:hover{color:var(--text);background:#101827}
+.sprachwahl button.on{background:rgba(56,189,248,.14);color:var(--accent)}
+@media(max-width:560px){.sprachwahl{margin:8px 0 0;width:100%}.sprachwahl button{flex:1}}
+#langBtn:hover{color:var(--accent);border-color:rgba(56,189,248,.45)}
+/* Teaser für den kommenden Kartell-Modus auf dem Startbildschirm */
+#kartellTeaser{position:relative;margin:16px 0 0;border-radius:14px;overflow:hidden;
+  border:1px solid rgba(251,191,36,.28);box-shadow:0 6px 24px rgba(0,0,0,.35)}
+#kartellTeaser img{display:block;width:100%;height:118px;object-fit:cover}
+#kartellTeaser .badge{position:absolute;top:10px;left:10px;background:rgba(251,191,36,.92);
+  color:#1a1206;font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;
+  padding:4px 9px;border-radius:7px}
+#kartellTeaser .glanz{position:absolute;inset:0;pointer-events:none;
+  background:linear-gradient(115deg,transparent 35%,rgba(255,255,255,.13) 48%,transparent 62%);
+  transform:translateX(-100%);animation:teaserGlanz 6s ease-in-out infinite}
+@keyframes teaserGlanz{0%,55%{transform:translateX(-100%)}100%{transform:translateX(100%)}}
+@media(max-width:560px){#kartellTeaser img{height:88px}}
+/* Bugreport-Dialog */
+#bugDialog{position:fixed;inset:0;z-index:220;background:rgba(4,8,16,.62);display:grid;place-items:center}
+#bugDialog[hidden]{display:none}
+.bugcard{width:min(440px,92vw);background:#0f1728;border:1px solid var(--line);border-radius:14px;
+  padding:20px;box-shadow:0 18px 50px rgba(0,0,0,.5)}
+.bugcard h3{margin:0 0 4px;font-size:16px}
+.bugsub{color:var(--dim);font-size:12px;margin:0 0 12px}
+#bugText{width:100%;box-sizing:border-box;background:#0b1220;border:1px solid var(--line);border-radius:9px;
+  color:var(--text);font-family:var(--font);font-size:13px;padding:10px;resize:vertical}
+.bugopt{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--dim);margin-top:10px;cursor:pointer}
+.bugfile input{font-size:11px}
+.bugrow{display:flex;gap:10px;justify-content:flex-end;margin-top:14px}
+.bugrow button{border-radius:9px;border:1px solid var(--line);background:none;color:var(--dim);
+  padding:8px 14px;font-family:var(--font);font-size:12px;font-weight:600;cursor:pointer}
+.bugrow button.primary{background:rgba(56,189,248,.16);border-color:rgba(56,189,248,.45);color:var(--accent)}
+.bugrow button:hover{color:var(--text)}
+#bugStatus{font-size:12px;margin:10px 0 0;min-height:14px;color:var(--dim)}
+/* Schwarzmarkt: Zurückziehen-Knopf im Stil der übrigen Bedienelemente */
+#smAngebote button[data-smcancel]{background:none;border:1px solid var(--line);border-radius:8px;
+  color:var(--dim);padding:5px 11px;font:600 11px var(--font);cursor:pointer;transition:all .15s}
+#smAngebote button[data-smcancel]:hover{color:#fb7185;border-color:rgba(251,113,133,.5)}
+/* ---- Renntag-Overlay ---- */
+#rennOverlay{position:fixed;inset:0;z-index:210;background:rgba(3,6,12,.72);display:grid;place-items:center;backdrop-filter:blur(3px)}
+#rennOverlay[hidden]{display:none}
+.renncard{width:min(780px,95vw);max-height:92vh;overflow:auto;background:linear-gradient(180deg,#101a2c,#0b1220);
+  border:1px solid rgba(56,189,248,.35);border-radius:16px;padding:18px 20px;box-shadow:0 24px 70px rgba(0,0,0,.6)}
+.rennhead{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+.rennhead h2{margin:0;font-size:18px;letter-spacing:.03em}
+.rennuhr{font-family:var(--mono,ui-monospace);font-size:15px;font-weight:700;color:#fbbf24;
+  background:#0b1220;border:1px solid var(--line);border-radius:8px;padding:4px 10px}
+#rennMini{background:none;border:1px solid var(--line);border-radius:7px;color:var(--dim);width:26px;height:26px;cursor:pointer}
+#rennMini:hover{color:var(--text)}
+#rennChip{position:fixed;right:16px;bottom:64px;z-index:205;background:linear-gradient(135deg,#1e3a5a,#164060);
+  border:1px solid rgba(56,189,248,.5);border-radius:20px;color:var(--accent);font:600 12px var(--font);
+  padding:8px 14px;cursor:pointer;box-shadow:0 6px 20px rgba(0,0,0,.4);animation:rennPuls 2s infinite}
+@keyframes rennPuls{0%,100%{box-shadow:0 6px 20px rgba(0,0,0,.4)}50%{box-shadow:0 6px 24px rgba(56,189,248,.35)}}
+.renngrid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media(max-width:640px){.renngrid{grid-template-columns:1fr}}
+.rennbox{background:#0d1524;border:1px solid var(--line);border-radius:11px;padding:11px}
+.rennbox .lbl{font-size:10.5px;font-weight:700;letter-spacing:.09em;color:#5f7292;text-transform:uppercase;margin-bottom:7px}
+/* Der Wagenname traegt die Zeile — Team und Fahrer sind Beiwerk. Vorher stand
+ * alles in derselben Groesse, und der Name ging zwischen den Zusaetzen unter. */
+.rennname{font-size:14.5px;font-weight:800;letter-spacing:.2px;color:var(--fg);line-height:1.25}
+/* Herkunft der Wagen: gemeldete Spielerstaelle heben sich vom Werksfeld ab —
+ * sonst sieht ein Startfeld aus fuenf Wagen gleich aus, egal ob jemand
+ * wirklich gemeldet hat oder nur die Kulisse steht. */
+.rennteil.gemeldet{box-shadow:inset 3px 0 0 var(--accent)}
+.rennteil.selbst{box-shadow:inset 3px 0 0 #fbbf24}
+.herkunft{font-size:10px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;
+  padding:1px 5px;border-radius:5px;border:1px solid var(--line);color:var(--dim);white-space:nowrap}
+.herkunft.spieler{color:var(--accent);border-color:rgba(56,189,248,.45)}
+.herkunft.selbst{color:#fbbf24;border-color:rgba(251,191,36,.45)}
+.letztes{font-size:10.5px;opacity:.75;white-space:nowrap}
+/* Gesuchszeilen: eigener Block statt einer Textzeile mit nacktem Knopf. */
+.gesuch{display:flex;align-items:center;gap:10px;padding:8px 10px;margin:6px 0;
+  background:rgba(16,24,40,.72);border:1px solid rgba(45,60,88,.55);border-radius:10px}
+.gesuch.kann{border-color:rgba(56,189,248,.35)}
+.gesuch .was{flex:1;min-width:0}
+.gesuch .was b{font-size:13px}
+.gesuch .bedarf{font-size:12.5px;font-weight:700;color:#fbbf24}
+.gesuch button{flex:none;border-radius:8px;border:1px solid rgba(56,189,248,.45);
+  background:rgba(56,189,248,.14);color:var(--accent);font:700 11.5px var(--font);
+  padding:6px 11px;cursor:pointer}
+.gesuch button:hover:not(:disabled){background:rgba(56,189,248,.26)}
+.gesuch button:disabled{border-color:var(--line);background:transparent;color:var(--dim);cursor:not-allowed}
+.eigenesGesuch{background:rgba(251,191,36,.07);border-color:rgba(251,191,36,.35)}
+.rennteil .meta,.rennstand .meta{font-size:11px;opacity:.62}
+.rennstand .wer b{font-size:14px;letter-spacing:.2px}
+input.autoname{flex:1;min-width:0;background:transparent;border:1px solid transparent;border-radius:6px;
+  color:var(--fg);font:inherit;font-weight:700;font-size:13px;padding:2px 5px;margin:-2px -5px}
+input.autoname:hover{border-color:var(--line)}
+input.autoname:focus{border-color:var(--accent);background:var(--panel2);outline:none}
+input.autoname::placeholder{color:var(--fg);opacity:.95;font-weight:700}
+.rennteil{display:flex;align-items:center;gap:8px;padding:4px 0;font-size:12.5px}
+.rennteil.wettbar{cursor:pointer;border-radius:8px;padding:5px 7px;margin:1px -7px;transition:background .12s}
+.rennteil.wettbar:hover{background:rgba(255,255,255,.06)}
+.rennteil.gewaehlt{background:rgba(56,189,248,.15);box-shadow:inset 0 0 0 1px var(--accent)}
+.rennteil .eigen{margin-left:auto;font-size:11px;color:#8695ab}
+.rennteil .quote{margin-left:auto;font-family:var(--mono,ui-monospace);font-weight:700;color:#fbbf24}
+.rennfarb{width:10px;height:10px;border-radius:3px;flex:none}
+#rennStrecke{display:block;width:100%;border-radius:11px;border:1px solid var(--line);background:#0a1120}
+.rennstand{display:grid;grid-template-columns:30px 34px 1fr 150px;align-items:center;gap:10px;
+  padding:7px 10px;margin:5px 0;font-size:12.5px;background:rgba(16,24,40,.75);
+  border:1px solid rgba(45,60,88,.55);border-radius:10px;transition:all .3s}
+.rennstand.fuehrt{border-color:rgba(251,191,36,.55);background:linear-gradient(90deg,rgba(251,191,36,.10),rgba(16,24,40,.75) 55%)}
+.rennstand.meins{box-shadow:inset 3px 0 0 var(--accent)}
+.platzbadge{width:24px;height:24px;border-radius:50%;display:grid;place-items:center;
+  font:800 12px var(--font);background:#1a2438;color:#8ea0bd;border:1px solid rgba(90,110,150,.4)}
+.platzbadge.p1{background:linear-gradient(135deg,#8a6d1d,#fbbf24);color:#241a03;border-color:#fbbf24}
+.platzbadge.p2{background:linear-gradient(135deg,#6d7683,#cdd6e2);color:#1a2028;border-color:#cdd6e2}
+.platzbadge.p3{background:linear-gradient(135deg,#6e4a26,#c98a4b);color:#22150a;border-color:#c98a4b}
+.rennstand .wer b{font-size:13px}
+.rennstand .wer .meta{display:block;font-size:11px}
+.rennstand .fortschritt{text-align:right}
+.rennstand .fortschritt .zeile{display:flex;justify-content:space-between;font-family:var(--mono,ui-monospace);
+  font-size:11px;color:var(--dim);margin-bottom:3px}
+.rennstand .fortschritt .balken{height:5px;background:#0b1220;border-radius:3px;overflow:hidden}
+.rennstand .fortschritt .balken i{display:block;height:100%;border-radius:3px;transition:width .9s linear}
+.rennstat{display:flex;gap:10px;flex-wrap:wrap;margin-top:10px}
+.rennstat .chip2{display:flex;align-items:center;gap:7px;background:#0b1220;border:1px solid var(--line);
+  border-radius:9px;padding:6px 12px;font-size:12px;color:var(--dim)}
+.rennstat .chip2 b{color:var(--text);font-family:var(--mono,ui-monospace)}
+/* Start-Ampel: fünf rote Lichter über der Strecke, dann grün */
+#rennAmpel{position:absolute;top:9%;left:50%;transform:translateX(-50%);display:flex;gap:9px;
+  background:rgba(10,14,22,.9);border:1px solid #2a3550;border-radius:12px;padding:10px 14px;
+  box-shadow:0 8px 26px rgba(0,0,0,.55);z-index:3}
+#rennAmpel[hidden]{display:none}
+#rennAmpel .licht{width:22px;height:22px;border-radius:50%;background:#241418;border:1px solid #3a2026;
+  transition:all .12s}
+#rennAmpel .licht.rot{background:radial-gradient(circle at 35% 35%,#ff8d85,#d81f14);border-color:#ff5348;
+  box-shadow:0 0 14px rgba(230,50,40,.75)}
+#rennAmpel .licht.gruen{background:radial-gradient(circle at 35% 35%,#a5f2b8,#17a34a);border-color:#3ade79;
+  box-shadow:0 0 16px rgba(50,220,110,.8)}
+#rennAmpel .go{align-self:center;font:800 14px var(--font);color:#3ade79;letter-spacing:.1em;padding:0 4px}
+.funkzeile{font-size:12.5px;padding:2px 0;font-family:var(--mono,ui-monospace)}
+.funkzeile:first-child{color:#fbbf24}
+/* Anmeldephase: Kopfleiste mit Countdown-Balken und Pool-Chips */
+.phasenkopf{margin-bottom:12px}
+.phasenbalken{height:6px;background:#0b1220;border-radius:4px;overflow:hidden;border:1px solid rgba(45,60,88,.6)}
+.phasenbalken i{display:block;height:100%;background:linear-gradient(90deg,#38bdf8,#fbbf24);transition:width 1s linear}
+/* Startfeld-Zeilen als Karten */
+.startzeile{display:flex;align-items:center;gap:10px;padding:8px 10px;margin:6px 0;font-size:12.5px;
+  background:rgba(16,24,40,.75);border:1px solid rgba(45,60,88,.55);border-radius:10px;transition:all .15s}
+.startzeile.wettbar{cursor:pointer}
+.startzeile.wettbar:hover{border-color:rgba(56,189,248,.5);background:rgba(22,32,52,.85)}
+.startzeile.gewaehlt{border-color:var(--accent);background:linear-gradient(90deg,rgba(56,189,248,.12),rgba(16,24,40,.8) 60%);
+  box-shadow:0 0 0 1px rgba(56,189,248,.35)}
+.startzeile.selbst{border-color:rgba(251,191,36,.45);box-shadow:inset 3px 0 0 #fbbf24}
+.startzeile .wer b{font-size:13px}
+.startnr{width:22px;height:22px;flex:none;border-radius:6px;display:grid;place-items:center;
+  font:800 11px var(--font);background:#1a2438;color:#8ea0bd;border:1px solid rgba(90,110,150,.4)}
+.quotepill{margin-left:auto;flex:none;font:700 12px var(--mono,ui-monospace);color:#fbbf24;
+  background:#0b1220;border:1px solid rgba(251,191,36,.35);border-radius:8px;padding:5px 10px}
+.quotepill.an{background:rgba(251,191,36,.16)}
+.quotepill.selbstpill{color:#8ea0bd;border-color:var(--line)}
+/* Wettschein */
+.wettschein{background:#0b1322;border:1px solid rgba(45,60,88,.6);border-radius:11px;padding:11px}
+.wettwahl{display:flex;align-items:center;gap:10px;min-height:34px;padding-bottom:9px;border-bottom:1px dashed var(--line)}
+.artwahl{display:flex;gap:0;margin-top:9px;background:#0a1120;border:1px solid var(--line);border-radius:9px;padding:2px}
+.artwahl button{flex:1;background:none;border:0;border-radius:7px;color:#5f7292;font:600 12px var(--font);
+  padding:7px 0;cursor:pointer;transition:all .15s}
+.artwahl button:hover{color:#9fb2cd}
+.artwahl button.an{background:linear-gradient(135deg,#1e3a5a,#164060);color:var(--accent)}
+.rennform .schnell{border:1px solid var(--line);background:#0a1120;color:var(--dim);border-radius:8px;
+  font:600 11px var(--font);padding:7px 9px;cursor:pointer}
+.rennform .schnell:hover{color:var(--accent);border-color:rgba(56,189,248,.4)}
+.wettknopf{width:100%;border-radius:9px;border:1px solid rgba(56,189,248,.5);
+  background:linear-gradient(135deg,rgba(56,189,248,.22),rgba(56,189,248,.10));color:var(--accent);
+  font:700 13px var(--font);padding:10px 0;cursor:pointer;transition:all .15s}
+.wettknopf:hover{background:linear-gradient(135deg,rgba(56,189,248,.32),rgba(56,189,248,.16))}
+/* Box-Knopf während des Rennens */
+#boxBar{display:flex;align-items:center;gap:12px;margin-top:10px}
+#boxBar[hidden]{display:none}
+#boxKnopf{flex:none;border-radius:10px;border:1px solid rgba(251,191,36,.55);
+  background:linear-gradient(135deg,rgba(251,191,36,.24),rgba(251,191,36,.10));color:#fbbf24;
+  font:800 13px var(--font);letter-spacing:.04em;padding:11px 18px;cursor:pointer;transition:all .15s;
+  animation:boxPuls 1.6s infinite}
+#boxKnopf:hover:not(:disabled){background:linear-gradient(135deg,rgba(251,191,36,.36),rgba(251,191,36,.18))}
+#boxKnopf:disabled{animation:none;opacity:.65;cursor:default;color:#8ea0bd;border-color:var(--line);background:#0b1220}
+@keyframes boxPuls{0%,100%{box-shadow:0 0 0 rgba(251,191,36,0)}50%{box-shadow:0 0 14px rgba(251,191,36,.35)}}
+.rennpodium{display:flex;gap:14px;justify-content:center;align-items:flex-end;margin:18px 0 10px}
+.rennpodium .stufe{text-align:center;flex:1;max-width:190px}
+/* Das Podest trug frueher nur eine Zahl auf blaugrauem Kasten. Jetzt bekommt
+ * jede Stufe die Lackierung ihres Teams als Lichtsaum, einen Metallverlauf
+ * nach Rang und eine grosse Platzziffer — auf einen Blick lesbar, wer wo steht. */
+.rennpodium .sockel{border-radius:12px 12px 0 0;position:relative;overflow:hidden;
+  display:flex;align-items:center;justify-content:center;
+  border:1px solid rgba(255,255,255,.10);border-bottom:none;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.14), 0 -6px 22px -10px var(--liv,#38bdf8)}
+.rennpodium .sockel .nr{font:900 30px/1 var(--font);color:rgba(255,255,255,.92);
+  text-shadow:0 2px 10px rgba(0,0,0,.55)}
+.rennpodium .sockel::after{content:"";position:absolute;left:0;right:0;top:0;height:3px;background:var(--liv,#38bdf8)}
+.rennpodium .p1 .sockel{background:linear-gradient(180deg,#8a6d18,#3a2f0c)}
+.rennpodium .p2 .sockel{background:linear-gradient(180deg,#5c6470,#2b3038)}
+.rennpodium .p3 .sockel{background:linear-gradient(180deg,#6b4426,#33200f)}
+.rennpodium .krone{font-size:30px;line-height:1;filter:drop-shadow(0 3px 8px rgba(0,0,0,.5))}
+.rennpodium .wer2{font-size:13.5px;margin:5px 0 7px;line-height:1.35}
+.rennpodium .wer2 b{font-size:14.5px;letter-spacing:.2px}
+.wmdelta{color:#fbbf24;font-weight:800}
+.rennform{display:flex;gap:7px;flex-wrap:wrap;align-items:center;margin-top:8px}
+.rennform select,.rennform input{background:#0b1220;border:1px solid var(--line);border-radius:8px;color:var(--text);
+  font-family:var(--font);font-size:12px;padding:7px 8px}
+.rennform input{width:90px}
+.rennform button{border-radius:8px;border:1px solid rgba(56,189,248,.45);background:rgba(56,189,248,.14);color:var(--accent);
+  font:600 12px var(--font);padding:7px 13px;cursor:pointer}
+.rennform button:hover{background:rgba(56,189,248,.24)}
+/* ---- Tonsteuerung ----
+ * Der Regler war ein unformatiertes <input type=range> mit accent-color: 56 px
+ * breit, ohne sichtbare Füllstandsanzeige und mit einem Griff, der auf dem
+ * Handy kaum zu treffen war. Jetzt ein zusammenhängendes Element mit
+ * gefülltem Balken, grösserem Griff und Zahlenwert beim Bedienen. */
+.tonpill{display:inline-flex;align-items:center;gap:2px;height:26px;padding:0 7px 0 2px;
+  border:1px solid var(--line);border-radius:8px;background:rgba(10,16,24,.5);transition:border-color .15s}
+.tonpill:hover,.tonpill:focus-within{border-color:rgba(56,189,248,.45)}
+.tonpill #music{background:none;border:0;color:var(--dim);width:26px;height:24px;cursor:pointer;
+  display:grid;place-items:center;padding:0;border-radius:6px;transition:color .15s}
+.tonpill #music:hover{color:var(--accent)}
+.tonpill.stumm #music{color:var(--down)}
+.tonreg{position:relative;display:flex;align-items:center}
+#musicVol{-webkit-appearance:none;appearance:none;width:64px;height:18px;background:none;
+  cursor:pointer;margin:0;display:block}
+#musicVol::-webkit-slider-runnable-track{height:4px;border-radius:3px;
+  background:linear-gradient(to right,var(--accent) 0 var(--fuell,22%),#243044 var(--fuell,22%) 100%)}
+#musicVol::-moz-range-track{height:4px;border-radius:3px;background:#243044}
+#musicVol::-moz-range-progress{height:4px;border-radius:3px;background:var(--accent)}
+/* Griff bewusst gross genug fuer Finger — 12 px sichtbar, Trefferflaeche darueber hinaus. */
+#musicVol::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;width:12px;height:12px;
+  border-radius:50%;background:var(--text);border:2px solid var(--accent);margin-top:-4px;
+  box-shadow:0 1px 4px rgba(0,0,0,.5);transition:transform .12s}
+#musicVol::-moz-range-thumb{width:12px;height:12px;border-radius:50%;background:var(--text);
+  border:2px solid var(--accent);box-shadow:0 1px 4px rgba(0,0,0,.5)}
+#musicVol:hover::-webkit-slider-thumb,#musicVol:active::-webkit-slider-thumb{transform:scale(1.25)}
+#musicVol:focus-visible{outline:2px solid var(--accent);outline-offset:3px;border-radius:4px}
+.tonpill.stumm #musicVol::-webkit-slider-runnable-track{
+  background:linear-gradient(to right,var(--down) 0 var(--fuell,22%),#243044 var(--fuell,22%) 100%)}
+/* Zahlenwert schwebt ueber dem Regler, damit die Kopfleiste beim Bedienen
+ * nicht springt. */
+.tonwert{position:absolute;left:50%;bottom:calc(100% + 7px);transform:translateX(-50%);
+  font-family:var(--mono);font-size:10.5px;color:var(--text);background:#0d131c;
+  border:1px solid var(--line);border-radius:5px;padding:2px 6px;white-space:nowrap;
+  opacity:0;pointer-events:none;transition:opacity .13s}
+.tonreg:hover .tonwert,#musicVol:focus-visible + .tonwert,.tonpill.zieht .tonwert{opacity:1}
+@media(max-width:600px){ #musicVol{width:52px} }
+/* ---- Nachrichtenzentrale ----
+ * Als Zeitungsspalte gesetzt: Serifen fuer die Schlagzeile, ruhiger Fliesstext
+ * darunter. Eine Tabelle stand hier zuerst — praeziser, las sich aber wie ein
+ * Datenblatt, und ein Datenblatt liest niemand zweimal.
+ * Die Zahlen tragen den Nachrichtenwert, deshalb stehen sie in Monoschrift und
+ * in Farbe: Im Fliesstext gehen sie sonst unter, gerade weil der Text ruhig
+ * gesetzt ist. */
+.nwlead{font-size:12.5px;color:var(--dim);line-height:1.6;padding-bottom:12px;
+  border-bottom:1px solid var(--line);margin-bottom:14px}
+.nwkarte{border:1px solid var(--line);border-radius:12px;background:rgba(12,18,28,.5);
+  padding:15px 18px 16px;margin-bottom:12px}
+.nwkarte.neu{border-color:rgba(251,191,36,.45);background:rgba(251,191,36,.055);
+  box-shadow:0 0 0 1px rgba(251,191,36,.09)}
+.nwkopf{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.nwressort{font-family:var(--mono);font-size:9.5px;font-weight:700;letter-spacing:.16em;
+  text-transform:uppercase;color:#fbbf24}
+.nwkarte:not(.neu) .nwressort{color:var(--dim)}
+.nwzeit{font-family:var(--mono);font-size:9.5px;letter-spacing:.13em;text-transform:uppercase;color:var(--dim)}
+.nwzeit::before{content:"· "}
+.nwmarke{font-family:var(--mono);font-size:9px;letter-spacing:.12em;text-transform:uppercase;
+  color:#0d131c;background:#fbbf24;border-radius:4px;padding:2px 6px;font-weight:700}
+.nwschlag{font-family:Georgia,"Times New Roman",serif;font-size:20.5px;font-weight:700;
+  line-height:1.24;color:var(--text);margin:0 0 11px;text-wrap:balance;letter-spacing:-.01em}
+.nwkarte.neu .nwschlag{color:#fdefc9}
+.nwtext{font-size:13.5px;line-height:1.72;color:#b3c2d6;margin:0 0 9px;max-width:64ch}
+.nwtext:last-child{margin-bottom:0}
+/* Aufmacher etwas kraeftiger — er traegt die Nachricht. */
+.nwtext.lead{font-size:14.5px;line-height:1.66;color:#cbd7e6}
+.nwtext.lead::first-letter{font-family:Georgia,"Times New Roman",serif;font-size:31px;
+  font-weight:700;color:#fbbf24;float:left;line-height:.9;padding:3px 7px 0 0}
+.nwproz{font-family:var(--mono);font-size:12.5px;font-weight:600;white-space:nowrap}
+.nwproz.auf{color:var(--up)} .nwproz.ab{color:var(--down)}
+.nwgeld{font-family:var(--mono);font-size:12.5px;font-weight:600;color:var(--text);white-space:nowrap}
+.nwmenge{font-family:var(--mono);font-size:12.5px;font-weight:600;color:#fbbf24;white-space:nowrap}
+.nwfirma{font-weight:600}
+/* ---- Stadtbank: Kopfzeile und Handelsseiten ---- */
+.bkopf{border:1px solid var(--line);border-radius:12px;background:rgba(12,18,28,.55);
+  padding:12px 14px 11px;margin-bottom:12px}
+.bkopf-oben{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:10px}
+.bkopf-name{display:flex;align-items:center;min-width:0}
+.bkopf-rating{font-family:var(--mono);font-size:12px;font-weight:700;letter-spacing:.08em;
+  border:1px solid currentColor;border-radius:5px;padding:1px 7px;flex:none}
+.bkopf-zahlen{display:grid;grid-template-columns:repeat(auto-fit,minmax(96px,1fr));gap:8px 14px}
+.bkz{display:flex;flex-direction:column;gap:1px;min-width:0}
+.bkz b{font-family:var(--mono);font-size:16px;line-height:1.25;white-space:nowrap}
+.bkz span{font-size:10.5px;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bkopf-uhr{display:flex;align-items:center;gap:10px;margin-top:11px;font-size:11.5px;color:var(--dim)}
+.bkopf-uhr b{font-family:var(--mono);color:var(--text)}
+.bkopf-balken{flex:1;height:5px;border-radius:3px;background:#0a1018;overflow:hidden;min-width:60px}
+.bkopf-balken i{display:block;height:100%;background:linear-gradient(to right,var(--accent),var(--accent2));
+  border-radius:3px;transition:width .4s linear}
+/* Kaufen und Verkaufen tragen dieselbe Farbsprache wie das Orderbuch an der
+ * Börse — vorher sahen beide Formulare identisch aus und man musste die
+ * Überschrift lesen, um zu wissen, was der blaue Knopf gleich auslöst. */
+.bhandel{display:flex;flex-direction:column;gap:10px;margin-bottom:6px}
+.bseite{border:1px solid var(--line);border-radius:11px;padding:10px 12px 11px}
+.bseite.verkauf{border-color:rgba(251,113,133,.3);background:rgba(251,113,133,.05)}
+.bseite.kauf{border-color:rgba(52,211,153,.3);background:rgba(52,211,153,.05)}
+.bseite-kopf{display:flex;align-items:center;gap:7px;font-size:11px;font-weight:700;
+  letter-spacing:.11em;text-transform:uppercase;margin-bottom:9px}
+.bseite.verkauf .bseite-kopf{color:var(--down)} .bseite.kauf .bseite-kopf{color:var(--up)}
+.bseite-kopf .pfeil{font-size:10px}
+.bknopf{width:auto;margin:0;padding:8px 14px;border-radius:9px;border:1px solid;
+  font-family:var(--font);font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap;
+  background:transparent;transition:all .14s}
+.bknopf.verkauf{color:var(--down);border-color:rgba(251,113,133,.5)}
+.bknopf.verkauf:hover{background:rgba(251,113,133,.15)}
+.bknopf.kauf{color:var(--up);border-color:rgba(52,211,153,.5)}
+.bknopf.kauf:hover{background:rgba(52,211,153,.15)}
+.bseite .meta{margin-top:6px}
+/* Aufgeklappte Firma in der Kurstafel */
+.firmdetail{margin:-4px 0 10px;padding:2px 12px 10px;border:1px solid var(--line);border-top:0;
+  border-radius:0 0 10px 10px;background:rgba(12,18,28,.45)}
+.kzrow{display:flex;justify-content:space-between;align-items:baseline;gap:10px;
+  padding:4px 0;border-bottom:1px solid rgba(36,48,68,.4);font-size:12.5px}
+.kzrow:last-of-type{border-bottom:0}
+.kzrow b{font-family:var(--mono);white-space:nowrap}
+.firmrow:hover{border-color:var(--accent)}
+/* Orderbuch-Zeile: Pfeil | Menge×Preis | Firma | Knopf */
+.obrow{display:grid;grid-template-columns:13px auto 1fr auto;align-items:center;gap:9px;
+  padding:3px 2px;border-bottom:1px solid rgba(36,48,68,.4)}
+.obrow .omono{font-family:var(--mono);font-variant-numeric:tabular-nums;white-space:nowrap}
+.obrow .oname{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11.5px}
+.obrow button{padding:3px 10px;font-size:11.5px;white-space:nowrap}
+/* Legende einmal oben statt zwei Ueberschriften je Ware — sie bleibt beim
+ * Scrollen stehen, damit die Pfeile immer erklaert sind. */
+.oblegend{display:flex;gap:16px;flex-wrap:wrap;font-size:11.5px;color:var(--dim);
+  padding:7px 2px 8px;border-bottom:1px solid var(--line);margin-bottom:2px;
+  position:sticky;top:0;background:rgba(19,26,38,.98);z-index:2}
+/* Aufklapp-Knopf: liegt ueber dem Scrollbereich, nicht darin — sonst wuerde er
+ * beim seitlichen Scrollen mitwandern. */
+#tickerToggle{position:absolute;right:0;top:0;height:32px;width:38px;z-index:3;cursor:pointer;
+  background:linear-gradient(to left,rgba(9,13,20,.98) 62%,transparent);border:0;color:var(--dim);
+  font-size:15px;line-height:32px;padding:0;transition:color .15s}
+#ticker.auf #tickerToggle{background:linear-gradient(to left,#0d131c 62%,transparent)}
+#tickerToggle:hover{color:var(--accent)}
+#status{height:42px;display:flex;align-items:center;justify-content:space-between;padding:0 14px;background:linear-gradient(180deg,rgba(9,13,20,.85),transparent);pointer-events:auto}
+/* Die Kennung liest sich jetzt als Firmenschild: kantiger Farbblock, schmal
+ * gesetzter Name, darunter die Kennzahl. Vorher war es ein rundes Profilbild
+ * mit Namen daneben — das Bildzeichen eines Kontos, nicht eines Betriebs. */
+/* Alles in einer Zeile: Die rechte Seite ist breit, der linke Block bekommt
+ * sonst nur den Rest und bricht um. Der Name wird notfalls gekuerzt, die
+ * Kennzahl dahinter bleibt immer vollstaendig lesbar. */
+#status .left{display:flex;align-items:center;gap:10px;min-width:0;flex:0 1 auto;overflow:hidden}
+.logo{flex:none;width:24px;height:24px;border-radius:2px;display:grid;place-items:center;
+  font-weight:800;color:#0a0e15;font-size:13px;font-stretch:85%}
+#coname{flex:0 1 auto;min-width:40px;max-width:190px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  font-stretch:82%;font-weight:700;font-size:13.5px;letter-spacing:.01em;color:#dbe5f3}
+#networth{flex:0 1 auto;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  color:var(--dim);font-size:11.5px;font-family:var(--mono);
+  padding-left:10px;border-left:1px solid #1c2637} #networth b{color:var(--text);font-weight:600}
+#status .right{display:flex;align-items:center;gap:16px;min-width:0;flex:0 1 auto;
+  font-family:var(--mono);font-variant-numeric:tabular-nums}
+#cash{color:var(--accent);font-weight:700;font-size:16px}
+#lvlwrap{display:flex;flex-direction:column;gap:3px;width:110px}
+#lvlwrap small{font-size:10px;color:var(--dim);text-transform:uppercase;letter-spacing:.06em;font-family:var(--font)}
+#xpbar{height:5px;background:var(--panel2);border-radius:3px;overflow:hidden}
+#xpfill{height:100%;width:0%;background:var(--accent2);transition:width .4s}
+/* Bei acht Mitspielern und schmalem Fenster ist die Liste das Erste, was
+ * weichen darf — die eigene Kennung und der Kontostand nicht. */
+#players{display:flex;gap:5px;min-width:0;overflow:hidden;flex:0 1 auto}
+#players .pl{width:22px;height:22px;border-radius:6px;font-size:10px;display:grid;place-items:center;color:#0a0e15;font-weight:800;cursor:default}
+
+/* Reiterleiste statt schwebender Pille. Der aktive Reiter wird durch eine
+ * Linie markiert, nicht durch einen gefuellten Kasten — das ist die Sprache
+ * von Werkzeugen; ein Kasten mit runden Ecken ist die von Anwendungen. */
+#dock{position:fixed;left:50%;transform:translateX(-50%);bottom:0;z-index:20;display:flex;gap:0;
+  background:rgba(11,16,24,.94);border:1px solid var(--line);border-bottom:0;
+  border-radius:4px 4px 0 0;padding:0 3px;backdrop-filter:blur(8px)}
+.dockbtn{width:74px;padding:11px 2px 10px;border:none;background:none;color:#6d809b;border-radius:0;
+  cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:3px;
+  font-size:11px;font-stretch:88%;letter-spacing:.02em;
+  border-bottom:2px solid transparent;transition:color .12s,border-color .12s}
+.dockbtn:hover{color:#a9bdd6}
+.dockbtn.on{background:none;color:var(--accent);border-bottom-color:var(--accent)}
+
+/* ===== Handy und Tablet =====
+ * Gemessen an den Mindestbreiten der Bausteine: Kopfzeile 446 px, Reiterleiste
+ * 512 px — beides sprengt ein 390-px-Display. Statt alles zu verkleinern werden
+ * gezielt die Teile zurückgenommen, die man unterwegs am wenigsten braucht. */
+@media(max-width:820px){
+  /* Reiterleiste: Beschriftung bleibt, aber schmaler und notfalls scrollbar */
+  #dock{max-width:calc(100vw - 16px);overflow-x:auto;gap:2px;padding:6px;
+    scrollbar-width:none;border-radius:12px}
+  #dock::-webkit-scrollbar{display:none}
+  .dockbtn{width:auto;min-width:52px;padding:7px 9px 6px;flex:none}
+}
+@media(max-width:600px){
+  /* Kopfzeile: Ticker flacher, Rundenziel und Level-Leiste weichen —
+   * beides steht ausführlich im Finanzen-Panel. */
+  #topbar{height:64px}
+  #ticker,#tickerScroll,#tickerTrack{height:26px}
+  #tickerTrack{font-size:11px;gap:22px}
+  #tickerToggle{height:26px;line-height:26px}
+  #ticker.auf #tickerScroll,#ticker.auf #tickerTrack{height:auto}
+  #ticker.auf #tickerTrack{grid-template-columns:repeat(auto-fill,minmax(158px,1fr))}
+  #status{height:38px;padding:0 10px;gap:8px}
+  #status .left,#status .right{gap:7px;min-width:0}
+  #coname{max-width:96px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  #networth{display:none}
+  #lvlwrap{display:none}
+  #players{max-width:88px;overflow:hidden}
+  .panel{top:72px;bottom:70px;right:8px;left:8px;width:auto}
+  #dock{bottom:10px}
+}
+@media(max-width:600px) and (orientation:landscape){
+  /* Quer gehaltenes Handy: kaum Höhe, also Ticker ganz weg */
+  #ticker{display:none}
+  #topbar{height:38px}
+  .panel{top:46px}
+}
+.panel{position:fixed;top:84px;right:14px;bottom:76px;width:min(440px,94vw);z-index:15;background:rgba(19,26,38,.97);border:1px solid var(--line);border-radius:14px;display:none;flex-direction:column;overflow:hidden}
+.panel.open{display:flex}
+.phead{padding:12px 16px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center}
+.phead h2{font-size:15px}
+.phead .x{background:none;border:none;color:var(--dim);font-size:16px;cursor:pointer}
+.pbody{flex:1;overflow-y:auto;padding:12px 14px}
+table{width:100%;border-collapse:collapse;font-size:12px}
+th{text-align:left;color:var(--dim);font-weight:500;font-size:10px;text-transform:uppercase;letter-spacing:.05em;padding:4px 5px;border-bottom:1px solid var(--line)}
+td{padding:5px;border-bottom:1px solid rgba(36,48,68,.5);font-family:var(--mono);font-variant-numeric:tabular-nums}
+td:first-child{font-family:var(--font)}
+.buyb,.sellb,.mini{border:none;border-radius:6px;padding:4px 9px;cursor:pointer;font-size:11px;font-weight:600}
+.buyb{background:var(--up);color:#08130b} .sellb{background:var(--down);color:#fff}
+.mini{background:var(--panel2);color:var(--text);border:1px solid var(--line)}
+.formrow{display:flex;gap:7px;margin:10px 0;flex-wrap:wrap;align-items:center}
+.formrow input{width:82px} .formrow select{max-width:150px}
+.sec{font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--dim);margin:12px 0 6px}
+
+/* ---- Fahrzeugentwicklung ----
+ * Die sechs Tuningbereiche als Karten statt als Knopfliste. Wichtig ist der
+ * Zielkonflikt: Was ein Bereich hebt und was er senkt, steht als farbiges
+ * Kürzel nebeneinander (--up / --down) — vorher lief beides als ein einziger
+ * Fließtext durch und war nicht auf einen Blick zu unterscheiden. */
+.tunegrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(228px,1fr));gap:8px}
+.tunecard{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:10px 11px;
+  text-align:left;color:var(--text);font-family:var(--font);cursor:pointer;width:100%;
+  display:flex;flex-direction:column;gap:8px;transition:border-color .15s,background .15s,transform .08s}
+.tunecard:hover:not(:disabled){border-color:var(--accent);background:#1e2839}
+.tunecard:active:not(:disabled){transform:translateY(1px)}
+.tunecard:disabled{cursor:default;opacity:.66}
+.tunecard.fertig{border-color:var(--up);opacity:1}
+.tunecard.fertig:disabled{opacity:1}
+.tunehead{display:flex;align-items:center;gap:8px}
+.tunehead svg{flex:none;opacity:.85}
+.tunehead b{font-size:12.5px;font-weight:650;flex:1;letter-spacing:.01em}
+.pips{display:flex;gap:3px;flex:none}
+.pip{width:7px;height:7px;border-radius:50%;background:var(--line)}
+.pip.on{background:var(--accent)}
+.tunecard.fertig .pip.on{background:var(--up)}
+.chips{display:flex;flex-wrap:wrap;gap:4px}
+.chip{font-size:10.5px;font-weight:600;padding:2px 6px;border-radius:6px;font-family:var(--mono);white-space:nowrap}
+.chip.up{color:var(--up);background:rgba(52,211,153,.13)}
+.chip.dn{color:var(--down);background:rgba(251,113,133,.13)}
+.tunecost{display:flex;flex-wrap:wrap;align-items:center;gap:6px;font-size:11px;color:var(--dim);
+  border-top:1px solid var(--line);padding-top:7px;margin-top:auto}
+.tunecost .geld{font-family:var(--mono);color:var(--text);font-weight:650}
+.teil{font-family:var(--mono);font-size:10.5px;padding:2px 6px;border-radius:6px;background:rgba(255,255,255,.05);color:var(--dim)}
+.teil.fehlt{color:var(--down);background:rgba(251,113,133,.13)}
+.tunehint{font-size:10.5px;color:var(--down);font-weight:600}
+.tunefertig{font-size:10.5px;color:var(--up);font-weight:600}
+.tunestand{display:flex;align-items:center;gap:9px;margin:2px 0 9px;font-size:11px;color:var(--dim)}
+.tunestand .bar{flex:1;height:5px;border-radius:3px;background:var(--line);overflow:hidden}
+.tunestand .bar>i{display:block;height:100%;background:linear-gradient(90deg,var(--accent),var(--accent2));transition:width .3s}
+
+/* ---- Fahrerkarten ----
+ * Vorher lief alles als Fließtext: sechs "Name Wert"-Paare hintereinander,
+ * ein Gesamteindruck war daraus nicht zu gewinnen und zwei Fahrer waren nicht
+ * vergleichbar. Jetzt: Helm in Teamfarbe, eine Gesamtnote zum Vergleichen und
+ * die Einzelwerte als Balken — dieselbe Sprache wie bei den Fahrzeugwerten. */
+.fgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(236px,1fr));gap:8px}
+.fcard{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:10px 11px;
+  display:flex;flex-direction:column;gap:9px}
+.fcard.mein{border-color:var(--accent)}
+.fcard.fremd{opacity:.62}
+.fhead{display:flex;gap:10px;align-items:center}
+.fhead svg{flex:none}
+.fname{flex:1;min-width:0}
+.fname b{display:block;font-size:13px;font-weight:650;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fname span{font-size:10.5px;color:var(--dim);font-family:var(--mono)}
+.fovr{flex:none;text-align:center;min-width:34px}
+.fovr b{display:block;font-family:var(--mono);font-size:17px;font-weight:700;line-height:1;color:var(--text)}
+.fovr span{font-size:9px;color:var(--dim);letter-spacing:.07em;text-transform:uppercase}
+.fstats{display:grid;grid-template-columns:1fr 1fr;gap:4px 11px}
+.fstat{display:grid;grid-template-columns:52px 1fr 22px;gap:6px;align-items:center;font-size:10px;color:var(--dim)}
+.fstat i{height:4px;border-radius:2px;background:var(--line);overflow:hidden;font-style:normal}
+.fstat i>b{display:block;height:100%;background:var(--accent);border-radius:2px}
+.fcard.fremd .fstat i>b{background:var(--dim)}
+.fstat u{text-decoration:none;font-family:var(--mono);color:var(--text);font-weight:650;text-align:right}
+.fsitz{font-size:10.5px;font-weight:600;color:var(--accent)}
+.fsitz.leer{color:var(--dim);font-weight:400}
+.ffoot{display:flex;align-items:center;gap:8px;border-top:1px solid var(--line);padding-top:8px;margin-top:auto}
+.fgehalt{font-size:11px;color:var(--dim);flex:1}
+.fgehalt b{font-family:var(--mono);color:var(--text);font-weight:650}
+.fbtn{background:var(--accent);color:#04121b;border:0;border-radius:8px;padding:6px 12px;
+  font-size:11.5px;font-weight:650;cursor:pointer;font-family:var(--font);white-space:nowrap;transition:filter .15s}
+.fbtn:hover:not(:disabled){filter:brightness(1.12)}
+.fbtn:disabled{background:var(--line);color:var(--dim);cursor:default}
+.fbtn.weg{background:transparent;border:1px solid var(--line);color:var(--dim)}
+.fbtn.weg:hover{border-color:var(--down);color:var(--down)}
+.invgrid{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+.invtile{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:10px}
+.invtile h4{font-size:12.5px;margin-bottom:4px}
+.invtile .qty{font-family:var(--mono);font-size:16px;font-weight:700}
+.invtile .val{font-size:11px;color:var(--dim);font-family:var(--mono)}
+.bond,.auction,.contract{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:10px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:12.5px}
+.meta{font-size:11px;color:var(--dim);font-family:var(--mono)}
+.rbadge{font-family:var(--mono);font-size:11px;padding:2px 7px;border-radius:6px;font-weight:700}
+.issue{width:100%;margin-top:4px;background:var(--accent);color:#0a0e15;border:none;border-radius:9px;padding:10px;font-weight:700;cursor:pointer;font-size:13px}
+#rooms{display:flex;gap:5px;flex-wrap:wrap;padding:10px 14px 0}
+.room{border:1px solid var(--line);background:none;color:var(--dim);border-radius:7px;padding:4px 9px;font-size:11px;cursor:pointer}
+.room.on{color:var(--accent2);border-color:var(--accent2)}
+#chatlog{flex:1;overflow-y:auto;padding:12px 14px;display:flex;flex-direction:column;gap:7px;font-size:12.5px}
+.msg .who{font-weight:600;margin-right:6px}
+#chatform{display:flex;gap:8px;padding:10px 14px;border-top:1px solid var(--line)}
+#chatin{flex:1}
+#chatform button{background:var(--accent2);border:none;border-radius:8px;padding:0 14px;font-weight:700;color:#062222;cursor:pointer}
+#ctrbar{padding:8px 14px;border-top:1px solid var(--line);display:flex;gap:6px;flex-wrap:wrap;align-items:center;font-size:11.5px}
+#ctrbar select,#ctrbar input{padding:5px 7px;font-size:11.5px} #ctrbar input{width:64px}
+
+#tilemenu{position:fixed;z-index:25;background:rgba(19,26,38,.98);border:1px solid var(--line);border-radius:12px;padding:12px;width:255px;display:none}
+#tilemenu h3{font-size:13px;margin-bottom:8px}
+#tilemenu .opt{display:flex;justify-content:space-between;width:100%;background:var(--panel2);border:1px solid var(--line);color:var(--text);border-radius:8px;padding:8px 10px;margin-bottom:6px;cursor:pointer;font-size:12px}
+#tilemenu .opt small{color:var(--accent);font-family:var(--mono)}
+#tilemenu .opt:disabled{opacity:.4;cursor:default}
+#tilemenu .note{font-size:11px;color:var(--dim);margin-bottom:8px}
+/* Tutorial */
+#tut{position:fixed;left:14px;bottom:14px;z-index:30;width:min(400px,92vw);background:rgba(19,26,38,.98);border:1px solid var(--accent);border-radius:14px;padding:16px;display:none;box-shadow:0 8px 30px rgba(0,0,0,.5)}
+#tutHead{display:flex;gap:12px;align-items:flex-end;margin:-16px -16px 10px;padding:12px 16px 0;border-radius:14px 14px 0 0;background:linear-gradient(180deg,rgba(56,189,248,.10),transparent)}
+#tutHead img,#tutHead .mentorAvatar{width:74px;height:74px;object-fit:cover;object-position:top;border-radius:50%;border:2px solid var(--accent);background:#20293a;flex-shrink:0}
+#tutHead .who{padding-bottom:8px}
+#tutHead .who b{font-size:13.5px;display:block}
+#tutHead .who span{font-size:10.5px;color:var(--dim);letter-spacing:.05em;text-transform:uppercase}
+#tut .step{font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--accent);margin-bottom:6px}
+#tut h3{font-size:15px;margin-bottom:8px}
+#tut p{font-size:12.5px;color:var(--dim);line-height:1.55;margin-bottom:12px}
+#tut p b{color:var(--text)} #tut p em{color:var(--accent2);font-style:normal}
+#tut .row{display:flex;justify-content:space-between;align-items:center}
+#tut .dots{display:flex;gap:4px}
+#tut .dots span{width:6px;height:6px;border-radius:3px;background:var(--panel2)}
+#tut .dots span.on{background:var(--accent)}
+#tut .btns{display:flex;gap:8px}
+#tutNext{background:var(--accent);color:#0a0e15;border:none;border-radius:8px;padding:7px 14px;font-weight:700;cursor:pointer;font-size:12.5px}
+#tutSkip{background:none;border:none;color:var(--dim);cursor:pointer;font-size:11.5px}
+#tutWait{font-size:11.5px;color:var(--accent2);display:none;align-items:center;gap:6px}
+@keyframes tutpulse{0%,100%{opacity:.4}50%{opacity:1}}
+#tutWait::before{content:"●";animation:tutpulse 1.2s infinite}
+#toasts{position:fixed;top:86px;left:50%;transform:translateX(-50%);z-index:40;display:flex;flex-direction:column;gap:6px;align-items:center}
+.toast{background:var(--panel2);border:1px solid var(--line);border-left:3px solid var(--accent);border-radius:9px;padding:8px 14px;font-size:12.5px;animation:tin .25s}
+.toast.err{border-left-color:var(--down)}
+@keyframes tin{from{opacity:0;transform:translateY(-8px)}to{opacity:1}}
+#win{position:fixed;inset:0;z-index:60;background:rgba(11,16,24,.92);display:none;place-items:center;text-align:center}
+#win h1{font-size:34px;color:var(--accent);line-height:1.1}
+#win{overflow:auto;padding:24px 16px;align-items:flex-start!important}
+.wincard{width:min(860px,100%);background:linear-gradient(180deg,rgba(24,32,46,.97),rgba(16,22,33,.97));
+  border:1px solid var(--line);border-radius:20px;overflow:hidden;text-align:left;
+  box-shadow:0 30px 80px -30px #000}
+.winhead{padding:24px 28px 18px;background:linear-gradient(180deg,rgba(56,189,248,.10),transparent);
+  border-bottom:1px solid var(--line)}
+#winsub{color:var(--dim);font-size:13px;margin-top:6px}
+#wintable{padding:16px 28px 4px;overflow-x:auto}
+#wintable table{width:100%;border-collapse:collapse;font-size:12.5px}
+#wintable th{text-align:right;font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;
+  color:var(--dim);font-weight:600;padding:0 0 8px;font-family:var(--mono);white-space:nowrap}
+#wintable th:first-child,#wintable td:first-child{text-align:left}
+#wintable td{padding:7px 0;border-top:1px solid rgba(39,49,68,.7);text-align:right;
+  font-family:var(--mono);font-variant-numeric:tabular-nums;white-space:nowrap}
+#wintable td:first-child{font-family:var(--font)}
+#wintable th+th,#wintable td+td{padding-left:16px}
+#wintable tr.sieger td{background:rgba(56,189,248,.07)}
+#wintable .pl{display:inline-grid;place-items:center;width:20px;height:20px;border-radius:6px;
+  font-size:10px;font-weight:800;color:#0a0e15;margin-right:8px;vertical-align:-4px}
+#winawards{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:14px 28px 4px}
+@media(max-width:700px){#winawards{grid-template-columns:1fr}}
+.award{background:#07090f;border:1px solid #141d2c;border-radius:11px;padding:10px 12px}
+.award .t{font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--dim);font-family:var(--mono)}
+.award .n{font-size:13.5px;font-weight:700;margin-top:3px}
+.award .v{font-size:12px;color:var(--accent);font-family:var(--mono)}
+.award .z{font-size:11px;color:var(--dim);margin-top:2px;line-height:1.35}
+.winfoot{padding:16px 28px 24px;border-top:1px solid var(--line);margin-top:14px}
+.winfoot p{color:var(--dim);font-size:11.5px;margin-top:10px;text-align:center}
+#win > div{display:flex;flex-direction:column;align-items:center;gap:6px}
+#winNew{margin-top:18px;background:linear-gradient(180deg,#7dd3fc,var(--accent));color:#0a0e15;border:none;
+  border-radius:13px;padding:13px 26px;font-weight:800;font-size:15px;cursor:pointer;font-family:var(--font);
+  box-shadow:0 10px 26px -12px rgba(56,189,248,.85);transition:transform .1s,box-shadow .16s}
+#winNew:hover{transform:translateY(-1px);box-shadow:0 14px 30px -12px rgba(56,189,248,.95)}
+#winNew:active{transform:translateY(1px)}
+
+/* ===== Ausführliches Tutorial ===== */
+#tutBuch{position:fixed;inset:0;z-index:120;display:none;background:rgba(4,7,12,.86);
+  backdrop-filter:blur(6px);padding:20px;align-items:center;justify-content:center}
+#tutBuch.auf{display:flex}
+.tbCard{width:min(980px,100%);height:min(680px,92vh);display:flex;flex-direction:column;
+  background:linear-gradient(160deg,#131c2b 0%,#0e1520 45%,#0c1220 100%);
+  border:1px solid #1e2d45;border-radius:20px;overflow:hidden;
+  box-shadow:0 30px 90px rgba(0,0,0,.85)}
+.tbHead{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;
+  padding:20px 24px 14px;border-bottom:1px solid var(--line)}
+.tbHead h2{font-size:19px;color:var(--text)}
+#tbFortschritt{margin-top:3px;font-size:11.5px;color:var(--dim);font-family:var(--mono)}
+/* Vorlesen: die Anleitung ist lang, und nicht jeder liest gern vom Bildschirm.
+ * Der Knopf liest ab dem aktuellen Kapitel weiter bis zum Ende. */
+.tbLaut{display:inline-flex;align-items:center;gap:7px;margin-left:auto;margin-right:8px;
+  background:transparent;border:1px solid var(--line);border-radius:8px;color:var(--dim);
+  padding:7px 13px;font-size:12px;font-weight:600;cursor:pointer;font-family:var(--font);
+  transition:color .15s,border-color .15s,background .15s}
+.tbLaut:hover{color:var(--accent);border-color:rgba(56,189,248,.45)}
+.tbLaut.an{color:var(--accent);border-color:var(--accent);background:rgba(56,189,248,.1)}
+.tbLaut.an svg{animation:tbPuls 1.4s ease-in-out infinite}
+@keyframes tbPuls{0%,100%{opacity:.55}50%{opacity:1}}
+.tbStimme{margin-right:8px;max-width:150px;font-size:11.5px;padding:6px 8px}
+@media(max-width:640px){.tbStimme{display:none}}
+.tbUeben{margin-right:auto;background:transparent;border:1px solid var(--line);border-radius:8px;
+  color:var(--dim);padding:8px 14px;font-size:12px;font-weight:600;cursor:pointer;font-family:var(--font)}
+.tbUeben:hover{color:var(--accent2);border-color:rgba(167,139,250,.45)}
+@media(prefers-reduced-motion:reduce){.tbLaut.an svg{animation:none}}
+.tbZu{background:none;border:1px solid var(--line);border-radius:9px;width:30px;height:30px;
+  color:var(--dim);cursor:pointer;font-size:13px;flex:none}
+.tbZu:hover{color:var(--text);border-color:#33415c}
+.tbBody{flex:1;display:grid;grid-template-columns:216px 1fr;min-height:0}
+.tbNav{border-right:1px solid var(--line);overflow-y:auto;padding:10px 8px}
+.tbNav button{display:block;width:100%;text-align:left;padding:8px 11px;margin-bottom:2px;
+  background:none;border:none;border-radius:8px;color:#6b7f9c;font-family:var(--font);
+  font-size:12.5px;cursor:pointer;transition:all .15s;line-height:1.35}
+.tbNav button:hover{background:#0d1522;color:#a9bbd2}
+.tbNav button.on{background:rgba(56,189,248,.11);color:var(--accent);font-weight:600}
+.tbNav .num{font-family:var(--mono);font-size:10.5px;color:#3d5170;margin-right:7px}
+.tbNav button.on .num{color:var(--accent)}
+.tbInhalt{overflow-y:auto;padding:22px 28px 26px}
+.tbInhalt h3{font-size:17px;color:var(--text);margin-bottom:4px}
+.tbInhalt .lead{color:var(--accent2);font-size:12.5px;margin-bottom:14px;font-weight:600}
+.tbInhalt p{font-size:13.5px;color:#c3cede;line-height:1.65;margin-bottom:11px}
+.tbInhalt b{color:var(--text)}
+.tbInhalt ul{margin:0 0 11px 18px}
+.tbInhalt li{font-size:13.5px;color:#c3cede;line-height:1.6;margin-bottom:5px}
+.tbInhalt .kasten{background:#07090f;border:1px solid #141d2c;border-radius:11px;
+  padding:12px 15px;margin:0 0 12px}
+.tbInhalt .kasten .t{font-size:10.5px;font-family:var(--mono);text-transform:uppercase;
+  letter-spacing:.07em;color:var(--dim);margin-bottom:6px}
+/* Die Ketten sind bewusst einzeilig — auf schmalen Fenstern scrollen sie
+ * innerhalb ihres Kastens, statt die ganze Seite breit zu ziehen. */
+.tbInhalt .kette{font-family:var(--mono);font-size:12.5px;color:#a9bbd2;line-height:1.9;
+  overflow-x:auto;white-space:nowrap;padding-bottom:2px}
+.tbInhalt .kette b{color:var(--accent)}
+.tbInhalt .merk{border-left:2px solid var(--accent2);padding-left:12px;margin:0 0 12px;
+  font-size:13px;color:#a9bbd2;line-height:1.6}
+.tbFuss{display:flex;align-items:center;justify-content:space-between;gap:14px;
+  padding:13px 24px;border-top:1px solid var(--line)}
+.tbFuss button{padding:8px 18px;border-radius:9px;border:1px solid var(--line);background:#0d1522;
+  color:#8695ab;font-family:var(--font);font-size:12.5px;font-weight:600;cursor:pointer;transition:all .16s}
+.tbFuss button:hover:not(:disabled){color:var(--text);border-color:#33415c}
+.tbFuss button:disabled{opacity:.35;cursor:default}
+#tbWeiter{background:linear-gradient(135deg,#1e3a5a,#164060);border-color:rgba(56,189,248,.3);color:var(--accent)}
+.tbPunkte{display:flex;gap:5px;flex-wrap:wrap;justify-content:center}
+.tbPunkte i{width:6px;height:6px;border-radius:50%;background:#1e2a3d;transition:all .2s}
+.tbPunkte i.on{background:var(--accent);box-shadow:0 0 6px rgba(56,189,248,.6)}
+@media(max-width:760px){
+  .tbBody{grid-template-columns:1fr;grid-template-rows:auto 1fr}
+  .tbNav{border-right:none;border-bottom:1px solid var(--line);display:flex;gap:6px;
+    overflow-x:auto;padding:9px 10px}
+  .tbNav button{width:auto;white-space:nowrap;flex:none;font-size:12px}
+  .tbNav .num{display:none}
+  .tbInhalt{padding:18px 16px 22px}
+  .tbInhalt .kette{font-size:11px;line-height:1.8}
+  .tbInhalt .kasten{padding:11px 12px}
+  .tbCard{height:94vh}
+}

@@ -26,6 +26,7 @@
  * Für den lokalen Gebrauch (start.sh) ändert sich nichts — das bleibt der
  * einfache Einzelrunden-Modus mit WebRTC-Beitritt übers eigene Netz. */
 import express from "express";
+import { statisch, cacheKoepfe } from "./statisch.js";
 import http from "http";
 import { spawn } from "child_process";
 import net from "net";
@@ -77,7 +78,10 @@ app.use((req, res, next) => {
   }
   next();
 });
-app.use(express.static(path.join(__dirname, "public")));   // vom Dateistandort, nicht vom Arbeitsverzeichnis
+/* Vom Dateistandort, nicht vom Arbeitsverzeichnis. Text komprimiert mit ETag,
+ * Medien lange gecacht — siehe statisch.js. */
+app.use(statisch(path.join(__dirname, "public")));
+app.use(express.static(path.join(__dirname, "public"), { setHeaders: cacheKoepfe }));
 app.get("/api/mode", (_req, res) => res.json({ multiroom: true, maxRooms: MAX_ROOMS, bootId: GATEWAY_BOOT_ID }));
 /* Wie viele Runden gerade laufen — der Startbildschirm zeigt das an, damit
  * man sieht, ob überhaupt jemand spielt. Bewusst schlank gehalten, weil der

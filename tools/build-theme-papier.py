@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Erzeugt public/theme-papier.css aus den <style>-Blöcken von public/index.html.
+"""Erzeugt public/theme-papier.css aus public/index.html samt app.css und app.js.
 
 Das Stylesheet des Spiels ist über Jahre dunkel gewachsen und enthält rund 600
 fest eingetragene Farben. Für das helle Kartenpapier-Thema wird jede Regel mit
@@ -15,13 +15,15 @@ Farben werden übersetzt:
 Hand-Feinschliff für die wichtigsten Bausteine steht danach in theme.css und
 gewinnt, weil es später geladen wird.
 
-Aufruf (nach Änderungen an index.html erneut ausführen):
+Aufruf (nach Änderungen an index.html, app.css oder app.js erneut ausführen):
   python3 tools/build-theme-papier.py
 """
 import colorsys, os, re, sys
 
 HIER = os.path.dirname(os.path.abspath(__file__))
 INDEX = os.path.join(HIER, "..", "public", "index.html")
+APP_CSS = os.path.join(HIER, "..", "public", "app.css")
+APP_JS = os.path.join(HIER, "..", "public", "app.js")
 ZIEL = os.path.join(HIER, "..", "public", "theme-papier.css")
 SCOPE = 'html[data-theme="papier"]'
 
@@ -226,6 +228,11 @@ def inline_regeln(html):
 
 def main():
     html = open(INDEX, encoding="utf-8").read()
+    # Seit dem Aufteilen stehen Hauptstile und Hauptskript in app.css/app.js.
+    # Für die Auswertung wieder an ihre Stelle einsetzen — so bleibt auch die
+    # Reihenfolge der Regeln wie vorher.
+    html = re.sub(r'<link rel="stylesheet" href="app\.css[^"]*">', lambda m: "<style>" + open(APP_CSS, encoding="utf-8").read() + "</style>", html, count=1)
+    html = re.sub(r'<script src="app\.js[^"]*"></script>', lambda m: "<script>" + open(APP_JS, encoding="utf-8").read() + "</script>", html, count=1)
     css = "\n".join(re.findall(r"<style>(.*?)</style>", html, re.S))
     kopf = ("/* AUTOMATISCH ERZEUGT von tools/build-theme-papier.py — nicht von Hand ändern.\n"
             " * Übersetzt die fest eingetragenen Farben aus index.html ins Kartenpapier-Thema.\n"
