@@ -411,3 +411,71 @@ html[data-theme="papier"] .fMehr summary::after,html[data-theme="papier"] .lexGr
 html[data-theme="papier"] .lexKarte{border-radius:0;border:1px solid #1f1a14;background:#fffdf7}
 html[data-theme="papier"] .lexChips span{border-radius:0;background:transparent;border:1px solid rgba(31,26,20,.35)}
 html[data-theme="papier"] .fBilanz tr.summe td{border-top:1.5px solid #1f1a14}
+
+/* ================================================================
+ * Einstellungen
+ * ================================================================ */
+#einstellungen{position:fixed;inset:0;z-index:230;display:grid;place-items:center;padding:16px;
+  background:rgba(4,8,14,.6);-webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px)}
+#einstellungen[hidden]{display:none}
+.eKarte{width:min(520px,100%);max-height:calc(100vh - 32px);overflow-y:auto;box-sizing:border-box;padding:22px;
+  background:var(--glass-strong);border:var(--rand);border-radius:20px;box-shadow:var(--schatten);font-family:var(--font);color:var(--text)}
+.eKopf{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+.eKopf h2{font-size:20px;font-weight:700;letter-spacing:-.01em}
+.eZu{width:38px;height:38px;border-radius:10px;border:1px solid var(--line);background:none;color:var(--dim);font-size:20px;cursor:pointer}
+.eZu:hover{color:var(--text);border-color:var(--accent)}
+.eReiter{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;padding:4px;border:var(--rand);border-radius:12px;margin-bottom:16px}
+.eReiter button{height:40px;border:0;border-radius:9px;background:none;color:var(--dim);font:600 13.5px var(--font);cursor:pointer}
+.eReiter button.on{background:var(--akzent-flaeche);color:var(--text)}
+.eSeite{display:flex;flex-direction:column;gap:4px}
+.eGruppe{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:10px 0;border-bottom:1px solid rgba(125,211,252,.08)}
+.eLabel{display:flex;flex-direction:column;gap:2px;font-size:14px;font-weight:500}
+.eLabel small,.eSchalter small{font-size:12px;font-weight:400;color:var(--dim)}
+.eSegment{display:flex;border:1px solid var(--line);border-radius:10px;overflow:hidden;flex:none}
+.eSegment button{height:36px;padding:0 12px;border:0;background:none;color:var(--dim);font:600 12.5px var(--font);cursor:pointer}
+.eSegment button + button{border-left:1px solid var(--line)}
+.eSegment button.on{background:var(--akzent-flaeche);color:var(--text)}
+.eSchalter{display:flex;align-items:center;justify-content:space-between;gap:14px;min-height:52px;padding:6px 0;
+  border-bottom:1px solid rgba(125,211,252,.08);cursor:pointer;position:relative}
+.eSchalter > span{display:flex;flex-direction:column;gap:2px;font-size:14px;font-weight:500}
+.eSchalter input{position:absolute;opacity:0;width:44px;height:26px;right:0;margin:0;cursor:pointer}
+.eSchalter i{flex:none;width:44px;height:26px;border-radius:13px;background:rgba(125,211,252,.16);position:relative;transition:background .15s}
+.eSchalter i::after{content:"";position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:#e6edf6;transition:transform .15s}
+.eSchalter input:checked + i{background:var(--accent)}
+.eSchalter input:checked + i::after{transform:translateX(18px);background:#04121c}
+.eSchalter input:focus-visible + i{outline:2px solid var(--accent);outline-offset:2px}
+.eRegler{display:flex;align-items:center;gap:10px;flex:none}
+.eRegler input{width:160px;accent-color:var(--accent)}
+.eRegler output{font:12px var(--mono);color:var(--dim);min-width:42px;text-align:right}
+.eTasten{display:flex;flex-direction:column;gap:8px;margin-top:12px;padding:12px;border-radius:12px;background:rgba(125,211,252,.04);border:1px solid rgba(125,211,252,.1)}
+.eTasten div{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--dim)}
+.eTasten span{margin-left:6px}
+kbd{display:inline-grid;place-items:center;min-width:26px;height:26px;padding:0 6px;box-sizing:border-box;border-radius:6px;
+  border:1px solid var(--line);border-bottom-width:2px;font:600 12px var(--mono);color:var(--text)}
+.eTest{margin-top:12px;height:42px;border-radius:10px;border:1px solid var(--line);background:none;color:var(--text);font:600 13px var(--font);cursor:pointer}
+.eTest:hover{border-color:var(--accent)}
+.hmEinst{display:flex;align-items:center;gap:8px;flex-wrap:wrap;width:100%;min-height:48px;padding:6px 10px;margin-bottom:4px;border-radius:10px;
+  border:1px solid var(--line);background:rgba(125,211,252,.06);color:var(--text);font:600 13.5px var(--font);cursor:pointer;text-align:left}
+.hmEinst small{width:100%;margin-left:23px;font-size:11.5px;font-weight:400;color:var(--dim)}
+.hmEinst:hover{border-color:var(--accent)}
+.startEinst{display:inline-flex;align-items:center;gap:7px;margin-left:10px;padding:8px 14px;border:var(--rand);border-radius:10px;
+  background:none;color:var(--dim);font:600 12px var(--font);cursor:pointer;vertical-align:middle}
+.startEinst:hover{color:var(--text);border-color:var(--accent)}
+@media(max-width:560px){.eGruppe{flex-direction:column;align-items:stretch}.eSegment button{flex:1}.eRegler input{flex:1;width:auto}
+  .startEinst{margin:8px 0 0;width:100%;justify-content:center}}
+/* Kartenpapier */
+html[data-theme="papier"] #einstellungen{background:rgba(237,230,214,.75);-webkit-backdrop-filter:none;backdrop-filter:none}
+html[data-theme="papier"] .eKarte,html[data-theme="papier"] .eReiter,html[data-theme="papier"] .eReiter button,
+html[data-theme="papier"] .eSegment,html[data-theme="papier"] .eZu,html[data-theme="papier"] .eTasten,html[data-theme="papier"] .eTest,
+html[data-theme="papier"] .hmEinst,html[data-theme="papier"] .startEinst,html[data-theme="papier"] kbd{border-radius:0}
+html[data-theme="papier"] .eKopf h2{text-transform:uppercase;font-weight:900;font-stretch:112%}
+html[data-theme="papier"] .eReiter button.on,html[data-theme="papier"] .eSegment button.on{background:#1f1a14;color:#f8f4ea}
+html[data-theme="papier"] .eGruppe,html[data-theme="papier"] .eSchalter{border-bottom:1px dotted rgba(31,26,20,.4)}
+html[data-theme="papier"] .eSchalter i{background:#e4dccb;border:1.5px solid #1f1a14;border-radius:0;box-sizing:border-box}
+html[data-theme="papier"] .eSchalter i::after{background:#1f1a14;border-radius:0;top:2px;left:2px}
+html[data-theme="papier"] .eSchalter input:checked + i{background:#9c3b1f}
+html[data-theme="papier"] .eSchalter input:checked + i::after{background:#fffdf7}
+html[data-theme="papier"] .eTasten{background:#fffdf7;border:1px solid #1f1a14}
+html[data-theme="papier"] kbd{background:#fffdf7;border-color:#1f1a14}
+html[data-theme="papier"] .hmEinst{background:#fffdf7;border:1.5px solid #1f1a14}
+.eSeite[hidden]{display:none}

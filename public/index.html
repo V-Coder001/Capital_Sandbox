@@ -1218,6 +1218,9 @@ td:first-child{font-family:var(--font)}
     </button>
     <!-- Sprachumschalter. Die Oberfläche ist deutsch gewachsen; ohne sichtbaren
          Schalter probiert ein internationaler Besucher das Spiel gar nicht erst. -->
+    <button type="button" class="startEinst" data-einst-auf aria-label="Einstellungen">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/></svg>
+      Einstellungen</button>
     <div class="themenwahl" role="group" aria-label="Kartenstil">
       <button type="button" data-thema="vermessung">Vermessung</button>
       <button type="button" data-thema="papier">Kartenpapier</button>
@@ -1980,6 +1983,43 @@ td:first-child{font-family:var(--font)}
 <script src="topo.js"></script>
 <script src="flaeche.js"></script>
 <script>
+/* ================================================================
+ * Einstellungen (Grafik, Steuerung, Sound) — im Browser gemerkt.
+ * EINST.x liest einen Wert, EINST.setzen(k, v) speichert und meldet
+ * "einstellung" an alle, die darauf reagieren (Auflösung, Musik, …).
+ * ================================================================ */
+window.EINST = (() => {
+  const STUFEN = {
+    hoch:    { aufloesung: 1,   hintergrund: true,  wolken: true,  verkehr: true,  licht: true,  fps: 60 },
+    mittel:  { aufloesung: .75, hintergrund: true,  wolken: true,  verkehr: true,  licht: true,  fps: 60 },
+    niedrig: { aufloesung: .5,  hintergrund: false, wolken: false, verkehr: false, licht: false, fps: 30 },
+  };
+  const STANDARD = Object.assign({ qualitaet: "hoch" }, STUFEN.hoch, {
+    radEmpf: 1, zoomZumZeiger: true, trackpadSchiebt: true, tastatur: true,
+    effekte: true, effekteVol: 60,
+  });
+  let w = {};
+  try { w = JSON.parse(localStorage.getItem("cs_einst") || "{}") || {}; } catch {}
+  const e = Object.assign({}, STANDARD, w);
+  const melden = k => document.dispatchEvent(new CustomEvent("einstellung", { detail: k }));
+  const api = {
+    STUFEN,
+    setzen(k, v) {
+      e[k] = v;
+      if (k === "qualitaet" && STUFEN[v]) Object.assign(e, STUFEN[v]);
+      else if (k in STUFEN.hoch) {          // Einzelschalter → "eigene"
+        const passt = Object.entries(STUFEN).find(([, st]) => Object.keys(st).every(x => st[x] === e[x]));
+        e.qualitaet = passt ? passt[0] : "eigene";
+      }
+      try { localStorage.setItem("cs_einst", JSON.stringify(e)); } catch {}
+      melden(k);
+    },
+    alle: () => Object.assign({}, e),
+  };
+  return new Proxy(api, { get: (t, k) => k in t ? t[k] : e[k] });
+})();
+</script>
+<script>
 /* ---- Kopfleisten-Menü ----
  * Ton, Kartenstil, Sprache, Fehler melden und Tutorial stehen nicht mehr als
  * neun Einzelknöpfe in der Leiste, sondern hinter einem Menüknopf. Die
@@ -1987,6 +2027,10 @@ td:first-child{font-family:var(--font)}
 document.addEventListener("DOMContentLoaded", () => {
   const menu = document.getElementById("hudMenu"), btn = document.getElementById("hudMenuBtn");
   if (!menu || !btn) return;
+  const oben = document.createElement("button");
+  oben.type = "button"; oben.className = "hmEinst"; oben.dataset.einstAuf = "";
+  oben.innerHTML = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/></svg> Einstellungen<small>Grafik · Steuerung · Sound</small>`;
+  menu.append(oben);
   const ZEILEN = [["tonPill", "Ton"], ["themeBtn", "Kartenstil"], ["langBtn", "Sprache"], ["help", "Tutorial ansehen"], ["bugBtn", "Fehler melden"]];
   for (const [id, text] of ZEILEN) {
     const el = document.getElementById(id); if (!el) continue;
@@ -4564,7 +4608,7 @@ async function oeffentlicheLaden() {
       seed: 26, interactiveWhen: startOderWarteraum, calmSpeed: 0.5, calmFrameMs: 66,
       /* Während die Karte bewegt wird, steht der Hintergrund still — spart die
        * Rechenzeit fürs Spiel, gerade beim Scrollen. */
-      pausiertWenn: () => performance.now() - (window.KAMERA_BEWEGT || 0) < 450,
+      pausiertWenn: () => !EINST.hintergrund || performance.now() - (window.KAMERA_BEWEGT || 0) < 450,
     });
     const ebeneSetzen = () => document.body.classList.toggle("topoVorn", startOderWarteraum());
     ebeneSetzen(); setInterval(ebeneSetzen, 200);
@@ -4784,7 +4828,8 @@ let PLAN_LOOK = false;
 let ITALIA_LOOK = false;
 /* Pixeldichte auf 2 gedeckelt — auf 3x-Displays wären es sonst 2,25x so viele
  * Pixel je Bild, ohne sichtbaren Gewinn bei einer bewegten Karte. */
-const DPR = () => Math.min(2, window.devicePixelRatio || 1);
+const DPR = () => Math.min(2, window.devicePixelRatio || 1) * (EINST.aufloesung || 1);
+document.addEventListener("einstellung", e => { if (e.detail === "aufloesung" || e.detail === "qualitaet") resize(); });
 function resize(){ cv.width = innerWidth * DPR(); cv.height = innerHeight * DPR();
   cv.style.width = innerWidth + "px"; cv.style.height = innerHeight + "px";
   /* Ein Resize setzt den Kontext zurück — die Glättungsqualität danach neu setzen. */
@@ -5397,6 +5442,7 @@ function tilePosAtU(tiles, u) {
  * andere auf der Karte. */
 const VERKEHR = new Map();
 function verkehrMerken(tx, ty, fn) {
+  if (!EINST.verkehr) return;
   const k = Math.round(tx) + "," + Math.round(ty);
   let l = VERKEHR.get(k);
   if (!l) VERKEHR.set(k, l = []);
@@ -5586,6 +5632,7 @@ const wrapX = v => ((v + CLOUD_SPAN) % (2 * CLOUD_SPAN) + 2 * CLOUD_SPAN) % (2 *
 /* Wird innerhalb der Welt-Transformation aufgerufen: Schatten direkt auf die
  * Stadt, danach die Wolken mit Parallax-Versatz gegen die Kameraposition. */
 function drawClouds(now) {
+  if (!EINST.wolken) return;
   for (const cl of CLOUDS) {
     const wx = wrapX(cl.x + now / 1000 * cl.speed), wy = cl.y;
     const h = cl.w / 2;
@@ -5645,6 +5692,7 @@ function inselHuelle(map) {
   return HUELLE;
 }
 function drawAtmosphere() {
+  if (!EINST.licht) return;
   const st = store.get().state;
   cx.save();
   if (st?.map?.length && draw.welt) { cx.setTransform(draw.welt); cx.clip(inselHuelle(st.map)); }
@@ -5779,6 +5827,7 @@ function trucksAktualisieren(st, now, dt) {
   }
 }
 function drawTrucks(now) {
+  if (!EINST.verkehr) return;
   if (!TRUCKSPR) return;
   for (const lkw of TRUCKS) {
     const n = lkw.line.length;
@@ -6104,8 +6153,33 @@ function drawSchatten(img, sx, sy, gr) {
   schattenMalen(img, sx, sy + TH / 2, sy + TH / 2 + (g.halbBasis - g.footY) * sk, gr, false, .5);
 }
 
+/* Tastatursteuerung der Karte: gedrückte Tasten merken, in draw() bewegen. */
+const TASTEN = new Set();
+addEventListener("keydown", e => {
+  if (!EINST.tastatur || /INPUT|SELECT|TEXTAREA/.test(document.activeElement?.tagName)) return;
+  const k = e.key.toLowerCase();
+  if (["w", "a", "s", "d", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(k)) {
+    if (k.startsWith("arrow") && document.getElementById("tutBuch")?.classList.contains("auf")) return;
+    TASTEN.add(k); if (k.startsWith("arrow")) e.preventDefault();
+  }
+  if (k === "+" || k === "=") cam.z = Math.min(2.2, cam.z * 1.12);
+  if (k === "-" || k === "_") cam.z = Math.max(.5, cam.z / 1.12);
+});
+addEventListener("keyup", e => TASTEN.delete(e.key.toLowerCase()));
+addEventListener("blur", () => TASTEN.clear());
 function draw() {
   requestAnimationFrame(draw);
+  /* Bildrate begrenzen (Einstellung „30 Bilder/s") — spart Akku und Lüfter. */
+  const pnow = performance.now();
+  if (EINST.fps === 30 && pnow - (draw.lastT || 0) < 31) return;
+  if (TASTEN.size) {
+    const v = Math.min(.05, (pnow - (draw.lastT || pnow)) / 1000) * 700;
+    if (TASTEN.has("w") || TASTEN.has("arrowup")) cam.y += v;
+    if (TASTEN.has("s") || TASTEN.has("arrowdown")) cam.y -= v;
+    if (TASTEN.has("a") || TASTEN.has("arrowleft")) cam.x += v;
+    if (TASTEN.has("d") || TASTEN.has("arrowright")) cam.x -= v;
+  }
+  draw.lastT = pnow;
   const st = store.get().state, now = Date.now();
   cx.setTransform(DPR(),0,0,DPR(),0,0);
   /* Kein Himmelsbild mehr: die Karte wird auf durchsichtigem Grund gezeichnet,
@@ -6785,12 +6859,13 @@ cv.addEventListener("wheel", e => {
   e.preventDefault();
   const zeilen = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? innerHeight : 1;
   const dx = e.deltaX * zeilen, dy = e.deltaY * zeilen;
-  const trackpadWisch = !e.ctrlKey && e.deltaMode === 0 && (Math.abs(dx) > 0 || Math.abs(dy) < 40);
+  const trackpadWisch = EINST.trackpadSchiebt && !e.ctrlKey && e.deltaMode === 0 && (Math.abs(dx) > 0 || Math.abs(dy) < 40);
   if (trackpadWisch) { cam.x -= dx; cam.y -= dy; return; }
-  const faktor = Math.exp(-dy * (e.ctrlKey ? .01 : .0018));
+  const faktor = Math.exp(-dy * (e.ctrlKey ? .01 : .0018) * (EINST.radEmpf || 1));
   const z2 = Math.max(.5, Math.min(2.2, cam.z * faktor));
-  // Weltpunkt unter dem Zeiger festhalten
-  const ax = e.clientX - innerWidth / 2 - cam.x, ay = e.clientY - 120 - cam.y;
+  // Weltpunkt unter dem Zeiger festhalten (abschaltbar: dann zur Bildmitte)
+  const ax = EINST.zoomZumZeiger ? e.clientX - innerWidth / 2 - cam.x : -cam.x;
+  const ay = EINST.zoomZumZeiger ? e.clientY - 120 - cam.y : innerHeight / 2 - 120 - cam.y;
   cam.x -= ax * (z2 / cam.z - 1); cam.y -= ay * (z2 / cam.z - 1);
   cam.z = z2;
 }, { passive:false });
@@ -7423,7 +7498,11 @@ const MUSIC = (() => {
       if (!audio.src) next(); else audio.play().catch(() => {}); }
     paint();
   });
+  /* Für das Einstellungsfenster: gleiche Wirkung wie Knopf und Regler oben. */
+  const setStumm = an => { if (an !== muted) btn.click(); };
+  const setVol = v => { volSlider.value = v; volSlider.dispatchEvent(new Event("input")); };
   return {
+    setStumm, setVol, istAus: () => muted, vol: () => vol,
     start() { if (started) return; started = true; if (!muted) next(); },
     /* Die Soundeffekte hängen an derselben Stummschaltung und demselben Regler —
      * zwei getrennte Regler für ein Spiel dieser Größe wären Überbau. */
@@ -7453,11 +7532,12 @@ const SFX = (() => {
   }
   /* Effekte dürfen die Musik nicht übertönen, gehen bei leiser Musik aber auch
    * nicht unter — daher angehoben und gedeckelt statt 1:1 übernommen. */
-  const pegel = () => Math.min(1, MUSIC.lautstaerke() * 2.2 + 0.12);
+  /* Effekte haben jetzt eine eigene Lautstärke (Einstellungen → Sound). */
+  const pegel = () => Math.min(1, (EINST.effekteVol ?? 60) / 100);
   let letzte = 0;
   return {
     spiel(name) {
-      if (MUSIC.istStumm() || !pools[name]) return;
+      if (!EINST.effekte || !(EINST.effekteVol > 0) || !pools[name]) return;
       /* Sammelaktionen (z. B. mehrere Orders auf einmal) würden sonst eine
        * Salve identischer Klänge auslösen. */
       const jetzt = performance.now();
@@ -11074,6 +11154,134 @@ const kap = k => (SPRACHE === "en" && k.en) ? { ...k, ...k.en } : k;
     else if (e.key === "ArrowRight" && i < TUT_BUCH.length - 1) blaettern(i + 1);
     else if (e.key === "ArrowLeft" && i > 0) blaettern(i - 1);
   });
+})();
+</script>
+
+<!-- ================================================================
+     Einstellungen: Grafik, Steuerung, Sound
+     ================================================================ -->
+<div id="einstellungen" role="dialog" aria-modal="true" aria-labelledby="einstTitel" hidden>
+  <div class="eKarte">
+    <div class="eKopf">
+      <h2 id="einstTitel">Einstellungen</h2>
+      <button type="button" class="eZu" data-einst-zu aria-label="Schließen">×</button>
+    </div>
+    <div class="eReiter" role="tablist">
+      <button type="button" role="tab" data-reiter="grafik" class="on">Grafik</button>
+      <button type="button" role="tab" data-reiter="steuerung">Steuerung</button>
+      <button type="button" role="tab" data-reiter="sound">Sound</button>
+    </div>
+
+    <section class="eSeite" data-seite="grafik">
+      <div class="eGruppe">
+        <div class="eLabel">Qualität<small>Hoch für starke Rechner, Niedrig für Laptops im Akkubetrieb.</small></div>
+        <div class="eSegment" role="radiogroup" aria-label="Qualität" data-einst-wahl="qualitaet">
+          <button type="button" data-wert="niedrig">Niedrig</button>
+          <button type="button" data-wert="mittel">Mittel</button>
+          <button type="button" data-wert="hoch">Hoch</button>
+        </div>
+      </div>
+      <div class="eGruppe">
+        <div class="eLabel">Auflösung<small>Weniger Pixel = flüssiger, etwas weicher.</small></div>
+        <div class="eSegment" role="radiogroup" aria-label="Auflösung" data-einst-wahl="aufloesung">
+          <button type="button" data-wert="0.5">50 %</button>
+          <button type="button" data-wert="0.75">75 %</button>
+          <button type="button" data-wert="1">100 %</button>
+        </div>
+      </div>
+      <div class="eGruppe">
+        <div class="eLabel">Bildrate</div>
+        <div class="eSegment" role="radiogroup" aria-label="Bildrate" data-einst-wahl="fps">
+          <button type="button" data-wert="30">30 / s</button>
+          <button type="button" data-wert="60">Maximal</button>
+        </div>
+      </div>
+      <label class="eSchalter"><span>Animierter Hintergrund<small>Höhenlinien bewegen sich im Spiel</small></span><input type="checkbox" data-einst="hintergrund"><i></i></label>
+      <label class="eSchalter"><span>Wolken</span><input type="checkbox" data-einst="wolken"><i></i></label>
+      <label class="eSchalter"><span>Verkehr<small>Autos und Lieferwagen auf den Straßen</small></span><input type="checkbox" data-einst="verkehr"><i></i></label>
+      <label class="eSchalter"><span>Tageszeit &amp; Licht<small>Dämmerung, Nacht, Dunst</small></span><input type="checkbox" data-einst="licht"><i></i></label>
+      <div class="eGruppe">
+        <div class="eLabel">Kartenstil</div>
+        <div class="eSegment" role="radiogroup" aria-label="Kartenstil">
+          <button type="button" data-thema="vermessung">Vermessung</button>
+          <button type="button" data-thema="papier">Kartenpapier</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="eSeite" data-seite="steuerung" hidden>
+      <div class="eGruppe">
+        <div class="eLabel">Zoom-Empfindlichkeit<small>Mausrad und Kneifen</small></div>
+        <div class="eRegler"><input type="range" min="0.4" max="2" step="0.1" data-einst-zahl="radEmpf" aria-label="Zoom-Empfindlichkeit"><output></output></div>
+      </div>
+      <label class="eSchalter"><span>Zum Mauszeiger zoomen<small>Aus: immer zur Bildmitte</small></span><input type="checkbox" data-einst="zoomZumZeiger"><i></i></label>
+      <label class="eSchalter"><span>Trackpad-Wischen verschiebt die Karte<small>Aus: Wischen zoomt</small></span><input type="checkbox" data-einst="trackpadSchiebt"><i></i></label>
+      <label class="eSchalter"><span>Tastatursteuerung<small>WASD / Pfeiltasten verschieben, + / − zoomen</small></span><input type="checkbox" data-einst="tastatur"><i></i></label>
+      <div class="eTasten">
+        <div><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd><span>Karte verschieben</span></div>
+        <div><kbd>+</kbd><kbd>−</kbd><span>Zoomen</span></div>
+        <div><kbd>F</kbd><span>Zu meinen Gebäuden</span></div>
+        <div><kbd>Esc</kbd><span>Menü / Fenster schließen</span></div>
+        <div><kbd>Ziehen</kbd><span>Karte mit der Maus verschieben</span></div>
+      </div>
+    </section>
+
+    <section class="eSeite" data-seite="sound" hidden>
+      <label class="eSchalter"><span>Musik<small>Naturkulisse im Hintergrund</small></span><input type="checkbox" data-einst-musik><i></i></label>
+      <div class="eGruppe">
+        <div class="eLabel">Musik-Lautstärke</div>
+        <div class="eRegler"><input type="range" min="0" max="100" step="1" data-einst-musikvol aria-label="Musik-Lautstärke"><output></output></div>
+      </div>
+      <label class="eSchalter"><span>Soundeffekte<small>Bauen, Geld, Klicks</small></span><input type="checkbox" data-einst="effekte"><i></i></label>
+      <div class="eGruppe">
+        <div class="eLabel">Effekt-Lautstärke</div>
+        <div class="eRegler"><input type="range" min="0" max="100" step="1" data-einst-zahl="effekteVol" aria-label="Effekt-Lautstärke"><output></output></div>
+      </div>
+      <button type="button" class="eTest" data-einst-test>Effekt anhören</button>
+    </section>
+  </div>
+</div>
+<script>
+/* Einstellungsfenster: liest/schreibt EINST, steuert MUSIC, spielt Testklang. */
+(function () {
+  const dlg = document.getElementById("einstellungen");
+  const auf = () => { dlg.hidden = false; fuellen(); dlg.querySelector(".eReiter .on")?.focus(); };
+  const zu = () => { dlg.hidden = true; };
+  window.einstellungenOeffnen = auf;
+  function fuellen() {
+    dlg.querySelectorAll("[data-einst]").forEach(i => i.checked = !!EINST[i.dataset.einst]);
+    dlg.querySelectorAll("[data-einst-zahl]").forEach(i => { i.value = EINST[i.dataset.einstZahl]; i.nextElementSibling.textContent = anzeige(i); });
+    dlg.querySelectorAll("[data-einst-wahl]").forEach(g => g.querySelectorAll("button").forEach(b =>
+      b.classList.toggle("on", String(EINST[g.dataset.einstWahl]) === b.dataset.wert)));
+    const m = dlg.querySelector("[data-einst-musik]"); m.checked = !MUSIC.istAus();
+    const mv = dlg.querySelector("[data-einst-musikvol]"); mv.value = MUSIC.vol(); mv.nextElementSibling.textContent = mv.value + " %";
+    dlg.querySelectorAll("[data-thema]").forEach(b => b.classList.toggle("on", b.dataset.thema === document.documentElement.dataset.theme));
+  }
+  const anzeige = i => i.dataset.einstZahl === "radEmpf" ? Math.round(i.value * 100) + " %" : i.value + " %";
+  dlg.addEventListener("change", e => {
+    const i = e.target;
+    if (i.dataset.einst) EINST.setzen(i.dataset.einst, i.checked);
+    if (i.hasAttribute("data-einst-musik")) MUSIC.setStumm(!i.checked);
+    fuellen();
+  });
+  dlg.addEventListener("input", e => {
+    const i = e.target;
+    if (i.dataset.einstZahl) { EINST.setzen(i.dataset.einstZahl, +i.value); i.nextElementSibling.textContent = anzeige(i); }
+    if (i.hasAttribute("data-einst-musikvol")) { MUSIC.setVol(+i.value); i.nextElementSibling.textContent = i.value + " %"; }
+  });
+  dlg.addEventListener("click", e => {
+    if (e.target === dlg || e.target.closest("[data-einst-zu]")) return zu();
+    const w = e.target.closest("[data-einst-wahl] button");
+    if (w) { const k = w.parentElement.dataset.einstWahl, v = w.dataset.wert;
+      EINST.setzen(k, isNaN(+v) ? v : +v); fuellen(); return; }
+    const r = e.target.closest("[data-reiter]");
+    if (r) { dlg.querySelectorAll("[data-reiter]").forEach(b => b.classList.toggle("on", b === r));
+      dlg.querySelectorAll("[data-seite]").forEach(sx => sx.hidden = sx.dataset.seite !== r.dataset.reiter); return; }
+    if (e.target.closest("[data-einst-test]")) { SFX.spiel("geld"); return; }
+    if (e.target.closest("[data-thema]")) setTimeout(fuellen, 0);
+  });
+  document.addEventListener("keydown", e => { if (e.key === "Escape" && !dlg.hidden) zu(); });
+  document.addEventListener("click", e => { if (e.target.closest("[data-einst-auf]")) { e.preventDefault(); auf(); } });
 })();
 </script>
 </body>
