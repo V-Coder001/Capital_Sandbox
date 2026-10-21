@@ -1707,6 +1707,13 @@ td:first-child{font-family:var(--font)}
 
 <!-- Stadtbank: fester Ort auf der Karte, an dem alle Spieler Firmenanteile handeln.
      Erreichbar nur über die Bank-Kachel im Zentrum, nicht über die Leiste unten. -->
+<!-- Finanzamt: Steuern, Stadtkasse, Bankreserve, Stadtprojekte. Erreichbar über
+     das Finanzamt-Gebäude im Zentrum. -->
+<div class="panel" id="p-finanzamt">
+  <div class="phead"><h2>Finanzamt</h2><button class="x" data-close>✕</button></div>
+  <div class="pbody" id="finanzamtbody"></div>
+</div>
+
 <div class="panel" id="p-news">
   <div class="phead"><h2>Nachrichtenzentrale</h2><button class="x" data-close>✕</button></div>
   <div class="pbody">
@@ -4062,7 +4069,7 @@ const EN = {
   "Starter-Aufgaben": "Starter tasks", "STARTER-AUFGABEN": "STARTER TASKS",
   "Du hast noch keine Gebäude gebaut.": "You haven't built anything yet.",
   "Zu meinen Gebäuden springen (Taste F)": "Jump to my buildings (key F)",
-  "BANK": "BANK", "NACHRICHTEN": "NEWS",
+  "BANK": "BANK", "NACHRICHTEN": "NEWS", "FINANZAMT": "TAX OFFICE", "Finanzamt": "Tax office",
   "Der Marktbericht erscheint alle zwei Minuten und vergleicht mit der Lage von vor zwei Minuten.":
     "The market report appears every two minutes, comparing against the situation two minutes earlier.",
   /* Lager, Firma, Finanzen */
@@ -5300,6 +5307,12 @@ BANKIMG.src = "assets/bank.png";
 let NEWSSPR = null;
 const NEWSIMG = new Image(); NEWSIMG.onload = () => NEWSSPR = spriteHiRes(NEWSIMG);
 NEWSIMG.src = "assets/newstower.png";
+/* Finanzamt und fertige Stadtprojekte: städtische Gebäude aus vorhandenen Sprites */
+const STADT_SPR = {};
+for (const [k, f] of Object.entries({ finanzamt: "buero-2", stadion: "hotel-0", krankenhaus: "pharma-0", hafen: "kontor-0",
+                                       bibliothek: "buero-1", messe: "markt-0", bahnhof: "autohaus-0" })) {
+  const im = new Image(); im.onload = () => STADT_SPR[k] = spriteHiRes(im); im.src = `assets/${f}.png`;
+}
 /* Vier Hochhaeuser als Kulisse im Zentrum. Sie gehoeren der Stadt, sind nicht
  * bebaubar und haben keinen Besitzer — reine Skyline. Der Server setzt das Feld
  * deko (1..4) auf ein paar zentrale Kacheln. */
@@ -6492,6 +6505,8 @@ function draw() {
   for (const t of st.map) {
     const spr = t.bank    ? (BANKSPR || spriteFor("kontor", t.x, t.y))
               : t.news    ? (NEWSSPR || spriteFor("buero", t.x, t.y))
+              : t.finanzamt ? (STADT_SPR.finanzamt || spriteFor("buero", t.x, t.y))
+              : t.denkmal ? (STADT_SPR[t.denkmal] || spriteFor("kontor", t.x, t.y))
               : t.deko    ? dekoSprite(t)
               : t.schwarz ? (spriteFor("markt", t.x, t.y) || spriteFor("kontor", t.x, t.y))
               : t.btype   ? spriteFor(t.btype, t.x, t.y)
@@ -6862,6 +6877,22 @@ function draw() {
       cx.font = "bold 10px sans-serif"; cx.textAlign = "center"; cx.fillStyle = "#fbbf24";
       cx.fillText(uebers("NACHRICHTEN"), sx, sy + TH / 2 + 16);
     }
+    if (t.finanzamt) {
+      /* Finanzamt: violetter Sockel wie die Bank, damit es als städtischer Ort lesbar ist */
+      cx.fillStyle = "rgba(167,139,250,.26)";
+      cx.beginPath(); cx.moveTo(sx,sy); cx.lineTo(sx+TW/2,sy+TH/2); cx.lineTo(sx,sy+TH); cx.lineTo(sx-TW/2,sy+TH/2); cx.closePath(); cx.fill();
+      cx.strokeStyle = "#a78bfa"; cx.lineWidth = 1.6; cx.stroke(); cx.lineWidth = 1;
+      const fimg = STADT_SPR.finanzamt || spriteFor("buero", t.x, t.y);
+      if (fimg) cx.drawImage(fimg, sx-36, standY(sy, fimg, 72), 72, 72);
+      cx.font = "bold 10px sans-serif"; cx.textAlign = "center"; cx.fillStyle = "#a78bfa";
+      cx.fillText(uebers("FINANZAMT"), sx, sy + TH / 2 + 16);
+    }
+    if (t.denkmal) {
+      const dimg2 = STADT_SPR[t.denkmal] || spriteFor("kontor", t.x, t.y);
+      if (dimg2) cx.drawImage(dimg2, sx-36, standY(sy, dimg2, 72), 72, 72);
+      cx.font = "bold 10px sans-serif"; cx.textAlign = "center"; cx.fillStyle = "#fbbf24";
+      cx.fillText(String(t.denkmalName || "").toUpperCase(), sx, sy + TH / 2 + 16);
+    }
     if (t.schwarz) {
       /* Schwarzmarkt-Baracke: rot markiert, bewusst unscheinbarer als die Bank. */
       cx.fillStyle = "rgba(244,63,94,.22)";
@@ -7015,6 +7046,7 @@ function clickTile(e) {
   if (t?.schwarz && me) { openPanel("schwarz"); return; }
   if (t?.bank && me) { openPanel("bank"); return; }
   if (t?.news && me) { openPanel("news"); return; }
+  if ((t?.finanzamt || t?.denkmal) && me) { openPanel("finanzamt"); return; }
   if (t?.gcasino && me) { gcasinoOeffnen(); return; }
   if (t?.wz && me) { wzOeffnen(t.wz); return; }
   if (t?.famhaus && me) { famOeffnen(t.famhaus); return; }
@@ -7519,6 +7551,54 @@ document.getElementById("p-bank").addEventListener("click", e => {
   const bidCancel = e.target.closest("[data-bidcancel]");
   if (bidCancel) { act("cancelShareBid", { bidId: +bidCancel.dataset.bidcancel }); return; }
 });
+/* ---------- Finanzamt-Panel ---------- */
+function finanzamtRendern(state, me, myId) {
+  const F = state.finanzamt, el = document.getElementById("finanzamtbody");
+  if (!F?.aktiv) { el.innerHTML = `<div class="meta">In diesem Modus gibt es kein Finanzamt.</div>`; return; }
+  const uhr = s => `${Math.floor(s / 60)}:${String(Math.max(0, s) % 60).padStart(2, "0")}`;
+  const st = me.steuer || {};
+  const P = state.stadtprojekt;
+  const pct = n => Math.min(100, n.have / n.req * 100);
+  el.innerHTML = `
+    <div class="faKonten">
+      <div class="faKonto"><span>Stadtkasse</span><b>${fmt(F.stadtkasse)}</b><em>${P ? "Projekt läuft" : F.stadtkasse >= F.schwelle ? "Projekt kommt gleich" : `Stadtprojekt ab ${fmt(F.schwelle)}`}</em>
+        <div class="faBalken"><i style="width:${Math.min(100, F.stadtkasse / F.schwelle * 100).toFixed(1)}%"></i></div></div>
+      <div class="faKonto"><span>Bankreserve</span><b>${fmt(F.reserve)}</b><em>Gegenpartei der Kurswetten</em></div>
+    </div>
+    <div class="sec">Dein Steuerbescheid <span class="meta">· nächster in ${uhr(F.naechsterIn)}</span></div>
+    <div class="faBescheid">
+      <div class="kzrow"><span>Gewinn seit dem letzten Bescheid</span><b>${fmt(st.gewinn || 0)}</b></div>
+      <div class="kzrow"><span>Freibetrag</span><b>−${fmt(F.frei)}</b></div>
+      <div class="kzrow"><span>Voraussichtliche Steuer (${Math.round(F.satz * 100)} %)</span><b class="faSteuer">${fmt(st.steuer || 0)}</b></div>
+      ${st.schuld ? `<div class="kzrow"><span>davon gestundet aus dem letzten Bescheid</span><b>${fmt(st.schuld)}</b></div>` : ""}
+      <div class="meta" style="padding-top:6px">Investitionen (Bau, Ausbau, Werbung, Einkauf) senken den Gewinn. Zuletzt gezahlt: ${st.letzter ? fmt(st.letzter.steuer) : "—"} · insgesamt ${fmt(st.gezahlt || 0)}.</div>
+    </div>
+    ${P ? `<div class="sec">Stadtprojekt: ${P.name} <span class="meta">· Budget ${fmt(P.budget)} · noch ${uhr(P.ttl)}</span></div>
+      ${Object.entries(P.needs).map(([g, n]) => {
+        const meins = P.contrib[myId]?.goods?.[g] || 0;
+        return `<div class="faProjekt">
+          <div class="faPKopf"><b>${gname(g)}</b><span class="meta">${n.have} / ${n.req}${meins ? ` · von dir ${meins}` : ""} · ${fp(n.pay)}/Stk</span></div>
+          <div class="faBalken"><i style="width:${pct(n).toFixed(1)}%"></i></div>
+          <div class="faPFuss"><span class="meta">Lager: ${Math.floor(me.inv[g] || 0)}</span>
+            <input type="number" min="1" id="sp-${g}" placeholder="Menge">
+            <button class="buyb" data-sp="${g}" ${(me.inv[g] || 0) < 1 || n.have >= n.req ? "disabled" : ""}>Liefern</button></div></div>`; }).join("")}
+      <div class="faLieferanten">${Object.values(P.contrib).map(c => `<span style="--f:${c.color || "#888"}">${c.name}${c.bot ? " · Bot" : ""}</span>`).join("") || `<span class="meta">Noch keine Lieferungen — Spieler und Bots liefern gemeinsam.</span>`}</div>` : ""}
+    <div class="sec">So arbeitet das Finanzamt</div>
+    <div class="faRegeln">
+      <div><b>${Math.round(F.satz * 100)} %</b><span>Gewinnsteuer alle 10 min, die ersten ${fmt(F.frei)} frei</span></div>
+      <div><b>${Math.round(F.wettSteuer * 100)} %</b><span>auf Gewinne aus Kurswetten</span></div>
+      <div><b>${Math.round(F.reserveAnteil * 100)} / ${Math.round(100 - F.reserveAnteil * 100)}</b><span>Bankreserve / Stadtkasse</span></div>
+      <div><b>${Math.round(F.praemieAnteil * 100)} %</b><span>der Stadtkasse als Prämie je Großauftrag</span></div>
+    </div>
+    ${F.fertig.length ? `<div class="sec">Gebaute Stadtprojekte</div>${F.fertig.map(f => `<div class="kzrow"><span>${f.name}</span><b class="meta">${f.lieferanten.join(", ")}</b></div>`).join("")}` : ""}
+    <div class="meta" style="padding-top:10px">Insgesamt eingenommen: ${fmt(F.gesamt)} — alle Firmen zahlen, auch die Bots.</div>`;
+}
+document.getElementById("finanzamtbody").addEventListener("click", e => {
+  const b = e.target.closest("[data-sp]");
+  if (!b) return;
+  const g = b.dataset.sp, me = store.get().me;
+  act("projektLiefern", { good: g, qty: +document.getElementById("sp-" + g).value || Math.floor(me.inv[g] || 0) });
+});
 /* ---------- Kurswetten ----------
  * Long = man setzt auf steigenden Firmenwert, Short auf fallenden. Der Server
  * friert die Werte beim Ende der Annahme ein und rechnet nach der Laufzeit ab.
@@ -7745,7 +7825,7 @@ const SFX = (() => {
  * ein Klang auf wirklich jeden Handgriff würde schnell nerven. */
 const SFX_AKTION = {
   build: "bau", upgradeBuilding: "bau", demolish: "bau", unlockTile: "bau", stallEinstellen: "bau",
-  placeOrder: "geld", takeOrder: "geld", buyShares: "geld", bidShares: "geld", kurswetteSetzen: "geld",
+  placeOrder: "geld", takeOrder: "geld", buyShares: "geld", bidShares: "geld", kurswetteSetzen: "geld", projektLiefern: "geld",
   acceptShareBid: "geld", listShares: "geld", buyBond: "geld", issueBond: "geld",
   bid: "geld", acceptContract: "geld", contribute: "geld", mergeCompany: "geld",
   bookAd: "geld", configureShop: "klick", togglePause: "klick",
@@ -10052,6 +10132,10 @@ function render({ state, me, myId, chat, room }) {
     document.querySelectorAll("[data-cancel]").forEach(b => b.addEventListener("click", () => act("cancelOrder", { orderId:+b.dataset.cancel })));
   }
 
+  /* Finanzamt */
+  if (document.getElementById("p-finanzamt").classList.contains("open") &&
+      !typingIn(document.getElementById("p-finanzamt"))) finanzamtRendern(state, me, myId);
+
   /* Lager + Gruppenauftrag */
   if (document.getElementById("p-lager").classList.contains("open") &&
       !typingIn(document.getElementById("invgrid"))) {
@@ -10060,7 +10144,8 @@ function render({ state, me, myId, chat, room }) {
     const go = state.groupOrder;
     const myName = state.players[myId]?.name;
     const goVol = go ? Object.values(go.needs).reduce((s, n) => s + n.req * n.pay, 0) : 0;
-    const goHtml = go ? `<div class="sec" style="grid-column:1/-1">Großauftrag: ${go.city} <span class="meta">· Gesamttopf ${fmt(goVol)} · noch ${Math.floor(go.ttl/60)}:${String(go.ttl%60).padStart(2,"0")} min · Stückpreise fixiert (Ø×2)</span></div>` +
+    const goMult = go?.praemie ? 2 * (1 + go.praemie / goVol) : 2;
+    const goHtml = go ? `<div class="sec" style="grid-column:1/-1">Großauftrag: ${go.city} <span class="meta">· Gesamttopf ${fmt(goVol + (go.praemie || 0))} · noch ${Math.floor(go.ttl/60)}:${String(go.ttl%60).padStart(2,"0")} min · ${go.praemie ? `inkl. ${fmt(go.praemie)} Prämie der Stadtkasse (≈ Ø×${goMult.toFixed(1).replace(".", ",")})` : "Stückpreise fixiert (Ø×2)"}</span></div>` +
       Object.entries(go.needs).map(([g, n]) => {
         const pct = Math.min(100, n.have / n.req * 100).toFixed(0);
         const mine = go.contrib[myName]?.[g] || 0;

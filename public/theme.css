@@ -840,3 +840,31 @@ html[data-theme="papier"] #win .award{background:#fffdf7;border:1px solid #1f1a1
 html[data-theme="papier"] #winNew{background:#9c3b1f!important;color:#fffdf7!important;border:1.5px solid #1f1a14!important;border-radius:0!important;box-shadow:4px 4px 0 #1f1a14!important}
 html[data-theme="papier"] #winKarte{border-radius:0;background:#fffdf7;border:1.5px solid #1f1a14}
 html[data-theme="papier"] #winWieder{background:#f8f4ea;color:#9c3b1f;border:1.5px solid #1f1a14;border-radius:0;box-shadow:4px 4px 0 #1f1a14}
+
+/* ================================================================
+ * Finanzamt
+ * ================================================================ */
+.faKonten{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:4px 0 6px}
+.faKonto{padding:12px 14px;border:var(--rand);border-radius:12px;display:flex;flex-direction:column;gap:3px}
+.faKonto span{font:600 11px var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--dim)}
+.faKonto b{font:700 22px var(--mono);color:var(--text)}
+.faKonto em{font-style:normal;font-size:12px;color:var(--dim)}
+.faBalken{height:5px;border-radius:3px;background:var(--line);overflow:hidden;margin-top:6px}
+.faBalken i{display:block;height:100%;background:#a78bfa}
+.faBescheid{padding:4px 0}
+.faSteuer{color:#a78bfa!important}
+.faProjekt{padding:10px 12px;margin:6px 0;border:1px solid var(--line);border-radius:10px}
+.faPKopf{display:flex;justify-content:space-between;gap:8px}
+.faPFuss{display:flex;gap:6px;justify-content:flex-end;align-items:center;margin-top:8px}
+.faPFuss input{width:80px}
+.faLieferanten{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0 4px}
+.faLieferanten span{font-size:11.5px;padding:3px 8px;border-radius:6px;border:1px solid var(--line);border-left:3px solid var(--f)}
+.faRegeln{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.faRegeln div{padding:10px 12px;border:1px solid var(--line);border-radius:10px;display:flex;flex-direction:column;gap:2px}
+.faRegeln b{font:700 16px var(--mono);color:#a78bfa}
+.faRegeln span{font-size:12px;color:var(--dim);line-height:1.4}
+html[data-theme="papier"] .faKonto,html[data-theme="papier"] .faProjekt,html[data-theme="papier"] .faRegeln div,
+html[data-theme="papier"] .faLieferanten span,html[data-theme="papier"] .faBalken,html[data-theme="papier"] .faBalken i{border-radius:0}
+html[data-theme="papier"] .faKonto,html[data-theme="papier"] .faProjekt,html[data-theme="papier"] .faRegeln div{background:#fffdf7;border:1px solid #1f1a14}
+html[data-theme="papier"] .faBalken i{background:#5b3f9e}
+html[data-theme="papier"] .faRegeln b,html[data-theme="papier"] .faSteuer{color:#5b3f9e!important}
