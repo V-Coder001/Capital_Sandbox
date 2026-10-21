@@ -1186,10 +1186,10 @@ td:first-child{font-family:var(--font)}
   <div class="updKopf"><h2 id="updKopf">Was ist neu</h2><button type="button" class="updZu" data-upd-zu aria-label="Schließen">✕</button></div>
   <div class="updListe" id="updListe"></div>
 </aside>
-<div class="card" data-topo-avoid>
+<div class="card startKarte" data-topo-avoid>
   <canvas id="joinParticles"></canvas>
 
-  <div class="hero">
+  <header class="hero">
     <!-- Statuszeile: zeigt echte Verbindungs- und Spielerzahl, keine Platzhalter -->
     <div id="joinStatus">
       <div class="left">
@@ -1202,41 +1202,37 @@ td:first-child{font-family:var(--font)}
       </div>
     </div>
 
-    <h1>Capital <span>Sandbox</span> <em class="beta">Beta</em></h1>
-    <div class="betaZeile">Noch in Entwicklung — Fehler sind wahrscheinlich, und mit jeder
-      Aktualisierung gehen laufende Runden verloren. Meldungen gern über
-      <b>Fehler melden</b> unten rechts im Spiel.</div>
-    <div class="tag">Bau dir eine Firma auf, versorge die Stadt, handle mit den anderen —
-      und wenn du genug Anteile hast, kaufst du sie einfach auf.</div>
-
-    <div id="netmode">
-      <button type="button" class="netopt on" data-net="host">Neue Runde starten</button>
-      <button type="button" class="netopt" data-net="join">Einer Runde beitreten</button>
-    </div>
-    <!-- Ausführliche Einführung. Das kurze Tutorial in der Runde führt durchs
-         Bauen; hier steht das ganze Spiel erklärt, auch ohne laufende Partie. -->
-    <button type="button" id="tutBuchAuf">
-      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-           stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-        <path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/>
-      </svg>
-      Spielanleitung lesen
-    </button>
-    <!-- Sprachumschalter. Die Oberfläche ist deutsch gewachsen; ohne sichtbaren
-         Schalter probiert ein internationaler Besucher das Spiel gar nicht erst. -->
-    <button type="button" class="startEinst updAuf" data-upd-auf>
-      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 8v4l3 2"/><circle cx="12" cy="12" r="9"/></svg>
-      Was ist neu<i class="updPunkt" hidden></i></button>
-    <button type="button" class="startEinst" data-einst-auf aria-label="Einstellungen">
-      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/></svg>
-      Einstellungen</button>
-    <div class="themenwahl" role="group" aria-label="Kartenstil">
-      <button type="button" data-thema="vermessung">Vermessung</button>
-      <button type="button" data-thema="papier">Kartenpapier</button>
-    </div>
-    <div class="sprachwahl" role="group" aria-label="Sprache / Language">
-      <button type="button" data-lang="de" class="on">Deutsch</button>
-      <button type="button" data-lang="en">English</button>
+    <div class="heroGrid">
+      <div class="heroText">
+        <h1>Capital <span>Sandbox</span> <em class="beta">Beta</em></h1>
+        <p class="tag">Bau dir eine Firma auf, versorge die Stadt, handle mit den anderen —
+          und wenn du genug Anteile hast, kaufst du sie einfach auf.</p>
+      </div>
+      <!-- Werkzeugleiste: alles, was nicht zum Formular gehört, an einer Stelle -->
+      <div class="startWerkzeuge">
+        <button type="button" id="tutBuchAuf">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+               stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/>
+          </svg>
+          Spielanleitung</button>
+        <button type="button" class="startEinst updAuf" data-upd-auf>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 8v4l3 2"/><circle cx="12" cy="12" r="9"/></svg>
+          Was ist neu<i class="updPunkt" hidden></i></button>
+        <button type="button" class="startEinst" data-einst-auf aria-label="Einstellungen">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/></svg>
+          Einstellungen</button>
+        <div class="startSchalter">
+          <div class="themenwahl" role="group" aria-label="Kartenstil">
+            <button type="button" data-thema="vermessung">Vermessung</button>
+            <button type="button" data-thema="papier">Kartenpapier</button>
+          </div>
+          <div class="sprachwahl" role="group" aria-label="Sprache / Language">
+            <button type="button" data-lang="de" class="on">DE</button>
+            <button type="button" data-lang="en">EN</button>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- Skyline aus den echten Gebäude-Sprites des Spiels -->
@@ -1261,19 +1257,33 @@ td:first-child{font-family:var(--font)}
       </div>
       <div class="fade l"></div><div class="fade r"></div><div class="fog"></div>
     </div>
-    <div class="rule"></div>
+  </header>
+
+  <!-- Erst die Wahl: selbst eröffnen oder beitreten — dann zwei Schritte und der Knopf -->
+  <div class="startModus">
+    <div id="netmode">
+      <button type="button" class="netopt on" data-net="host">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+        Neue Runde starten</button>
+      <button type="button" class="netopt" data-net="join">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 3h4a2 2 0 012 2v14a2 2 0 01-2 2h-4M10 17l5-5-5-5M15 12H3"/></svg>
+        Einer Runde beitreten</button>
+    </div>
   </div>
 
   <div class="body">
-    <div class="col">
-      <div>
-        <label class="flabel" for="jname">Firmenname</label>
+    <section class="col schritt">
+      <div class="schrittKopf"><span class="nr">01</span><label class="flabel" for="jname">Deine Firma</label></div>
+      <div class="firmaZeile">
+        <span class="firmaVorschau" id="jvorschau" aria-hidden="true">N</span>
         <input id="jname" placeholder="z. B. Nordwerk &amp; Co." maxlength="20" autocomplete="off">
-        <div class="colors" id="jcolors"></div>
       </div>
+      <div class="colors" id="jcolors"></div>
+      <p class="schrittNotiz">Name und Farbe sehen alle Mitspieler auf Karte und Kurstafel.</p>
+    </section>
 
-      <div>
-        <label class="flabel" id="netstep">Mitspieler einladen</label>
+    <section class="col schritt">
+      <div class="schrittKopf"><span class="nr">02</span><label class="flabel" id="netstep">Mitspieler einladen</label></div>
         <div id="invite">
           <div class="joinbox">
             <div class="lbl">
@@ -1304,7 +1314,7 @@ td:first-child{font-family:var(--font)}
               <em>Sie steht dann für alle auf dem Startbildschirm und ist ohne Code zu betreten.</em></span>
           </label>
         </div>
-        <div id="joinCodeRow" style="display:none">
+        <div id="joinCodeRow"        <div id="joinCodeRow" style="display:none">
           <div id="oeffListe"></div>
           <div class="joinbox">
             <div class="lbl">
@@ -1315,28 +1325,57 @@ td:first-child{font-family:var(--font)}
             <p id="joinCodeStatus" style="margin-top:8px"></p>
           </div>
         </div>
-      </div>
+    </section>
+  </div>
 
-      <!-- Ablauf in drei Schritten: steht links, weil die Branchenauswahl
-           rechts sonst allein die ganze Spaltenhöhe tragen müsste. -->
-      <div class="how">
-        <div class="hrow"><span>1</span><div><b>Bauen</b> <em>Kachel freischalten, Betrieb hochziehen, Rohstoffe verarbeiten.</em></div></div>
-        <div class="hrow"><span>2</span><div><b>Handeln</b> <em>Im eigenen Laden, an der Börse mit den anderen oder für die Stadt.</em></div></div>
-        <div class="hrow"><span>3</span><div><b>Gewinnen</b> <em>Wer zuerst das Vermögensziel knackt, gewinnt die Runde.</em></div></div>
-      </div>
+  <div class="foot">
+    <div id="joinErr"></div>
+    <button class="go" id="jgo">Runde erstellen</button>
+    <p id="foothint">Ziel und Bots stellst du gleich im Warteraum ein.</p>
+  </div>
 
-      <!-- Bestenliste: die besten Nettovermögen bisheriger Runden auf diesem
-           Server — als Ansporn, die eigene Bestmarke zu schlagen. Bleibt
-           leer/versteckt, bis die erste Runde beendet wurde. -->
+  <!-- Ablauf und Modi: unter dem Knopf, für alle, die das Spiel noch nicht kennen -->
+  <div class="startInfo">
+    <div class="how">
+      <div class="hrow"><span>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><path d="M3 21h18M5 21V10l7-5 7 5v11M9 21v-6h6v6"/></svg></span>
+        <div><b>Bauen</b> <em>Kachel freischalten, Betrieb hochziehen, Rohstoffe verarbeiten.</em></div></div>
+      <div class="hrow"><span>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 7h13l-3-3M17 17H4l3 3"/></svg></span>
+        <div><b>Handeln</b> <em>Im eigenen Laden, an der Börse mit den anderen oder für die Stadt.</em></div></div>
+      <div class="hrow"><span>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 01-10 0V4zM17 6h3v2a3 3 0 01-3 3M7 6H4v2a3 3 0 003 3"/></svg></span>
+        <div><b>Gewinnen</b> <em>Wer zuerst das Vermögensziel knackt, gewinnt die Runde.</em></div></div>
+    </div>
+
+    <div class="startModi">
+      <div class="flabel">Spielmodi <span class="meta">— im Warteraum wählbar</span></div>
+      <div class="modiReihe">
+        <div class="modusChip"><b>Sandbox</b><em>Freies Wirtschaften bis zum Vermögensziel</em></div>
+        <div class="modusChip"><b>Planwirtschaft</b><em>Plansolls erfüllen, Planpunkte sammeln</em></div>
+        <div class="modusChip"><b>Einsteiger</b><em>Geführte Runde zum Kennenlernen</em></div>
+        <div class="modusChip"><b>Race Day</b><em>Rennställe, Fahrer und Preisgeld</em></div>
+        <div class="modusChip neu"><b>Kartell <i>Neu</i></b><em>Familien, Schutzgeld und Razzien</em></div>
+      </div>
+    </div>
+
       <div id="hofBox" style="display:none">
         <label class="flabel" style="margin-top:14px">🏆 Bestenliste dieses Servers</label>
         <div id="hofListe"></div>
       </div>
+  </div>
+
+  <div class="startFuss">
+    <div class="betaZeile"><b>Beta</b> — Fehler sind wahrscheinlich, und mit jeder Aktualisierung gehen
+      laufende Runden verloren. Meldungen gern über <b>Fehler melden</b> unten rechts im Spiel.</div>
+    <div id="joinFoot">
+      <span>capital-sandbox · läuft im Browser · <a href="datenschutz.html" style="color:inherit;text-decoration:underline">Datenschutz</a> · <a href="impressum.html" style="color:inherit;text-decoration:underline">Impressum</a></span>
+      <div class="right"><span class="pulse"><i></i><b></b></span><span id="joinWaiting">—</span></div>
     </div>
+  </div>
 
-    <div class="divider"></div>
-
-    <div class="col">
+  <!-- Branchenwahl: wandert beim Laden in den Warteraum (siehe unten) -->
+  <div hidden>
       <div id="jind">
         <!-- Nur im Renntag sichtbar: dort ersetzen zwei Rollen die sechs Branchen. -->
         <button type="button" data-ind="rennclub" class="indopt rennrolle" style="display:none;--ac:#38bdf8;--ac08:rgba(56,189,248,.03);--ac15:rgba(56,189,248,.08);--ac18:rgba(56,189,248,.09);--ac35:rgba(56,189,248,.21);--ac50:rgba(56,189,248,.31)">
@@ -1372,30 +1411,7 @@ td:first-child{font-family:var(--font)}
           <span class="txt"><span class="head"><b>Rüstung</b><span class="chosen">Gewählt</span></span>
           <small>Munition, Pistolen und Panzer — die wertvollsten Güter, aber am Ende jeder Lieferkette.</small></span></button>
       </div>
-    </div>
   </div>
-
-  <!-- Teaser für den kommenden Kartell-Modus: Bild mit eingebranntem Titel,
-       dazu Badge und ein periodischer Lichtstreif, damit es nach Ankündigung
-       aussieht und nicht nach klickbarem Inhalt. -->
-  <div id="kartellTeaser" aria-label="Kartellwirtschaft — neuer Spielmodus, bald verfügbar">
-    <img src="assets/kartell-teaser.jpg" alt="Kartellwirtschaft — Coming Soon">
-    <span class="badge">Neuer Spielmodus</span>
-    <div class="glanz" aria-hidden="true"></div>
-  </div>
-
-  <div class="foot">
-    <!-- Rundenziel und Bots stellt der Host im Warteraum ein — dort sehen alle
-         die Einstellungen live mit, statt sie hier blind vorab zu wählen. -->
-    <p id="foothint">Ziel und Bots stellst du gleich im Warteraum ein.</p>
-    <div id="joinErr"></div>
-    <button class="go" id="jgo">Runde erstellen</button>
-    <div id="joinFoot">
-      <span>capital-sandbox · läuft im Browser · <a href="datenschutz.html" style="color:inherit;text-decoration:underline">Datenschutz</a> · <a href="impressum.html" style="color:inherit;text-decoration:underline">Impressum</a></span>
-      <div class="right"><span class="pulse"><i></i><b></b></span><span id="joinWaiting">—</span></div>
-    </div>
-  </div>
-
 </div></div>
 
 <div id="lobbyWait"><div class="card" data-topo-avoid>
@@ -11475,6 +11491,21 @@ const kap = k => (SPRACHE === "en" && k.en) ? { ...k, ...k.en } : k;
     if (e.target.closest("[data-lang]")) setTimeout(zeichnen, 0);
   });
   document.addEventListener("keydown", e => { if (e.key === "Escape") box.classList.remove("offen"); });
+})();
+</script>
+<script>
+/* Startbildschirm: Vorschau der eigenen Firmenmarke (Initiale + Farbe) */
+(() => {
+  const v = document.getElementById("jvorschau"), n = document.getElementById("jname");
+  if (!v || !n) return;
+  const neu = () => {
+    v.textContent = (n.value.trim()[0] || n.placeholder.replace(/^z\. B\. /, "")[0] || "?").toUpperCase();
+    const on = document.querySelector("#jcolors button.on");
+    if (on) v.style.setProperty("--fv", on.style.background || getComputedStyle(on).backgroundColor);
+  };
+  n.addEventListener("input", neu);
+  document.getElementById("jcolors").addEventListener("click", () => setTimeout(neu, 0));
+  neu();
 })();
 </script>
 </body>
