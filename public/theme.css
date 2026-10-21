@@ -479,3 +479,35 @@ html[data-theme="papier"] .eTasten{background:#fffdf7;border:1px solid #1f1a14}
 html[data-theme="papier"] kbd{background:#fffdf7;border-color:#1f1a14}
 html[data-theme="papier"] .hmEinst{background:#fffdf7;border:1.5px solid #1f1a14}
 .eSeite[hidden]{display:none}
+
+/* ================================================================
+ * Stadtbank
+ * ================================================================ */
+.bReiter{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;padding:4px;border:var(--rand);border-radius:12px;margin:12px 0 4px}
+.bReiter button{position:relative;height:40px;border:0;border-radius:9px;background:none;color:var(--dim);font:600 13.5px var(--font);cursor:pointer}
+.bReiter button.on{background:var(--akzent-flaeche);color:var(--text)}
+.bReiter i{font:600 10.5px var(--mono);font-style:normal;margin-left:6px;padding:1px 6px;border-radius:8px;background:var(--accent);color:var(--auf-akzent)}
+.bReiter i:empty{display:none}
+#p-bank section[hidden]{display:none}
+.bTafelKopf{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.bTafelKopf .meta{text-transform:none;letter-spacing:0;font-family:var(--font)}
+.bAngebotChip{color:var(--up);font-weight:600}
+.bAngebote{margin:10px 0 6px;display:flex;flex-direction:column;gap:6px}
+.bAngKopf{font:600 11px var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--dim)}
+.bAng{display:grid;grid-template-columns:1fr auto auto;gap:10px;align-items:center;padding:8px 10px;border-radius:10px;border:1px solid var(--line)}
+.bAng span{font-size:12.5px;color:var(--dim);display:flex;flex-direction:column;gap:2px}
+.bAng em{font-style:normal;font-size:11.5px;font-family:var(--mono)}
+.bAng em.plus{color:var(--up)} .bAng em.minus{color:var(--down)}
+.bAng b{font:600 14px var(--mono)}
+.bAnfrage{width:100%;margin:6px 0 4px;height:38px}
+.bForm{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:8px}
+.bForm label{display:flex;flex-direction:column;gap:4px;min-width:0}
+.bForm label span{font:11px var(--mono);color:var(--dim);letter-spacing:.06em;text-transform:uppercase}
+.bForm select,.bForm input{width:100%;height:40px;box-sizing:border-box}
+.bForm .breit{grid-column:1 / -1}
+.bForm button.breit{height:44px;font-weight:700;font-size:14px}
+.bhandel{gap:14px}
+.bseite{padding:12px 14px 14px}
+html[data-theme="papier"] .bReiter,html[data-theme="papier"] .bReiter button,html[data-theme="papier"] .bAng,html[data-theme="papier"] .bReiter i{border-radius:0}
+html[data-theme="papier"] .bReiter button.on{background:#1f1a14;color:#f8f4ea}
+html[data-theme="papier"] .bAng{background:#fffdf7;border:1px solid #1f1a14}

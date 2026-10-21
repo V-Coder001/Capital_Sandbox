@@ -1699,40 +1699,49 @@ td:first-child{font-family:var(--font)}
          vollständig im Lexikon. -->
     <div class="bkopf" id="bankKopf"></div>
 
-    <div class="bhandel">
-      <div class="bseite verkauf">
-        <div class="bseite-kopf"><span class="pfeil">▼</span>Anteile abgeben</div>
-        <div class="formrow">
-          <select id="shCompany" title="Welche Firma"></select>
-          <select id="shCount"><option value="1">25 %</option><option value="2">50 %</option><option value="3">75 %</option><option value="4">100 %</option></select>
-          <input id="shPrice" type="number" min="1" value="1000" title="Preis $">
-          <select id="shTo"><option value="">Offener Markt (alle)</option></select>
-          <button class="bknopf verkauf" id="shList">Anbieten</button>
-        </div>
-        <div class="meta" id="shHint"></div>
-      </div>
-
-      <div class="bseite kauf">
-        <div class="bseite-kopf"><span class="pfeil">▲</span>Anteile übernehmen</div>
-        <div class="formrow">
-          <select id="bidCompany" title="Welche Firma"></select>
-          <select id="bidCount"><option value="1">25 %</option><option value="2">50 %</option><option value="3">75 %</option><option value="4">100 %</option></select>
-          <input id="bidPrice" type="number" min="1" value="2000" title="Dein Gebot $">
-          <button class="bknopf kauf" id="bidSend">Anfragen</button>
-        </div>
-        <div class="meta" id="bidHint"></div>
-      </div>
+    <!-- Drei Reiter statt einer langen Seite: Markt (Kurse + Angebote je
+         Firma), Handeln (Formulare), Depot. -->
+    <div class="bReiter" role="tablist" aria-label="Stadtbank">
+      <button type="button" role="tab" data-breiter="markt" class="on">Markt</button>
+      <button type="button" role="tab" data-breiter="handeln">Handeln<i id="bReiterHandeln"></i></button>
+      <button type="button" role="tab" data-breiter="depot">Depot<i id="bReiterDepot"></i></button>
     </div>
-    <div id="bidlist"></div>
 
-    <div class="sec">Kurstafel</div>
-    <div id="bankboard"></div>
+    <section data-bseite="markt">
+      <div id="sharelist"></div>
+      <div id="bankboard"></div>
+    </section>
 
-    <div class="sec">Offene Angebote</div>
-    <div id="sharelist"></div>
+    <section data-bseite="handeln" hidden>
+      <div id="bidlist"></div>
+      <div class="bhandel">
+        <div class="bseite kauf">
+          <div class="bseite-kopf"><span class="pfeil">▲</span>Anteile übernehmen</div>
+          <div class="bForm">
+            <label class="breit"><span>Firma</span><select id="bidCompany"></select></label>
+            <label><span>Anteil</span><select id="bidCount"><option value="1">25 %</option><option value="2">50 %</option><option value="3">75 %</option><option value="4">100 %</option></select></label>
+            <label><span>Dein Gebot $</span><input id="bidPrice" type="number" min="1" value="2000"></label>
+            <button class="bknopf kauf breit" id="bidSend">Kaufanfrage senden</button>
+          </div>
+          <div class="meta" id="bidHint"></div>
+        </div>
+        <div class="bseite verkauf">
+          <div class="bseite-kopf"><span class="pfeil">▼</span>Anteile abgeben</div>
+          <div class="bForm">
+            <label class="breit"><span>Firma</span><select id="shCompany"></select></label>
+            <label><span>Anteil</span><select id="shCount"><option value="1">25 %</option><option value="2">50 %</option><option value="3">75 %</option><option value="4">100 %</option></select></label>
+            <label><span>Preis $</span><input id="shPrice" type="number" min="1" value="1000"></label>
+            <label class="breit"><span>An wen</span><select id="shTo"><option value="">Offener Markt (alle)</option></select></label>
+            <button class="bknopf verkauf breit" id="shList">Anbieten</button>
+          </div>
+          <div class="meta" id="shHint"></div>
+        </div>
+      </div>
+    </section>
 
-    <div class="sec">Dein Depot</div>
-    <div id="bankdepot"></div>
+    <section data-bseite="depot" hidden>
+      <div id="bankdepot"></div>
+    </section>
   </div>
 </div>
 
@@ -7399,7 +7408,18 @@ document.getElementById("bIssue").addEventListener("click", () => act("issueBond
  * Listener, die render() bei jedem State-Update neu an frische DOM-Knoten hängt.
  * Sonst kann ein Zustandsupdate zwischen Maus-runter und Maus-hoch den Knopf
  * austauschen — dann entsteht gar kein click-Event und der Klick verpufft. */
+let BANK_REITER = "markt";
+function bankReiterZeigen() {
+  document.querySelectorAll("#p-bank [data-breiter]").forEach(b => b.classList.toggle("on", b.dataset.breiter === BANK_REITER));
+  document.querySelectorAll("#p-bank [data-bseite]").forEach(sx => sx.hidden = sx.dataset.bseite !== BANK_REITER);
+}
 document.getElementById("p-bank").addEventListener("click", e => {
+  const reiter = e.target.closest("[data-breiter]");
+  if (reiter) { BANK_REITER = reiter.dataset.breiter; bankReiterZeigen(); SFX.spiel("klick"); return; }
+  const zuHandeln = e.target.closest("[data-zu-handeln]");
+  if (zuHandeln) { BANK_REITER = "handeln"; bankReiterZeigen();
+    const sel = document.getElementById("bidCompany"); if ([...sel.options].some(o => o.value === zuHandeln.dataset.zuHandeln)) sel.value = zuHandeln.dataset.zuHandeln;
+    return; }
   const yes = e.target.closest("[data-merge-yes]");
   if (yes) { act("mergeCompany", { targetId: yes.dataset.mergeYes }); pendingMerge = null; render(store.get()); return; }
   if (e.target.closest("[data-merge-no]")) { pendingMerge = null; render(store.get()); return; }
@@ -10019,9 +10039,13 @@ function render({ state, me, myId, chat, room }) {
         const auf = firmenAuf.has(p.id);
         const div = blockDividende(p), rend = blockRendite(p), urteil = renditeUrteil(rend);
         const takt = Math.round((store.get().meta?.dividendInterval ?? 600) / 60);
+        const angebote = state.shareListings.filter(l => l.companyId === p.id && l.sellerId !== myId && (!l.toId || l.toId === myId))
+          .sort((a, b) => a.price / a.count - b.price / b.count);
+        const guenstig = angebote[0];
         return `<div class="bond firmrow" data-firm="${p.id}" style="cursor:pointer">
           <div style="min-width:0;flex:1">${firmenMarke(p.name, p.color, 42)}${p.id === myId ? ` <span class="meta">(du)</span>` : ""}
-            <div class="meta">Marktwert ${fmt(p.marketValue || 0)}${held ? ` · <b style="color:var(--accent)">du: ${held} %</b>` : ""}</div></div>
+            <div class="meta">Marktwert ${fmt(p.marketValue || 0)}${held ? ` · <b style="color:var(--accent)">du: ${held} %</b>` : ""}
+              ${angebote.length ? ` · <span class="bAngebotChip">${angebote.length} Angebot${angebote.length > 1 ? "e" : ""} ab ${fmt(guenstig.price / guenstig.count)}/25 %</span>` : ""}</div></div>
           <span style="display:flex;align-items:center;gap:8px">
             ${firmHist[p.id] ? sparklineVon(firmHist[p.id], 52, 16) : ""}
             <span class="fpreis">${fmt(p.blockPrice || 0)}<span class="meta"> /25 %</span></span>
@@ -10032,6 +10056,12 @@ function render({ state, me, myId, chat, room }) {
           <div class="kzrow"><span>Umsatz der letzten 10 min</span><b>${fmt(p.rev10 || 0)}</b></div>
           <div class="kzrow"><span>Dividende je 25 %-Block</span><b>${div == null ? "—" : fmt(div)} <span class="meta">/${takt} min</span></b></div>
           <div class="kzrow"><span>Rendite auf den Blockpreis</span><b style="color:${urteil?.farbe || "var(--dim)"}">${rend == null ? "—" : rend.toFixed(1) + " %"}${urteil ? ` <span style="font-weight:400">· ${urteil.text}</span>` : ""}</b></div>
+          ${angebote.length ? `<div class="bAngebote"><div class="bAngKopf">Angebote</div>${angebote.map(l => {
+              const fair = (p.blockPrice || 0) * l.count, diff = fair ? Math.round((l.price / fair - 1) * 100) : 0;
+              return `<div class="bAng"><span>${l.count * 25} % · ${l.isIssue ? "Emission" : `von ${l.seller}`}${l.toId ? " · <b>nur für dich</b>" : ""}
+                <em class="${diff <= 0 ? "plus" : diff > 25 ? "minus" : ""}">${diff > 0 ? "+" : ""}${diff} % zum Wert</em></span>
+                <b>${fmt(l.price)}</b><button class="buyb" data-shbuy="${l.id}">Kaufen</button></div>`; }).join("")}</div>` : ""}
+          ${p.id !== myId && (p.ownPct ?? 0) > 0 ? `<button type="button" class="mini bAnfrage" data-zu-handeln="${p.id}">Kaufanfrage an ${p.name} stellen</button>` : ""}
           <div class="meta" style="padding-top:4px">Ausgeschüttet werden ${Math.round((store.get().meta?.dividendRate ?? 0) * 100)} % des Umsatzes je ${takt} Minuten; ein 25-%-Block erhält davon ein Viertel.</div>
         </div>` : "");
       }).join("");
@@ -10063,8 +10093,7 @@ function render({ state, me, myId, chat, room }) {
         `<div class="bond"><div><b>${l.company}</b><div class="meta">${l.count*25} % für ${fmt(l.price)}${l.toId ? ` · nur für ${l.toName}` : " · offener Markt"}</div></div>
          <button class="mini" data-shcancel="${l.id}">${t("Storno")}</button></div>`).join("") : "") +
       (toMe.length ? `<div class="sec">Nur für dich</div>` + toMe.map(offerRow).join("") : "") +
-      `<div class="sec">Offener Markt</div>` +
-      (open.length ? open.map(offerRow).join("") : `<span class="meta">Gerade keine Angebote.</span>`);
+      `<div class="sec bTafelKopf"><span>Kurstafel</span><span class="meta">${open.length ? `${open.length} offene Angebote — Firma antippen` : "keine offenen Angebote"}</span></div>`;
 
     /* Kaufanfragen: Zielauswahl, eingegangene Anfragen, eigene laufende Anfragen */
     const bidCo = document.getElementById("bidCompany"), bidCoPrev = bidCo.value;
@@ -10091,6 +10120,9 @@ function render({ state, me, myId, chat, room }) {
         <div><b>${b.company}</b><div class="meta">${b.count * 25} % für ${fmt(b.price)} · wartet auf Antwort · noch ${b.ttl}s</div></div>
         <button class="mini" data-bidcancel="${b.id}">Zurückziehen</button></div>`).join("") : "");
 
+    document.getElementById("bReiterHandeln").textContent = bidsToMe.length ? bidsToMe.length : "";
+    document.getElementById("bReiterDepot").textContent = me.portfolio?.length ? me.portfolio.length : "";
+    bankReiterZeigen();
     /* Depot: was man an fremden Firmen hält, mit aktuellem Wert */
     document.getElementById("bankdepot").innerHTML = me.portfolio?.length
       ? me.portfolio.map(h => {
