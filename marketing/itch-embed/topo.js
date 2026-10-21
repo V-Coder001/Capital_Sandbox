@@ -251,6 +251,9 @@
     canvas.style.opacity = "1";
     start();
 
+    /* Themenwechsel (Vermessung/Kartenpapier): Linienfarbe neu lesen. */
+    const aufThema = () => { color = getComputedStyle(canvas).color; paint(performance.now()); };
+    document.addEventListener("themawechsel", aufThema);
     const ro = new ResizeObserver(() => { resize(); paint(performance.now()); });
     ro.observe(canvas);
     /* Elemente, die sich nachträglich verschieben (Modus-Wechsel, Plakate),
@@ -292,6 +295,7 @@
     return () => {
       cancelAnimationFrame(raf); ro.disconnect(); io.disconnect(); clearInterval(avoidTimer);
       document.removeEventListener("visibilitychange", updateVisible);
+      document.removeEventListener("themawechsel", aufThema);
       root.removeEventListener("pointermove", onMove);
       root.removeEventListener("pointerleave", onLeave);
       root.removeEventListener("pointerdown", onDown);
