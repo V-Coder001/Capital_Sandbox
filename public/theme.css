@@ -884,3 +884,20 @@ html[data-theme="papier"] .faRegeln b,html[data-theme="papier"] .faSteuer{color:
 .faStufeMini{border:1px solid;border-radius:999px;padding:1px 8px;font-size:11px;font-weight:600}
 html[data-theme="papier"] .faStufe{border-color:#1b1b1b33}
 html[data-theme="papier"] .faStufe[data-stufe=normal].on,html[data-theme="papier"] .faStufeMini[data-stufe=normal]{border-color:#1b1b1b}
+
+/* ---------- Aktienmarkt: Marktgeschehen ---------- */
+#marktlog .mlog{font-size:12px;padding:3px 0;border-bottom:1px solid var(--line,rgba(255,255,255,.08))}
+#marktlog .mlog .meta{display:inline-block;min-width:46px;font-family:var(--mono)}
+#marktlog .mlog.panik{color:var(--down,#fb7185);font-weight:600}
+#marktlog .mlog.flaute{color:#f59e0b}
+#marktlog .mlog.ausschuettung{color:var(--up,#34d399)}
+.bkz small{font-size:.65em;opacity:.6;font-weight:500}
+.fAktie{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin:4px 0}
+.fAktie div{border:1px solid var(--line,rgba(255,255,255,.1));border-radius:8px;padding:6px 8px;display:flex;flex-direction:column}
+.fAktie span{font-size:11px;opacity:.7}
+.fAktie b{font-family:var(--mono);font-size:14px}
+.fAktie small{font-size:.7em;opacity:.6}
+.fAusschuettung{display:flex;flex-direction:column;gap:6px;margin-bottom:8px}
+.fAusZeile{display:flex;gap:6px;align-items:center}
+.fAusZeile input{width:110px}
+.fAusZeile .mini.on{border-color:var(--accent);color:var(--accent)}

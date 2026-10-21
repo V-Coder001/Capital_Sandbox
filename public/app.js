@@ -24,19 +24,24 @@ const store = (() => {
  * Ereignis "kurse" geliefert. 60 Punkte = 10 Minuten Rückblick. */
 let priceHist = {}, firmHist = {};
 
-/* Dividende, die ein 25-%-Block je Ausschüttung abwirft. Der Server schüttet
- * DIVIDEND_RATE des Umsatzes aus, davon bekommt ein Block ein Viertel — die
- * Sätze kommen aus der Anmeldung mit, damit hier keine fest eingetippte Zahl
- * steht, die beim nächsten Balancing stillschweigend falsch wird. */
-function blockDividende(p) {
+/* Dividende je Aktie und Ausschüttung. Die Firma legt ihre Ausschüttung
+ * selbst fest: automatisch DIVIDEND_RATE des Umsatzes oder ein fester Betrag.
+ * Die Sätze kommen aus der Anmeldung mit, statt hier fest eingetippt zu sein. */
+const AKTIEN_JE_FIRMA = () => store.get().state?.marktCfg?.aktien || 100;
+function aktienDividende(p) {
   const satz = store.get().meta?.dividendRate;
-  return satz == null ? null : (p.rev10 || 0) * satz / 4;
+  if (p.ausschuettung != null) return p.ausschuettung / AKTIEN_JE_FIRMA();
+  return satz == null ? null : (p.rev10 || 0) * satz / AKTIEN_JE_FIRMA();
 }
-/* Rendite je Ausschüttungsintervall, gemessen am Preis eines 25-%-Blocks. */
-function blockRendite(p) {
-  const d = blockDividende(p), kurs = p.blockPrice || 0;
+/* Rendite je Ausschüttungsintervall, gemessen am Kurs */
+function aktienRendite(p) {
+  const d = aktienDividende(p), kurs = p.kurs || 0;
   return d == null || kurs <= 0 ? null : d / kurs * 100;
 }
+/* Kurs mit Cent, ab 100 $ ohne */
+const fk = v => v >= 100 ? fmt(v) : "$" + (Math.round((v || 0) * 100) / 100).toLocaleString(SPRACHE === "en" ? "en-US" : "de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+/* Lücke zwischen Fundament und Kurs als farbiger Hinweis */
+const lueckeHtml = g => g == null ? "" : `<span style="color:${g > 0.1 ? "var(--up)" : g < -0.1 ? "var(--down)" : "var(--dim)"}">${g > 0 ? "unter" : "über"} Wert ${Math.abs(Math.round(g * 100))} %</span>`;
 /* Einordnung der Rendite. Die Schwellen orientieren sich am Ausschüttungstakt
  * von 10 Minuten: 8 % je 10 min holt den Kaufpreis in gut zwei Stunden
  * Spielzeit wieder herein, 1 % praktisch nie. */
@@ -1930,6 +1935,13 @@ const EN = {
   "Keine fremden Orders für diese Ware.": "No other players' orders for this good.",
   /* Stadtbank */
   "gehört dir": "you own", "je 25 %-Block": "per 25% block", "Marktwert": "Market value",
+  "Aktien": "Shares", "Aktien gehören dir": "shares are yours", "Kurs je Aktie": "Price per share",
+  "Wert je Aktie (F)": "Value per share (F)", "Gebot gesamt $": "Total bid $", "Preis gesamt $": "Total price $",
+  "Aktien abgeben": "Sell shares", "Deine Aktie": "Your stock", "Kurs": "Price", "Eigene Aktien": "Own shares",
+  "Wert F je Aktie": "Value F per share", "Automatisch": "Automatic", "Festlegen": "Set",
+  "Marktgeschehen": "Market activity", "Wert je Aktie (Fundament F)": "Value per share (fundamental F)",
+  "Buchwert der Firma": "Book value of the company", "Dividende je Aktie": "Dividend per share",
+  "Dividendenrendite zum Kurs": "Dividend yield at price", "Branchen-ETFs": "Industry ETFs", "Aktien des Finanzamts": "Tax office shares",
   "Umsatz 10 min": "Revenue 10 min", "Anteile abgeben": "Sell shares",
   "Anteile übernehmen": "Acquire shares", "Anbieten": "Offer", "Anfragen": "Request",
   "Kurstafel": "Price board", "Offene Angebote": "Open offers", "Dein Depot": "Your portfolio",
@@ -4830,6 +4842,15 @@ function draw() {
       }
       if (t.lien) drawWarn(sx, sy - 42);
       if (t.paused) drawPause(sx + (t.lien ? 13 : 0), sy - 42);
+      /* Anlage in Arbeit: Baubalken über dem Gebäude, bis es produziert */
+      if (t.bauBis && st.tick < t.bauBis) {
+        const dauer = st.marktCfg?.bauDauer || 30, rest = t.bauBis - st.tick;
+        const k = Math.max(0, Math.min(1, 1 - rest / dauer)), w = 30;
+        cx.fillStyle = "rgba(10,14,21,.75)"; cx.fillRect(sx - w / 2 - 1, sy - 37, w + 2, 6);
+        cx.fillStyle = "#f59e0b"; cx.fillRect(sx - w / 2, sy - 36, w * k, 4);
+        cx.font = "bold 9px sans-serif"; cx.textAlign = "center"; cx.fillStyle = "#f59e0b";
+        cx.fillText(`im Bau ${rest}s`, sx, sy - 40);
+      }
       if (t.level > 1) { cx.font="bold 10px sans-serif"; cx.textAlign="center"; cx.fillStyle="#38bdf8";
         cx.fillText(`★${t.level}`, sx, sy - 48); }
     }
@@ -5074,7 +5095,8 @@ function clickTile(e) {
      * Erklärtexte stehen eingeklappt unter „Mehr erfahren". */
     const ownerCol = store.get().state.players[t.owner]?.color || "#666";
     const sprSrc = spriteUrl(t.btype, t.x, t.y);
-    const status = t.lien ? ["warn", "Pfandrecht"] : t.paused ? ["aus", "Pausiert"]
+    const imBauNoch = t.bauBis && store.get().state.tick < t.bauBis ? t.bauBis - store.get().state.tick : 0;
+    const status = imBauNoch ? ["warn", `Im Bau · noch ${imBauNoch}s`] : t.lien ? ["warn", "Pfandrecht"] : t.paused ? ["aus", "Pausiert"]
       : (bt.out || bt.proc || bt.retail) ? ["an", "Läuft"] : null;
     const kennzahlen = [];
     if (bt.out) kennzahlen.push(["Produziert", `${(bt.rate * lvlMult).toFixed(2)}/s`, gname(bt.out)]);
@@ -5088,6 +5110,7 @@ function clickTile(e) {
     if (bt.retail) mehr.push(`Dein Preis bestimmt das Tempo: Ø-Kurs = volle Rate, teurer = langsamer, billiger = schneller (max. ×2).`
       + ((me.ad?.boost || 1) > 1.001 ? ` <b style="color:var(--accent2)">Werbung aktiv: bis ${Math.round((me.ad.boost - 1) * 100)} % über Ø-Kurs ohne Tempoverlust.</b>` : ""));
     if (t.lien) mehr.push("Auf dem Gebäude liegt ein Pfandrecht — Abreißen ist gesperrt, bis die Anleihe bedient ist.");
+    if (imBauNoch) mehr.push(`Anlage in Arbeit: Das Gebäude produziert erst nach der Bauzeit. Sein Wert zählt aber schon jetzt voll zum Firmenwert — Bauen senkt den Wert deiner Firma nicht.`);
     const nebenKnoepfe = [
       (bt.retail || bt.proc) && mine ? `<button class="tmKlein" id="pause">${t.paused ? "▶ Fortsetzen" : "❚❚ Pausieren"}</button>` : "",
       mine && !t.lien ? `<button class="tmKlein gefahr" id="dem" data-preis="${fmt(bt.cost * .5)}">Abreißen</button>` : "",
@@ -5468,7 +5491,7 @@ function finanzamtRendern(state, me, myId) {
       <div class="kzrow"><span>Freibetrag</span><b>−${fmt(F.frei)}</b></div>
       <div class="kzrow"><span>Voraussichtliche Steuer (${Math.round(F.satz * 1000) / 10} %)</span><b class="faSteuer">${fmt(st.steuer || 0)}</b></div>
       ${st.schuld ? `<div class="kzrow"><span>davon gestundet aus dem letzten Bescheid</span><b>${fmt(st.schuld)}</b></div>` : ""}
-      <div class="meta" style="padding-top:6px">Investitionen (Bau, Ausbau, Werbung, Einkauf) senken den Gewinn. Zuletzt gezahlt: ${st.letzter ? fmt(st.letzter.steuer) : "—"} · insgesamt ${fmt(st.gezahlt || 0)}.</div>
+      <div class="meta" style="padding-top:6px">Einkauf und Werbung senken den Gewinn sofort, Bau und Ausbau verteilt über ${Math.round((store.get().state?.marktCfg?.afaDauer || 1800) / 60)} min (Abschreibung). Zuletzt gezahlt: ${st.letzter ? fmt(st.letzter.steuer) : "—"} · insgesamt ${fmt(st.gezahlt || 0)}.</div>
     </div>
     ${P ? `<div class="sec">Stadtprojekt: ${P.name} <span class="meta">· Budget ${fmt(P.budget)} · noch ${uhr(P.ttl)}</span></div>
       ${Object.entries(P.needs).map(([g, n]) => {
@@ -5480,6 +5503,10 @@ function finanzamtRendern(state, me, myId) {
             <input type="number" min="1" id="sp-${g}" placeholder="Menge">
             <button class="buyb" data-sp="${g}" ${(me.inv[g] || 0) < 1 || n.have >= n.req ? "disabled" : ""}>Liefern</button></div></div>`; }).join("")}
       <div class="faLieferanten">${Object.values(P.contrib).map(c => `<span style="--f:${c.color || "#888"}">${c.name}${c.bot ? " · Bot" : ""}</span>`).join("") || `<span class="meta">Noch keine Lieferungen — Spieler und Bots liefern gemeinsam.</span>`}</div>` : ""}
+    <div class="sec">Aktien des Finanzamts <span class="meta">· Stabilisator</span></div>
+    ${(F.portfolio || []).length ? `<div class="faPortfolio">${F.portfolio.map(f => `<div class="kzrow"><span>${f.firma} <span class="meta">· ${f.aktien} Aktien</span></span><b>${fmt(f.wert)} <span class="meta">Buchwert ${fmt(f.buchwert)}</span></b></div>`).join("")}</div>`
+      : `<div class="meta">Noch keine Aktien.</div>`}
+    <div class="meta faLageText">Liegt der Kurs einer Firma mehr als ${Math.round((F.theta ?? 0.1) * 100)} % unter ihrem Wert F, kauft das Finanzamt — aus Angeboten oder per Kaufanfrage, höchstens ${F.maxAnteil ?? 20} Aktien je Firma, bezahlt nur aus dem Geld über der Projektschwelle — Stadtprojekte gehen vor. Liegt der Kurs mehr als ${Math.round((F.theta ?? 0.1) * 100)} % darüber, verkauft es. Seine Aktien stehen immer zum Wert + 5 % im Angebot, Übernahmen bleiben also möglich. Dividenden darauf fließen in die Stadtkasse.</div>
     <div class="sec">So arbeitet das Finanzamt</div>
     <div class="faRegeln">
       <div><b>${Math.round(F.satz * 1000) / 10} %</b><span>Gewinnsteuer alle 10 min, die ersten ${fmt(F.frei)} frei</span></div>
@@ -5521,7 +5548,8 @@ function kurswettenRendern() {
 
   /* Formular: nur Firmen, auf die man wetten darf */
   const sel = document.getElementById("wFirma"), vorher = sel.value;
-  const erlaubt = R.firmen.filter(f => f.id !== myId && (state.players[f.id]?.equity?.[myId] || 0) < 2);
+  const meinName = state.players[myId]?.name;
+  const erlaubt = R.firmen.filter(f => f.id !== myId && (state.players[f.id]?.equity?.[meinName] || 0) < 50);
   const opts = erlaubt.map(f => `<option value="${f.id}">${f.name}</option>`).join("") || `<option value="">Keine Firma verfügbar</option>`;
   if (sel.dataset.sig !== opts) { sel.innerHTML = opts; sel.dataset.sig = opts; }
   if (erlaubt.some(f => f.id === vorher)) sel.value = vorher;
@@ -5562,7 +5590,7 @@ function kurswettenRendern() {
       const sum = f.long + f.short, lp = sum ? f.long / sum * 100 : 50;
       const aend = f.start ? (f.jetzt - f.start) / f.start * 100 : null;
       const mw = meine.find(w => w.firmaId === f.id);
-      const gesperrt = f.id === myId || (state.players[f.id]?.equity?.[myId] || 0) >= 2;
+      const gesperrt = f.id === myId || (state.players[f.id]?.equity?.[meinName] || 0) >= 50;
       return `<div class="wFirma${f.id === sel.value ? " gewaehlt" : ""}${gesperrt ? " gesperrt" : ""}" ${gesperrt ? "" : `data-wfirma="${f.id}"`}>
         <div class="wFKopf">${firmenMarke(f.name, f.farbe, 28)}${f.id === myId ? ` <span class="meta">(du)</span>` : ""}
           <span class="wWert">${fmt(f.jetzt)}${aend != null ? ` <em class="${aend >= 0 ? "plus" : "minus"}">${aend >= 0 ? "+" : ""}${aend.toFixed(1)} %</em>` : ""}</span></div>
@@ -8158,10 +8186,10 @@ function render({ state, me, myId, chat, room }) {
         <span class="bkopf-rating" style="color:${RCOL[my?.rating] || "var(--dim)"}">${my?.rating || "—"}</span>
       </div>
       <div class="bkopf-zahlen">
-        ${kopfZahl(meinAnteil + " %", "gehörst dir", meinAnteil >= 50 ? "var(--up)" : "var(--down)")}
-        ${kopfZahl(fmt(me.blockPrice ?? 0), "je 25 %-Block", "var(--accent)")}
+        ${kopfZahl(`${me.ownAktien ?? 0}<small>/${AKTIEN_JE_FIRMA()}</small>`, "Aktien gehören dir", meinAnteil >= 50 ? "var(--up)" : "var(--down)")}
+        ${kopfZahl(fk(me.kurs ?? 0), "Kurs je Aktie", "var(--accent)")}
+        ${kopfZahl(fk(me.fundament ?? 0), "Wert je Aktie (F)")}
         ${kopfZahl(fmt(my?.marketValue ?? 0), "Marktwert")}
-        ${kopfZahl(fmt(my?.rev10 ?? 0), "Umsatz 10 min")}
       </div>
       <div class="bkopf-uhr">
         <div class="bkopf-balken"><i style="width:${(fortschritt * 100).toFixed(1)}%"></i></div>
@@ -8169,19 +8197,20 @@ function render({ state, me, myId, chat, room }) {
       </div>`;
 
     /* Verkaufen kann man eigene Anteile (Emission) und zugekaufte fremde (Weiterverkauf) */
-    const sellable = [{ id: myId, name: "Eigene Firma", blocks: Math.round((me.ownPct ?? 0) / 25),
-                        price: me.blockPrice ?? 0 }]
-      .concat((me.portfolio || []).map(h => ({ id: h.id, name: h.company, blocks: h.count, price: h.blockPrice })))
-      .filter(o => o.blocks > 0);
+    const sellable = [{ id: myId, name: "Eigene Firma", aktien: me.ownAktien ?? 0, kurs: me.kurs ?? 0 }]
+      .concat((me.portfolio || []).map(h => ({ id: h.id, name: h.company, aktien: h.count, kurs: h.kurs })))
+      .filter(o => o.aktien > 0);
     const shCo = document.getElementById("shCompany"), shCoPrev = shCo.value;
     shCo.innerHTML = sellable.map(o =>
-      `<option value="${o.id}">${o.name} (${o.blocks * 25} %)</option>`).join("")
-      || `<option value="">Keine Anteile</option>`;
+      `<option value="${o.id}">${o.name} (${o.aktien} Aktien)</option>`).join("")
+      || `<option value="">Keine Aktien</option>`;
     if (sellable.some(o => o.id === shCoPrev)) shCo.value = shCoPrev;
     const sel = sellable.find(o => o.id === shCo.value);
+    const shN = Math.max(1, Math.min(sel?.aktien || 1, +document.getElementById("shCount").value || 1));
+    document.getElementById("shCount").max = sel?.aktien || 1;
     document.getElementById("shHint").textContent = sel
-      ? `Richtpreis nach Marktwert: ${fmt(sel.price)} je 25 %-Block.`
-      : "Du hältst gerade keine Anteile zum Verkauf.";
+      ? `Kurs ${fk(sel.kurs)} je Aktie → ${shN} Aktien ≈ ${fmt(sel.kurs * shN)}. Du hältst ${sel.aktien}.`
+      : "Du hältst gerade keine Aktien zum Verkauf.";
 
     const shToSel = document.getElementById("shTo"), shToPrev = shToSel.value;
     shToSel.innerHTML = `<option value="">Offener Markt (alle)</option>` + Object.values(state.players)
@@ -8198,7 +8227,7 @@ function render({ state, me, myId, chat, room }) {
         const held = p.id === myId ? (me.ownPct ?? 0)
           : ((me.portfolio || []).find(h => h.id === p.id)?.pct || 0);
         const auf = firmenAuf.has(p.id);
-        const div = blockDividende(p), rend = blockRendite(p), urteil = renditeUrteil(rend);
+        const div = aktienDividende(p), rend = aktienRendite(p), urteil = renditeUrteil(rend);
         const takt = Math.round((store.get().meta?.dividendInterval ?? 600) / 60);
         const angebote = state.shareListings.filter(l => l.companyId === p.id && l.sellerId !== myId && (!l.toId || l.toId === myId))
           .sort((a, b) => a.price / a.count - b.price / b.count);
@@ -8206,24 +8235,28 @@ function render({ state, me, myId, chat, room }) {
         return `<div class="bond firmrow" data-firm="${p.id}" style="cursor:pointer">
           <div style="min-width:0;flex:1">${firmenMarke(p.name, p.color, 42)}${p.id === myId ? ` <span class="meta">(du)</span>` : ""}
             <div class="meta">Marktwert ${fmt(p.marketValue || 0)}${held ? ` · <b style="color:var(--accent)">du: ${held} %</b>` : ""}
-              ${angebote.length ? ` · <span class="bAngebotChip">${angebote.length} Angebot${angebote.length > 1 ? "e" : ""} ab ${fmt(guenstig.price / guenstig.count)}/25 %</span>` : ""}</div></div>
+              ${angebote.length ? ` · <span class="bAngebotChip">${angebote.length} Angebot${angebote.length > 1 ? "e" : ""} ab ${fk(guenstig.price / guenstig.count)}/Aktie</span>` : ""}
+              · ${lueckeHtml(p.luecke)}</div></div>
           <span style="display:flex;align-items:center;gap:8px">
             ${firmHist[p.id] ? sparklineVon(firmHist[p.id], 52, 16) : ""}
-            <span class="fpreis">${fmt(p.blockPrice || 0)}<span class="meta"> /25 %</span></span>
+            <span class="fpreis">${fk(p.kurs || 0)}<span class="meta"> /Aktie</span></span>
             <span class="meta" style="width:9px;text-align:center">${auf ? "⌃" : "⌄"}</span>
           </span>
         </div>` + (auf ? `<div class="firmdetail">
-          ${verlaufChart(firmHist[p.id], "Firmenwert", fmt)}
+          ${verlaufChart(firmHist[p.id], "Marktwert (Kurs × Aktien)", fmt)}
+          <div class="kzrow"><span>Kurs je Aktie</span><b>${fk(p.kurs || 0)}</b></div>
+          <div class="kzrow"><span>Wert je Aktie (Fundament F)</span><b>${fk(p.fundament || 0)} <span class="meta">· ${lueckeHtml(p.luecke)}</span></b></div>
+          <div class="kzrow"><span>Buchwert der Firma</span><b>${fmt(p.buchwert || 0)}</b></div>
           <div class="kzrow"><span>Umsatz der letzten 10 min</span><b>${fmt(p.rev10 || 0)}</b></div>
-          <div class="kzrow"><span>Dividende je 25 %-Block</span><b>${div == null ? "—" : fmt(div)} <span class="meta">/${takt} min</span></b></div>
-          <div class="kzrow"><span>Rendite auf den Blockpreis</span><b style="color:${urteil?.farbe || "var(--dim)"}">${rend == null ? "—" : rend.toFixed(1) + " %"}${urteil ? ` <span style="font-weight:400">· ${urteil.text}</span>` : ""}</b></div>
+          <div class="kzrow"><span>Dividende je Aktie</span><b>${div == null ? "—" : fk(div)} <span class="meta">/${takt} min${p.ausschuettung != null ? " · fest" : ""}</span></b></div>
+          <div class="kzrow"><span>Dividendenrendite zum Kurs</span><b style="color:${urteil?.farbe || "var(--dim)"}">${rend == null ? "—" : rend.toFixed(1) + " %"}${urteil ? ` <span style="font-weight:400">· ${urteil.text}</span>` : ""}</b></div>
           ${angebote.length ? `<div class="bAngebote"><div class="bAngKopf">Angebote</div>${angebote.map(l => {
-              const fair = (p.blockPrice || 0) * l.count, diff = fair ? Math.round((l.price / fair - 1) * 100) : 0;
-              return `<div class="bAng"><span>${l.count * 25} % · ${l.isIssue ? "Emission" : `von ${l.seller}`}${l.toId ? " · <b>nur für dich</b>" : ""}
-                <em class="${diff <= 0 ? "plus" : diff > 25 ? "minus" : ""}">${diff > 0 ? "+" : ""}${diff} % zum Wert</em></span>
+              const fair = (p.kurs || 0) * l.count, diff = fair ? Math.round((l.price / fair - 1) * 100) : 0;
+              return `<div class="bAng"><span>${l.count} Aktien · ${l.isIssue ? "Emission" : `von ${l.seller}`}${l.toId ? " · <b>nur für dich</b>" : ""}
+                <em class="${diff <= 0 ? "plus" : diff > 25 ? "minus" : ""}">${diff > 0 ? "+" : ""}${diff} % zum Kurs</em></span>
                 <b>${fmt(l.price)}</b><button class="buyb" data-shbuy="${l.id}">Kaufen</button></div>`; }).join("")}</div>` : ""}
           ${p.id !== myId && (p.ownPct ?? 0) > 0 ? `<button type="button" class="mini bAnfrage" data-zu-handeln="${p.id}">Kaufanfrage an ${p.name} stellen</button>` : ""}
-          <div class="meta" style="padding-top:4px">Ausgeschüttet werden ${Math.round((store.get().meta?.dividendRate ?? 0) * 100)} % des Umsatzes je ${takt} Minuten; ein 25-%-Block erhält davon ein Viertel.</div>
+          <div class="meta" style="padding-top:4px">${p.ausschuettung != null ? `${p.name} schüttet fest ${fmt(p.ausschuettung)}` : `Ausgeschüttet werden ${Math.round((store.get().meta?.dividendRate ?? 0) * 100)} % des Umsatzes`} je ${takt} Minuten, verteilt auf ${AKTIEN_JE_FIRMA()} Aktien. Der Kurs folgt dem Wert F mit Verzögerung.</div>
         </div>` : "");
       }).join("");
     document.querySelectorAll("[data-firm]").forEach(el => el.addEventListener("click", () => {
@@ -8239,46 +8272,67 @@ function render({ state, me, myId, chat, room }) {
     const open = state.shareListings.filter(l => l.sellerId !== myId && !l.toId);
     const priceTag = l => {
       const co = state.players[l.companyId];
-      const fair = co ? co.blockPrice * l.count : 0;
+      const fair = co ? (co.kurs || 0) * l.count : 0;
       if (!fair) return "";
       const diff = Math.round((l.price / fair - 1) * 100);
       const col = diff <= 0 ? "var(--up)" : diff > 25 ? "var(--down)" : "var(--dim)";
-      return ` · <span style="color:${col}">${diff > 0 ? "+" : ""}${diff} % zum Marktwert</span>`;
+      return ` · <span style="color:${col}">${diff > 0 ? "+" : ""}${diff} % zum Kurs</span>`;
     };
     const offerRow = l => `<div class="bond">
-      <div><b>${l.company}</b><div class="meta">${l.count*25} % · ${l.isIssue ? "Emission der Firma" : `von ${l.seller}`}${priceTag(l)}</div></div>
+      <div><b>${l.company}</b><div class="meta">${l.count} Aktien · ${l.isIssue ? "Emission der Firma" : `von ${l.seller}`}${priceTag(l)}</div></div>
       <div style="display:flex;align-items:center;gap:8px"><span style="font-family:var(--mono)">${fmt(l.price)}</span>
       <button class="buyb" data-shbuy="${l.id}">Kaufen</button></div></div>`;
     document.getElementById("sharelist").innerHTML =
       (mine.length ? `<div class="sec">Deine Angebote</div>` + mine.map(l =>
-        `<div class="bond"><div><b>${l.company}</b><div class="meta">${l.count*25} % für ${fmt(l.price)}${l.toId ? ` · nur für ${l.toName}` : " · offener Markt"}</div></div>
+        `<div class="bond"><div><b>${l.company}</b><div class="meta">${l.count} Aktien für ${fmt(l.price)}${l.toId ? ` · nur für ${l.toName}` : " · offener Markt"}</div></div>
          <button class="mini" data-shcancel="${l.id}">${t("Storno")}</button></div>`).join("") : "") +
       (toMe.length ? `<div class="sec">Nur für dich</div>` + toMe.map(offerRow).join("") : "") +
       `<div class="sec bTafelKopf"><span>Kurstafel</span><span class="meta">${open.length ? `${open.length} offene Angebote — Firma antippen` : "keine offenen Angebote"}</span></div>`;
+    /* Branchen-ETFs: Index je Branche (Kurse gewichtet nach Wert F, Start 100) */
+    const etfs = state.etf || [];
+    document.getElementById("etfboard").innerHTML = etfs.length ? `<div class="sec bTafelKopf"><span>Branchen-ETFs</span><span class="meta">ein Kauf streut über alle Firmen der Branche</span></div>` +
+      etfs.map(e => {
+        const h = e.verlauf || [], seit = h.length > 1 ? (h[h.length - 1] / h[0] - 1) * 100 : null;
+        const meins = (me.etf || []).find(x => x.branche === e.branche);
+        return `<div class="bond etfrow">
+          <div style="min-width:0;flex:1"><b>${e.name}-Fonds</b>
+            <div class="meta">Fondswert ${fmt(e.wert || 0)} · davon flüssig ${fmt(e.kasse || 0)}${(e.aktien || []).length ? ` · hält ${e.aktien.map(a => `${a.aktien} ${a.firma}`).join(", ")}` : " · noch keine Aktien"}${meins ? ` · <b style="color:var(--accent)">du: ${fmt(meins.wert)}</b>` : ""}</div></div>
+          <span style="display:flex;align-items:center;gap:8px">
+            ${h.length > 1 ? sparklineVon(h, 52, 16) : ""}
+            <span class="fpreis">${(e.preis || 0).toFixed(1)}${seit == null ? "" : ` <em class="${seit >= 0 ? "plus" : "minus"}" style="font-size:11px">${seit >= 0 ? "+" : ""}${seit.toFixed(1)} %</em>`}</span>
+            <input type="number" class="etfBetrag" data-etf-betrag="${e.branche}" min="100" step="100" placeholder="$" style="width:84px">
+            <button class="buyb" data-etf-kauf="${e.branche}">Kaufen</button>
+          </span></div>`; }).join("") +
+      `<div class="meta" style="padding-top:4px">Jede Branche hat einen Fonds. Dein Geld kauft echte Aktien der Firmen dieser Branche (gewichtet nach Wert F) — das hebt ihre Kurse. Anteilspreis = Fondswert ÷ Anteile, Start 100. Auszahlen kann der Fonds nur aus seiner Kasse; ist sie knapp, bietet er Aktien an. 1 % Gebühr je Kauf und Verkauf.</div>` : "";
+    /* Marktgeschehen: Käufe, Verkäufe, Ausschüttungen, Bauten, Flauten, Panik */
+    const mlog = (state.marktLog || []).slice(0, 8);
+    document.getElementById("marktlog").innerHTML = mlog.length
+      ? `<div class="sec">Marktgeschehen</div>` + mlog.map(e => `<div class="mlog ${e.art}"><span class="meta">min ${Math.floor(e.tick / 60)}</span> ${e.text}</div>`).join("")
+      : "";
 
     /* Kaufanfragen: Zielauswahl, eingegangene Anfragen, eigene laufende Anfragen */
     const bidCo = document.getElementById("bidCompany"), bidCoPrev = bidCo.value;
     const targets = Object.values(state.players).filter(p => p.id !== myId && p.ownPct > 0);
-    bidCo.innerHTML = targets.map(p => `<option value="${p.id}">${p.name} (${p.ownPct} % frei)</option>`).join("")
-      || `<option value="">Keine Firma hält noch eigene Anteile</option>`;
+    bidCo.innerHTML = targets.map(p => `<option value="${p.id}">${p.name} (hält ${Math.round(p.ownPct * AKTIEN_JE_FIRMA() / 100)} eigene Aktien)</option>`).join("")
+      || `<option value="">Keine Firma hält noch eigene Aktien</option>`;
     if (targets.some(p => p.id === bidCoPrev)) bidCo.value = bidCoPrev;
     const bidTarget = targets.find(p => p.id === bidCo.value);
     const bidCount = +document.getElementById("bidCount").value || 1;
     document.getElementById("bidHint").textContent = bidTarget
-      ? `Marktwert für ${bidCount * 25} %: ${fmt((bidTarget.blockPrice || 0) * bidCount)} — darunter lehnen die meisten ab.`
-      : "Alle Firmen haben ihre Anteile bereits vollständig abgegeben.";
+      ? `Kurs ${fk(bidTarget.kurs || 0)} je Aktie → ${bidCount} Aktien ≈ ${fmt((bidTarget.kurs || 0) * bidCount)}. Darunter lehnen die meisten ab.`
+      : "Alle Firmen haben ihre eigenen Aktien bereits vollständig abgegeben.";
 
     const bids = state.shareBids || [];
     const bidsToMe = bids.filter(b => b.companyId === myId);
     const myBids = bids.filter(b => b.bidderId === myId);
     document.getElementById("bidlist").innerHTML =
       (bidsToMe.length ? `<div class="sec">Anfragen an dich</div>` + bidsToMe.map(b => `<div class="bond">
-        <div><b>${b.bidder}</b><div class="meta">will ${b.count * 25} % deiner Firma · Marktwert ${fmt((me.blockPrice || 0) * b.count)} · noch ${b.ttl}s</div></div>
+        <div><b>${b.bidder}</b><div class="meta">will ${b.count} Aktien deiner Firma · zum Kurs ${fmt((me.kurs || 0) * b.count)} · noch ${b.ttl}s</div></div>
         <div style="display:flex;align-items:center;gap:8px"><span style="font-family:var(--mono)">${fmt(b.price)}</span>
         <button class="buyb" data-bidok="${b.id}">Annehmen</button>
         <button class="mini" data-bidno="${b.id}">Ablehnen</button></div></div>`).join("") : "") +
       (myBids.length ? `<div class="sec">Deine Anfragen</div>` + myBids.map(b => `<div class="bond">
-        <div><b>${b.company}</b><div class="meta">${b.count * 25} % für ${fmt(b.price)} · wartet auf Antwort · noch ${b.ttl}s</div></div>
+        <div><b>${b.company}</b><div class="meta">${b.count} Aktien für ${fmt(b.price)} · wartet auf Antwort · noch ${b.ttl}s</div></div>
         <button class="mini" data-bidcancel="${b.id}">Zurückziehen</button></div>`).join("") : "");
 
     document.getElementById("bReiterHandeln").textContent = bidsToMe.length ? bidsToMe.length : "";
@@ -8303,9 +8357,10 @@ function render({ state, me, myId, chat, room }) {
           return `<div class="bond">
             <div style="min-width:0">${firmenMarke(h.company, "var(--text)", 38)}${h.pct >= 100 ? ` <b style="color:var(--accent)">· bereit zur Fusion</b>` : ""}
               <div class="depotzahlen">
-                <span>${h.pct} %</span>
+                <span>${h.count} Aktien (${h.pct} %)</span>
                 <span>Einstand <b>${h.einstand > 0 ? fmt(h.einstand) : "—"}</b></span>
-                <span>Wert <b>${fmt(h.value)}</b></span>
+                <span>zum Kurs <b>${fmt(h.value)}</b></span>
+                <span class="meta">Buchwert ${fmt(h.buchwert || 0)}</span>
                 ${gv == null ? "" : `<span style="color:${gvFarbe}">${gv >= 0 ? "+" : "−"}${fmt(Math.abs(gv))} (${gvProz >= 0 ? "+" : ""}${gvProz.toFixed(0)} %)</span>`}
               </div></div>
             <div style="display:flex;gap:5px">${mergeUi}</div></div>`;
@@ -8321,12 +8376,20 @@ function render({ state, me, myId, chat, room }) {
             <span><b>${fmt(wert)}</b>${einst > 0 ? ` <span class="meta">Einstand ${fmt(einst)}</span>` : ""}
               ${gv == null ? "" : `<b style="color:${gv >= 0 ? "var(--up)" : "var(--down)"}">${gv >= 0 ? "+" : "−"}${fmt(Math.abs(gv))}</b>`}</span></div>`;
         })()
-      : `<span class="meta">Du hältst keine fremden Anteile. Kaufe oben einen Block — steigt der Marktwert der Firma, kannst du ihn teurer weiterverkaufen.</span>`;
+      : `<span class="meta">Du hältst keine fremden Aktien. Kauf welche — liegt der Kurs unter dem Wert F, holt er meist auf, und du kannst teurer weiterverkaufen.</span>`;
+    /* ETF-Bestände */
+    if ((me.etf || []).length) document.getElementById("bankdepot").insertAdjacentHTML("beforeend",
+      `<div class="sec">Branchen-ETFs</div>` + me.etf.map(x => {
+        const gv = x.einstand > 0 ? x.wert - x.einstand : null;
+        return `<div class="bond"><div><b>${x.name}-Fonds</b><div class="depotzahlen"><span>${x.anteile} Anteile</span>
+          <span>Einstand <b>${fmt(x.einstand)}</b></span><span>zum Kurs <b>${fmt(x.wert)}</b></span><span class="meta">Buchwert ${fmt(x.buchwert || 0)}</span>
+          ${gv == null ? "" : `<span style="color:${gv >= 0 ? "var(--up)" : "var(--down)"}">${gv >= 0 ? "+" : "−"}${fmt(Math.abs(gv))}</span>`}</div></div>
+          <div style="display:flex;gap:5px"><button class="mini" data-etf-verkauf="${x.branche}" data-anteil="0.5">Hälfte</button><button class="buyb" data-etf-verkauf="${x.branche}" data-anteil="1">Verkaufen</button></div></div>`; }).join(""));
   }
 
   /* Firmen-Dashboard: Kennzahlen oben, Verlauf, Bilanz; Details eingeklappt.
    * Fehlende Werte (z. B. vor dem ersten Server-Update) zeigen „—" statt $NaN. */
-  if (document.getElementById("p-firma").classList.contains("open")) {
+  if (document.getElementById("p-firma").classList.contains("open") && !typingIn(document.getElementById("p-firma"))) {
     const bal = me.balance || {};
     const geld = v => (v == null || isNaN(v)) ? "—" : fmt(v);
     const nRank = my?.rank ?? "—", nPlayers = Object.keys(state.players).length;
@@ -8360,12 +8423,29 @@ function render({ state, me, myId, chat, room }) {
         ${bal.debtVal ? zeile("Verbindlichkeiten", bal.debtVal, true) : ""}
         ${zeile("Firmenwert", bal.firmVal, false, "summe")}
         ${(bal.ownShare ?? 1) < 1 ? zeile(`davon dein Anteil (${Math.round((bal.ownShare ?? 1) * 100)} %)`, (bal.firmVal || 0) * (bal.ownShare ?? 1)) : ""}
-        ${bal.holdings ? zeile("Beteiligungen", bal.holdings) : ""}
+        ${bal.holdings ? zeile("Beteiligungen (Buchwert)", bal.holdings) : ""}
         ${zeile("Nettovermögen", bal.total, false, "gesamt")}
       </table>
       <div class="fZinsen">
         <div><span>Zinserträge</span><b class="plus">${geld(me.fin?.zinsErtrag || 0)}</b></div>
         <div><span>Zinsausgaben</span><b class="${me.fin?.zinsAufwand ? "minus" : ""}">${me.fin?.zinsAufwand ? "− " : ""}${geld(me.fin?.zinsAufwand || 0)}</b></div>
+      </div>
+      <div class="sec">Deine Aktie</div>
+      <div class="fAktie">
+        <div><span>Kurs</span><b>${fk(me.kurs ?? 0)}</b></div>
+        <div><span>Wert F je Aktie</span><b>${fk(me.fundament ?? 0)}</b></div>
+        <div><span>Eigene Aktien</span><b>${me.ownAktien ?? 0}<small>/${me.aktien ?? 100}</small></b></div>
+      </div>
+      <div class="meta" style="padding:2px 0 8px">${lueckeHtml(me.luecke)} — der Kurs folgt dem Wert F mit ein paar Minuten Verzögerung. F = Buchwert + Ertrag der letzten 10 min.</div>
+      <div class="fAusschuettung">
+        <div class="meta">Ausschüttung je ${Math.round((store.get().meta?.dividendInterval ?? 600) / 60)} min:
+          <b>${me.ausschuettung == null ? `automatisch ${Math.round((store.get().meta?.dividendRate ?? 0) * 100)} % des Umsatzes` : me.ausschuettung ? `fest ${fmt(me.ausschuettung)}` : "ausgesetzt"}</b>.
+          Gezahlt wird an alle Aktionäre nach Anteil — was auf deine eigenen Aktien entfiele, bleibt in der Firma. Jede Ausschüttung senkt den Wert F um genau den Betrag.</div>
+        <div class="fAusZeile">
+          <button type="button" class="mini${me.ausschuettung == null ? " on" : ""}" data-aus-auto>Automatisch</button>
+          <input type="number" id="ausBetrag" min="0" step="100" placeholder="Betrag $" value="${me.ausschuettung ?? ""}">
+          <button type="button" class="buyb" data-aus-setzen>Festlegen</button>
+        </div>
       </div>
       <details class="fMehr" data-lex="f-verkauf" ${offen("f-verkauf")}><summary>Verkäufe je Ware <span>${sales.length}</span></summary>
       ${sales.length ? `<table><tr><th>Ware</th><th>an Stadt</th><th>an Spieler</th><th>Einkäufe</th></tr>` +
@@ -8875,35 +8955,44 @@ const TUT_BUCH = [
       after a good two minutes. Advertising therefore only pays if you sell a lot through
       your own shops — not for pure exchange traders.</p>` } },
 
-  { t: "Stadtbank &amp; Anteile", lead: "Firmen kaufen und übernehmen",
+  { t: "Stadtbank &amp; Aktien", lead: "Kurs, Wert, Dividende, Übernahme",
     html: `
-      <p>Jede Firma ist in <b>vier Anteile zu je 25 %</b> geteilt. Zu Beginn hältst du
-      alle vier an dir selbst. An der Stadtbank kannst du Anteile fremder Firmen kaufen
-      — oder eigene verkaufen, um an frisches Kapital zu kommen.</p>
-      <div class="kasten"><div class="t">Kaufanfrage</div>
-      Du bietest einer Firma einen Preis für 25 % oder mehr. Die andere Seite entscheidet,
-      ob sie annimmt. Der Erlös geht an die verkaufende Firma — sie tauscht Eigentum
-      gegen Kapital.</div>
-      <p><b>Dividenden:</b> Wer Anteile an einer Firma hält, bekommt regelmäßig einen
-      Teil ihres Umsatzes ausgezahlt — anteilig zum gehaltenen Prozentsatz. Eine
-      Beteiligung an einer starken Firma verdient also mit, ohne dass du etwas tust.</p>
-      <p><b>Übernahme:</b> Hältst du <b>alle vier Anteile</b>, kannst du die Firma
-      fusionieren. Ihr Bargeld, Lager und alle Gebäude gehen auf dich über. Das ist der
-      schnellste Weg an die Spitze — und der teuerste.</p>`,
-    en: { t: "City bank &amp; shares", lead: "Buying and taking over companies", html: `
-      <p>Every company is split into <b>four shares of 25 % each</b>. At the start you hold
-      all four in yourself. At the city bank you can buy shares in other companies — or
-      sell your own to raise fresh capital.</p>
-      <div class="kasten"><div class="t">Purchase request</div>
-      You offer a company a price for 25 % or more. The other side decides whether to
-      accept. The proceeds go to the selling company — it trades ownership for
-      capital.</div>
-      <p><b>Dividends:</b> whoever holds shares in a company is paid part of its revenue at
-      regular intervals, in proportion to the percentage held. A stake in a strong company
-      therefore earns alongside it without you doing anything.</p>
-      <p><b>Takeover:</b> hold <b>all four shares</b> and you can merge the company. Its
-      cash, stock and every building pass to you. That is the fastest way to the top — and
-      the most expensive.</p>` } },
+      <p>Jede Firma hat <b>100 Aktien</b>. Zu Beginn hältst du alle selbst. An der
+      Stadtbank kaufst du Aktien fremder Firmen — oder verkaufst eigene, um an frisches
+      Kapital zu kommen.</p>
+      <div class="kasten"><div class="t">Wert F und Kurs</div>
+      <b>F</b> ist, was eine Firma wirklich wert ist: Kasse, Lager, Anlagen (auch die noch
+      im Bau) und der Ertrag der letzten 10 Minuten. Der <b>Kurs</b> folgt F mit einigen
+      Minuten Verzögerung, schwankt etwas und kann bei Flauten oder Panik fallen. Liegt der
+      Kurs unter F, ist die Aktie günstig — meist holt er auf. Jeder Kauf hebt den Kurs ein
+      Stück, jeder Verkauf senkt ihn.</div>
+      <p><b>Kaufanfrage:</b> Du bietest einer Firma einen Preis für eine Anzahl Aktien. Sie
+      entscheidet, ob sie annimmt. Der Erlös geht an die Firma.</p>
+      <p><b>Dividenden:</b> Jede Firma legt im Firmen-Panel fest, wie viel sie je Periode
+      ausschüttet — automatisch einen Teil des Umsatzes oder einen festen Betrag. Verteilt
+      wird nach Aktien. Eine Ausschüttung senkt F um genau ihren Betrag.</p>
+      <p><b>Nettovermögen:</b> Beteiligungen zählen zum Buchwert der Firma, nicht zum Kurs —
+      Kursschwankungen machen niemanden reicher oder ärmer, solange er nicht verkauft.</p>
+      <p><b>Übernahme:</b> Hältst du <b>alle 100 Aktien</b>, kannst du die Firma
+      fusionieren. Ihr Bargeld, Lager und alle Gebäude gehen auf dich über.</p>`,
+    en: { t: "City bank &amp; stock", lead: "Price, value, dividends, takeover", html: `
+      <p>Every company has <b>100 shares</b>. At the start you hold them all. At the city
+      bank you buy shares in other companies — or sell your own to raise fresh capital.</p>
+      <div class="kasten"><div class="t">Value F and price</div>
+      <b>F</b> is what a company is really worth: cash, stock, assets (including those
+      still under construction) and the earnings of the last 10 minutes. The <b>price</b>
+      follows F with a few minutes' delay, wobbles a bit and can drop in slumps or a panic.
+      If the price is below F the share is cheap — it usually catches up. Every purchase
+      lifts the price a little, every sale lowers it.</div>
+      <p><b>Purchase request:</b> you offer a company a price for a number of shares. It
+      decides whether to accept. The proceeds go to the company.</p>
+      <p><b>Dividends:</b> each company sets in its company panel how much it pays out per
+      period — automatically a share of revenue or a fixed amount. It is split by shares.
+      A payout lowers F by exactly its amount.</p>
+      <p><b>Net worth:</b> holdings count at the company's book value, not its price —
+      price swings make nobody richer or poorer unless they sell.</p>
+      <p><b>Takeover:</b> hold <b>all 100 shares</b> and you can merge the company. Its
+      cash, stock and every building pass to you.</p>` } },
 
   { t: "Anleihen", lead: "Geld leihen und verleihen",
     html: `
@@ -9349,3 +9438,27 @@ const kap = k => (SPRACHE === "en" && k.en) ? { ...k, ...k.en } : k;
     else if (e.key === "ArrowLeft" && i > 0) blaettern(i - 1);
   });
 })();
+
+/* Ausschüttung im Firmen-Panel festlegen */
+document.getElementById("firmabody").addEventListener("click", e => {
+  if (e.target.closest("[data-aus-auto]")) { act("setAusschuettung", { betrag: "auto" }); return; }
+  if (e.target.closest("[data-aus-setzen]")) {
+    const v = document.getElementById("ausBetrag").value;
+    if (v === "") return toast("Betrag eingeben — 0 setzt die Ausschüttung aus", true);
+    act("setAusschuettung", { betrag: +v });
+  }
+});
+
+/* Branchen-ETFs kaufen und verkaufen */
+document.getElementById("p-bank").addEventListener("click", e => {
+  const k = e.target.closest("[data-etf-kauf]");
+  if (k) {
+    const feld = document.querySelector(`[data-etf-betrag="${k.dataset.etfKauf}"]`);
+    const betrag = +feld?.value || 0;
+    if (betrag < 100) return toast("Betrag eingeben — mindestens 100 $", true);
+    act("etfKaufen", { branche: k.dataset.etfKauf, betrag }); if (feld) feld.value = "";
+    return;
+  }
+  const v = e.target.closest("[data-etf-verkauf]");
+  if (v) act("etfVerkaufen", { branche: v.dataset.etfVerkauf, anteil: +v.dataset.anteil });
+});
