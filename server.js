@@ -87,16 +87,14 @@ app.get("/api/invite", (_req, res) => {
 /* ---------- Bugreports ----------
  * Spieler melden Fehler mit Beschreibung und optionalem Screenshot; die
  * Meldungen landen als JSON-Zeilen plus Bilddateien im Ordner bugreports/.
- * Die Admin-Ansicht unter /bugs ist mit einem Schlüssel geschützt, der beim
- * ersten Start erzeugt und in bugreports/.key abgelegt wird (überschreibbar
- * per Umgebungsvariable BUGS_KEY). Der fertige Link steht im Server-Log. */
+ * Die Admin-Ansicht unter /bugs ist mit einem festen Schlüssel geschützt
+ * (FESTER_SCHLUESSEL, überschreibbar per BUGS_KEY / ADMIN_KEY). */
 const BUGDIR = path.join(__dirname, "bugreports");
 fs.mkdirSync(BUGDIR, { recursive: true });
-let BUGKEY = process.env.BUGS_KEY || "";
-if (!BUGKEY) {
-  try { BUGKEY = fs.readFileSync(path.join(BUGDIR, ".key"), "utf8").trim(); } catch {}
-  if (!BUGKEY) { BUGKEY = crypto.randomBytes(6).toString("hex"); fs.writeFileSync(path.join(BUGDIR, ".key"), BUGKEY); }
-}
+/* Fester Schlüssel für Bugreports und Adminpanel — bleibt über Neustarts und
+ * Deploys gleich. Per Umgebungsvariable (ADMIN_KEY / BUGS_KEY) überschreibbar. */
+const FESTER_SCHLUESSEL = "79ce89d";
+const BUGKEY = process.env.BUGS_KEY || process.env.ADMIN_KEY || FESTER_SCHLUESSEL;
 app.post("/api/bugreport", express.json({ limit: "8mb" }), (req, res) => {
   const text = String(req.body?.text || "").slice(0, 4000).trim();
   if (!text) return res.status(400).json({ error: "Beschreibung fehlt" });
