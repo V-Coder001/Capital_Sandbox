@@ -181,3 +181,108 @@ html[data-theme="papier"] #lobbyWait h2{text-transform:uppercase;font-stretch:11
 #win{background:rgba(7,11,16,.86);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
 html[data-theme="papier"] #win{background:rgba(237,230,214,.94)}
 html[data-theme="papier"] #winNew{background:#9c3b1f;color:#fffdf7;border:1.5px solid #1f1a14;box-shadow:4px 4px 0 #1f1a14;border-radius:0}
+
+/* ================================================================
+ * Kachelmenü (Klick auf Gebäude / Bauplatz) — übersichtlich:
+ * Kopf, Kennzahlen, ein Hauptknopf, kleine Nebenknöpfe, Rest eingeklappt.
+ * ================================================================ */
+#tilemenu{width:300px;padding:14px;border-radius:16px;background:var(--glass-strong);border:var(--rand);
+  box-shadow:var(--schatten);-webkit-backdrop-filter:var(--blur);backdrop-filter:var(--blur);
+  font-family:var(--font);max-height:calc(100vh - 200px);overflow-y:auto}
+#tilemenu:has(.tmBauGrid){width:340px}
+.tmKopf{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+.tmBild{width:44px;height:44px;object-fit:contain;flex:none;border-radius:10px;background:rgba(125,211,252,.06)}
+.tmTitel{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.tmTitel b{font-size:16px;font-weight:700;letter-spacing:-.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tmBesitzer{display:flex;align-items:center;gap:6px;font:12px var(--mono);color:var(--dim)}
+.tmBesitzer i{width:9px;height:9px;border-radius:3px;flex:none}
+.tmZu{flex:none;width:32px;height:32px;border-radius:9px;border:1px solid var(--line);background:none;color:var(--dim);
+  font-size:18px;line-height:1;cursor:pointer;display:grid;place-items:center}
+.tmZu:hover{color:var(--text);border-color:var(--accent)}
+.tmChips{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+.tmChips:empty{display:none}
+.tmStufe{display:inline-flex;align-items:center;gap:3px}
+.tmStufe i{width:8px;height:8px;border-radius:50%;background:rgba(125,211,252,.18)}
+.tmStufe i.on{background:var(--accent)}
+.tmStufe em{font:normal 11px var(--mono);color:var(--dim);margin-left:5px}
+.tmStatus{font:600 11px var(--mono);padding:3px 8px;border-radius:6px;letter-spacing:.04em}
+.tmStatus.an{color:var(--up);background:rgba(52,211,153,.12)}
+.tmStatus.aus{color:var(--dim);background:rgba(148,163,184,.14)}
+.tmStatus.warn{color:#fbbf24;background:rgba(251,191,36,.14)}
+.tmZahlen{display:grid;grid-template-columns:repeat(auto-fit,minmax(118px,1fr));gap:8px;margin-bottom:12px}
+.tmZahlen > div{display:flex;flex-direction:column;gap:2px;padding:9px 11px;border-radius:10px;
+  background:rgba(125,211,252,.05);border:1px solid rgba(125,211,252,.1)}
+.tmZahlen span{font:11px var(--mono);color:var(--dim);letter-spacing:.06em;text-transform:uppercase}
+.tmZahlen b{font:600 16px var(--mono);color:var(--text)}
+.tmZahlen small{font-size:12px;color:var(--dim)}
+.tmAbschnitt{font:600 11px var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--accent);margin:4px 0 8px}
+.tmSlot{padding:10px;border-radius:10px;background:rgba(255,255,255,.025);border:1px solid var(--line);margin-bottom:8px}
+.tmSlotZeile{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr) minmax(0,1fr) 36px;gap:6px;align-items:end}
+.tmSlotZeile label{display:flex;flex-direction:column;gap:3px;min-width:0}
+.tmSlotZeile label span{font:10.5px var(--mono);color:var(--dim)}
+.tmSlotZeile select,.tmSlotZeile input{width:100%;min-width:0;height:36px;box-sizing:border-box;padding:0 8px}
+.tmOk{height:36px;width:36px;padding:0;font-size:15px}
+.tmSlotInfo{font-size:12px;color:var(--dim);margin-top:7px;line-height:1.45}
+.tmHaupt{width:100%;display:flex;flex-direction:column;align-items:flex-start;gap:3px;padding:11px 14px;border:0;border-radius:12px;
+  background:linear-gradient(180deg,#8fdcfd,#5cc8f7);color:var(--auf-akzent);cursor:pointer;font-family:var(--font);text-align:left}
+.tmHaupt span{font-weight:700;font-size:14.5px}
+.tmHaupt em{font-style:normal;font-weight:500;opacity:.8;margin-left:4px}
+.tmHaupt small{font:12px var(--mono);opacity:.85}
+.tmHaupt:disabled{background:rgba(125,211,252,.1);color:var(--dim);cursor:default}
+.tmHaupt:not(:disabled):hover{filter:brightness(1.06)}
+.tmHinweis{font-size:12px;color:var(--dim);margin:7px 2px 0;line-height:1.45}
+.tmNeben{display:flex;gap:8px;margin-top:10px}
+.tmKlein{flex:1;height:38px;border-radius:10px;border:1px solid var(--line);background:none;color:var(--text);
+  font:500 13px var(--font);cursor:pointer}
+.tmKlein:hover{border-color:var(--accent)}
+.tmKlein.gefahr{color:#fda4af}
+.tmKlein.gefahr:hover{border-color:rgba(251,113,133,.6)}
+.tmKlein.gefahr.sicher{background:rgba(251,113,133,.16);border-color:#fb7185;color:#fecdd3;font-weight:600}
+.tmMehr{margin-top:12px;border-top:1px solid var(--line);padding-top:10px}
+.tmMehr summary{cursor:pointer;font:600 12px var(--mono);color:var(--dim);letter-spacing:.04em;list-style:none}
+.tmMehr summary::-webkit-details-marker{display:none}
+.tmMehr summary::before{content:"+ "}
+.tmMehr[open] summary::before{content:"− "}
+.tmMehr p{font-size:12.5px;color:var(--dim);line-height:1.5;margin-top:7px}
+/* Baumenü */
+.tmBauGrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+#tilemenu .opt.tmBau{display:flex;flex-direction:column;align-items:flex-start;gap:3px;margin:0;padding:10px;text-align:left;
+  border-radius:12px;background:rgba(255,255,255,.025);border:1px solid var(--line);font-family:var(--font)}
+#tilemenu .opt.tmBau:not(:disabled):hover{border-color:var(--accent);background:rgba(125,211,252,.07)}
+#tilemenu .opt.tmBau:disabled{opacity:1}
+#tilemenu .opt.tmBau:disabled img,#tilemenu .opt.tmBau:disabled b,#tilemenu .opt.tmBau:disabled .tmLiefert,#tilemenu .opt.tmBau:disabled .tmPreis{opacity:.45}
+.tmBau img,.tmBauLeer{width:46px;height:46px;object-fit:contain;align-self:center;margin-bottom:2px}
+.tmBau b{font-size:13.5px;font-weight:600;color:var(--text)}
+.tmLiefert{font-size:12px;color:var(--dim)}
+.tmPreis{font:600 13px var(--mono);color:var(--accent);display:flex;flex-direction:column}
+.tmPreis small{font-weight:400;font-size:11px;color:var(--dim)}
+.tmGrund{font:11px var(--mono);color:#fbbf24;line-height:1.35}
+.tmFuss{font-size:12px;color:var(--dim);margin-top:10px}
+
+/* Kartenpapier */
+html[data-theme="papier"] #tilemenu{border-radius:0}
+html[data-theme="papier"] .tmBild,html[data-theme="papier"] .tmZu,html[data-theme="papier"] .tmZahlen > div,
+html[data-theme="papier"] .tmSlot,html[data-theme="papier"] .tmKlein,html[data-theme="papier"] #tilemenu .opt.tmBau,
+html[data-theme="papier"] .tmStatus{border-radius:0}
+html[data-theme="papier"] .tmBild{background:#fffdf7;border:1px solid #1f1a14}
+html[data-theme="papier"] .tmTitel b{text-transform:uppercase;font-weight:900;font-stretch:110%}
+html[data-theme="papier"] .tmZu{border:1.5px solid #1f1a14;color:#1f1a14}
+html[data-theme="papier"] .tmStufe i{background:#fffdf7;border:1px solid #1f1a14}
+html[data-theme="papier"] .tmStufe i.on{background:#9c3b1f}
+html[data-theme="papier"] .tmStatus.an{color:#2f7d4f;background:rgba(47,125,79,.12)}
+html[data-theme="papier"] .tmStatus.warn{color:#8a5a00;background:rgba(138,90,0,.12)}
+html[data-theme="papier"] .tmZahlen > div{background:#fffdf7;border:1.5px solid #1f1a14}
+html[data-theme="papier"] .tmSlot{background:#fffdf7;border:1px solid #1f1a14}
+html[data-theme="papier"] .tmHaupt{background:#9c3b1f;color:#fffdf7;border:1.5px solid #1f1a14;border-radius:0;box-shadow:4px 4px 0 #1f1a14}
+html[data-theme="papier"] .tmHaupt:disabled{background:#e4dccb;color:#4a4134;box-shadow:none}
+html[data-theme="papier"] .tmKlein{border:1.5px solid #1f1a14;color:#1f1a14}
+html[data-theme="papier"] .tmKlein.gefahr{color:#a3321c}
+html[data-theme="papier"] .tmKlein.gefahr.sicher{background:#a3321c;color:#fffdf7}
+html[data-theme="papier"] #tilemenu .opt.tmBau{background:#fffdf7;border:1.5px solid #1f1a14}
+html[data-theme="papier"] #tilemenu .opt.tmBau:not(:disabled):hover{background:#f1e9d8;box-shadow:3px 3px 0 #1f1a14}
+html[data-theme="papier"] .tmGrund{color:#8a5a00}
+.tmZahlen b.lang{font-size:13px;line-height:1.35;font-weight:500}
+/* Sprites haben viel transparenten Rand — im Menü etwas größer zeigen */
+.tmBild{overflow:hidden}
+.tmBild,.tmBau img{image-rendering:auto}
+.tmBau img{width:58px;height:58px;transform:scale(1.25);transform-origin:center 70%}
