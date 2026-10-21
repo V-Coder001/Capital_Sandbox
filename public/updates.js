@@ -14,7 +14,11 @@ window.UPDATES = [
         en: "Losers pay into the winners' pot, no money is created. 5 % bank fee." },
       { art: "neu", de: "Keine Wetten auf die eigene Firma oder Firmen, an denen du 50 % oder mehr hältst.",
         en: "No bets on your own company or companies you hold 50 % or more of." },
-      { art: "neu", de: "Diese Neuigkeiten-Spalte auf der Startseite.", en: "This news column on the start page." }
+      { art: "neu", de: "Diese Neuigkeiten-Spalte auf der Startseite.", en: "This news column on the start page." },
+      { art: "besser", de: "Startbildschirm neu gestaltet: zwei klare Schritte, der Start-Knopf sofort sichtbar, alle Spielmodi im Überblick.",
+        en: "Start screen redesigned: two clear steps, the start button visible right away, all game modes at a glance." },
+      { art: "besser", de: "Neuer Endbildschirm mit Siegerpodest, deinem Platz, Endstand und Auszeichnungen — und „Karte ansehen“.",
+        en: "New end screen with winners' podium, your placement, final standings and awards — plus “View map”." }
     ]
   },
   {

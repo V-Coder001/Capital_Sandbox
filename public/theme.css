@@ -733,3 +733,106 @@ html[data-theme="papier"] .modusChip.neu{border:1.5px solid #9c3b1f;background:r
 html[data-theme="papier"] .modusChip b i{background:#9c3b1f;color:#fffdf7}
 html[data-theme="papier"] .startKarte .skyline::after{background:#1f1a14;opacity:.5}
 html[data-theme="papier"] .startKarte .colors button.on{border-color:#1f1a14!important;box-shadow:none}
+
+/* ================================================================
+ * Endbildschirm (Neugestaltung): Podest, eigener Platz, Endstand mit
+ * Balken, Auszeichnungen, "Karte ansehen".
+ * ================================================================ */
+#win{padding:32px 16px 48px}
+#win > .wincard{display:block;width:min(820px,100%);border-radius:24px;border:var(--rand);overflow:hidden;
+  background:linear-gradient(180deg,rgba(14,22,34,.95),rgba(9,14,22,.97));box-shadow:0 40px 100px -30px #000;text-align:center}
+#win .winhead{padding:30px 32px 6px;background:radial-gradient(ellipse 70% 100% at 50% 0%,rgba(251,191,36,.12),transparent 70%);border:0}
+.winKicker{font:600 11px var(--mono);letter-spacing:.16em;text-transform:uppercase;color:var(--dim)}
+#win h1{font:800 clamp(28px,4.4vw,42px)/1.05 var(--font)!important;letter-spacing:-.035em;color:var(--text)!important;margin:10px 0 6px}
+#win h1 #winname{color:#fbbf24}
+#winsub{font-size:13.5px!important;color:var(--dim)!important}
+/* Podest */
+#winPodest{display:flex;justify-content:center;align-items:flex-end;gap:12px;padding:22px 32px 0}
+.podPlatz{display:flex;flex-direction:column;align-items:center;gap:6px;width:min(190px,30%);min-width:0;position:relative}
+.podPlatz b{font:700 14px var(--font);color:var(--text);max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.podPlatz .nw{font:600 12.5px var(--mono);color:var(--dim)}
+.podPlatz .krone{color:#fbbf24;filter:drop-shadow(0 4px 12px rgba(251,191,36,.5));margin-bottom:-2px}
+.podPlatz .sockel{width:100%;margin-top:6px;border-radius:12px 12px 0 0;display:grid;place-items:center;
+  background:linear-gradient(180deg,rgba(125,211,252,.16),rgba(125,211,252,.04));border:var(--rand);border-bottom:0}
+.podPlatz .sockel span{font:800 26px var(--font);color:var(--dim)}
+.podPlatz.p1 .sockel{height:110px;background:linear-gradient(180deg,rgba(251,191,36,.28),rgba(251,191,36,.05));border-color:rgba(251,191,36,.5)}
+.podPlatz.p1 .sockel span{color:#fbbf24;font-size:34px}
+.podPlatz.p2 .sockel{height:78px} .podPlatz.p2 .sockel span{color:#cdd6e2}
+.podPlatz.p3 .sockel{height:56px} .podPlatz.p3 .sockel span{color:#c98a4b}
+.podPlatz.ich b::after{content:" (du)";color:var(--accent);font-weight:600}
+.winMarke{width:var(--g);height:var(--g);border-radius:calc(var(--g) * .26);display:grid;place-items:center;flex:none;
+  background:var(--f);color:#06121c;font:800 calc(var(--g) * .44) var(--font);box-shadow:0 10px 26px -10px var(--f)}
+.winMarke.logo{background:#fff;padding:4px;box-sizing:border-box}
+.winMarke.logo img{max-width:100%;max-height:100%;object-fit:contain}
+.podPlatz.p1 .winMarke{box-shadow:0 0 0 3px rgba(251,191,36,.6),0 14px 34px -10px rgba(251,191,36,.6)}
+/* Eigenes Ergebnis */
+#winMein:empty{display:none}
+#winMein{padding:0 32px}
+.winMeinBox{display:flex;align-items:center;gap:14px;text-align:left;padding:14px 18px;border:var(--rand);border-top:0;border-radius:0 0 14px 14px;
+  background:rgba(125,211,252,.06)}
+.winMeinBox.sieg{background:rgba(251,191,36,.08);border-color:rgba(251,191,36,.45)}
+.winMeinPlatz{font:800 28px var(--font);color:var(--accent);min-width:42px}
+.winMeinBox.sieg .winMeinPlatz{color:#fbbf24}
+.winMeinBox b{display:block;font-size:15px;color:var(--text)}
+.winMeinBox .meta{font-size:12.5px}
+/* Abschnitte */
+.winAbschnitt{padding:22px 32px 0;text-align:left}
+.winAbschnitt[hidden]{display:none}
+.winTitel{font:600 11px var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--dim);margin-bottom:8px}
+#win #wintable{padding:0}
+.winZeile{display:grid;grid-template-columns:24px auto 1fr auto;gap:12px;align-items:center;padding:10px 12px;border-radius:12px}
+.winZeile+.winZeile{border-top:1px solid var(--line)}
+.winZeile.sieger{background:rgba(251,191,36,.07)}
+.winZeile.ich{box-shadow:inset 0 0 0 1px var(--accent)}
+.winZeile .rang{font:700 14px var(--mono);color:var(--dim);text-align:center}
+.winZeile.sieger .rang{color:#fbbf24}
+.winName{min-width:0;display:flex;flex-direction:column;gap:5px}
+.winName b{font-size:14px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.winName b em{font:600 10px var(--mono);font-style:normal;text-transform:uppercase;color:var(--accent);margin-left:4px}
+.winName .meta{font-size:11.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.winBalken{height:5px;border-radius:3px;background:var(--line);overflow:hidden}
+.winBalken i{display:block;height:100%;border-radius:3px}
+.winNw{font:700 15px var(--mono);color:var(--text)}
+/* Auszeichnungen */
+#win #winawards{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px;padding:0}
+#win .award{background:rgba(4,8,14,.45);border:1px solid var(--line);border-left:3px solid var(--f);border-radius:12px;padding:12px 14px;text-align:left}
+#win .award .n{color:var(--f);font-size:14px}
+#win .award .v{color:var(--text)}
+/* Fuß */
+#win .winfoot{display:flex;flex-wrap:wrap;justify-content:center;gap:10px;padding:26px 32px 28px;margin-top:24px;border-top:1px solid var(--line)}
+#win .winfoot p{flex-basis:100%;margin:0}
+#winNew{margin:0!important;height:48px;padding:0 28px!important;border-radius:13px!important;background:linear-gradient(180deg,#8fdcfd,#5cc8f7)!important}
+#winKarte{height:48px;padding:0 22px;border-radius:13px;border:var(--rand);background:rgba(4,8,14,.45);color:var(--text);font:600 14px var(--font);cursor:pointer}
+#winKarte:hover{border-color:var(--accent)}
+#winWieder{position:fixed;z-index:61;top:84px;left:50%;transform:translateX(-50%);height:42px;padding:0 20px;border-radius:21px;
+  border:1px solid rgba(251,191,36,.6);background:rgba(14,22,34,.92);color:#fbbf24;font:700 13.5px var(--font);cursor:pointer;
+  box-shadow:0 12px 30px -10px rgba(0,0,0,.7)}
+#winWieder[hidden]{display:none}
+@media(max-width:620px){
+  #win .winhead,#winPodest,#winMein,.winAbschnitt,#win .winfoot{padding-left:16px;padding-right:16px}
+  .podPlatz .sockel span{font-size:20px}
+  .winZeile{grid-template-columns:20px auto 1fr;}
+  .winNw{grid-column:3;font-size:13px}}
+/* Kartenpapier */
+html[data-theme="papier"] #win .wincard{background:#f8f4ea;border:1.5px solid #1f1a14;border-radius:0;box-shadow:8px 8px 0 #1f1a14}
+html[data-theme="papier"] #win .winhead{background:none}
+html[data-theme="papier"] #win h1{text-transform:uppercase;font-stretch:112%;font-weight:900!important}
+html[data-theme="papier"] #win h1 #winname{color:#9c3b1f}
+html[data-theme="papier"] .podPlatz .krone{color:#9c3b1f;filter:none}
+html[data-theme="papier"] .podPlatz .sockel{border-radius:0;background:#efe8da;border:1.5px solid #1f1a14;border-bottom:0}
+html[data-theme="papier"] .podPlatz.p1 .sockel{background:#9c3b1f;border-color:#1f1a14}
+html[data-theme="papier"] .podPlatz.p1 .sockel span{color:#fffdf7}
+html[data-theme="papier"] .podPlatz.p2 .sockel span,html[data-theme="papier"] .podPlatz.p3 .sockel span{color:#1f1a14}
+html[data-theme="papier"] .winMarke{border-radius:0;border:1.5px solid #1f1a14;box-shadow:3px 3px 0 #1f1a14}
+html[data-theme="papier"] .podPlatz.p1 .winMarke{box-shadow:4px 4px 0 #9c3b1f}
+html[data-theme="papier"] .winMeinBox{border-radius:0;background:#fffdf7;border:1.5px solid #1f1a14}
+html[data-theme="papier"] .winMeinBox.sieg{background:rgba(156,59,31,.08)}
+html[data-theme="papier"] .winMeinPlatz,html[data-theme="papier"] .winMeinBox.sieg .winMeinPlatz{color:#9c3b1f}
+html[data-theme="papier"] .winZeile{border-radius:0}
+html[data-theme="papier"] .winZeile.sieger{background:rgba(156,59,31,.07)}
+html[data-theme="papier"] .winZeile.sieger .rang{color:#9c3b1f}
+html[data-theme="papier"] .winBalken,html[data-theme="papier"] .winBalken i{border-radius:0}
+html[data-theme="papier"] #win .award{background:#fffdf7;border:1px solid #1f1a14;border-left:4px solid var(--f);border-radius:0}
+html[data-theme="papier"] #winNew{background:#9c3b1f!important;color:#fffdf7!important;border:1.5px solid #1f1a14!important;border-radius:0!important;box-shadow:4px 4px 0 #1f1a14!important}
+html[data-theme="papier"] #winKarte{border-radius:0;background:#fffdf7;border:1.5px solid #1f1a14}
+html[data-theme="papier"] #winWieder{background:#f8f4ea;color:#9c3b1f;border:1.5px solid #1f1a14;border-radius:0;box-shadow:4px 4px 0 #1f1a14}

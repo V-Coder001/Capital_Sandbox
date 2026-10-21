@@ -2021,16 +2021,21 @@ td:first-child{font-family:var(--font)}
 <div id="toasts"></div>
 <div id="win"><div class="wincard">
   <div class="winhead">
+    <div class="winKicker" id="winKicker">Runde beendet</div>
     <h1><span id="winname"></span> gewinnt!</h1>
     <p id="winsub">Das Rundenziel wurde erreicht.</p>
   </div>
-  <div id="wintable"></div>
-  <div id="winawards"></div>
+  <div id="winPodest"></div>
+  <div id="winMein"></div>
+  <div class="winAbschnitt"><div class="winTitel">Endstand</div><div id="wintable"></div></div>
+  <div class="winAbschnitt" id="winAwardsBox"><div class="winTitel">Auszeichnungen</div><div id="winawards"></div></div>
   <div class="winfoot">
+    <button type="button" id="winKarte">Karte ansehen</button>
     <button id="winNew">Neue Runde starten</button>
     <p>Setzt Karte, Firmen und Kurse zurück — auch für die Mitspieler.</p>
   </div>
 </div></div>
+<button type="button" id="winWieder" hidden>🏆 Auswertung</button>
 
 <script src="vendor/socket.io.min.js"></script>
 <script src="vendor/peerjs.min.js"></script>
@@ -3642,26 +3647,48 @@ function zeigeAuswertung(state) {
         : `${fmt(state.winGoal)} Nettovermögen wurde erreicht.`;
   if (!r) return;
   auswertungGezeigt = true;
-
-  const kopf = ["Firma", "Nettovermögen", "Umsatz", "Produziert", "Gebäude", "Großaufträge", "Beteiligungen"];
-  document.getElementById("wintable").innerHTML = `<table><thead><tr>${
-    kopf.map(h => `<th>${h}</th>`).join("")}</tr></thead><tbody>${
-    r.zeilen.map((z, i) => `<tr class="${z.sieger ? "sieger" : ""}">
-      <td><span class="pl" style="background:${z.color}">${z.name[0].toUpperCase()}</span>${z.name}${z.sieger ? '<span style="color:var(--accent);font-weight:700"> · Sieger</span>' : ""}</td>
-      <td>${fmt(z.netWorth)}</td>
-      <td>${fmt(z.umsatz)}</td>
-      <td>${z.produziertStk.toLocaleString("de-DE")}</td>
-      <td>${z.gebaeude}${z.stufen ? ` <span style="color:var(--accent)">★${z.stufen}</span>` : ""}</td>
-      <td>${z.grossauftraege || "—"}</td>
-      <td>${z.beteiligungswert ? fmt(z.beteiligungswert) : "—"}</td>
-    </tr>`).join("")}</tbody></table>`;
-
+  const myId = store.get().myId;
+  document.getElementById("winKicker").textContent = state.tutorialEnde ? "Tutorial geschafft" : `Runde beendet · ${r.dauerMin} min`;
+  const marke = (z, gr) => { const u = logoUrl(z.name);
+    return u ? `<span class="winMarke logo" style="--g:${gr}px"><img src="${u}" alt=""></span>`
+             : `<span class="winMarke" style="--g:${gr}px;--f:${z.color}">${z.name[0].toUpperCase()}</span>`; };
+  /* Podest: Platz 2 – 1 – 3 */
+  const top = r.zeilen.slice(0, 3);
+  const reihenfolge = [top[1], top[0], top[2]].filter(Boolean);
+  document.getElementById("winPodest").innerHTML = reihenfolge.map(z => {
+    const platz = r.zeilen.indexOf(z) + 1;
+    return `<div class="podPlatz p${platz}${z.id === myId ? " ich" : ""}">
+      ${platz === 1 ? `<svg class="krone" width="30" height="22" viewBox="0 0 30 22" aria-hidden="true"><path d="M2 20h26L26 6l-6 6-5-10-5 10-6-6z" fill="currentColor"/></svg>` : ""}
+      ${marke(z, platz === 1 ? 64 : 48)}
+      <b>${z.name}</b><span class="nw">${fmt(z.netWorth)}</span>
+      <div class="sockel"><span>${platz}</span></div></div>`; }).join("");
+  /* Eigenes Ergebnis */
+  const ichIdx = r.zeilen.findIndex(z => z.id === myId), ich = r.zeilen[ichIdx];
+  document.getElementById("winMein").innerHTML = ich ? `<div class="winMeinBox${ich.sieger ? " sieg" : ""}">
+      <span class="winMeinPlatz">${ichIdx + 1}.</span>
+      <div><b>${ich.sieger ? "Glückwunsch — du hast gewonnen!" : `Dein Platz: ${ichIdx + 1} von ${r.zeilen.length}`}</b>
+        <span class="meta">${fmt(ich.netWorth)} Nettovermögen · ${fmt(ich.umsatz)} Umsatz · ${ich.gebaeude} Gebäude</span></div></div>` : "";
+  /* Endstand: Balken relativ zum Sieger */
+  const maxNw = Math.max(1, ...r.zeilen.map(z => z.netWorth));
+  document.getElementById("wintable").innerHTML = r.zeilen.map((z, i) => `
+    <div class="winZeile${z.sieger ? " sieger" : ""}${z.id === myId ? " ich" : ""}">
+      <span class="rang">${i + 1}</span>${marke(z, 30)}
+      <div class="winName"><b>${z.name}${z.id === myId ? ` <em>du</em>` : ""}</b>
+        <div class="winBalken"><i style="width:${Math.max(2, z.netWorth / maxNw * 100).toFixed(1)}%;background:${z.color}"></i></div>
+        <span class="meta">Umsatz ${fmt(z.umsatz)} · ${z.produziertStk.toLocaleString("de-DE")} Stück · ${z.gebaeude} Gebäude${z.stufen ? ` ★${z.stufen}` : ""}${z.grossauftraege ? ` · ${z.grossauftraege} Großaufträge` : ""}${z.beteiligungswert ? ` · Beteiligungen ${fmt(z.beteiligungswert)}` : ""}</span></div>
+      <span class="winNw">${fmt(z.netWorth)}</span></div>`).join("");
+  document.getElementById("winAwardsBox").hidden = !r.auszeichnungen.length;
   document.getElementById("winawards").innerHTML = r.auszeichnungen.map(a => `
-    <div class="award"><div class="t">${a.titel}</div>
-      <div class="n" style="color:${a.color}">${a.name}</div>
+    <div class="award" style="--f:${a.color}"><div class="t">${a.titel}</div>
+      <div class="n">${a.name}</div>
       <div class="v">${a.wert}</div>
       ${a.zusatz ? `<div class="z">${a.zusatz}</div>` : ""}</div>`).join("");
 }
+let WIN_ZU = false;
+document.getElementById("winKarte").addEventListener("click", () => {
+  WIN_ZU = true; document.getElementById("win").style.display = "none"; document.getElementById("winWieder").hidden = false; });
+document.getElementById("winWieder").addEventListener("click", () => {
+  WIN_ZU = false; document.getElementById("winWieder").hidden = true; document.getElementById("win").style.display = "grid"; });
 
 function backToLobby() {
   cachedFullMap = null;
@@ -3671,8 +3698,9 @@ function backToLobby() {
   myToken = null;
   try { localStorage.removeItem(TOKEN_KEY); } catch {}
   store.set({ state: null, me: null, meta: null, myId: null, chat: {} });
-  auswertungGezeigt = false;
+  auswertungGezeigt = false; WIN_ZU = false;
   document.getElementById("win").style.display = "none";
+  document.getElementById("winWieder").hidden = true;
   document.getElementById("joinErr").textContent = "";
   openPanel("karte", true);   // Rückkehr in die Lobby ist kein Panel-Klick
   tutDone();
@@ -9945,7 +9973,8 @@ function render({ state, me, myId, chat, room }) {
     .map(p => { const u = logoUrl(p.name), t = `${p.name} · ${fmt(p.netWorth)} · ${p.rating}`;
       return u ? `<img class="plLogo" src="${u}" alt="${p.name}" title="${t}">`
                : `<span class="pl" style="background:${p.color}" title="${t}">${p.name[0].toUpperCase()}</span>`; }).join("");
-  if (state.winner) { document.getElementById("win").style.display = "grid";
+  if (state.winner) { document.getElementById("win").style.display = WIN_ZU ? "none" : "grid";
+    document.getElementById("winWieder").hidden = !WIN_ZU;
     document.getElementById("winname").textContent = state.winner;
     zeigeAuswertung(state);
   }
