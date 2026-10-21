@@ -14,7 +14,10 @@
      Beschriftungen etwas von einem Werksschild statt von einem Formular, und
      die Ziffern von IBM Plex Mono passen zu einer Kursleiste, ohne wie ein
      Editor auszusehen. -->
-<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..125,400..800&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..900&family=IBM+Plex+Mono:wght@400;500;600&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+<!-- Thema (Vermessung / Kartenpapier) so früh wie möglich setzen, damit beim
+     Laden nichts im falschen Thema aufblitzt. Gemerkt pro Browser. -->
+<script>try{document.documentElement.dataset.theme=localStorage.getItem("cs_thema")==="papier"?"papier":"vermessung"}catch(e){document.documentElement.dataset.theme="vermessung"}</script>
 <style>
 :root{
   --bg:#0a0e15; --panel:#121824; --panel2:#1a2231; --line:#273144;
@@ -1215,6 +1218,10 @@ td:first-child{font-family:var(--font)}
     </button>
     <!-- Sprachumschalter. Die Oberfläche ist deutsch gewachsen; ohne sichtbaren
          Schalter probiert ein internationaler Besucher das Spiel gar nicht erst. -->
+    <div class="themenwahl" role="group" aria-label="Kartenstil">
+      <button type="button" data-thema="vermessung">Vermessung</button>
+      <button type="button" data-thema="papier">Kartenpapier</button>
+    </div>
     <div class="sprachwahl" role="group" aria-label="Sprache / Language">
       <button type="button" data-lang="de" class="on">Deutsch</button>
       <button type="button" data-lang="en">English</button>
@@ -1527,6 +1534,9 @@ td:first-child{font-family:var(--font)}
       </div>
       <button id="findBtn" title="Zu meinen Gebäuden springen (Taste F)" aria-label="Zu meinen Gebäuden springen" style="background:none;border:1px solid var(--line);border-radius:7px;color:var(--dim);width:24px;height:24px;cursor:pointer;display:grid;place-items:center;padding:0">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="7"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>
+      </button>
+      <button id="themeBtn" type="button" data-thema-toggle title="Kartenstil wechseln: Vermessung / Kartenpapier" aria-label="Kartenstil wechseln">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M3 18c4-1 5-5 9-5s6 3 9 2"/><path d="M3 12c4-1 5-5 9-5s6 3 9 2"/></svg><span data-thema-label>KARTE</span>
       </button>
       <button id="langBtn" data-lang-toggle title="Sprache / Language" style="background:none;border:1px solid var(--line);border-radius:7px;color:var(--dim);height:24px;cursor:pointer;padding:0 7px;font:600 10px/1 var(--font);letter-spacing:.06em">DE</button>
       <button id="bugBtn" title="Fehler melden" aria-label="Fehler melden" style="background:none;border:1px solid var(--line);border-radius:7px;color:var(--dim);width:24px;height:24px;cursor:pointer;display:grid;place-items:center;padding:0">
@@ -1875,6 +1885,10 @@ td:first-child{font-family:var(--font)}
 .wzZiel{position:absolute;right:9%;top:0;bottom:0;width:5px;background:repeating-linear-gradient(180deg,#fff 0 5px,#161616 5px 10px);opacity:.9;z-index:1;box-shadow:0 0 6px rgba(255,255,255,.35)}
 .gcFilzPad{border-radius:14px;border:4px solid #57351d;box-shadow:0 0 0 2px #c9a04e,inset 0 0 26px rgba(0,0,0,.5);background:radial-gradient(ellipse at 50% 30%,rgba(120,255,170,.16),transparent 65%),radial-gradient(ellipse at center,#1d7a45,#0b3a20 80%);padding:14px;margin:6px 0 10px}
 </style>
+<!-- Themen: übersetzte Altfarben fürs Kartenpapier, danach Feinschliff beider
+     Themen. Beide NACH den Stilblöcken, damit sie bei gleicher Spezifität gewinnen. -->
+<link rel="stylesheet" href="theme-papier.css">
+<link rel="stylesheet" href="theme.css">
 <div id="gcSpielModal" style="position:fixed;inset:0;z-index:53;display:none;place-items:center;background:rgba(6,9,15,.55);backdrop-filter:blur(2px)" onclick="if(event.target===this)gcSpielSchliessen()">
   <div class="panel gcPanel" style="position:static;display:flex;width:min(430px,94vw);max-height:86vh;border-color:#c9a04e55">
     <div class="phead" style="background:linear-gradient(135deg,rgba(201,160,78,.16),transparent)">
@@ -1953,6 +1967,32 @@ td:first-child{font-family:var(--font)}
 <script src="vendor/socket.io.min.js"></script>
 <script src="vendor/peerjs.min.js"></script>
 <script src="topo.js"></script>
+<script src="flaeche.js"></script>
+<script>
+/* ---- Themenwechsel: Vermessung (Standard) <-> Kartenpapier ----
+ * Setzt <html data-theme>, merkt die Wahl und sagt der Topo-Karte und der
+ * Spielfläche Bescheid (beide lesen ihre Farben dann neu). */
+(function () {
+  function anzeigen() {
+    const t = document.documentElement.dataset.theme;
+    document.querySelectorAll("[data-thema]").forEach(b => b.classList.toggle("on", b.dataset.thema === t));
+    document.querySelectorAll("[data-thema-label]").forEach(el => el.textContent = t === "papier" ? "PAPIER" : "VERMESS.");
+  }
+  window.themaSetzen = function (t) {
+    t = t === "papier" ? "papier" : "vermessung";
+    document.documentElement.dataset.theme = t;
+    try { localStorage.setItem("cs_thema", t); } catch (e) {}
+    anzeigen();
+    document.dispatchEvent(new Event("themawechsel"));
+  };
+  document.addEventListener("click", e => {
+    const b = e.target.closest("[data-thema],[data-thema-toggle]");
+    if (!b) return;
+    themaSetzen(b.dataset.thema || (document.documentElement.dataset.theme === "papier" ? "vermessung" : "papier"));
+  });
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", anzeigen); else anzeigen();
+})();
+</script>
 <script>
 "use strict";
 /* ================================================================
@@ -5580,11 +5620,15 @@ function atmosphaereMalen() {
   if (LICHT > .55)      tint = lerp3([255, 246, 232], [255, 253, 250], (LICHT - .55) / .45);  // Tag: Hauch warm
   else if (LICHT > .28) tint = lerp3([255, 208, 162], [255, 246, 232], (LICHT - .28) / .27);  // goldene Stunde
   else                  tint = lerp3([76, 90, 146], [255, 208, 162], LICHT / .28);            // Nacht: kühles Blau
+  /* Kartenpapier: Die Karte soll wie gedruckt wirken — Tageszeit nur angedeutet,
+   * sonst wird das helle Papier nachts zu einem schmutzigen Violett. */
+  const PAPIER = document.documentElement.dataset.theme === "papier";
+  if (PAPIER) tint = tint.map(v => Math.round(v + (255 - v) * .8));
   cx.globalCompositeOperation = "multiply";
   cx.fillStyle = `rgb(${tint.join(",")})`;
   cx.fillRect(0, 0, innerWidth, innerHeight);
   cx.globalCompositeOperation = "source-over";
-  if (DAEMMERUNG > .01) {
+  if (DAEMMERUNG > .01 && !PAPIER) {
     /* Der Himmel brennt oben, der Boden bleibt ruhig */
     const d = Math.round(DAEMMERUNG * 100);
     if (!ATMO.daemmer || ATMO.daemmerKey !== d) {
@@ -5598,7 +5642,7 @@ function atmosphaereMalen() {
     cx.fillRect(0, 0, innerWidth, innerHeight);
   }
   const nacht = 1 - LICHT;
-  if (nacht > .02) {
+  if (nacht > .02 && !PAPIER) {
     /* Rest-Dunkel deutlich schwächer als früher (das Multiply-Blau trägt
      * die Nacht) — dafür oben ein kühler Glanz, als stünde der Mond hoch. */
     cx.fillStyle = `rgba(7,11,30,${(nacht * .34).toFixed(3)})`;
@@ -6025,18 +6069,23 @@ function draw() {
     KAMPF_SHAKE *= .93;
   } else KAMPF_SHAKE = 0;
   cx.translate(innerWidth/2 + cam.x + bebenX, 120 + cam.y + bebenY); cx.scale(cam.z, cam.z);
+  /* Neue Spielfläche (public/flaeche.js): Geländemodell mit Sockel, ruhigen
+   * Zonenfarben, Höhenlinien, Bezirksgrenzen. Planwirtschaft und Kartell
+   * behalten ihren eigenen Look. */
+  const FL = !!window.FLAECHE && !ITALIA_LOOK && !PLAN_LOOK;
+  if (FL) FLAECHE.unter(cx, st.map);
   for (const t of st.map) {
     const [sx, sy] = iso(t.x, t.y);
     cx.beginPath(); cx.moveTo(sx,sy); cx.lineTo(sx+TW/2,sy+TH/2); cx.lineTo(sx,sy+TH); cx.lineTo(sx-TW/2,sy+TH/2); cx.closePath();
-    const img = tileSprite(t);
+    const img = FL ? FLAECHE.tile(t) : tileSprite(t);
     /* Die Rauten sind beim Laden fertig vorgerendert — hier nur noch platzieren. */
     if (img) cx.drawImage(img, sx - TW / 2, sy, TW, TH);
     else { cx.fillStyle = t.park ? "#2f4a2a" : t.road ? "#1c2430" : t.sand ? "#4d4632" : t.deep ? "#092536" : ZCOL[t.zone]; cx.fill(); }
-    cx.strokeStyle = "rgba(255,255,255,.05)"; cx.stroke();
+    if (!FL) { cx.strokeStyle = "rgba(255,255,255,.05)"; cx.stroke(); }
     /* Der frühere Zonen-Farbwasch entfällt: jede Zone hat jetzt ihre eigene
      * Textur, ein Farbschleier darüber würde sie nur trüben. Nur das offene
      * Meer bekommt weiterhin einen Dunkel-Ton, damit sich Tiefe abhebt. */
-    if (t.water && t.deep) { cx.globalAlpha = 0.35; cx.fillStyle = "#092536"; cx.fill(); cx.globalAlpha = 1; }
+    if (t.water && t.deep && !FL) { cx.globalAlpha = 0.35; cx.fillStyle = "#092536"; cx.fill(); cx.globalAlpha = 1; }
     /* Italien-Schleier: Pflaster statt Asphalt, Olivgrün statt Rasen,
      * warmes Zentrum, türkises Mittelmeer. */
     if (ITALIA_LOOK) {
@@ -6089,9 +6138,10 @@ function draw() {
      * Herumfahren ueberwiegend genau diese Flaeche. Jetzt so weit
      * abgedunkelt, dass der Unterschied klar bleibt, die Textur darunter
      * aber sichtbar ist. */
-    if (t.locked) { cx.fillStyle="rgba(4,10,18,.26)"; cx.fill();
+    if (t.locked) { cx.fillStyle = FL ? FLAECHE.gesperrt() : "rgba(4,10,18,.26)"; cx.fill();
       drawLock(sx, sy + TH / 2 - 1); }
   }
+  if (FL) FLAECHE.ueber(cx, st.map);
   /* Territorium (Kartellmodus): Kacheln kontrollierter Bezirke bekommen einen
    * hauchdünnen Schleier in Familienfarbe, dazu ein Label je Bezirk. */
   if (st.mode === "kartell" && st.bezirke && st.familien) {
@@ -6632,6 +6682,7 @@ function draw() {
     verkehrZeichnen(t.x, t.y);
   }
   verkehrRest();          // was ausserhalb der Karte liegt, nicht verschlucken
+  if (FL) FLAECHE.schilder(cx, st.map);
   drawEffekte(now);
   drawClouds(now);
   drawAtmosphere();

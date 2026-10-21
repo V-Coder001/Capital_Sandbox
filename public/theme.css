@@ -1,0 +1,183 @@
+/* ================================================================
+ * Capital Sandbox — Themen
+ *   "vermessung" (Standard): Navy, Cyan, Glas — passend zur Topo-Karte
+ *   "papier": Kartenpapier, Tinte, Terrakotta — umschaltbar
+ * Das Thema steht in <html data-theme="…"> und wird im Browser gemerkt.
+ * Lädt NACH den Stilen in index.html und nach theme-papier.css (automatisch
+ * übersetzte Altfarben), gewinnt also bei gleicher Spezifität.
+ * ================================================================ */
+
+/* ---------- Tokens: Vermessung ---------- */
+:root{
+  --bg:#070b10; --panel:#0e1520; --panel2:#131c2a; --line:rgba(125,211,252,.16);
+  --text:#e6edf6; --dim:#93a3b8; --accent:#7dd3fc; --accent2:#a78bfa;
+  --up:#34d399; --down:#fb7185;
+  --font:"Space Grotesk","Archivo",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  --glass:rgba(12,18,28,.74); --glass-strong:rgba(10,15,24,.88);
+  --rand:1px solid rgba(125,211,252,.18);
+  --radius:14px; --radius-s:10px;
+  --schatten:0 24px 70px rgba(0,0,0,.55);
+  --schatten-s:0 10px 30px rgba(0,0,0,.4);
+  --blur:blur(14px);
+  --auf-akzent:#04121c;
+  --akzent-flaeche:rgba(125,211,252,.14);
+}
+/* ---------- Tokens: Kartenpapier ---------- */
+html[data-theme="papier"]{
+  --bg:#ede6d6; --panel:#f8f4ea; --panel2:#fffdf7; --line:rgba(31,26,20,.4);
+  --text:#1f1a14; --dim:#4a4134; --accent:#9c3b1f; --accent2:#2b6cb0;
+  --up:#2f7d4f; --down:#a3321c;
+  --font:"Archivo",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --glass:#f8f4ea; --glass-strong:#f8f4ea;
+  --rand:1.5px solid #1f1a14;
+  --radius:0px; --radius-s:0px;
+  --schatten:6px 6px 0 #1f1a14;
+  --schatten-s:4px 4px 0 #1f1a14;
+  --blur:none;
+  --auf-akzent:#fffdf7;
+  --akzent-flaeche:#1f1a14;
+  color-scheme:light;
+}
+
+body{font-family:var(--font)}
+html[data-theme="papier"] body{background:var(--bg)!important;color:var(--text)}
+html[data-theme="papier"] #bgDeck{background:var(--bg)!important}
+html[data-theme="papier"] #bgTopo{color:#3b3226!important}
+html[data-theme="papier"] #join::before,html[data-theme="papier"] #lobbyWait{background:none!important}
+html[data-theme="papier"] #joinGlow{display:none}
+
+/* ---------- Eingaben ---------- */
+input,select,textarea{border-radius:var(--radius-s)}
+#join input,#join select,.panel input,.panel select,.panel textarea,#lobbyWait input,#lobbyWait select{
+  background:rgba(4,8,14,.55);border:1px solid rgba(125,211,252,.22);color:var(--text)}
+#join input:focus,#join select:focus,.panel input:focus,.panel select:focus,.panel textarea:focus{
+  outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(125,211,252,.18)}
+html[data-theme="papier"] #join input,html[data-theme="papier"] #join select,
+html[data-theme="papier"] .panel input,html[data-theme="papier"] .panel select,html[data-theme="papier"] .panel textarea,
+html[data-theme="papier"] #lobbyWait input,html[data-theme="papier"] #lobbyWait select{
+  background:#fffdf7;border:1.5px solid #1f1a14;color:#1f1a14}
+html[data-theme="papier"] #join input:focus,html[data-theme="papier"] .panel input:focus,
+html[data-theme="papier"] .panel select:focus{box-shadow:3px 3px 0 #9c3b1f}
+
+/* ---------- Kopfleiste: Kurstafel + zwei schwebende Glas-Karten ---------- */
+#ticker{background:rgba(5,8,13,.8);border-bottom:var(--rand);-webkit-backdrop-filter:var(--blur);backdrop-filter:var(--blur)}
+html[data-theme="papier"] #ticker{background:#f8f4ea;border-bottom:1.5px solid #1f1a14}
+#ticker:not(.auf) .tk{border-right-color:rgba(125,211,252,.1)}
+html[data-theme="papier"] #ticker:not(.auf) .tk{border-right-color:rgba(31,26,20,.25)}
+@media(min-width:601px){
+  #topbar{height:100px}
+  #status{height:auto;padding:12px 16px 0;background:none;align-items:flex-start}
+  #status .left,#status .right{background:var(--glass);border:var(--rand);border-radius:var(--radius);
+    padding:8px 14px;min-height:46px;box-sizing:border-box;
+    -webkit-backdrop-filter:var(--blur);backdrop-filter:var(--blur);box-shadow:var(--schatten-s)}
+  .panel{top:110px;right:16px;bottom:100px}
+  #toasts{top:112px}
+}
+#coname{font-family:var(--font);font-stretch:normal;font-weight:700;font-size:14.5px;color:var(--text)}
+html[data-theme="papier"] #coname{text-transform:uppercase;font-stretch:110%;font-weight:800}
+#networth{border-left-color:var(--line)}
+.logo{border-radius:8px}
+html[data-theme="papier"] .logo{border-radius:0;border:1.5px solid #1f1a14}
+#cash{color:var(--accent);font-size:17px}
+#xpfill{background:var(--accent)}
+#xpbar{background:rgba(125,211,252,.12)}
+html[data-theme="papier"] #xpbar{background:#fffdf7;border:1px solid #1f1a14;border-radius:0}
+#status .right button,#roomCodeTop,#findBtn,#langBtn,#bugBtn,#help,#themeBtn{border-radius:9px!important;border-color:var(--line)!important;color:var(--dim)!important}
+html[data-theme="papier"] #status .right button,html[data-theme="papier"] #roomCodeTop,html[data-theme="papier"] #themeBtn{
+  border-radius:0!important;border:1.5px solid #1f1a14!important;color:#1f1a14!important;background:#fffdf7!important}
+
+/* ---------- Themenschalter ---------- */
+#themeBtn{background:none;border:1px solid var(--line);height:24px;padding:0 8px;cursor:pointer;
+  display:inline-flex;align-items:center;gap:6px;font:600 10.5px/1 var(--mono);letter-spacing:.04em}
+#themeBtn svg{flex:none}
+.themenwahl{display:inline-flex;margin-left:10px;border:var(--rand);border-radius:10px;overflow:hidden;vertical-align:middle}
+.themenwahl button{background:none;border:0;color:var(--dim);font:600 12px var(--font);padding:8px 13px;cursor:pointer}
+.themenwahl button.on{background:var(--akzent-flaeche);color:var(--text)}
+html[data-theme="papier"] .themenwahl{border-radius:0}
+html[data-theme="papier"] .themenwahl button.on{color:#f8f4ea}
+@media(max-width:560px){.themenwahl{margin:8px 0 0;width:100%}.themenwahl button{flex:1}}
+
+/* ---------- Menüleiste: schwebende Glas-Leiste ---------- */
+#dock{bottom:16px;border:var(--rand);border-radius:18px;padding:6px;gap:4px;background:var(--glass-strong);
+  box-shadow:var(--schatten);-webkit-backdrop-filter:var(--blur);backdrop-filter:var(--blur)}
+.dockbtn{width:80px;border-radius:12px;padding:9px 2px 8px;border-bottom:0;color:var(--dim);
+  font-family:var(--font);font-size:12px;font-stretch:normal;font-weight:500}
+.dockbtn:hover{color:var(--text);background:rgba(125,211,252,.06)}
+.dockbtn.on{background:var(--akzent-flaeche);color:var(--text);border-bottom:0;font-weight:600}
+.dockbtn.on svg{color:var(--accent)}
+html[data-theme="papier"] #dock{border-radius:0;gap:0;padding:0;background:#f8f4ea}
+html[data-theme="papier"] .dockbtn{border-radius:0;color:#1f1a14;font-weight:600;border-right:1.5px solid #1f1a14}
+html[data-theme="papier"] .dockbtn:last-child{border-right:0}
+html[data-theme="papier"] .dockbtn:hover{background:rgba(31,26,20,.06)}
+html[data-theme="papier"] .dockbtn.on{background:#1f1a14;color:#f8f4ea;text-transform:uppercase;letter-spacing:.04em}
+html[data-theme="papier"] .dockbtn.on svg{color:#f8f4ea}
+@media(max-width:820px){#dock{border-radius:14px}}
+
+/* ---------- Panels: Glas-Karten ---------- */
+.panel{background:var(--glass-strong);border:var(--rand);border-radius:18px;box-shadow:var(--schatten);
+  -webkit-backdrop-filter:var(--blur);backdrop-filter:var(--blur)}
+.phead{padding:15px 18px;border-bottom:var(--rand)}
+.phead h2{font-family:var(--font);font-size:17px;font-weight:700;letter-spacing:-.01em}
+.phead .x{width:34px;height:34px;border:1px solid var(--line);border-radius:10px;display:grid;place-items:center;color:var(--dim)}
+.phead .x:hover{color:var(--text);border-color:var(--accent)}
+.pbody{padding:14px 18px}
+.sec{font-family:var(--mono);color:var(--accent);letter-spacing:.12em}
+th{font-family:var(--mono);letter-spacing:.08em}
+td{border-bottom-color:rgba(125,211,252,.08)}
+html[data-theme="papier"] .panel{border-radius:0}
+html[data-theme="papier"] .phead h2{text-transform:uppercase;font-stretch:112%;font-weight:900;font-size:18px}
+html[data-theme="papier"] .phead .x{border-radius:0;border:1.5px solid #1f1a14;color:#1f1a14}
+html[data-theme="papier"] td{border-bottom:1px dotted rgba(31,26,20,.4)}
+html[data-theme="papier"] th{border-bottom:1.5px solid #1f1a14;color:#4a4134}
+
+/* ---------- Knöpfe ---------- */
+.buyb,.sellb,.mini{border-radius:8px;padding:6px 11px;font-family:var(--font)}
+.buyb{background:var(--up);color:#04170f}
+.sellb{background:rgba(251,113,133,.12);color:#fda4af;border:1px solid rgba(251,113,133,.5)}
+.mini{background:rgba(255,255,255,.03);border:1px solid var(--line)}
+.bknopf{border-radius:10px;font-family:var(--font)}
+html[data-theme="papier"] .buyb,html[data-theme="papier"] .sellb,html[data-theme="papier"] .mini,html[data-theme="papier"] .bknopf{
+  border-radius:0;border:1.5px solid #1f1a14}
+html[data-theme="papier"] .buyb{background:#1f1a14;color:#f8f4ea}
+html[data-theme="papier"] .sellb{background:transparent;color:#1f1a14}
+html[data-theme="papier"] .mini{background:#fffdf7;color:#1f1a14}
+
+/* ---------- Meldungen ---------- */
+.toast{background:var(--glass-strong);border:var(--rand);border-left:3px solid var(--accent);border-radius:12px;
+  -webkit-backdrop-filter:var(--blur);backdrop-filter:var(--blur);box-shadow:var(--schatten-s);font-family:var(--font)}
+html[data-theme="papier"] .toast{border-radius:0;border:1.5px solid #1f1a14;border-left:5px solid #9c3b1f}
+
+/* ---------- Startbildschirm ---------- */
+#join .card{background:rgba(12,18,28,.74);border:var(--rand);border-radius:22px;box-shadow:var(--schatten)}
+#join h1{font-family:var(--font);font-weight:700;letter-spacing:-.035em}
+#join h1 span{color:var(--accent);text-shadow:0 0 30px rgba(125,211,252,.35)}
+#join .go{background:linear-gradient(180deg,#8fdcfd,#5cc8f7);color:var(--auf-akzent);border-radius:12px;font-family:var(--font);font-weight:700;
+  box-shadow:0 10px 30px rgba(125,211,252,.28)}
+#join .netopt.on,#netmode .netopt.on{background:var(--accent);color:var(--auf-akzent)}
+#join .indopt{border-radius:12px}
+.sprachwahl{border:var(--rand);border-radius:10px}
+.sprachwahl button.on{background:var(--akzent-flaeche);color:var(--text)}
+html[data-theme="papier"] #join .card{background:#f8f4ea;border-radius:0}
+html[data-theme="papier"] #join h1{font-family:"Archivo",sans-serif;font-weight:900;font-stretch:112%;text-transform:uppercase;letter-spacing:-.02em}
+html[data-theme="papier"] #join h1 span{color:#9c3b1f;text-shadow:none}
+html[data-theme="papier"] #join h1::after{background:#1f1a14}
+html[data-theme="papier"] #join .go{background:#9c3b1f;color:#fffdf7;border:1.5px solid #1f1a14;border-radius:0;box-shadow:4px 4px 0 #1f1a14;
+  text-transform:uppercase;letter-spacing:.04em;font-stretch:110%;font-weight:800}
+html[data-theme="papier"] #join .netopt.on,html[data-theme="papier"] #netmode .netopt.on{background:#1f1a14;color:#f8f4ea}
+html[data-theme="papier"] #join .indopt,html[data-theme="papier"] .sprachwahl,html[data-theme="papier"] #netmode,
+html[data-theme="papier"] #netmode .netopt,html[data-theme="papier"] #tutBuchAuf,html[data-theme="papier"] .joinbox,
+html[data-theme="papier"] .copybtn{border-radius:0!important}
+html[data-theme="papier"] .sprachwahl button.on{background:#1f1a14;color:#f8f4ea}
+html[data-theme="papier"] .posterWall{box-shadow:6px 6px 0 #1f1a14;border:1.5px solid #1f1a14}
+html[data-theme="papier"] #joinParticles{display:none}
+
+/* ---------- Warteraum, Sieg, Anleitung ---------- */
+#lobbyWait .card{background:rgba(12,18,28,.8);border:var(--rand);border-radius:20px;box-shadow:var(--schatten);
+  -webkit-backdrop-filter:var(--blur);backdrop-filter:var(--blur)}
+#lobbyWait h2{font-family:var(--font);font-weight:700;letter-spacing:-.01em}
+html[data-theme="papier"] #lobbyWait .card{background:#f8f4ea;border-radius:0}
+html[data-theme="papier"] #lobbyWait h2{text-transform:uppercase;font-stretch:112%;font-weight:900}
+#win{background:rgba(7,11,16,.86);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
+html[data-theme="papier"] #win{background:rgba(237,230,214,.94)}
+html[data-theme="papier"] #winNew{background:#9c3b1f;color:#fffdf7;border:1.5px solid #1f1a14;box-shadow:4px 4px 0 #1f1a14;border-radius:0}
