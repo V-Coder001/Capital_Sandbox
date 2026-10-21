@@ -318,3 +318,18 @@ html[data-theme="papier"] .wzGischt{color:rgb(31,26,20);text-shadow:0 0 4px rgba
 html[data-theme="papier"] .wzKopfleiste{background:linear-gradient(180deg,rgb(229,220,202),rgb(229,220,202));color:rgb(156,90,10);text-shadow:0 1px 2px rgba(31,26,20,0.21)}
 html[data-theme="papier"] .wzZiel{background:repeating-linear-gradient(180deg,rgb(31,26,20) 0 5px,rgb(239,232,218) 5px 10px);box-shadow:0 0 6px rgba(31,26,20,0.122)}
 html[data-theme="papier"] .gcFilzPad{border:4px solid rgba(31,26,20,0.65);box-shadow:0 0 0 2px rgba(156,90,10,0.5),inset 0 0 26px rgba(31,26,20,0.175);background:radial-gradient(ellipse at 50% 30%,rgba(47,125,79,0.16),transparent 65%),radial-gradient(ellipse at center,rgba(47,125,79,0.9),rgb(229,220,202) 80%)}
+/* Inline-Stile */
+html[data-theme="papier"] [style*="rgba(6,9,15,.55)"]{background:rgba(239,232,218,0.9)!important;color:rgb(31,26,20)}
+html[data-theme="papier"] [style*="rgba(6,9,15,.6)"]{background:rgba(239,232,218,0.9)!important;color:rgb(31,26,20)}
+html[data-theme="papier"] [style*="rgba(10,6,6,.0)"]{background:rgba(239,232,218,0.9)!important;color:rgb(31,26,20)}
+html[data-theme="papier"] [style*="rgba(10,6,6,.55)"]{background:rgba(239,232,218,0.9)!important;color:rgb(31,26,20)}
+html[data-theme="papier"] [style*="#dfe6f2"]{color:rgb(31,26,20)!important}
+html[data-theme="papier"] [style*="rgba(12,18,28,.5)"]{background:rgba(239,232,218,0.9)!important;color:rgb(31,26,20)}
+html[data-theme="papier"] [style*="#ffd8d0"]{color:rgb(31,26,20)!important}
+html[data-theme="papier"] [style*="#14181f"]{background:rgb(239,232,218)!important;color:rgb(31,26,20)}
+html[data-theme="papier"] [style*="#232a36"]{background:rgb(239,232,218)!important;color:rgb(31,26,20)}
+html[data-theme="papier"] [style*="#dfe6f0"]{color:rgb(31,26,20)!important}
+html[data-theme="papier"] [style*="#f4f0e6"]{color:rgb(31,26,20)!important}
+html[data-theme="papier"] [style*="rgba(255,255,255,.55)"]{color:rgb(31,26,20)!important}
+html[data-theme="papier"] [style*="#0b1220"]{background:rgb(239,232,218)!important;color:rgb(31,26,20)}
+html[data-theme="papier"] [style*="#0b1322"]{background:rgb(239,232,218)!important;color:rgb(31,26,20)}

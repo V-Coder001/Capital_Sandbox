@@ -201,13 +201,36 @@ def verarbeiten(css):
     return "\n".join(out)
 
 
+def inline_regeln(html):
+    """Inline-Stile (auch in JS-Templates): dunkle Hintergründe → Papier,
+    helle Schrift → Tinte. Per Attribut-Selektor auf den exakten Wert."""
+    aus, gesehen = [], set()
+    for st in re.findall(r'style=\\?"([^"]*)"', html):
+        for prop, wert in re.findall(r"(background(?:-color)?|color)\s*:\s*([^;]+)", st):
+            for c in FARBE.findall(wert):
+                r, g, b, a = parse(c)
+                h, l, sat = colorsys.rgb_to_hls(r / 255, g / 255, b / 255)
+                schluessel = (prop, c)
+                if schluessel in gesehen:
+                    continue
+                if prop.startswith("background") and l < .2:
+                    neu = f"background:{fmt(PAPER2, max(a, .9))}!important;color:rgb(31,26,20)"
+                elif prop == "color" and l > .75 and not (sat > .35 and l < .9):
+                    neu = "color:rgb(31,26,20)!important"
+                else:
+                    continue
+                gesehen.add(schluessel)
+                aus.append(f'{SCOPE} [style*="{c}"]{{{neu}}}')
+    return "\n".join(aus)
+
+
 def main():
     html = open(INDEX, encoding="utf-8").read()
     css = "\n".join(re.findall(r"<style>(.*?)</style>", html, re.S))
     kopf = ("/* AUTOMATISCH ERZEUGT von tools/build-theme-papier.py — nicht von Hand ändern.\n"
             " * Übersetzt die fest eingetragenen Farben aus index.html ins Kartenpapier-Thema.\n"
             " * Feinschliff steht in theme.css. */\n")
-    open(ZIEL, "w", encoding="utf-8").write(kopf + verarbeiten(css) + "\n")
+    open(ZIEL, "w", encoding="utf-8").write(kopf + verarbeiten(css) + "\n/* Inline-Stile */\n" + inline_regeln(html) + "\n")
     print("geschrieben:", ZIEL)
 
 
