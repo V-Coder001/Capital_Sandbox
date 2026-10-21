@@ -47,14 +47,27 @@ input,select{background:var(--panel2);border:1px solid var(--line);border-radius
  * Alle Element-IDs und Klassen bleiben, damit die bestehende Spiellogik
  * unverändert weiterläuft. */
 #join{position:fixed;inset:0;z-index:100;overflow:auto;padding:10px 16px;
-  background:#070b10;display:flex;align-items:flex-start;justify-content:center}
+  background:transparent;display:flex;align-items:flex-start;justify-content:center}
 /* Vignette, Scanlines und Lichtschein von oben liegen hinter der Karte */
-#join::before{content:"";position:fixed;inset:0;pointer-events:none;z-index:0;
-  background:radial-gradient(ellipse at center, transparent 30%, rgba(0,0,0,.7) 100%)}
-#join::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:1;
-  background:repeating-linear-gradient(0deg, rgba(255,255,255,.012) 0px, rgba(255,255,255,.012) 1px, transparent 1px, transparent 3px)}
+#join::before{content:"";position:fixed;inset:0;pointer-events:none;z-index:1;
+  background:radial-gradient(ellipse at center, transparent 45%, rgba(0,0,0,.55) 100%)}
+/* ---- Gemeinsamer Hintergrund: lebende Höhenlinien-Karte (public/topo.js) ----
+ * Liegt hinter ALLEM — Startbildschirm, Warteraum und im Spiel um die Karte
+ * herum. Auf Start/Warteraum hebt die Maus einen Hügel an und ein Klick ins
+ * Freie schickt eine Welle übers Gelände; im Spiel läuft sie nur ruhig mit. */
+body{background:#070b10}
+/* Auf Start/Warteraum liegt die Karte VOR dem Spiel (das sonst mit Leiste
+ * und Stadt durch die durchsichtigen Bildschirme scheinen würde) — samt
+ * deckendem Grund darunter. Im Spiel selbst wieder ganz hinten. */
+#bgDeck{position:fixed;inset:0;z-index:97;background:#070b10;display:none;pointer-events:none}
+body.topoVorn #bgDeck{display:block}
+body.topoVorn #bgTopo{z-index:98}
+#bgTopo{position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:-1;
+  color:#7dd3fc;opacity:0;transition:opacity .8s ease-out;
+  -webkit-mask-image:radial-gradient(ellipse 120% 100% at 50% 45%,#000 55%,transparent 100%);
+          mask-image:radial-gradient(ellipse 120% 100% at 50% 45%,#000 55%,transparent 100%)}
 #joinGlow{position:fixed;top:0;left:50%;transform:translateX(-50%);width:1000px;height:320px;pointer-events:none;z-index:1;
-  background:radial-gradient(ellipse at 50% 0%, rgba(56,189,248,.12) 0%, rgba(167,139,250,.07) 50%, transparent 75%)}
+  background:radial-gradient(ellipse at 50% 0%, rgba(56,189,248,.08) 0%, rgba(167,139,250,.04) 50%, transparent 75%)}
 /* ---- Werbeplakate links und rechts ----
  * Füllen den leeren Raum neben der Karte auf breiten Bildschirmen. Bewusst
  * abgedunkelt und leicht gekippt: sie sollen nach angeklebten Plakaten in der
@@ -76,8 +89,9 @@ input,select{background:var(--panel2);border:1px solid var(--line);border-radius
 @media(prefers-reduced-motion:reduce){.posterWall{transition:none}}
 
 #join .card{position:relative;z-index:10;width:min(1000px,100%);min-width:0;
-  background:linear-gradient(160deg,#131c2b 0%,#0e1520 40%,#0c1220 100%);
-  border:1px solid #1e2d45;border-radius:22px;overflow:hidden;
+  background:linear-gradient(160deg,rgba(19,28,43,.78) 0%,rgba(14,21,32,.84) 40%,rgba(12,18,32,.88) 100%);
+  -webkit-backdrop-filter:blur(10px) saturate(1.1);backdrop-filter:blur(10px) saturate(1.1);
+  border:1px solid rgba(56,189,248,.16);border-radius:22px;overflow:hidden;
   box-shadow:0 0 0 1px rgba(56,189,248,.06), 0 24px 80px rgba(0,0,0,.8), 0 0 60px rgba(56,189,248,.04)}
 #joinParticles{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;opacity:.45}
 
@@ -236,7 +250,7 @@ input,select{background:var(--panel2);border:1px solid var(--line);border-radius
   letter-spacing:.28em;text-shadow:0 0 20px rgba(56,189,248,.45)}
 /* ---- Warteraum: zwischen Anmeldung und Rundenstart ---- */
 #lobbyWait{position:fixed;inset:0;z-index:99;display:none;overflow:auto;padding:20px 16px;
-  background:#070b10;align-items:flex-start;justify-content:center}
+  background:radial-gradient(ellipse at center, transparent 45%, rgba(0,0,0,.55) 100%);align-items:flex-start;justify-content:center}
 #lobbyWait.on{display:flex}
 #lobbyWait .card{position:relative;width:min(540px,100%);margin:auto;
   background:linear-gradient(160deg,#131c2b 0%,#0e1520 40%,#0c1220 100%);
@@ -1146,6 +1160,8 @@ td:first-child{font-family:var(--font)}
 </style>
 </head>
 <body>
+<div id="bgDeck" aria-hidden="true"></div>
+<canvas id="bgTopo" aria-hidden="true"></canvas>
 <!-- Intro: läuft einmal je Serverstart, danach nicht mehr (siehe bootId) -->
 <div id="intro" hidden>
   <video id="introVideo" playsinline preload="auto"></video>
@@ -1159,9 +1175,9 @@ td:first-child{font-family:var(--font)}
 <div id="joinGlow"></div>
 <!-- Werbeplakate im sonst leeren Raum neben der Karte. Rein dekorativ, daher
      aria-hidden — für Screenreader wäre "Plakat" nur Rauschen. -->
-<div class="posterWall" id="posterL" aria-hidden="true"></div>
-<div class="posterWall" id="posterR" aria-hidden="true"></div>
-<div class="card">
+<div class="posterWall" id="posterL" aria-hidden="true" data-topo-avoid></div>
+<div class="posterWall" id="posterR" aria-hidden="true" data-topo-avoid></div>
+<div class="card" data-topo-avoid>
   <canvas id="joinParticles"></canvas>
 
   <div class="hero">
@@ -1363,7 +1379,7 @@ td:first-child{font-family:var(--font)}
 
 </div></div>
 
-<div id="lobbyWait"><div class="card">
+<div id="lobbyWait"><div class="card" data-topo-avoid>
   <div id="lwHead">
     <h2 id="lwTitel">Warteraum</h2>
     <span id="lwPulse"><span class="pulse"><i></i><b></b></span><span id="lwPulseText">wartet</span></span>
@@ -1936,6 +1952,7 @@ td:first-child{font-family:var(--font)}
 
 <script src="vendor/socket.io.min.js"></script>
 <script src="vendor/peerjs.min.js"></script>
+<script src="topo.js"></script>
 <script>
 "use strict";
 /* ================================================================
@@ -4463,6 +4480,15 @@ async function oeffentlicheLaden() {
  * Das Partikelfeld ist reine Deko und läuft nur, solange die Lobby sichtbar ist —
  * im Spiel selbst würde es sonst dauerhaft Rechenzeit neben der Karte fressen. */
 (function joinAmbience() {
+  if (window.startTopo) {
+    const joinEl = document.getElementById("join"), lobbyEl = document.getElementById("lobbyWait");
+    const startOderWarteraum = () => joinEl.style.display !== "none" || lobbyEl.classList.contains("on");
+    startTopo(document.body, document.getElementById("bgTopo"), {
+      seed: 26, interactiveWhen: startOderWarteraum, calmSpeed: 0.5, calmFrameMs: 66,
+    });
+    const ebeneSetzen = () => document.body.classList.toggle("topoVorn", startOderWarteraum());
+    ebeneSetzen(); setInterval(ebeneSetzen, 200);
+  }
   const cv = document.getElementById("joinParticles"), join = document.getElementById("join");
   const cx = cv.getContext("2d");
   let raf = null, teilchen = [];
@@ -5208,7 +5234,7 @@ function shade(hex, amt){ const n = parseInt(hex.slice(1), 16);
   return `rgb(${c((n>>16)+amt)},${c(((n>>8)&255)+amt)},${c((n&255)+amt)})`; }
 
 /* Himmel-Hintergrund (Kenney Skyboxes, CC0) — nur ein leichter Ausschnitt (115 KB statt 1 MB Panorama) */
-const SKY = new Image(); SKY.src = "assets/kenney/sky/sky-day.png";
+/* (Himmelsbild entfällt — siehe draw(): Hintergrund ist jetzt #bgTopo) */
 
 /* Ambient-Deko (Kenney Car-Kit / Mini-Characters, CC0): rein kosmetische, clientseitige
  * Bewegung entlang der Straßen — Position ist reine Funktion der Wanduhrzeit, braucht
@@ -5494,7 +5520,26 @@ function drawClouds(now) {
 /* Bildschirmraum: Höhendunst (oben heller, bläulich) und Vignette an den
  * Rändern. Die Verläufe werden pro Fenstergröße einmal gebaut. */
 let ATMO = null, ATMO_KEY = "";
+/* Die Spielkarte liegt auf durchsichtigem Grund über der Höhenlinien-Karte
+ * (#bgTopo). Die Atmosphäre-Pässe unten sind Vollbild-Fills — ohne Maske
+ * würden sie (v. a. der deckende Multiply-Tint) den Hintergrund zudecken.
+ * Darum: Deckkraft der fertig gezeichneten Szene merken und die Atmosphäre
+ * am Ende genau darauf zurückschneiden. Zwei GPU-Kopien je Bild. */
+const ATMO_MASKE = document.createElement("canvas"), atmoMx = ATMO_MASKE.getContext("2d");
 function drawAtmosphere() {
+  if (ATMO_MASKE.width !== cv.width || ATMO_MASKE.height !== cv.height) {
+    ATMO_MASKE.width = cv.width; ATMO_MASKE.height = cv.height;
+  }
+  atmoMx.clearRect(0, 0, ATMO_MASKE.width, ATMO_MASKE.height);
+  atmoMx.drawImage(cv, 0, 0);
+  atmosphaereMalen();
+  cx.setTransform(1, 0, 0, 1, 0, 0);
+  cx.globalCompositeOperation = "destination-in";
+  cx.drawImage(ATMO_MASKE, 0, 0);
+  cx.globalCompositeOperation = "source-over";
+  cx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
+}
+function atmosphaereMalen() {
   cx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
   const key = innerWidth + "x" + innerHeight;
   if (ATMO_KEY !== key) {
@@ -5946,13 +5991,10 @@ function draw() {
   requestAnimationFrame(draw);
   const st = store.get().state, now = Date.now();
   cx.setTransform(devicePixelRatio,0,0,devicePixelRatio,0,0);
-  if (SKY.complete && SKY.naturalWidth) {
-    const scale = innerHeight / SKY.naturalHeight, dw = SKY.naturalWidth * scale, dh = innerHeight;
-    for (let x = 0; x < innerWidth + dw; x += dw) cx.drawImage(SKY, x, 0, dw, dh);
-    const grad = cx.createLinearGradient(0, 0, 0, innerHeight);
-    grad.addColorStop(0, "rgba(10,14,21,0)"); grad.addColorStop(.55, "rgba(10,14,21,.78)"); grad.addColorStop(1, "#0a0e15");
-    cx.fillStyle = grad; cx.fillRect(0, 0, innerWidth, innerHeight);
-  } else { cx.fillStyle = "#0a0e15"; cx.fillRect(0,0,innerWidth,innerHeight); }
+  /* Kein Himmelsbild mehr: die Karte wird auf durchsichtigem Grund gezeichnet,
+   * dahinter läuft dieselbe Höhenlinien-Karte wie auf dem Startbildschirm
+   * (#bgTopo, public/topo.js) — ein durchgehender Look für Spiel und Website. */
+  cx.clearRect(0, 0, innerWidth, innerHeight);
   if (!st) return;
   /* Moduswechsel bringt eine neue Spielfläche mit — Straßen- und Ufer-Cache
    * müssen dann neu aufgebaut werden. */
