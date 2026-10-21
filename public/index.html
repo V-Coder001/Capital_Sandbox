@@ -1180,10 +1180,16 @@ td:first-child{font-family:var(--font)}
      aria-hidden — für Screenreader wäre "Plakat" nur Rauschen. -->
 <div class="posterWall" id="posterL" aria-hidden="true" data-topo-avoid></div>
 <div class="posterWall" id="posterR" aria-hidden="true" data-topo-avoid></div>
-<div class="card" data-topo-avoid>
+<!-- Neuigkeiten: auf breiten Bildschirmen eine feste Spalte rechts neben der
+     Karte, schmal als Fenster über den Knopf "Was ist neu". Inhalt: updates.js -->
+<aside id="updates" data-topo-avoid aria-labelledby="updKopf">
+  <div class="updKopf"><h2 id="updKopf">Was ist neu</h2><button type="button" class="updZu" data-upd-zu aria-label="Schließen">✕</button></div>
+  <div class="updListe" id="updListe"></div>
+</aside>
+<div class="card startKarte" data-topo-avoid>
   <canvas id="joinParticles"></canvas>
 
-  <div class="hero">
+  <header class="hero">
     <!-- Statuszeile: zeigt echte Verbindungs- und Spielerzahl, keine Platzhalter -->
     <div id="joinStatus">
       <div class="left">
@@ -1196,38 +1202,37 @@ td:first-child{font-family:var(--font)}
       </div>
     </div>
 
-    <h1>Capital <span>Sandbox</span> <em class="beta">Beta</em></h1>
-    <div class="betaZeile">Noch in Entwicklung — Fehler sind wahrscheinlich, und mit jeder
-      Aktualisierung gehen laufende Runden verloren. Meldungen gern über
-      <b>Fehler melden</b> unten rechts im Spiel.</div>
-    <div class="tag">Bau dir eine Firma auf, versorge die Stadt, handle mit den anderen —
-      und wenn du genug Anteile hast, kaufst du sie einfach auf.</div>
-
-    <div id="netmode">
-      <button type="button" class="netopt on" data-net="host">Neue Runde starten</button>
-      <button type="button" class="netopt" data-net="join">Einer Runde beitreten</button>
-    </div>
-    <!-- Ausführliche Einführung. Das kurze Tutorial in der Runde führt durchs
-         Bauen; hier steht das ganze Spiel erklärt, auch ohne laufende Partie. -->
-    <button type="button" id="tutBuchAuf">
-      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-           stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-        <path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/>
-      </svg>
-      Spielanleitung lesen
-    </button>
-    <!-- Sprachumschalter. Die Oberfläche ist deutsch gewachsen; ohne sichtbaren
-         Schalter probiert ein internationaler Besucher das Spiel gar nicht erst. -->
-    <button type="button" class="startEinst" data-einst-auf aria-label="Einstellungen">
-      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/></svg>
-      Einstellungen</button>
-    <div class="themenwahl" role="group" aria-label="Kartenstil">
-      <button type="button" data-thema="vermessung">Vermessung</button>
-      <button type="button" data-thema="papier">Kartenpapier</button>
-    </div>
-    <div class="sprachwahl" role="group" aria-label="Sprache / Language">
-      <button type="button" data-lang="de" class="on">Deutsch</button>
-      <button type="button" data-lang="en">English</button>
+    <div class="heroGrid">
+      <div class="heroText">
+        <h1>Capital <span>Sandbox</span> <em class="beta">Beta</em></h1>
+        <p class="tag">Bau dir eine Firma auf, versorge die Stadt, handle mit den anderen —
+          und wenn du genug Anteile hast, kaufst du sie einfach auf.</p>
+      </div>
+      <!-- Werkzeugleiste: alles, was nicht zum Formular gehört, an einer Stelle -->
+      <div class="startWerkzeuge">
+        <button type="button" id="tutBuchAuf">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+               stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/>
+          </svg>
+          Spielanleitung</button>
+        <button type="button" class="startEinst updAuf" data-upd-auf>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 8v4l3 2"/><circle cx="12" cy="12" r="9"/></svg>
+          Was ist neu<i class="updPunkt" hidden></i></button>
+        <button type="button" class="startEinst" data-einst-auf aria-label="Einstellungen">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/></svg>
+          Einstellungen</button>
+        <div class="startSchalter">
+          <div class="themenwahl" role="group" aria-label="Kartenstil">
+            <button type="button" data-thema="vermessung">Vermessung</button>
+            <button type="button" data-thema="papier">Kartenpapier</button>
+          </div>
+          <div class="sprachwahl" role="group" aria-label="Sprache / Language">
+            <button type="button" data-lang="de" class="on">DE</button>
+            <button type="button" data-lang="en">EN</button>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- Skyline aus den echten Gebäude-Sprites des Spiels -->
@@ -1252,19 +1257,33 @@ td:first-child{font-family:var(--font)}
       </div>
       <div class="fade l"></div><div class="fade r"></div><div class="fog"></div>
     </div>
-    <div class="rule"></div>
+  </header>
+
+  <!-- Erst die Wahl: selbst eröffnen oder beitreten — dann zwei Schritte und der Knopf -->
+  <div class="startModus">
+    <div id="netmode">
+      <button type="button" class="netopt on" data-net="host">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+        Neue Runde starten</button>
+      <button type="button" class="netopt" data-net="join">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 3h4a2 2 0 012 2v14a2 2 0 01-2 2h-4M10 17l5-5-5-5M15 12H3"/></svg>
+        Einer Runde beitreten</button>
+    </div>
   </div>
 
   <div class="body">
-    <div class="col">
-      <div>
-        <label class="flabel" for="jname">Firmenname</label>
+    <section class="col schritt">
+      <div class="schrittKopf"><span class="nr">01</span><label class="flabel" for="jname">Deine Firma</label></div>
+      <div class="firmaZeile">
+        <span class="firmaVorschau" id="jvorschau" aria-hidden="true">N</span>
         <input id="jname" placeholder="z. B. Nordwerk &amp; Co." maxlength="20" autocomplete="off">
-        <div class="colors" id="jcolors"></div>
       </div>
+      <div class="colors" id="jcolors"></div>
+      <p class="schrittNotiz">Name und Farbe sehen alle Mitspieler auf Karte und Kurstafel.</p>
+    </section>
 
-      <div>
-        <label class="flabel" id="netstep">Mitspieler einladen</label>
+    <section class="col schritt">
+      <div class="schrittKopf"><span class="nr">02</span><label class="flabel" id="netstep">Mitspieler einladen</label></div>
         <div id="invite">
           <div class="joinbox">
             <div class="lbl">
@@ -1295,7 +1314,7 @@ td:first-child{font-family:var(--font)}
               <em>Sie steht dann für alle auf dem Startbildschirm und ist ohne Code zu betreten.</em></span>
           </label>
         </div>
-        <div id="joinCodeRow" style="display:none">
+        <div id="joinCodeRow"        <div id="joinCodeRow" style="display:none">
           <div id="oeffListe"></div>
           <div class="joinbox">
             <div class="lbl">
@@ -1306,28 +1325,57 @@ td:first-child{font-family:var(--font)}
             <p id="joinCodeStatus" style="margin-top:8px"></p>
           </div>
         </div>
-      </div>
+    </section>
+  </div>
 
-      <!-- Ablauf in drei Schritten: steht links, weil die Branchenauswahl
-           rechts sonst allein die ganze Spaltenhöhe tragen müsste. -->
-      <div class="how">
-        <div class="hrow"><span>1</span><div><b>Bauen</b> <em>Kachel freischalten, Betrieb hochziehen, Rohstoffe verarbeiten.</em></div></div>
-        <div class="hrow"><span>2</span><div><b>Handeln</b> <em>Im eigenen Laden, an der Börse mit den anderen oder für die Stadt.</em></div></div>
-        <div class="hrow"><span>3</span><div><b>Gewinnen</b> <em>Wer zuerst das Vermögensziel knackt, gewinnt die Runde.</em></div></div>
-      </div>
+  <div class="foot">
+    <div id="joinErr"></div>
+    <button class="go" id="jgo">Runde erstellen</button>
+    <p id="foothint">Ziel und Bots stellst du gleich im Warteraum ein.</p>
+  </div>
 
-      <!-- Bestenliste: die besten Nettovermögen bisheriger Runden auf diesem
-           Server — als Ansporn, die eigene Bestmarke zu schlagen. Bleibt
-           leer/versteckt, bis die erste Runde beendet wurde. -->
+  <!-- Ablauf und Modi: unter dem Knopf, für alle, die das Spiel noch nicht kennen -->
+  <div class="startInfo">
+    <div class="how">
+      <div class="hrow"><span>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><path d="M3 21h18M5 21V10l7-5 7 5v11M9 21v-6h6v6"/></svg></span>
+        <div><b>Bauen</b> <em>Kachel freischalten, Betrieb hochziehen, Rohstoffe verarbeiten.</em></div></div>
+      <div class="hrow"><span>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 7h13l-3-3M17 17H4l3 3"/></svg></span>
+        <div><b>Handeln</b> <em>Im eigenen Laden, an der Börse mit den anderen oder für die Stadt.</em></div></div>
+      <div class="hrow"><span>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 01-10 0V4zM17 6h3v2a3 3 0 01-3 3M7 6H4v2a3 3 0 003 3"/></svg></span>
+        <div><b>Gewinnen</b> <em>Wer zuerst das Vermögensziel knackt, gewinnt die Runde.</em></div></div>
+    </div>
+
+    <div class="startModi">
+      <div class="flabel">Spielmodi <span class="meta">— im Warteraum wählbar</span></div>
+      <div class="modiReihe">
+        <div class="modusChip"><b>Sandbox</b><em>Freies Wirtschaften bis zum Vermögensziel</em></div>
+        <div class="modusChip"><b>Planwirtschaft</b><em>Plansolls erfüllen, Planpunkte sammeln</em></div>
+        <div class="modusChip"><b>Einsteiger</b><em>Geführte Runde zum Kennenlernen</em></div>
+        <div class="modusChip"><b>Race Day</b><em>Rennställe, Fahrer und Preisgeld</em></div>
+        <div class="modusChip neu"><b>Kartell <i>Neu</i></b><em>Familien, Schutzgeld und Razzien</em></div>
+      </div>
+    </div>
+
       <div id="hofBox" style="display:none">
         <label class="flabel" style="margin-top:14px">🏆 Bestenliste dieses Servers</label>
         <div id="hofListe"></div>
       </div>
+  </div>
+
+  <div class="startFuss">
+    <div class="betaZeile"><b>Beta</b> — Fehler sind wahrscheinlich, und mit jeder Aktualisierung gehen
+      laufende Runden verloren. Meldungen gern über <b>Fehler melden</b> unten rechts im Spiel.</div>
+    <div id="joinFoot">
+      <span>capital-sandbox · läuft im Browser · <a href="datenschutz.html" style="color:inherit;text-decoration:underline">Datenschutz</a> · <a href="impressum.html" style="color:inherit;text-decoration:underline">Impressum</a></span>
+      <div class="right"><span class="pulse"><i></i><b></b></span><span id="joinWaiting">—</span></div>
     </div>
+  </div>
 
-    <div class="divider"></div>
-
-    <div class="col">
+  <!-- Branchenwahl: wandert beim Laden in den Warteraum (siehe unten) -->
+  <div hidden>
       <div id="jind">
         <!-- Nur im Renntag sichtbar: dort ersetzen zwei Rollen die sechs Branchen. -->
         <button type="button" data-ind="rennclub" class="indopt rennrolle" style="display:none;--ac:#38bdf8;--ac08:rgba(56,189,248,.03);--ac15:rgba(56,189,248,.08);--ac18:rgba(56,189,248,.09);--ac35:rgba(56,189,248,.21);--ac50:rgba(56,189,248,.31)">
@@ -1363,30 +1411,7 @@ td:first-child{font-family:var(--font)}
           <span class="txt"><span class="head"><b>Rüstung</b><span class="chosen">Gewählt</span></span>
           <small>Munition, Pistolen und Panzer — die wertvollsten Güter, aber am Ende jeder Lieferkette.</small></span></button>
       </div>
-    </div>
   </div>
-
-  <!-- Teaser für den kommenden Kartell-Modus: Bild mit eingebranntem Titel,
-       dazu Badge und ein periodischer Lichtstreif, damit es nach Ankündigung
-       aussieht und nicht nach klickbarem Inhalt. -->
-  <div id="kartellTeaser" aria-label="Kartellwirtschaft — neuer Spielmodus, bald verfügbar">
-    <img src="assets/kartell-teaser.jpg" alt="Kartellwirtschaft — Coming Soon">
-    <span class="badge">Neuer Spielmodus</span>
-    <div class="glanz" aria-hidden="true"></div>
-  </div>
-
-  <div class="foot">
-    <!-- Rundenziel und Bots stellt der Host im Warteraum ein — dort sehen alle
-         die Einstellungen live mit, statt sie hier blind vorab zu wählen. -->
-    <p id="foothint">Ziel und Bots stellst du gleich im Warteraum ein.</p>
-    <div id="joinErr"></div>
-    <button class="go" id="jgo">Runde erstellen</button>
-    <div id="joinFoot">
-      <span>capital-sandbox · läuft im Browser · <a href="datenschutz.html" style="color:inherit;text-decoration:underline">Datenschutz</a> · <a href="impressum.html" style="color:inherit;text-decoration:underline">Impressum</a></span>
-      <div class="right"><span class="pulse"><i></i><b></b></span><span id="joinWaiting">—</span></div>
-    </div>
-  </div>
-
 </div></div>
 
 <div id="lobbyWait"><div class="card" data-topo-avoid>
@@ -1704,6 +1729,7 @@ td:first-child{font-family:var(--font)}
     <div class="bReiter" role="tablist" aria-label="Stadtbank">
       <button type="button" role="tab" data-breiter="markt" class="on">Markt</button>
       <button type="button" role="tab" data-breiter="handeln">Handeln<i id="bReiterHandeln"></i></button>
+      <button type="button" role="tab" data-breiter="wetten">Kurswetten<i id="bReiterWetten"></i></button>
       <button type="button" role="tab" data-breiter="depot">Depot<i id="bReiterDepot"></i></button>
     </div>
 
@@ -1737,6 +1763,25 @@ td:first-child{font-family:var(--font)}
           <div class="meta" id="shHint"></div>
         </div>
       </div>
+    </section>
+
+    <!-- Kurswetten: long/short auf den Firmenwert einer Runde. Formular statisch,
+         damit ein State-Update die Eingabe nicht wegwischt. -->
+    <section data-bseite="wetten" hidden>
+      <div id="wKopf"></div>
+      <div id="wFirmen"></div>
+      <div class="wForm" id="wForm">
+        <label class="breit"><span>Firma</span><select id="wFirma"></select></label>
+        <div class="wRichtung breit" role="radiogroup" aria-label="Richtung">
+          <button type="button" data-wrichtung="long" class="on"><b>▲ Long</b><small>Firmenwert steigt</small></button>
+          <button type="button" data-wrichtung="short"><b>▼ Short</b><small>Firmenwert fällt</small></button>
+        </div>
+        <label class="breit"><span>Einsatz $</span><input id="wEinsatz" type="number" min="100" step="100" value="500"></label>
+        <div class="wSchnell breit"><button type="button" data-wanteil=".1">10 %</button><button type="button" data-wanteil=".25">25 %</button><button type="button" data-wanteil=".5">50 %</button><button type="button" data-wanteil="1">Max</button></div>
+        <div class="wVorschau breit" id="wVorschau"></div>
+        <button class="bknopf kauf breit" id="wSetzen">Wette setzen</button>
+      </div>
+      <div id="wMeine"></div>
     </section>
 
     <section data-bseite="depot" hidden>
@@ -1976,21 +2021,27 @@ td:first-child{font-family:var(--font)}
 <div id="toasts"></div>
 <div id="win"><div class="wincard">
   <div class="winhead">
+    <div class="winKicker" id="winKicker">Runde beendet</div>
     <h1><span id="winname"></span> gewinnt!</h1>
     <p id="winsub">Das Rundenziel wurde erreicht.</p>
   </div>
-  <div id="wintable"></div>
-  <div id="winawards"></div>
+  <div id="winPodest"></div>
+  <div id="winMein"></div>
+  <div class="winAbschnitt"><div class="winTitel">Endstand</div><div id="wintable"></div></div>
+  <div class="winAbschnitt" id="winAwardsBox"><div class="winTitel">Auszeichnungen</div><div id="winawards"></div></div>
   <div class="winfoot">
+    <button type="button" id="winKarte">Karte ansehen</button>
     <button id="winNew">Neue Runde starten</button>
     <p>Setzt Karte, Firmen und Kurse zurück — auch für die Mitspieler.</p>
   </div>
 </div></div>
+<button type="button" id="winWieder" hidden>🏆 Auswertung</button>
 
 <script src="vendor/socket.io.min.js"></script>
 <script src="vendor/peerjs.min.js"></script>
 <script src="topo.js"></script>
 <script src="flaeche.js"></script>
+<script src="updates.js"></script>
 <script>
 /* ================================================================
  * Einstellungen (Grafik, Steuerung, Sound) — im Browser gemerkt.
@@ -3596,26 +3647,48 @@ function zeigeAuswertung(state) {
         : `${fmt(state.winGoal)} Nettovermögen wurde erreicht.`;
   if (!r) return;
   auswertungGezeigt = true;
-
-  const kopf = ["Firma", "Nettovermögen", "Umsatz", "Produziert", "Gebäude", "Großaufträge", "Beteiligungen"];
-  document.getElementById("wintable").innerHTML = `<table><thead><tr>${
-    kopf.map(h => `<th>${h}</th>`).join("")}</tr></thead><tbody>${
-    r.zeilen.map((z, i) => `<tr class="${z.sieger ? "sieger" : ""}">
-      <td><span class="pl" style="background:${z.color}">${z.name[0].toUpperCase()}</span>${z.name}${z.sieger ? '<span style="color:var(--accent);font-weight:700"> · Sieger</span>' : ""}</td>
-      <td>${fmt(z.netWorth)}</td>
-      <td>${fmt(z.umsatz)}</td>
-      <td>${z.produziertStk.toLocaleString("de-DE")}</td>
-      <td>${z.gebaeude}${z.stufen ? ` <span style="color:var(--accent)">★${z.stufen}</span>` : ""}</td>
-      <td>${z.grossauftraege || "—"}</td>
-      <td>${z.beteiligungswert ? fmt(z.beteiligungswert) : "—"}</td>
-    </tr>`).join("")}</tbody></table>`;
-
+  const myId = store.get().myId;
+  document.getElementById("winKicker").textContent = state.tutorialEnde ? "Tutorial geschafft" : `Runde beendet · ${r.dauerMin} min`;
+  const marke = (z, gr) => { const u = logoUrl(z.name);
+    return u ? `<span class="winMarke logo" style="--g:${gr}px"><img src="${u}" alt=""></span>`
+             : `<span class="winMarke" style="--g:${gr}px;--f:${z.color}">${z.name[0].toUpperCase()}</span>`; };
+  /* Podest: Platz 2 – 1 – 3 */
+  const top = r.zeilen.slice(0, 3);
+  const reihenfolge = [top[1], top[0], top[2]].filter(Boolean);
+  document.getElementById("winPodest").innerHTML = reihenfolge.map(z => {
+    const platz = r.zeilen.indexOf(z) + 1;
+    return `<div class="podPlatz p${platz}${z.id === myId ? " ich" : ""}">
+      ${platz === 1 ? `<svg class="krone" width="30" height="22" viewBox="0 0 30 22" aria-hidden="true"><path d="M2 20h26L26 6l-6 6-5-10-5 10-6-6z" fill="currentColor"/></svg>` : ""}
+      ${marke(z, platz === 1 ? 64 : 48)}
+      <b>${z.name}</b><span class="nw">${fmt(z.netWorth)}</span>
+      <div class="sockel"><span>${platz}</span></div></div>`; }).join("");
+  /* Eigenes Ergebnis */
+  const ichIdx = r.zeilen.findIndex(z => z.id === myId), ich = r.zeilen[ichIdx];
+  document.getElementById("winMein").innerHTML = ich ? `<div class="winMeinBox${ich.sieger ? " sieg" : ""}">
+      <span class="winMeinPlatz">${ichIdx + 1}.</span>
+      <div><b>${ich.sieger ? "Glückwunsch — du hast gewonnen!" : `Dein Platz: ${ichIdx + 1} von ${r.zeilen.length}`}</b>
+        <span class="meta">${fmt(ich.netWorth)} Nettovermögen · ${fmt(ich.umsatz)} Umsatz · ${ich.gebaeude} Gebäude</span></div></div>` : "";
+  /* Endstand: Balken relativ zum Sieger */
+  const maxNw = Math.max(1, ...r.zeilen.map(z => z.netWorth));
+  document.getElementById("wintable").innerHTML = r.zeilen.map((z, i) => `
+    <div class="winZeile${z.sieger ? " sieger" : ""}${z.id === myId ? " ich" : ""}">
+      <span class="rang">${i + 1}</span>${marke(z, 30)}
+      <div class="winName"><b>${z.name}${z.id === myId ? ` <em>du</em>` : ""}</b>
+        <div class="winBalken"><i style="width:${Math.max(2, z.netWorth / maxNw * 100).toFixed(1)}%;background:${z.color}"></i></div>
+        <span class="meta">Umsatz ${fmt(z.umsatz)} · ${z.produziertStk.toLocaleString("de-DE")} Stück · ${z.gebaeude} Gebäude${z.stufen ? ` ★${z.stufen}` : ""}${z.grossauftraege ? ` · ${z.grossauftraege} Großaufträge` : ""}${z.beteiligungswert ? ` · Beteiligungen ${fmt(z.beteiligungswert)}` : ""}</span></div>
+      <span class="winNw">${fmt(z.netWorth)}</span></div>`).join("");
+  document.getElementById("winAwardsBox").hidden = !r.auszeichnungen.length;
   document.getElementById("winawards").innerHTML = r.auszeichnungen.map(a => `
-    <div class="award"><div class="t">${a.titel}</div>
-      <div class="n" style="color:${a.color}">${a.name}</div>
+    <div class="award" style="--f:${a.color}"><div class="t">${a.titel}</div>
+      <div class="n">${a.name}</div>
       <div class="v">${a.wert}</div>
       ${a.zusatz ? `<div class="z">${a.zusatz}</div>` : ""}</div>`).join("");
 }
+let WIN_ZU = false;
+document.getElementById("winKarte").addEventListener("click", () => {
+  WIN_ZU = true; document.getElementById("win").style.display = "none"; document.getElementById("winWieder").hidden = false; });
+document.getElementById("winWieder").addEventListener("click", () => {
+  WIN_ZU = false; document.getElementById("winWieder").hidden = true; document.getElementById("win").style.display = "grid"; });
 
 function backToLobby() {
   cachedFullMap = null;
@@ -3625,8 +3698,9 @@ function backToLobby() {
   myToken = null;
   try { localStorage.removeItem(TOKEN_KEY); } catch {}
   store.set({ state: null, me: null, meta: null, myId: null, chat: {} });
-  auswertungGezeigt = false;
+  auswertungGezeigt = false; WIN_ZU = false;
   document.getElementById("win").style.display = "none";
+  document.getElementById("winWieder").hidden = true;
   document.getElementById("joinErr").textContent = "";
   openPanel("karte", true);   // Rückkehr in die Lobby ist kein Panel-Klick
   tutDone();
@@ -3887,6 +3961,8 @@ const EN = {
   "Datenschutz": "Privacy", "Impressum": "Legal notice", "Überspringen": "Skip",
   "Ton einschalten": "Turn on sound", "Bitte Rundencode eingeben": "Please enter a round code",
   "Bauen": "Build", "Handeln": "Trade", "Gewinnen": "Win",
+  "Kurswetten": "Stock bets", "Wette setzen": "Place bet", "Firmenwert steigt": "Value rises", "Firmenwert fällt": "Value falls",
+  "Markt": "Market", "Depot": "Portfolio",
   /* Leiste unten und Panels */
   "Karte": "Map", "Lager": "Storage", "Börse": "Exchange", "Finanzen": "Finance",
   "Firma": "Company", "Lexikon": "Encyclopedia", "Chat": "Chat",
@@ -7416,6 +7492,13 @@ function bankReiterZeigen() {
 document.getElementById("p-bank").addEventListener("click", e => {
   const reiter = e.target.closest("[data-breiter]");
   if (reiter) { BANK_REITER = reiter.dataset.breiter; bankReiterZeigen(); SFX.spiel("klick"); return; }
+  const wr = e.target.closest("[data-wrichtung]");
+  if (wr) { W_RICHTUNG = wr.dataset.wrichtung; kurswettenRendern(); SFX.spiel("klick"); return; }
+  const wa = e.target.closest("[data-wanteil]");
+  if (wa) { const max = store.get().me?.wettMax || 0;
+    document.getElementById("wEinsatz").value = Math.max(100, Math.floor(max * +wa.dataset.wanteil / 100) * 100); kurswettenRendern(); return; }
+  const wf = e.target.closest("[data-wfirma]");
+  if (wf) { document.getElementById("wFirma").value = wf.dataset.wfirma; kurswettenRendern(); SFX.spiel("klick"); return; }
   const zuHandeln = e.target.closest("[data-zu-handeln]");
   if (zuHandeln) { BANK_REITER = "handeln"; bankReiterZeigen();
     const sel = document.getElementById("bidCompany"); if ([...sel.options].some(o => o.value === zuHandeln.dataset.zuHandeln)) sel.value = zuHandeln.dataset.zuHandeln;
@@ -7436,6 +7519,91 @@ document.getElementById("p-bank").addEventListener("click", e => {
   const bidCancel = e.target.closest("[data-bidcancel]");
   if (bidCancel) { act("cancelShareBid", { bidId: +bidCancel.dataset.bidcancel }); return; }
 });
+/* ---------- Kurswetten ----------
+ * Long = man setzt auf steigenden Firmenwert, Short auf fallenden. Der Server
+ * friert die Werte beim Ende der Annahme ein und rechnet nach der Laufzeit ab.
+ * Verlierer zahlen Einsatz × min(1, |Änderung| × Hebel) an die Gewinnerseite. */
+let W_RICHTUNG = "long";
+const zeitFmt = s => `${Math.floor(s / 60)}:${String(Math.max(0, s) % 60).padStart(2, "0")}`;
+function kurswettenRendern() {
+  const S = store.get(), state = S.state, me = S.me || {}, myId = S.myId;
+  const R = state?.wettrunde;
+  if (!R || !document.getElementById("wKopf")) return;
+  const annahme = R.phase === "annahme";
+  const meine = me.meineWetten || [];
+  document.getElementById("bReiterWetten").textContent = meine.length ? meine.length : "";
+  const anteil = 1 - R.rest / R.dauer;
+  document.getElementById("wKopf").innerHTML = `<div class="wPhase ${annahme ? "offen" : "laeuft"}">
+      <div class="wPhaseText"><span class="wPunkt"></span><b>Runde ${R.nr} · ${annahme ? "Annahme offen" : "Läuft — Kurse eingefroren"}</b>
+        <span class="wUhr">${zeitFmt(R.rest)}</span></div>
+      <div class="wBalken"><i style="width:${(anteil * 100).toFixed(1)}%"></i></div>
+      <div class="meta">${annahme ? "Wetten setzen bis zum Ende der Annahme, danach 5 min Laufzeit." : "Abrechnung, wenn die Uhr abläuft. Neue Wetten ab der nächsten Annahme."}
+        Hebel ×${R.hebel}: bei ${Math.round(100 / R.hebel)} % Bewegung ist der ganze Einsatz im Spiel · ${Math.round(R.gebuehr * 100)} % Bankgebühr.</div></div>`;
+
+  /* Formular: nur Firmen, auf die man wetten darf */
+  const sel = document.getElementById("wFirma"), vorher = sel.value;
+  const erlaubt = R.firmen.filter(f => f.id !== myId && (state.players[f.id]?.equity?.[myId] || 0) < 2);
+  const opts = erlaubt.map(f => `<option value="${f.id}">${f.name}</option>`).join("") || `<option value="">Keine Firma verfügbar</option>`;
+  if (sel.dataset.sig !== opts) { sel.innerHTML = opts; sel.dataset.sig = opts; }
+  if (erlaubt.some(f => f.id === vorher)) sel.value = vorher;
+  const ziel = R.firmen.find(f => f.id === sel.value);
+  const eigene = meine.find(w => w.firmaId === sel.value);
+  if (eigene) W_RICHTUNG = eigene.richtung;
+  document.querySelectorAll("[data-wrichtung]").forEach(b => {
+    b.classList.toggle("on", b.dataset.wrichtung === W_RICHTUNG);
+    b.disabled = !!eigene && b.dataset.wrichtung !== eigene.richtung; });
+  const einsatz = +document.getElementById("wEinsatz").value || 0;
+  document.getElementById("wForm").hidden = !annahme;
+  const knopf = document.getElementById("wSetzen");
+  knopf.disabled = !annahme || !ziel;
+  knopf.textContent = !annahme ? `Annahme wieder in ${zeitFmt(R.rest)}` : eigene ? "Einsatz erhöhen" : "Wette setzen";
+  knopf.classList.toggle("kauf", W_RICHTUNG === "long"); knopf.classList.toggle("verkauf", W_RICHTUNG === "short");
+  /* Vorschau: was bei ±5 % Bewegung herauskäme — mit den aktuellen Töpfen */
+  let vorschau = "";
+  if (ziel && einsatz > 0) {
+    const eigen = (W_RICHTUNG === "long" ? ziel.long : ziel.short) + einsatz;
+    const gegen = W_RICHTUNG === "long" ? ziel.short : ziel.long;
+    const bew = 0.05, teil = Math.min(1, bew * R.hebel);
+    const plus = gegen * teil * (1 - R.gebuehr) * einsatz / eigen;
+    vorschau = gegen
+      ? `<span>Bei 5 % ${W_RICHTUNG === "long" ? "Anstieg" : "Rückgang"}</span><b class="plus">+${fmt(plus)}</b>
+         <span>Bei 5 % Gegenbewegung</span><b class="minus">−${fmt(einsatz * teil)}</b>`
+      : `<span class="meta" style="grid-column:1/-1">Noch keine Gegenseite — ohne Gegenwette gibt es den Einsatz zurück.</span>`;
+    vorschau += `<span>Dein Rahmen</span><b>${fmt(me.wettMax || 0)}</b>`;
+  }
+  document.getElementById("wVorschau").innerHTML = vorschau;
+
+  /* Firmenliste mit Töpfen */
+  const firmen = [...R.firmen].sort((a, b) => (b.long + b.short) - (a.long + a.short) || b.jetzt - a.jetzt);
+  document.getElementById("wFirmen").innerHTML = `<div class="sec bTafelKopf"><span>Firmen</span><span class="meta">${annahme ? "Long gegen Short — antippen zum Auswählen" : "Änderung seit Rundenstart"}</span></div>` +
+    firmen.map(f => {
+      const sum = f.long + f.short, lp = sum ? f.long / sum * 100 : 50;
+      const aend = f.start ? (f.jetzt - f.start) / f.start * 100 : null;
+      const mw = meine.find(w => w.firmaId === f.id);
+      const gesperrt = f.id === myId || (state.players[f.id]?.equity?.[myId] || 0) >= 2;
+      return `<div class="wFirma${f.id === sel.value ? " gewaehlt" : ""}${gesperrt ? " gesperrt" : ""}" ${gesperrt ? "" : `data-wfirma="${f.id}"`}>
+        <div class="wFKopf">${firmenMarke(f.name, f.farbe, 28)}${f.id === myId ? ` <span class="meta">(du)</span>` : ""}
+          <span class="wWert">${fmt(f.jetzt)}${aend != null ? ` <em class="${aend >= 0 ? "plus" : "minus"}">${aend >= 0 ? "+" : ""}${aend.toFixed(1)} %</em>` : ""}</span></div>
+        <div class="wPool"><span class="l">▲ ${fmt(f.long)}</span><div class="wPoolBar${sum ? "" : " leer"}"><i style="width:${lp}%"></i></div><span class="s">${fmt(f.short)} ▼</span></div>
+        ${mw ? `<div class="wMein ${mw.richtung}">Deine Wette: ${mw.richtung === "long" ? "▲ Long" : "▼ Short"} · ${fmt(mw.einsatz)}</div>` : ""}
+      </div>`; }).join("");
+
+  /* Ergebnisse */
+  const log = me.wettLog || [];
+  const letzte = (R.letzte || []).filter(e => e.gewinner);
+  document.getElementById("wMeine").innerHTML =
+    (log.length ? `<div class="sec">Deine Ergebnisse</div>` + log.map(e => {
+      const d = e.auszahlung - e.einsatz;
+      return `<div class="wErg"><span>R${e.runde} · ${e.firma} · ${e.richtung === "long" ? "▲ Long" : "▼ Short"} · ${fmt(e.einsatz)}</span>
+        <b class="${d > 0 ? "plus" : d < 0 ? "minus" : ""}">${d > 0 ? "+" : d < 0 ? "−" : "±"}${fmt(Math.abs(d))}</b></div>`; }).join("") : "") +
+    (letzte.length ? `<div class="sec">Letzte Runde</div>` + letzte.map(e => `<div class="wErg"><span>${e.name} · ${e.aenderung >= 0 ? "+" : ""}${(e.aenderung * 100).toFixed(1)} %</span>
+        <b>${e.gewinner === "long" ? "▲ Long gewinnt" : "▼ Short gewinnt"} · ${fmt(e.topf)}</b></div>`).join("") : "");
+}
+document.getElementById("wFirma").addEventListener("change", kurswettenRendern);
+document.getElementById("wEinsatz").addEventListener("input", kurswettenRendern);
+document.getElementById("wSetzen").addEventListener("click", () => act("kurswetteSetzen", {
+  firmaId: document.getElementById("wFirma").value, richtung: W_RICHTUNG,
+  einsatz: +document.getElementById("wEinsatz").value }));
 document.getElementById("bidSend").addEventListener("click", () => act("bidShares", {
   companyId: document.getElementById("bidCompany").value,
   count: document.getElementById("bidCount").value,
@@ -7572,7 +7740,7 @@ const SFX = (() => {
  * ein Klang auf wirklich jeden Handgriff würde schnell nerven. */
 const SFX_AKTION = {
   build: "bau", upgradeBuilding: "bau", demolish: "bau", unlockTile: "bau", stallEinstellen: "bau",
-  placeOrder: "geld", takeOrder: "geld", buyShares: "geld", bidShares: "geld",
+  placeOrder: "geld", takeOrder: "geld", buyShares: "geld", bidShares: "geld", kurswetteSetzen: "geld",
   acceptShareBid: "geld", listShares: "geld", buyBond: "geld", issueBond: "geld",
   bid: "geld", acceptContract: "geld", contribute: "geld", mergeCompany: "geld",
   bookAd: "geld", configureShop: "klick", togglePause: "klick",
@@ -9805,7 +9973,8 @@ function render({ state, me, myId, chat, room }) {
     .map(p => { const u = logoUrl(p.name), t = `${p.name} · ${fmt(p.netWorth)} · ${p.rating}`;
       return u ? `<img class="plLogo" src="${u}" alt="${p.name}" title="${t}">`
                : `<span class="pl" style="background:${p.color}" title="${t}">${p.name[0].toUpperCase()}</span>`; }).join("");
-  if (state.winner) { document.getElementById("win").style.display = "grid";
+  if (state.winner) { document.getElementById("win").style.display = WIN_ZU ? "none" : "grid";
+    document.getElementById("winWieder").hidden = !WIN_ZU;
     document.getElementById("winname").textContent = state.winner;
     zeigeAuswertung(state);
   }
@@ -10122,6 +10291,7 @@ function render({ state, me, myId, chat, room }) {
 
     document.getElementById("bReiterHandeln").textContent = bidsToMe.length ? bidsToMe.length : "";
     document.getElementById("bReiterDepot").textContent = me.portfolio?.length ? me.portfolio.length : "";
+    kurswettenRendern();
     bankReiterZeigen();
     /* Depot: was man an fremden Firmen hält, mit aktuellem Wert */
     document.getElementById("bankdepot").innerHTML = me.portfolio?.length
@@ -11314,6 +11484,57 @@ const kap = k => (SPRACHE === "en" && k.en) ? { ...k, ...k.en } : k;
   });
   document.addEventListener("keydown", e => { if (e.key === "Escape" && !dlg.hidden) zu(); });
   document.addEventListener("click", e => { if (e.target.closest("[data-einst-auf]")) { e.preventDefault(); auf(); } });
+})();
+</script>
+<script>
+/* "Was ist neu" auf der Startseite — Daten aus updates.js */
+(() => {
+  const liste = document.getElementById("updListe"), box = document.getElementById("updates");
+  if (!liste || !window.UPDATES?.length) { box?.remove(); document.querySelector("[data-upd-auf]")?.remove(); return; }
+  const ART = { neu: ["Neu", "New"], besser: ["Besser", "Improved"], fix: ["Fix", "Fix"] };
+  const sprache = () => (typeof SPRACHE !== "undefined" && SPRACHE === "en") ? "en" : "de";
+  const datum = (d, en) => new Date(d + "T12:00:00").toLocaleDateString(en ? "en-GB" : "de-DE", { day: "numeric", month: "long", year: "numeric" });
+  const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+  let gesehen = ""; try { gesehen = localStorage.getItem("cs_updates_gesehen") || ""; } catch {}
+  const neuestes = UPDATES[0].id;
+  function zeichnen() {
+    const en = sprache() === "en";
+    document.getElementById("updKopf").textContent = en ? "What's new" : "Was ist neu";
+    const knopf = document.querySelector("[data-upd-auf]");
+    if (knopf) knopf.childNodes[knopf.childNodes.length - 2].textContent = en ? " What's new" : " Was ist neu";
+    liste.innerHTML = UPDATES.map((u, i) => `<article class="updEintrag${u.id > gesehen && gesehen ? " ungelesen" : ""}">
+      <time datetime="${u.datum}">${datum(u.datum, en)}</time>
+      <h3>${esc(u.titel[en ? "en" : "de"] || u.titel.de)}</h3>
+      <ul>${u.punkte.map(p => `<li><span class="updArt ${p.art}">${ART[p.art]?.[en ? 1 : 0] || p.art}</span>${esc(p[en ? "en" : "de"] || p.de)}</li>`).join("")}</ul>
+    </article>`).join("");
+  }
+  const punkt = document.querySelector(".updPunkt");
+  if (punkt) punkt.hidden = gesehen === neuestes;
+  function gelesen() { try { localStorage.setItem("cs_updates_gesehen", neuestes); } catch {} if (punkt) punkt.hidden = true; }
+  zeichnen();
+  /* Breit: die Spalte ist sichtbar — wer die Startseite sieht, hat sie gesehen */
+  if (matchMedia("(min-width:1560px)").matches) setTimeout(gelesen, 4000);
+  document.addEventListener("click", e => {
+    if (e.target.closest("[data-upd-auf]")) { box.classList.add("offen"); gelesen(); return; }
+    if (e.target.closest("[data-upd-zu]") || e.target === box) box.classList.remove("offen");
+    if (e.target.closest("[data-lang]")) setTimeout(zeichnen, 0);
+  });
+  document.addEventListener("keydown", e => { if (e.key === "Escape") box.classList.remove("offen"); });
+})();
+</script>
+<script>
+/* Startbildschirm: Vorschau der eigenen Firmenmarke (Initiale + Farbe) */
+(() => {
+  const v = document.getElementById("jvorschau"), n = document.getElementById("jname");
+  if (!v || !n) return;
+  const neu = () => {
+    v.textContent = (n.value.trim()[0] || n.placeholder.replace(/^z\. B\. /, "")[0] || "?").toUpperCase();
+    const on = document.querySelector("#jcolors button.on");
+    if (on) v.style.setProperty("--fv", on.style.background || getComputedStyle(on).backgroundColor);
+  };
+  n.addEventListener("input", neu);
+  document.getElementById("jcolors").addEventListener("click", () => setTimeout(neu, 0));
+  neu();
 })();
 </script>
 </body>
