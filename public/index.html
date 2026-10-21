@@ -7538,7 +7538,8 @@ function kurswettenRendern() {
         <span class="wUhr">${zeitFmt(R.rest)}</span></div>
       <div class="wBalken"><i style="width:${(anteil * 100).toFixed(1)}%"></i></div>
       <div class="meta">${annahme ? "Wetten setzen bis zum Ende der Annahme, danach 5 min Laufzeit." : "Abrechnung, wenn die Uhr abläuft. Neue Wetten ab der nächsten Annahme."}
-        Hebel ×${R.hebel}: bei ${Math.round(100 / R.hebel)} % Bewegung ist der ganze Einsatz im Spiel · ${Math.round(R.gebuehr * 100)} % Bankgebühr.</div></div>`;
+        Hebel ×${R.hebel}: bei ${Math.round(100 / R.hebel)} % Bewegung ist der ganze Einsatz im Spiel · ${Math.round(R.gebuehr * 100)} % Bankgebühr.</div>
+      <div class="wReserve"><span>Bank als Gegenpartei</span><b>${fmt(R.reserve ?? 0)}</b><em>Reserve — füllt beim Einfrieren die kleinere Seite auf</em></div></div>`;
 
   /* Formular: nur Firmen, auf die man wetten darf */
   const sel = document.getElementById("wFirma"), vorher = sel.value;
@@ -7562,13 +7563,16 @@ function kurswettenRendern() {
   let vorschau = "";
   if (ziel && einsatz > 0) {
     const eigen = (W_RICHTUNG === "long" ? ziel.long : ziel.short) + einsatz;
-    const gegen = W_RICHTUNG === "long" ? ziel.short : ziel.long;
+    /* Die Bank füllt beim Einfrieren die kleinere Seite auf (max. 25 % ihrer Reserve) */
+    const gegenSpieler = W_RICHTUNG === "long" ? ziel.short : ziel.long;
+    const gegen = gegenSpieler + Math.max(0, Math.min(eigen - gegenSpieler, (R.reserve || 0) * 0.25));
     const bew = 0.05, teil = Math.min(1, bew * R.hebel);
     const plus = gegen * teil * (1 - R.gebuehr) * einsatz / eigen;
     vorschau = gegen
       ? `<span>Bei 5 % ${W_RICHTUNG === "long" ? "Anstieg" : "Rückgang"}</span><b class="plus">+${fmt(plus)}</b>
          <span>Bei 5 % Gegenbewegung</span><b class="minus">−${fmt(einsatz * teil)}</b>`
-      : `<span class="meta" style="grid-column:1/-1">Noch keine Gegenseite — ohne Gegenwette gibt es den Einsatz zurück.</span>`;
+      : `<span class="meta" style="grid-column:1/-1">Die Bankreserve ist leer — ohne Gegenwette gibt es den Einsatz zurück.</span>`;
+    if (gegen > gegenSpieler + 1) vorschau += `<span class="meta" style="grid-column:1/-1">inkl. ${fmt(gegen - gegenSpieler)} von der Bank auf der Gegenseite</span>`;
     vorschau += `<span>Dein Rahmen</span><b>${fmt(me.wettMax || 0)}</b>`;
   }
   document.getElementById("wVorschau").innerHTML = vorschau;
@@ -7585,6 +7589,7 @@ function kurswettenRendern() {
         <div class="wFKopf">${firmenMarke(f.name, f.farbe, 28)}${f.id === myId ? ` <span class="meta">(du)</span>` : ""}
           <span class="wWert">${fmt(f.jetzt)}${aend != null ? ` <em class="${aend >= 0 ? "plus" : "minus"}">${aend >= 0 ? "+" : ""}${aend.toFixed(1)} %</em>` : ""}</span></div>
         <div class="wPool"><span class="l">▲ ${fmt(f.long)}</span><div class="wPoolBar${sum ? "" : " leer"}"><i style="width:${lp}%"></i></div><span class="s">${fmt(f.short)} ▼</span></div>
+        ${f.bank ? `<div class="wBank">Bank hält ${f.bank.richtung === "long" ? "▲ Long" : "▼ Short"} · ${fmt(f.bank.einsatz)}</div>` : ""}
         ${mw ? `<div class="wMein ${mw.richtung}">Deine Wette: ${mw.richtung === "long" ? "▲ Long" : "▼ Short"} · ${fmt(mw.einsatz)}</div>` : ""}
       </div>`; }).join("");
 

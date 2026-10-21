@@ -519,6 +519,10 @@ html[data-theme="papier"] .hmEinst{background:#fffdf7;border:1.5px solid #1f1a14
 .wBalken i{display:block;height:100%;background:var(--up);transition:width .9s linear}
 .wPhase.laeuft .wBalken i{background:var(--accent)}
 .wPhase .meta{line-height:1.45}
+.wReserve{display:grid;grid-template-columns:1fr auto;gap:2px 10px;padding-top:8px;border-top:1px solid var(--line);font-size:12.5px}
+.wReserve span{color:var(--dim)} .wReserve b{font:600 13px var(--mono);color:var(--accent)}
+.wReserve em{grid-column:1/-1;font-style:normal;font-size:11.5px;color:var(--dim);opacity:.8}
+.wBank{font-size:11.5px;color:var(--dim);font-family:var(--mono)}
 .wForm[hidden]{display:none}
 .wForm{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:14px 0 6px;padding-top:12px;border-top:1px solid var(--line)}
 .wForm label{display:flex;flex-direction:column;gap:4px;min-width:0}
