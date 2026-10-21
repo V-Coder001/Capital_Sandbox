@@ -215,6 +215,14 @@ function adminEingriff({ pid, art, betrag, good, menge }) {
     pushState();
     return { ok: true };
   }
+  if (art === "stufe") {
+    const i = Math.round(+betrag);
+    if (!(i >= 0 && i < STEUER_STUFEN.length)) return { status: 400, error: "Stufe ungültig" };
+    G.steuerStufe = i;
+    io.emit("notice", { text: `Finanzamt: ${STUFE_TEXT[STEUER_STUFEN[i].key]} Börsengebühr jetzt ${Math.round(satzBoerse() * 1000) / 10} %, Gewinnsteuer ${Math.round(satzGewinn() * 1000) / 10} %.` });
+    pushState();
+    return { ok: true };
+  }
   if (art === "projekt") {
     if (G.stadtprojekt) return { status: 400, error: "Es läuft schon ein Stadtprojekt" };
     if (G.stadtkasse < 1000) return { status: 400, error: "Stadtkasse fast leer — erst Geld setzen" };
@@ -369,7 +377,11 @@ app.get("/admin", (req, res) => {
     <tr><td>Stadtkasse</td><td class="num">${geld(G.stadtkasse)}</td><td><input type="number" step="1000" value="${Math.round(G.stadtkasse)}" id="fa-stadtkasse">
       <button onclick="konto('stadtkasse')">Setzen</button> <button class="geist" onclick="senden({ art: 'projekt' })">Stadtprojekt starten</button></td></tr>
     <tr><td>Bankreserve (Kurswetten)</td><td class="num">${geld(G.wettReserve)}</td><td><input type="number" step="1000" value="${Math.round(G.wettReserve)}" id="fa-reserve">
-      <button onclick="konto('reserve')">Setzen</button></td></tr></table>`
+      <button onclick="konto('reserve')">Setzen</button></td></tr>
+    <tr><td>Steuerlage <span class="sub">(Lage ${geld(stadtVermoegen())})</span></td><td class="num">${escHtml(steuerStufe().name)} · ×${steuerFaktor()}<br><span class="sub">Börse ${Math.round(satzBoerse() * 1000) / 10} % · Gewinn ${Math.round(satzGewinn() * 1000) / 10} % · Wette ${Math.round(satzWette() * 1000) / 10} %</span></td>
+      <td><select id="fa-stufe">${STEUER_STUFEN.map((st, i) => `<option value="${i}"${i === (G.steuerStufe ?? 2) ? " selected" : ""}>${escHtml(st.name)} (×${st.faktor})</option>`).join("")}</select>
+      <button onclick="senden({ art: 'stufe', betrag: document.getElementById('fa-stufe').value })">Setzen</button>
+      <div class="sub">Wird jede Minute neu bewertet (max. eine Stufe pro Minute).</div></td></tr></table>`
   : `<div class="sub">Im Modus ${escHtml(MODE)} gibt es kein Finanzamt.</div>`}
 </div>
 <div class="karte">
@@ -2829,7 +2841,7 @@ const G = {
   wetten: [],            // {id, spielerId, firmaId, richtung, einsatz}
   wettLetzte: [],        // Ergebnis der letzten Runde je Firma
   wettReserve: 20000,    // Bankreserve für die Kurswetten (WETT_RESERVE)
-  stadtkasse: 0,         // Finanzamt: Anteil der Steuern für Großauftrags-Prämien und Stadtprojekte
+  stadtkasse: 0, steuerStufe: 2, boerseGebuehren: 0,         // Finanzamt: Anteil der Steuern für Großauftrags-Prämien und Stadtprojekte
   steuernGesamt: 0,
   stadtprojekt: null, projektPause: 120, stadtprojekteFertig: [],
   fahrer: [],            // Fahrerpool der Runde: {id, name, land, Werte…, teamId, autoId}
@@ -3007,12 +3019,16 @@ function settleTrade(good, qty, price, buyerId, sellerId) {
     const r = salesRec(buyer, good); r.buyQty += qty; r.buyCost += qty * price;
     buyer.stats.ausgaben += qty * price;
     logTx(buyer, "Kauf", `Kauf ${qty}× ${gname} von ${seller?.name ?? "?"}`, -qty * price); }
-  if (seller) { seller.cash += qty * price; addRevenue(seller, qty * price); gainXp(seller, 2);
+  if (seller) {
+    const geb = Math.round(qty * price * satzBoerse() * 100) / 100;
+    seller.cash += qty * price - geb; addRevenue(seller, qty * price - geb); gainXp(seller, 2);
+    if (geb > 0) { finanzamtEinnahme(geb); G.boerseGebuehren = (G.boerseGebuehren || 0) + geb;
+      seller.stats.steuern = (seller.stats.steuern || 0) + geb; }
     const r = salesRec(seller, good); r.playerQty += qty; r.playerRev += qty * price;
     const summe = qty * price;
     if (!seller.stats.besterHandel || summe > seller.stats.besterHandel.summe)
       seller.stats.besterHandel = { good, qty, price, summe, partner: buyer?.name ?? "?" };
-    logTx(seller, "Verkauf", `Verkauf ${qty}× ${gname} an ${buyer?.name ?? "?"}`, qty * price);
+    logTx(seller, "Verkauf", `Verkauf ${qty}× ${gname} an ${buyer?.name ?? "?"}${geb > 0 ? ` (−${Math.round(geb)} $ Börsengebühr)` : ""}`, qty * price - geb);
     kartellUmsatzMerken(seller, good, qty * price); }
   G.lastTrade[good] = price;
   io.emit("trade", { good, qty, price, buyer: buyer?.name, seller: seller?.name });
@@ -3294,6 +3310,43 @@ const STADTPROJEKTE = [
   { key: "messe", name: "Messehalle" }, { key: "bahnhof", name: "Hauptbahnhof" },
 ];
 const finanzamtAktiv = () => MODE !== "kartell" && MODE !== "plan";
+/* Börsengebühr: der Verkäufer gibt einen Teil des Erlöses jedes Warenbörsen-
+ * Handels an das Finanzamt ab (Basis 20 %, je nach Lage 15–25 %). */
+const BOERSE_GEBUEHR = 0.20;
+/* Dynamische Sätze: Alle 60 s schaut das Finanzamt auf die Lage der Stadt —
+ * Stadtkasse plus das, was die Bankreserve über ihrem Startwert hat (Kurswetten,
+ * die für die Bank gut liefen, machen die Stadt reicher; schlecht gelaufene
+ * ziehen sie runter). Pro Prüfung höchstens eine Stufe, damit nichts springt.
+ * Ein Faktor gilt für alle drei Sätze: Gewinnsteuer, Wettsteuer, Börsengebühr. */
+const STEUER_STUFEN = [
+  { key: "notstand",  name: "Notstand",  faktor: 1.25, bis: 3000 },
+  { key: "knapp",     name: "Knappe Kasse", faktor: 1.10, bis: 10000 },
+  { key: "normal",    name: "Normal",    faktor: 1.00, bis: 35000 },
+  { key: "gut",       name: "Gute Lage", faktor: 0.90, bis: 60000 },
+  { key: "wohlstand", name: "Wohlstand", faktor: 0.75, bis: Infinity },
+];
+const STUFE_TEXT = {
+  notstand:  "NOTSTAND: Die Stadtkasse ist fast leer — alle Steuern und Gebühren +25 %.",
+  knapp:     "Die Stadtkasse wird knapp — Steuern und Gebühren steigen um 10 %.",
+  normal:    "Die Stadtfinanzen sind im Lot — Steuern und Gebühren wieder auf Normalniveau.",
+  gut:       "Der Stadt geht es gut — Steuern und Gebühren sinken um 10 %.",
+  wohlstand: "Wohlstand! Die Stadt hat reichlich Geld — Steuern und Gebühren −25 %.",
+};
+const stadtVermoegen = () => G.stadtkasse + Math.max(-WETT_RESERVE, G.wettReserve - WETT_RESERVE);
+const steuerStufe = () => STEUER_STUFEN[G.steuerStufe ?? 2];
+const steuerFaktor = () => steuerStufe().faktor;
+const satzGewinn = () => STEUER_SATZ * steuerFaktor();
+const satzWette  = () => WETT_STEUER * steuerFaktor();
+const satzBoerse = () => finanzamtAktiv() ? BOERSE_GEBUEHR * steuerFaktor() : 0;
+function steuerStufePruefen() {
+  const v = stadtVermoegen();
+  const ziel = STEUER_STUFEN.findIndex(st => v < st.bis);
+  const alt = G.steuerStufe ?? 2;
+  if (ziel === alt) return;
+  G.steuerStufe = alt + Math.sign(ziel - alt);
+  const st = steuerStufe();
+  io.emit("notice", { text: `Finanzamt: ${STUFE_TEXT[st.key]} Börsengebühr jetzt ${Math.round(satzBoerse() * 1000) / 10} %, Gewinnsteuer ${Math.round(satzGewinn() * 1000) / 10} %.` });
+}
 function steuerBasis(p) {
   const st = p.stats;
   return (st.umsatz || 0) + (st.dividendeRein || 0) + (st.zinsErtrag || 0)
@@ -3302,7 +3355,7 @@ function steuerBasis(p) {
 function steuerSchaetzung(p) {
   const gewinn = steuerBasis(p) - (p.steuerStand ?? 0);
   return { gewinn: Math.round(gewinn),
-           steuer: Math.ceil(Math.max(0, gewinn - STEUER_FREI) * STEUER_SATZ) + Math.round(p.steuerSchuld || 0) };
+           steuer: Math.ceil(Math.max(0, gewinn - STEUER_FREI) * satzGewinn()) + Math.round(p.steuerSchuld || 0) };
 }
 function finanzamtEinnahme(betrag) {
   if (!(betrag > 0)) return;
@@ -3321,7 +3374,7 @@ function steuernErheben() {
     const basis = steuerBasis(p);
     const gewinn = basis - (p.steuerStand ?? 0);
     p.steuerStand = basis;
-    const faellig = Math.ceil(Math.max(0, gewinn - STEUER_FREI) * STEUER_SATZ) + (p.steuerSchuld || 0);
+    const faellig = Math.ceil(Math.max(0, gewinn - STEUER_FREI) * satzGewinn()) + (p.steuerSchuld || 0);
     const zahl = Math.min(faellig, Math.max(0, Math.floor(p.cash)));
     p.cash -= zahl; p.steuerSchuld = faellig - zahl;
     p.stats.steuern = (p.stats.steuern || 0) + zahl;
@@ -3400,12 +3453,16 @@ function stadtprojektAbrechnen(fertig) {
 function finanzamtTick() {
   if (!finanzamtAktiv()) return;
   if (G.nextDividendIn === 60) steuerVorwarnung();
+  if (G.tick % 60 === 0) steuerStufePruefen();
   if (G.stadtprojekt) { if (--G.stadtprojekt.ttl <= 0) stadtprojektAbrechnen(false); }
   else if (--G.projektPause <= 0 && G.stadtkasse >= PROJEKT_SCHWELLE) stadtprojektStarten();
 }
 function finanzamtPublic() {
   return { aktiv: finanzamtAktiv(), stadtkasse: Math.round(G.stadtkasse), reserve: Math.round(G.wettReserve),
-    gesamt: Math.round(G.steuernGesamt), satz: STEUER_SATZ, frei: STEUER_FREI, wettSteuer: WETT_STEUER,
+    gesamt: Math.round(G.steuernGesamt), satz: satzGewinn(), frei: STEUER_FREI, wettSteuer: satzWette(),
+    boerse: satzBoerse(), boerseBasis: BOERSE_GEBUEHR, stufe: steuerStufe().key, stufeName: steuerStufe().name,
+    faktor: steuerFaktor(), lage: Math.round(stadtVermoegen()), stufen: STEUER_STUFEN.map(st => ({ key: st.key, name: st.name, faktor: st.faktor, bis: isFinite(st.bis) ? st.bis : null })),
+    boerseGesamt: Math.round(G.boerseGebuehren || 0),
     reserveAnteil: STEUER_RESERVE_ANTEIL, praemieAnteil: PRAEMIE_ANTEIL, schwelle: PROJEKT_SCHWELLE,
     naechsterIn: G.nextDividendIn, fertig: G.stadtprojekteFertig };
 }
@@ -3493,7 +3550,7 @@ function wettenAbrechnen() {
     for (const w of ws) if (w.richtung === gew) {
       let plus = netto * (w.einsatz / gewPool);
       /* Finanzamt: 10 % auf den Reingewinn der Spieler (nicht der Bank) */
-      if (!w.bank && finanzamtAktiv()) { const st = plus * WETT_STEUER; plus -= st; finanzamtEinnahme(st);
+      if (!w.bank && finanzamtAktiv()) { const st = plus * satzWette(); plus -= st; finanzamtEinnahme(st);
         const wp = G.players[w.spielerId]; if (wp) wp.stats.steuern = (wp.stats.steuern || 0) + st; }
       wettAuszahlen(w, w.einsatz + plus, `Wette auf ${name} gewonnen`);
       if (!w.bank) emitTo(w.spielerId, "notice", { text: `Kurswette ${name} gewonnen: +${Math.round(plus)} $${finanzamtAktiv() ? " (nach Steuer)" : ""}` });
@@ -6291,7 +6348,7 @@ io.on("connection", socket => {
     G.groupOrder = null; G.nextGroupIn = 20;
     G.nextDividendIn = DIVIDEND_INTERVAL;
     G.wettrunde = { nr: 1, phase: "annahme", rest: WETT_ANNAHME, start: {} }; G.wetten = []; G.wettLetzte = []; G.wettReserve = WETT_RESERVE;
-    G.stadtkasse = 0; G.steuernGesamt = 0; G.stadtprojekt = null; G.projektPause = 120; G.stadtprojekteFertig = [];
+    G.stadtkasse = 0; G.steuerStufe = 2; G.boerseGebuehren = 0; G.steuernGesamt = 0; G.stadtprojekt = null; G.projektPause = 120; G.stadtprojekteFertig = [];
     for (const pl of Object.values(G.players)) { pl.steuerStand = undefined; pl.steuerSchuld = 0; pl.steuerLetzter = null; }
     for (const pl of Object.values(G.players)) { pl.wettOffen = 0; pl.wettLog = []; }
     /* Preisanker zurücksetzen — sonst startet die neue Runde mit den
