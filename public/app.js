@@ -5503,10 +5503,10 @@ function finanzamtRendern(state, me, myId) {
             <input type="number" min="1" id="sp-${g}" placeholder="Menge">
             <button class="buyb" data-sp="${g}" ${(me.inv[g] || 0) < 1 || n.have >= n.req ? "disabled" : ""}>Liefern</button></div></div>`; }).join("")}
       <div class="faLieferanten">${Object.values(P.contrib).map(c => `<span style="--f:${c.color || "#888"}">${c.name}${c.bot ? " · Bot" : ""}</span>`).join("") || `<span class="meta">Noch keine Lieferungen — Spieler und Bots liefern gemeinsam.</span>`}</div>` : ""}
-    <div class="sec">Aktien des Finanzamts <span class="meta">· Stabilisator</span></div>
-    ${(F.portfolio || []).length ? `<div class="faPortfolio">${F.portfolio.map(f => `<div class="kzrow"><span>${f.firma} <span class="meta">· ${f.aktien} Aktien</span></span><b>${fmt(f.wert)} <span class="meta">Buchwert ${fmt(f.buchwert)}</span></b></div>`).join("")}</div>`
-      : `<div class="meta">Noch keine Aktien.</div>`}
-    <div class="meta faLageText">Liegt der Kurs einer Firma mehr als ${Math.round((F.theta ?? 0.1) * 100)} % unter ihrem Wert F, kauft das Finanzamt — aus Angeboten oder per Kaufanfrage, höchstens ${F.maxAnteil ?? 20} Aktien je Firma, bezahlt nur aus dem Geld über der Projektschwelle — Stadtprojekte gehen vor. Liegt der Kurs mehr als ${Math.round((F.theta ?? 0.1) * 100)} % darüber, verkauft es. Seine Aktien stehen immer zum Wert + 5 % im Angebot, Übernahmen bleiben also möglich. Dividenden darauf fließen in die Stadtkasse.</div>
+    <div class="sec">Portfolio des Finanzamts <span class="meta">· nur Branchenfonds</span></div>
+    ${(F.portfolio || []).length ? `<div class="faPortfolio">${F.portfolio.map(f => `<div class="kzrow"><span>${f.fonds}-Fonds <span class="meta">· ${f.anteile} Anteile</span></span><b>${fmt(f.wert)} <span class="meta">Buchwert ${fmt(f.buchwert)}</span></b></div>`).join("")}</div>`
+      : `<div class="meta">Noch keine Fondsanteile.</div>`}
+    <div class="meta faLageText">Das Finanzamt kauft keine einzelnen Aktien, nur Anteile der Branchenfonds. Liegen die Kurse einer Branche zusammen mehr als ${Math.round((F.theta ?? 0.1) * 100)} % unter ihrem Wert, kauft es deren Fonds — der Fonds kauft damit echte Aktien und hebt die Kurse der ganzen Branche. Liegen sie mehr als ${Math.round((F.theta ?? 0.1) * 100)} % darüber, gibt es Anteile zurück. Bezahlt wird nur mit Geld über der Projektschwelle — Stadtprojekte gehen vor.</div>
     <div class="sec">So arbeitet das Finanzamt</div>
     <div class="faRegeln">
       <div><b>${Math.round(F.satz * 1000) / 10} %</b><span>Gewinnsteuer alle 10 min, die ersten ${fmt(F.frei)} frei</span></div>
