@@ -483,8 +483,8 @@ html[data-theme="papier"] .hmEinst{background:#fffdf7;border:1.5px solid #1f1a14
 /* ================================================================
  * Stadtbank
  * ================================================================ */
-.bReiter{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;padding:4px;border:var(--rand);border-radius:12px;margin:12px 0 4px}
-.bReiter button{position:relative;height:40px;border:0;border-radius:9px;background:none;color:var(--dim);font:600 13.5px var(--font);cursor:pointer}
+.bReiter{display:grid;grid-template-columns:repeat(4,1fr);gap:4px;padding:4px;border:var(--rand);border-radius:12px;margin:12px 0 4px}
+.bReiter button{position:relative;height:40px;border:0;border-radius:9px;background:none;color:var(--dim);font:600 13px var(--font);cursor:pointer;padding:0 4px;white-space:nowrap}
 .bReiter button.on{background:var(--akzent-flaeche);color:var(--text)}
 .bReiter i{font:600 10.5px var(--mono);font-style:normal;margin-left:6px;padding:1px 6px;border-radius:8px;background:var(--accent);color:var(--auf-akzent)}
 .bReiter i:empty{display:none}
@@ -508,6 +508,107 @@ html[data-theme="papier"] .hmEinst{background:#fffdf7;border:1.5px solid #1f1a14
 .bForm button.breit{height:44px;font-weight:700;font-size:14px}
 .bhandel{gap:14px}
 .bseite{padding:12px 14px 14px}
+/* Kurswetten */
+.wPhase{margin:12px 0 4px;padding:12px 14px;border:var(--rand);border-radius:12px;display:flex;flex-direction:column;gap:8px}
+.wPhaseText{display:flex;align-items:center;gap:8px;font-size:13.5px}
+.wPhaseText b{flex:1;font-weight:600}
+.wPunkt{width:8px;height:8px;border-radius:50%;background:var(--up);box-shadow:0 0 0 4px rgba(52,211,153,.18)}
+.wPhase.laeuft .wPunkt{background:var(--accent);box-shadow:0 0 0 4px var(--akzent-flaeche)}
+.wUhr{font:600 18px var(--mono);letter-spacing:.02em}
+.wBalken{height:4px;border-radius:2px;background:var(--line);overflow:hidden}
+.wBalken i{display:block;height:100%;background:var(--up);transition:width .9s linear}
+.wPhase.laeuft .wBalken i{background:var(--accent)}
+.wPhase .meta{line-height:1.45}
+.wForm[hidden]{display:none}
+.wForm{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:14px 0 6px;padding-top:12px;border-top:1px solid var(--line)}
+.wForm label{display:flex;flex-direction:column;gap:4px;min-width:0}
+.wForm label span{font:11px var(--mono);color:var(--dim);letter-spacing:.06em;text-transform:uppercase}
+.wForm select,.wForm input{width:100%;height:40px;box-sizing:border-box}
+.wForm .breit{grid-column:1 / -1}
+.wRichtung{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.wRichtung button{display:flex;flex-direction:column;align-items:flex-start;gap:2px;padding:10px 12px;border-radius:10px;border:1px solid var(--line);background:none;color:var(--dim);cursor:pointer;font-family:var(--font)}
+.wRichtung button b{font-size:14px;font-weight:700}
+.wRichtung button small{font-size:11.5px}
+.wRichtung button[data-wrichtung="long"].on{border-color:var(--up);color:var(--up);background:rgba(52,211,153,.1)}
+.wRichtung button[data-wrichtung="short"].on{border-color:var(--down);color:var(--down);background:rgba(251,113,133,.1)}
+.wRichtung button:disabled{opacity:.35;cursor:not-allowed}
+.wSchnell{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+.wSchnell button{height:30px;border-radius:8px;border:1px solid var(--line);background:none;color:var(--dim);font:600 12px var(--mono);cursor:pointer}
+.wSchnell button:hover{color:var(--text);border-color:var(--dim)}
+.wVorschau{display:grid;grid-template-columns:1fr auto;gap:4px 12px;font-size:12.5px;color:var(--dim)}
+.wVorschau:empty{display:none}
+.wVorschau b{font:600 13px var(--mono);color:var(--text);text-align:right}
+.wVorschau b.plus,.wErg b.plus,.wWert em.plus{color:var(--up)} .wVorschau b.minus,.wErg b.minus,.wWert em.minus{color:var(--down)}
+#wSetzen{height:44px;font-weight:700;font-size:14px}
+#wSetzen.verkauf{background:var(--down);color:#fff}
+#wSetzen:disabled{opacity:.5;cursor:not-allowed}
+.wFirma{padding:10px 12px;margin:6px 0;border:1px solid var(--line);border-radius:10px;cursor:pointer;display:flex;flex-direction:column;gap:8px}
+.wFirma:hover{border-color:var(--dim)}
+.wFirma.gewaehlt{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
+.wFirma.gesperrt{cursor:default;opacity:.6}
+.wFKopf{display:flex;align-items:center;gap:8px}
+.wWert{margin-left:auto;font:600 13px var(--mono)}
+.wWert em{font-style:normal;font-size:11.5px;margin-left:4px}
+.wPool{display:grid;grid-template-columns:auto 1fr auto;gap:8px;align-items:center;font:11.5px var(--mono)}
+.wPool .l{color:var(--up)} .wPool .s{color:var(--down)}
+.wPoolBar{height:6px;border-radius:3px;background:var(--down);overflow:hidden}
+.wPoolBar i{display:block;height:100%;background:var(--up)}
+.wPoolBar.leer{background:var(--line)} .wPoolBar.leer i{background:transparent}
+.wMein{font-size:12px;font-weight:600}
+.wMein.long{color:var(--up)} .wMein.short{color:var(--down)}
+.wErg{display:flex;justify-content:space-between;gap:10px;padding:7px 0;border-bottom:1px solid var(--line);font-size:12.5px;color:var(--dim)}
+.wErg b{font:600 12.5px var(--mono);color:var(--text);white-space:nowrap}
+html[data-theme="papier"] .wPhase,html[data-theme="papier"] .wFirma,html[data-theme="papier"] .wRichtung button,html[data-theme="papier"] .wSchnell button,html[data-theme="papier"] .wPoolBar,html[data-theme="papier"] .wBalken{border-radius:0}
+html[data-theme="papier"] .wPhase,html[data-theme="papier"] .wFirma{background:#fffdf7;border:1px solid #1f1a14}
+html[data-theme="papier"] .wFirma.gewaehlt{box-shadow:inset 0 0 0 2px #9c3b1f;border-color:#9c3b1f}
+html[data-theme="papier"] .wRichtung button{border-color:#1f1a14}
+html[data-theme="papier"] .wRichtung button[data-wrichtung="long"].on{background:rgba(47,125,79,.12)}
+html[data-theme="papier"] .wRichtung button[data-wrichtung="short"].on{background:rgba(163,50,28,.1)}
+html[data-theme="papier"] .wPunkt{box-shadow:none}
 html[data-theme="papier"] .bReiter,html[data-theme="papier"] .bReiter button,html[data-theme="papier"] .bAng,html[data-theme="papier"] .bReiter i{border-radius:0}
 html[data-theme="papier"] .bReiter button.on{background:#1f1a14;color:#f8f4ea}
 html[data-theme="papier"] .bAng{background:#fffdf7;border:1px solid #1f1a14}
+
+/* ================================================================
+ * Startseite: Was ist neu
+ * ================================================================ */
+#updates{position:fixed;z-index:3;top:50%;transform:translateY(-50%);right:18px;
+  width:min(330px,calc(50vw - 500px - 40px));max-height:min(78vh,760px);display:flex;flex-direction:column;
+  background:rgba(12,18,28,.78);border:var(--rand);border-radius:16px;box-shadow:var(--schatten);backdrop-filter:blur(8px)}
+.updKopf{display:flex;align-items:center;justify-content:space-between;padding:14px 16px 10px;border-bottom:1px solid var(--line)}
+.updKopf h2{margin:0;font:600 11.5px var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--accent)}
+.updZu{display:none;background:none;border:0;color:var(--dim);font-size:16px;cursor:pointer;padding:4px 6px}
+.updListe{overflow-y:auto;padding:6px 16px 14px;scrollbar-width:thin}
+.updEintrag{padding:12px 0;border-bottom:1px solid var(--line)}
+.updEintrag:last-child{border-bottom:0}
+.updEintrag time{font:11px var(--mono);color:var(--dim);letter-spacing:.04em}
+.updEintrag.ungelesen time::after{content:"";display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--accent);margin-left:8px;vertical-align:middle}
+.updEintrag h3{margin:4px 0 8px;font:600 14.5px/1.3 var(--font);color:var(--text)}
+.updEintrag ul{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:7px}
+.updEintrag li{font-size:12.5px;line-height:1.45;color:var(--dim);display:grid;grid-template-columns:auto 1fr;gap:8px;align-items:baseline}
+.updArt{font:600 9.5px var(--mono);letter-spacing:.08em;text-transform:uppercase;padding:2px 6px;border-radius:5px;min-width:54px;box-sizing:border-box;text-align:center}
+.updArt.neu{color:var(--up);background:rgba(52,211,153,.12)}
+.updArt.besser{color:var(--accent);background:var(--akzent-flaeche)}
+.updArt.fix{color:#fbbf24;background:rgba(251,191,36,.12)}
+.updAuf{position:relative}
+.updAuf .updPunkt{position:absolute;top:-3px;right:-3px;width:9px;height:9px;border-radius:50%;background:var(--up);box-shadow:0 0 0 2px var(--bg,#0b111b)}
+.updAuf .updPunkt[hidden]{display:none}
+@media(min-width:1560px){#posterR{display:none}.updAuf{display:none!important}}
+@media(max-width:1559px){
+  #updates{display:none;inset:0;transform:none;width:auto;max-height:none;border-radius:0;border:0;background:rgba(5,9,15,.6);
+    align-items:center;justify-content:center;z-index:60;backdrop-filter:blur(3px)}
+  #updates.offen{display:flex}
+  #updates.offen .updKopf,#updates.offen .updListe{width:min(520px,calc(100vw - 32px));box-sizing:border-box;background:#0d1520}
+  #updates.offen .updKopf{border:var(--rand);border-bottom:1px solid var(--line);border-radius:16px 16px 0 0}
+  #updates.offen .updListe{max-height:min(70vh,640px);border:var(--rand);border-top:0;border-radius:0 0 16px 16px}
+  .updZu{display:block}}
+html[data-theme="papier"] #updates{background:#f8f4ea;border:1.5px solid #1f1a14;border-radius:0;box-shadow:6px 6px 0 #1f1a14;backdrop-filter:none}
+html[data-theme="papier"] .updKopf h2{color:#9c3b1f}
+html[data-theme="papier"] .updArt{border-radius:0}
+html[data-theme="papier"] .updArt.neu{background:rgba(47,125,79,.12)}
+html[data-theme="papier"] .updArt.besser{color:#9c3b1f;background:rgba(156,59,31,.1)}
+html[data-theme="papier"] .updArt.fix{color:#9c5a0a;background:rgba(156,90,10,.12)}
+html[data-theme="papier"] .updAuf .updPunkt{box-shadow:0 0 0 2px #f8f4ea}
+@media(max-width:1559px){
+  html[data-theme="papier"] #updates{background:rgba(31,26,20,.35);border:0;box-shadow:none}
+  html[data-theme="papier"] #updates.offen .updKopf,html[data-theme="papier"] #updates.offen .updListe{background:#f8f4ea;border-color:#1f1a14;border-radius:0}}

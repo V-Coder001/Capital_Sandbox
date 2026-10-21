@@ -1180,6 +1180,12 @@ td:first-child{font-family:var(--font)}
      aria-hidden — für Screenreader wäre "Plakat" nur Rauschen. -->
 <div class="posterWall" id="posterL" aria-hidden="true" data-topo-avoid></div>
 <div class="posterWall" id="posterR" aria-hidden="true" data-topo-avoid></div>
+<!-- Neuigkeiten: auf breiten Bildschirmen eine feste Spalte rechts neben der
+     Karte, schmal als Fenster über den Knopf "Was ist neu". Inhalt: updates.js -->
+<aside id="updates" data-topo-avoid aria-labelledby="updKopf">
+  <div class="updKopf"><h2 id="updKopf">Was ist neu</h2><button type="button" class="updZu" data-upd-zu aria-label="Schließen">✕</button></div>
+  <div class="updListe" id="updListe"></div>
+</aside>
 <div class="card" data-topo-avoid>
   <canvas id="joinParticles"></canvas>
 
@@ -1218,6 +1224,9 @@ td:first-child{font-family:var(--font)}
     </button>
     <!-- Sprachumschalter. Die Oberfläche ist deutsch gewachsen; ohne sichtbaren
          Schalter probiert ein internationaler Besucher das Spiel gar nicht erst. -->
+    <button type="button" class="startEinst updAuf" data-upd-auf>
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 8v4l3 2"/><circle cx="12" cy="12" r="9"/></svg>
+      Was ist neu<i class="updPunkt" hidden></i></button>
     <button type="button" class="startEinst" data-einst-auf aria-label="Einstellungen">
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/></svg>
       Einstellungen</button>
@@ -1704,6 +1713,7 @@ td:first-child{font-family:var(--font)}
     <div class="bReiter" role="tablist" aria-label="Stadtbank">
       <button type="button" role="tab" data-breiter="markt" class="on">Markt</button>
       <button type="button" role="tab" data-breiter="handeln">Handeln<i id="bReiterHandeln"></i></button>
+      <button type="button" role="tab" data-breiter="wetten">Kurswetten<i id="bReiterWetten"></i></button>
       <button type="button" role="tab" data-breiter="depot">Depot<i id="bReiterDepot"></i></button>
     </div>
 
@@ -1737,6 +1747,25 @@ td:first-child{font-family:var(--font)}
           <div class="meta" id="shHint"></div>
         </div>
       </div>
+    </section>
+
+    <!-- Kurswetten: long/short auf den Firmenwert einer Runde. Formular statisch,
+         damit ein State-Update die Eingabe nicht wegwischt. -->
+    <section data-bseite="wetten" hidden>
+      <div id="wKopf"></div>
+      <div id="wFirmen"></div>
+      <div class="wForm" id="wForm">
+        <label class="breit"><span>Firma</span><select id="wFirma"></select></label>
+        <div class="wRichtung breit" role="radiogroup" aria-label="Richtung">
+          <button type="button" data-wrichtung="long" class="on"><b>▲ Long</b><small>Firmenwert steigt</small></button>
+          <button type="button" data-wrichtung="short"><b>▼ Short</b><small>Firmenwert fällt</small></button>
+        </div>
+        <label class="breit"><span>Einsatz $</span><input id="wEinsatz" type="number" min="100" step="100" value="500"></label>
+        <div class="wSchnell breit"><button type="button" data-wanteil=".1">10 %</button><button type="button" data-wanteil=".25">25 %</button><button type="button" data-wanteil=".5">50 %</button><button type="button" data-wanteil="1">Max</button></div>
+        <div class="wVorschau breit" id="wVorschau"></div>
+        <button class="bknopf kauf breit" id="wSetzen">Wette setzen</button>
+      </div>
+      <div id="wMeine"></div>
     </section>
 
     <section data-bseite="depot" hidden>
@@ -1991,6 +2020,7 @@ td:first-child{font-family:var(--font)}
 <script src="vendor/peerjs.min.js"></script>
 <script src="topo.js"></script>
 <script src="flaeche.js"></script>
+<script src="updates.js"></script>
 <script>
 /* ================================================================
  * Einstellungen (Grafik, Steuerung, Sound) — im Browser gemerkt.
@@ -3887,6 +3917,8 @@ const EN = {
   "Datenschutz": "Privacy", "Impressum": "Legal notice", "Überspringen": "Skip",
   "Ton einschalten": "Turn on sound", "Bitte Rundencode eingeben": "Please enter a round code",
   "Bauen": "Build", "Handeln": "Trade", "Gewinnen": "Win",
+  "Kurswetten": "Stock bets", "Wette setzen": "Place bet", "Firmenwert steigt": "Value rises", "Firmenwert fällt": "Value falls",
+  "Markt": "Market", "Depot": "Portfolio",
   /* Leiste unten und Panels */
   "Karte": "Map", "Lager": "Storage", "Börse": "Exchange", "Finanzen": "Finance",
   "Firma": "Company", "Lexikon": "Encyclopedia", "Chat": "Chat",
@@ -7416,6 +7448,13 @@ function bankReiterZeigen() {
 document.getElementById("p-bank").addEventListener("click", e => {
   const reiter = e.target.closest("[data-breiter]");
   if (reiter) { BANK_REITER = reiter.dataset.breiter; bankReiterZeigen(); SFX.spiel("klick"); return; }
+  const wr = e.target.closest("[data-wrichtung]");
+  if (wr) { W_RICHTUNG = wr.dataset.wrichtung; kurswettenRendern(); SFX.spiel("klick"); return; }
+  const wa = e.target.closest("[data-wanteil]");
+  if (wa) { const max = store.get().me?.wettMax || 0;
+    document.getElementById("wEinsatz").value = Math.max(100, Math.floor(max * +wa.dataset.wanteil / 100) * 100); kurswettenRendern(); return; }
+  const wf = e.target.closest("[data-wfirma]");
+  if (wf) { document.getElementById("wFirma").value = wf.dataset.wfirma; kurswettenRendern(); SFX.spiel("klick"); return; }
   const zuHandeln = e.target.closest("[data-zu-handeln]");
   if (zuHandeln) { BANK_REITER = "handeln"; bankReiterZeigen();
     const sel = document.getElementById("bidCompany"); if ([...sel.options].some(o => o.value === zuHandeln.dataset.zuHandeln)) sel.value = zuHandeln.dataset.zuHandeln;
@@ -7436,6 +7475,91 @@ document.getElementById("p-bank").addEventListener("click", e => {
   const bidCancel = e.target.closest("[data-bidcancel]");
   if (bidCancel) { act("cancelShareBid", { bidId: +bidCancel.dataset.bidcancel }); return; }
 });
+/* ---------- Kurswetten ----------
+ * Long = man setzt auf steigenden Firmenwert, Short auf fallenden. Der Server
+ * friert die Werte beim Ende der Annahme ein und rechnet nach der Laufzeit ab.
+ * Verlierer zahlen Einsatz × min(1, |Änderung| × Hebel) an die Gewinnerseite. */
+let W_RICHTUNG = "long";
+const zeitFmt = s => `${Math.floor(s / 60)}:${String(Math.max(0, s) % 60).padStart(2, "0")}`;
+function kurswettenRendern() {
+  const S = store.get(), state = S.state, me = S.me || {}, myId = S.myId;
+  const R = state?.wettrunde;
+  if (!R || !document.getElementById("wKopf")) return;
+  const annahme = R.phase === "annahme";
+  const meine = me.meineWetten || [];
+  document.getElementById("bReiterWetten").textContent = meine.length ? meine.length : "";
+  const anteil = 1 - R.rest / R.dauer;
+  document.getElementById("wKopf").innerHTML = `<div class="wPhase ${annahme ? "offen" : "laeuft"}">
+      <div class="wPhaseText"><span class="wPunkt"></span><b>Runde ${R.nr} · ${annahme ? "Annahme offen" : "Läuft — Kurse eingefroren"}</b>
+        <span class="wUhr">${zeitFmt(R.rest)}</span></div>
+      <div class="wBalken"><i style="width:${(anteil * 100).toFixed(1)}%"></i></div>
+      <div class="meta">${annahme ? "Wetten setzen bis zum Ende der Annahme, danach 5 min Laufzeit." : "Abrechnung, wenn die Uhr abläuft. Neue Wetten ab der nächsten Annahme."}
+        Hebel ×${R.hebel}: bei ${Math.round(100 / R.hebel)} % Bewegung ist der ganze Einsatz im Spiel · ${Math.round(R.gebuehr * 100)} % Bankgebühr.</div></div>`;
+
+  /* Formular: nur Firmen, auf die man wetten darf */
+  const sel = document.getElementById("wFirma"), vorher = sel.value;
+  const erlaubt = R.firmen.filter(f => f.id !== myId && (state.players[f.id]?.equity?.[myId] || 0) < 2);
+  const opts = erlaubt.map(f => `<option value="${f.id}">${f.name}</option>`).join("") || `<option value="">Keine Firma verfügbar</option>`;
+  if (sel.dataset.sig !== opts) { sel.innerHTML = opts; sel.dataset.sig = opts; }
+  if (erlaubt.some(f => f.id === vorher)) sel.value = vorher;
+  const ziel = R.firmen.find(f => f.id === sel.value);
+  const eigene = meine.find(w => w.firmaId === sel.value);
+  if (eigene) W_RICHTUNG = eigene.richtung;
+  document.querySelectorAll("[data-wrichtung]").forEach(b => {
+    b.classList.toggle("on", b.dataset.wrichtung === W_RICHTUNG);
+    b.disabled = !!eigene && b.dataset.wrichtung !== eigene.richtung; });
+  const einsatz = +document.getElementById("wEinsatz").value || 0;
+  document.getElementById("wForm").hidden = !annahme;
+  const knopf = document.getElementById("wSetzen");
+  knopf.disabled = !annahme || !ziel;
+  knopf.textContent = !annahme ? `Annahme wieder in ${zeitFmt(R.rest)}` : eigene ? "Einsatz erhöhen" : "Wette setzen";
+  knopf.classList.toggle("kauf", W_RICHTUNG === "long"); knopf.classList.toggle("verkauf", W_RICHTUNG === "short");
+  /* Vorschau: was bei ±5 % Bewegung herauskäme — mit den aktuellen Töpfen */
+  let vorschau = "";
+  if (ziel && einsatz > 0) {
+    const eigen = (W_RICHTUNG === "long" ? ziel.long : ziel.short) + einsatz;
+    const gegen = W_RICHTUNG === "long" ? ziel.short : ziel.long;
+    const bew = 0.05, teil = Math.min(1, bew * R.hebel);
+    const plus = gegen * teil * (1 - R.gebuehr) * einsatz / eigen;
+    vorschau = gegen
+      ? `<span>Bei 5 % ${W_RICHTUNG === "long" ? "Anstieg" : "Rückgang"}</span><b class="plus">+${fmt(plus)}</b>
+         <span>Bei 5 % Gegenbewegung</span><b class="minus">−${fmt(einsatz * teil)}</b>`
+      : `<span class="meta" style="grid-column:1/-1">Noch keine Gegenseite — ohne Gegenwette gibt es den Einsatz zurück.</span>`;
+    vorschau += `<span>Dein Rahmen</span><b>${fmt(me.wettMax || 0)}</b>`;
+  }
+  document.getElementById("wVorschau").innerHTML = vorschau;
+
+  /* Firmenliste mit Töpfen */
+  const firmen = [...R.firmen].sort((a, b) => (b.long + b.short) - (a.long + a.short) || b.jetzt - a.jetzt);
+  document.getElementById("wFirmen").innerHTML = `<div class="sec bTafelKopf"><span>Firmen</span><span class="meta">${annahme ? "Long gegen Short — antippen zum Auswählen" : "Änderung seit Rundenstart"}</span></div>` +
+    firmen.map(f => {
+      const sum = f.long + f.short, lp = sum ? f.long / sum * 100 : 50;
+      const aend = f.start ? (f.jetzt - f.start) / f.start * 100 : null;
+      const mw = meine.find(w => w.firmaId === f.id);
+      const gesperrt = f.id === myId || (state.players[f.id]?.equity?.[myId] || 0) >= 2;
+      return `<div class="wFirma${f.id === sel.value ? " gewaehlt" : ""}${gesperrt ? " gesperrt" : ""}" ${gesperrt ? "" : `data-wfirma="${f.id}"`}>
+        <div class="wFKopf">${firmenMarke(f.name, f.farbe, 28)}${f.id === myId ? ` <span class="meta">(du)</span>` : ""}
+          <span class="wWert">${fmt(f.jetzt)}${aend != null ? ` <em class="${aend >= 0 ? "plus" : "minus"}">${aend >= 0 ? "+" : ""}${aend.toFixed(1)} %</em>` : ""}</span></div>
+        <div class="wPool"><span class="l">▲ ${fmt(f.long)}</span><div class="wPoolBar${sum ? "" : " leer"}"><i style="width:${lp}%"></i></div><span class="s">${fmt(f.short)} ▼</span></div>
+        ${mw ? `<div class="wMein ${mw.richtung}">Deine Wette: ${mw.richtung === "long" ? "▲ Long" : "▼ Short"} · ${fmt(mw.einsatz)}</div>` : ""}
+      </div>`; }).join("");
+
+  /* Ergebnisse */
+  const log = me.wettLog || [];
+  const letzte = (R.letzte || []).filter(e => e.gewinner);
+  document.getElementById("wMeine").innerHTML =
+    (log.length ? `<div class="sec">Deine Ergebnisse</div>` + log.map(e => {
+      const d = e.auszahlung - e.einsatz;
+      return `<div class="wErg"><span>R${e.runde} · ${e.firma} · ${e.richtung === "long" ? "▲ Long" : "▼ Short"} · ${fmt(e.einsatz)}</span>
+        <b class="${d > 0 ? "plus" : d < 0 ? "minus" : ""}">${d > 0 ? "+" : d < 0 ? "−" : "±"}${fmt(Math.abs(d))}</b></div>`; }).join("") : "") +
+    (letzte.length ? `<div class="sec">Letzte Runde</div>` + letzte.map(e => `<div class="wErg"><span>${e.name} · ${e.aenderung >= 0 ? "+" : ""}${(e.aenderung * 100).toFixed(1)} %</span>
+        <b>${e.gewinner === "long" ? "▲ Long gewinnt" : "▼ Short gewinnt"} · ${fmt(e.topf)}</b></div>`).join("") : "");
+}
+document.getElementById("wFirma").addEventListener("change", kurswettenRendern);
+document.getElementById("wEinsatz").addEventListener("input", kurswettenRendern);
+document.getElementById("wSetzen").addEventListener("click", () => act("kurswetteSetzen", {
+  firmaId: document.getElementById("wFirma").value, richtung: W_RICHTUNG,
+  einsatz: +document.getElementById("wEinsatz").value }));
 document.getElementById("bidSend").addEventListener("click", () => act("bidShares", {
   companyId: document.getElementById("bidCompany").value,
   count: document.getElementById("bidCount").value,
@@ -7572,7 +7696,7 @@ const SFX = (() => {
  * ein Klang auf wirklich jeden Handgriff würde schnell nerven. */
 const SFX_AKTION = {
   build: "bau", upgradeBuilding: "bau", demolish: "bau", unlockTile: "bau", stallEinstellen: "bau",
-  placeOrder: "geld", takeOrder: "geld", buyShares: "geld", bidShares: "geld",
+  placeOrder: "geld", takeOrder: "geld", buyShares: "geld", bidShares: "geld", kurswetteSetzen: "geld",
   acceptShareBid: "geld", listShares: "geld", buyBond: "geld", issueBond: "geld",
   bid: "geld", acceptContract: "geld", contribute: "geld", mergeCompany: "geld",
   bookAd: "geld", configureShop: "klick", togglePause: "klick",
@@ -10122,6 +10246,7 @@ function render({ state, me, myId, chat, room }) {
 
     document.getElementById("bReiterHandeln").textContent = bidsToMe.length ? bidsToMe.length : "";
     document.getElementById("bReiterDepot").textContent = me.portfolio?.length ? me.portfolio.length : "";
+    kurswettenRendern();
     bankReiterZeigen();
     /* Depot: was man an fremden Firmen hält, mit aktuellem Wert */
     document.getElementById("bankdepot").innerHTML = me.portfolio?.length
@@ -11314,6 +11439,42 @@ const kap = k => (SPRACHE === "en" && k.en) ? { ...k, ...k.en } : k;
   });
   document.addEventListener("keydown", e => { if (e.key === "Escape" && !dlg.hidden) zu(); });
   document.addEventListener("click", e => { if (e.target.closest("[data-einst-auf]")) { e.preventDefault(); auf(); } });
+})();
+</script>
+<script>
+/* "Was ist neu" auf der Startseite — Daten aus updates.js */
+(() => {
+  const liste = document.getElementById("updListe"), box = document.getElementById("updates");
+  if (!liste || !window.UPDATES?.length) { box?.remove(); document.querySelector("[data-upd-auf]")?.remove(); return; }
+  const ART = { neu: ["Neu", "New"], besser: ["Besser", "Improved"], fix: ["Fix", "Fix"] };
+  const sprache = () => (typeof SPRACHE !== "undefined" && SPRACHE === "en") ? "en" : "de";
+  const datum = (d, en) => new Date(d + "T12:00:00").toLocaleDateString(en ? "en-GB" : "de-DE", { day: "numeric", month: "long", year: "numeric" });
+  const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+  let gesehen = ""; try { gesehen = localStorage.getItem("cs_updates_gesehen") || ""; } catch {}
+  const neuestes = UPDATES[0].id;
+  function zeichnen() {
+    const en = sprache() === "en";
+    document.getElementById("updKopf").textContent = en ? "What's new" : "Was ist neu";
+    const knopf = document.querySelector("[data-upd-auf]");
+    if (knopf) knopf.childNodes[knopf.childNodes.length - 2].textContent = en ? " What's new" : " Was ist neu";
+    liste.innerHTML = UPDATES.map((u, i) => `<article class="updEintrag${u.id > gesehen && gesehen ? " ungelesen" : ""}">
+      <time datetime="${u.datum}">${datum(u.datum, en)}</time>
+      <h3>${esc(u.titel[en ? "en" : "de"] || u.titel.de)}</h3>
+      <ul>${u.punkte.map(p => `<li><span class="updArt ${p.art}">${ART[p.art]?.[en ? 1 : 0] || p.art}</span>${esc(p[en ? "en" : "de"] || p.de)}</li>`).join("")}</ul>
+    </article>`).join("");
+  }
+  const punkt = document.querySelector(".updPunkt");
+  if (punkt) punkt.hidden = gesehen === neuestes;
+  function gelesen() { try { localStorage.setItem("cs_updates_gesehen", neuestes); } catch {} if (punkt) punkt.hidden = true; }
+  zeichnen();
+  /* Breit: die Spalte ist sichtbar — wer die Startseite sieht, hat sie gesehen */
+  if (matchMedia("(min-width:1560px)").matches) setTimeout(gelesen, 4000);
+  document.addEventListener("click", e => {
+    if (e.target.closest("[data-upd-auf]")) { box.classList.add("offen"); gelesen(); return; }
+    if (e.target.closest("[data-upd-zu]") || e.target === box) box.classList.remove("offen");
+    if (e.target.closest("[data-lang]")) setTimeout(zeichnen, 0);
+  });
+  document.addEventListener("keydown", e => { if (e.key === "Escape") box.classList.remove("offen"); });
 })();
 </script>
 </body>

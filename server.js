@@ -2785,6 +2785,9 @@ const G = {
   shareListings: [],     // {id, companyId, sellerId, count(1-4 = 25%-Schritte), price, ts, toId}
   shareBids: [],         // Kaufanfragen an eine Firma: {id, companyId, bidderId, count, price, ttl}
   nextDividendIn: DIVIDEND_INTERVAL,
+  wettrunde: { nr: 1, phase: "annahme", rest: 120, start: {} },   // Kurswetten (long/short auf Firmenwerte)
+  wetten: [],            // {id, spielerId, firmaId, richtung, einsatz}
+  wettLetzte: [],        // Ergebnis der letzten Runde je Firma
   fahrer: [],            // Fahrerpool der Runde: {id, name, land, Werte…, teamId, autoId}
   fahrerGehaltIn: FAHRER_GEHALT_TAKT,
   rennen: null,                    // laufender Renntag (Anmeldung/Rennen/Ergebnis)
@@ -2875,7 +2878,7 @@ function buildingValueOf(pid) {
   return bldCache.byOwner[pid] || 0;
 }
 function substance(p) {
-  let v = p.cash + buildingValueOf(p.id);
+  let v = p.cash + buildingValueOf(p.id) + (p.wettOffen || 0);   // laufende Kurswetten gehören weiter dem Spieler
   for (const k in p.inv) v += p.inv[k] * MM[k].price;
   for (const b of G.bonds) {
     if (b.holderId === p.id) v += b.principal;
@@ -3223,6 +3226,130 @@ function distributeDividends() {
     }
     p.revenue = 0;
   }
+}
+
+
+/* ---------- Kurswetten (long / short auf Firmenwerte) ----------
+ * Geschlossene Wirtschaft: es entsteht kein Geld. Wer verliert, zahlt in den
+ * Topf der Gegenseite; die Bank behält 5 % als Gebühr (Geldsenke).
+ *  Annahme (2 min): Wetten setzen → Sperre: Firmenwerte werden eingefroren
+ *  Laufzeit (5 min) → Abrechnung je Firma:
+ *    Verlierer verlieren Einsatz × min(1, |Änderung| × 10)
+ *    Gewinner teilen diesen Topf (minus Gebühr) nach Einsatz
+ *    Rückzahlung, wenn keine Gegenseite oder |Änderung| < 0,5 %. */
+const WETT_ANNAHME = 120, WETT_LAUFZEIT = 300;
+const WETT_GEBUEHR = 0.05, WETT_HEBEL = 10, WETT_SCHWELLE = 0.005;
+const WETT_MIN = 100, WETT_MAX_ANTEIL = 0.2;
+let wettSeq = 1;
+
+function wettMax(p) { return Math.max(0, Math.floor(Math.min(p.cash, netWorth(p) * WETT_MAX_ANTEIL))); }
+function wettVerbot(p, firma) {
+  if (!firma) return "Firma existiert nicht";
+  if (firma.id === p.id) return "Auf die eigene Firma kannst du nicht wetten";
+  if ((firma.equity[p.id] || 0) >= 2) return "Du hältst 50 % oder mehr an dieser Firma";
+  return null;
+}
+function wetteBuchen(p, firma, richtung, einsatz) {
+  const alt = G.wetten.find(w => w.spielerId === p.id && w.firmaId === firma.id);
+  if (alt && alt.richtung !== richtung) return "Pro Firma und Runde nur eine Richtung";
+  const schon = alt ? alt.einsatz : 0;
+  if (einsatz < WETT_MIN && !alt) return `Mindesteinsatz ${WETT_MIN} $`;
+  if (schon + einsatz > Math.floor(netWorth(p) * WETT_MAX_ANTEIL) + 0.5) return "Höchstens 20 % deines Nettovermögens je Firma";
+  if (p.cash < einsatz) return "Zu wenig Kapital";
+  p.cash -= einsatz; p.wettOffen = (p.wettOffen || 0) + einsatz;
+  if (alt) alt.einsatz += einsatz;
+  else G.wetten.push({ id: wettSeq++, spielerId: p.id, firmaId: firma.id, richtung, einsatz });
+  logTx(p, "Wette", `${richtung === "long" ? "Long" : "Short"} auf ${firma.name}`, -einsatz);
+  return null;
+}
+function wettPools(firmaId) {
+  let long = 0, short = 0, n = 0;
+  for (const w of G.wetten) if (w.firmaId === firmaId) { n++; if (w.richtung === "long") long += w.einsatz; else short += w.einsatz; }
+  return { long, short, n };
+}
+function wettAuszahlen(w, betrag, text) {
+  const p = G.players[w.spielerId];
+  if (!p) return;
+  p.wettOffen = Math.max(0, (p.wettOffen || 0) - w.einsatz);
+  if (betrag > 0.01) { p.cash += betrag; logTx(p, "Wette", text, betrag); }
+  (p.wettLog ??= []).unshift({ runde: G.wettrunde.nr, firma: G.players[w.firmaId]?.name ?? "—",
+    richtung: w.richtung, einsatz: Math.round(w.einsatz), auszahlung: Math.round(betrag) });
+  p.wettLog.length = Math.min(p.wettLog.length, 8);
+}
+function wettenAbrechnen() {
+  const R = G.wettrunde, ergebnisse = [];
+  const firmen = [...new Set(G.wetten.map(w => w.firmaId))];
+  for (const fid of firmen) {
+    const ws = G.wetten.filter(w => w.firmaId === fid);
+    const firma = G.players[fid], start = R.start[fid];
+    const ende = firma ? companyValue(firma) : null;
+    const aend = (start && ende != null) ? (ende - start) / start : 0;
+    const pools = wettPools(fid);
+    const name = firma?.name ?? "—";
+    if (!firma || !start || Math.abs(aend) < WETT_SCHWELLE || !pools.long || !pools.short) {
+      for (const w of ws) wettAuszahlen(w, w.einsatz, `Wette auf ${name} zurückerstattet`);
+      for (const w of ws) emitTo(w.spielerId, "notice", { text: `Kurswette ${name}: ${!pools.long || !pools.short ? "keine Gegenseite" : "kaum Bewegung"} — Einsatz zurück.` });
+      ergebnisse.push({ firmaId: fid, name, aenderung: aend, gewinner: null, topf: 0 });
+      continue;
+    }
+    const gew = aend > 0 ? "long" : "short";
+    const anteil = Math.min(1, Math.abs(aend) * WETT_HEBEL);
+    let topf = 0;
+    for (const w of ws) if (w.richtung !== gew) {
+      const verlust = w.einsatz * anteil; topf += verlust;
+      wettAuszahlen(w, w.einsatz - verlust, `Wette auf ${name} verloren (Rest)`);
+      emitTo(w.spielerId, "notice", { text: `Kurswette ${name} verloren: −${Math.round(verlust)} $` });
+    }
+    const netto = topf * (1 - WETT_GEBUEHR);
+    const gewPool = gew === "long" ? pools.long : pools.short;
+    for (const w of ws) if (w.richtung === gew) {
+      const plus = netto * (w.einsatz / gewPool);
+      wettAuszahlen(w, w.einsatz + plus, `Wette auf ${name} gewonnen`);
+      emitTo(w.spielerId, "notice", { text: `Kurswette ${name} gewonnen: +${Math.round(plus)} $` });
+    }
+    ergebnisse.push({ firmaId: fid, name, aenderung: aend, gewinner: gew, topf: Math.round(topf) });
+  }
+  G.wettLetzte = ergebnisse;
+  G.wetten = [];
+}
+/* Bots sorgen für Gegenseite: kleine Einsätze, Richtung nach jüngstem Trend
+ * mit viel Zufall — sie sind Liquidität, keine Orakel. */
+function botsWetten() {
+  const firmen = Object.values(G.players);
+  if (firmen.length < 2) return;
+  for (const b of firmen) {
+    if (!b.bot || Math.random() > 0.35 || b.cash < 1500) continue;
+    const ziel = firmen[Math.floor(Math.random() * firmen.length)];
+    if (wettVerbot(b, ziel)) continue;
+    const h = G.firmHist[ziel.id] || [];
+    const trend = h.length > 3 ? h[h.length - 1] - h[h.length - 4] : 0;
+    const richtung = Math.random() < (trend > 0 ? 0.6 : trend < 0 ? 0.4 : 0.5) ? "long" : "short";
+    const einsatz = Math.max(WETT_MIN, Math.min(Math.round(b.cash * 0.04), 1500, wettMax(b)));
+    if (einsatz >= WETT_MIN) wetteBuchen(b, ziel, richtung, einsatz);
+  }
+}
+function wettTick() {
+  const R = G.wettrunde;
+  if (R.phase === "annahme" && R.rest % 30 === 15) botsWetten();
+  if (--R.rest > 0) return;
+  if (R.phase === "annahme") {
+    R.phase = "laufzeit"; R.rest = WETT_LAUFZEIT;
+    R.start = Object.fromEntries(Object.values(G.players).map(p => [p.id, companyValue(p)]));
+  } else {
+    wettenAbrechnen();
+    Object.assign(R, { nr: R.nr + 1, phase: "annahme", rest: WETT_ANNAHME, start: {} });
+  }
+}
+function wettrundePublic() {
+  const R = G.wettrunde;
+  return { nr: R.nr, phase: R.phase, rest: R.rest, dauer: R.phase === "annahme" ? WETT_ANNAHME : WETT_LAUFZEIT,
+    gebuehr: WETT_GEBUEHR, hebel: WETT_HEBEL, min: WETT_MIN,
+    firmen: Object.values(G.players).map(p => {
+      const pools = wettPools(p.id);
+      return { id: p.id, name: p.name, farbe: p.color, jetzt: Math.round(companyValue(p)),
+               start: R.start[p.id] != null ? Math.round(R.start[p.id]) : null, ...pools };
+    }),
+    letzte: G.wettLetzte };
 }
 
 /* ---------- Pfändung & Versteigerung ---------- */
@@ -3787,6 +3914,7 @@ function snapshot() {
       isIssue: (l.sellerId ?? l.companyId) === l.companyId,   // Emission der Firma statt Weiterverkauf
       toName: l.toId ? (G.players[l.toId]?.name ?? "—") : null })),
     nextDividendIn: G.nextDividendIn,
+    wettrunde: wettrundePublic(),
     auctions: G.auctions,
     fahrer: G.fahrer,
     rennen: G.rennen ? (() => {
@@ -3875,6 +4003,9 @@ function privateState(p) {
     fans: Math.round(p.fans || 0), fanHubs: fanHubs(p).length,
     ad: { reach: Math.round(p.adReach || 0), boost: +adBoost(p).toFixed(3),
           agenturen: adAgenturen(p), cap: adCap(adAgenturen(p)), pakete: AD_PACKAGES },
+    meineWetten: G.wetten.filter(w => w.spielerId === p.id)
+      .map(w => ({ ...w, firma: G.players[w.firmaId]?.name ?? "—" })),
+    wettLog: p.wettLog || [], wettMax: wettMax(p),
     ownPct: (p.equity[p.id] || 0) * 25, portfolio, revenue: Math.round(p.revenue),
     marketValue: Math.round(companyValue(p)), blockPrice: blockPrice(p), rev10: Math.round(rev10(p)),
     /* Bilanz: erst die Substanz der eigenen Firma, dann der Anteil daran, den man
@@ -5838,6 +5969,19 @@ io.on("connection", socket => {
     ack?.({ ok: true });
   }));
 
+  socket.on("kurswetteSetzen", guard((p, { firmaId, richtung, einsatz } = {}, ack) => {
+    if (G.wettrunde.phase !== "annahme") return ack?.({ error: "Die Runde läuft — neue Wetten ab der nächsten Annahme" });
+    if (richtung !== "long" && richtung !== "short") return ack?.({ error: "Richtung fehlt" });
+    einsatz = Math.floor(Number(einsatz));
+    if (!(einsatz > 0)) return ack?.({ error: "Ungültiger Einsatz" });
+    const firma = G.players[firmaId];
+    const verbot = wettVerbot(p, firma);
+    if (verbot) return ack?.({ error: verbot });
+    const fehler = wetteBuchen(p, firma, richtung, einsatz);
+    if (fehler) return ack?.({ error: fehler });
+    ack?.({ ok: true });
+  }));
+
   socket.on("cancelShareListing", guard((p, { listingId }, ack) => {
     const i = G.shareListings.findIndex(l => l.id === listingId && (l.sellerId ?? l.companyId) === p.id);
     if (i < 0) return ack?.({ error: "Angebot nicht gefunden" });
@@ -5916,6 +6060,8 @@ io.on("connection", socket => {
     G.started = false; G.hostId = null;   // neue Runde beginnt wieder im Warteraum
     G.groupOrder = null; G.nextGroupIn = 20;
     G.nextDividendIn = DIVIDEND_INTERVAL;
+    G.wettrunde = { nr: 1, phase: "annahme", rest: WETT_ANNAHME, start: {} }; G.wetten = []; G.wettLetzte = [];
+    for (const pl of Object.values(G.players)) { pl.wettOffen = 0; pl.wettLog = []; }
     /* Preisanker zurücksetzen — sonst startet die neue Runde mit den
      * verzerrten Kursen der alten (z. B. dauerhaft gedrücktem Ölpreis). */
     for (const k of Object.keys(GOODS)) Object.assign(MM[k], { price: BASEP[k], anchor: BASEP[k], sold: 0 });
@@ -6643,6 +6789,8 @@ function runTick() {
   if (MODE !== "plan" && MODE !== "kartell" && G.tick > 60 && G.tick % NEWS_INTERVAL === 0) sendeMarktbericht();
   /* Aktien: Dividendenausschüttung alle 10 min */
   if (--G.nextDividendIn <= 0) { distributeDividends(); G.nextDividendIn = DIVIDEND_INTERVAL; }
+  /* Kurswetten: Annahme → Laufzeit → Abrechnung */
+  wettTick();
   /* Fahrergehälter: eine laufende Verpflichtung, kein Einmalkauf. Wer nicht
    * zahlen kann, verliert den Fahrer — er geht zurück in den Pool und steht
    * den Mitbewerbern offen. Genau deshalb ist ein Spitzenfahrer eine Wette
