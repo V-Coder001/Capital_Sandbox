@@ -352,3 +352,62 @@ html[data-theme="papier"] .hmZeile + .hmZeile{border-top:1px dotted rgba(31,26,2
 .orderfilter{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 0;border-top:1px solid var(--line);margin-bottom:6px}
 .orderfilter select{height:36px;min-width:160px}
 html[data-theme="papier"] .orderfilter{border-top:1.5px solid #1f1a14}
+
+/* ================================================================
+ * Firma-Panel
+ * ================================================================ */
+.fKennzahlen{display:grid;grid-template-columns:1fr 1.4fr 1fr;gap:8px;margin-bottom:12px}
+.fKennzahlen > div{display:flex;flex-direction:column;gap:2px;padding:10px 12px;border-radius:12px;
+  background:rgba(125,211,252,.05);border:1px solid rgba(125,211,252,.12)}
+.fKennzahlen span{font:11px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--dim)}
+.fKennzahlen b{font:600 19px var(--mono);color:var(--text)}
+.fKennzahlen small{font-size:12px;color:var(--dim)}
+.fKennzahlen .haupt b{color:var(--accent)}
+.fVerlauf svg{width:100%;height:64px;display:block}
+.fAchse{display:flex;justify-content:space-between;margin-top:4px;font-family:var(--mono)}
+.fBilanz td{padding:7px 4px}
+.fBilanz .betrag,.panel td.betrag{text-align:right;font-family:var(--mono)}
+.fBilanz tr.summe td{border-top:1px solid var(--line);font-weight:600}
+.fBilanz tr.gesamt td{font-weight:700;font-size:14px;border-bottom:0}
+.fBilanz tr.gesamt .betrag{color:var(--accent)}
+.betrag.minus,b.minus{color:var(--down)!important}
+.betrag.plus,b.plus{color:var(--up)}
+.fZinsen{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:14px 0 6px}
+.fZinsen > div{display:flex;justify-content:space-between;align-items:baseline;padding:9px 12px;border-radius:10px;border:1px solid var(--line)}
+.fZinsen span{font-size:12px;color:var(--dim)}
+.fZinsen b{font:600 14px var(--mono)}
+.fMehr,.lexGruppe{border-top:1px solid var(--line);padding:2px 0}
+.fMehr summary,.lexGruppe summary{display:flex;align-items:center;justify-content:space-between;gap:10px;min-height:44px;cursor:pointer;
+  list-style:none;font:600 13.5px var(--font);color:var(--text)}
+.fMehr summary::-webkit-details-marker,.lexGruppe summary::-webkit-details-marker{display:none}
+.fMehr summary span,.lexGruppe summary span{margin-left:auto;font:12px var(--mono);color:var(--dim)}
+.fMehr summary::after,.lexGruppe summary::after{content:"+";font:600 16px var(--mono);color:var(--accent);width:16px;text-align:center}
+.fMehr[open] summary::after,.lexGruppe[open] summary::after{content:"−"}
+.fMehr[open],.lexGruppe[open]{padding-bottom:10px}
+
+/* ================================================================
+ * Lexikon
+ * ================================================================ */
+.lexSucheZeile{padding:12px 18px 0}
+.lexSucheZeile input{width:100%;height:40px;box-sizing:border-box;padding:0 12px}
+.lexKarte{display:flex;gap:12px;padding:10px;border-radius:12px;border:1px solid rgba(125,211,252,.1);background:rgba(255,255,255,.02);margin-bottom:8px}
+.lexKarte img{width:52px;height:52px;object-fit:contain;flex:none;transform:scale(1.2);transform-origin:center 70%}
+.lexText{flex:1;min-width:0;display:flex;flex-direction:column;gap:4px}
+.lexKopf{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.lexKopf b{font-size:14px;font-weight:600}
+.lexPreis{font:600 13px var(--mono);color:var(--accent);white-space:nowrap}
+.lexWas{font-size:13px;color:var(--text)}
+.lexWas b{font-weight:600}
+.lexChips{display:flex;flex-wrap:wrap;gap:5px}
+.lexChips span{font:11px var(--mono);color:var(--dim);padding:2px 7px;border-radius:6px;background:rgba(125,211,252,.07)}
+.lexMehr{font-size:12px;color:var(--dim);line-height:1.5}
+.lexGruppe table{margin-top:4px}
+
+/* Kartenpapier */
+html[data-theme="papier"] .fKennzahlen > div{background:#fffdf7;border:1.5px solid #1f1a14;border-radius:0}
+html[data-theme="papier"] .fZinsen > div{border-radius:0;border:1px solid #1f1a14;background:#fffdf7}
+html[data-theme="papier"] .fMehr,html[data-theme="papier"] .lexGruppe{border-top:1.5px solid #1f1a14}
+html[data-theme="papier"] .fMehr summary::after,html[data-theme="papier"] .lexGruppe summary::after{color:#9c3b1f}
+html[data-theme="papier"] .lexKarte{border-radius:0;border:1px solid #1f1a14;background:#fffdf7}
+html[data-theme="papier"] .lexChips span{border-radius:0;background:transparent;border:1px solid rgba(31,26,20,.35)}
+html[data-theme="papier"] .fBilanz tr.summe td{border-top:1.5px solid #1f1a14}

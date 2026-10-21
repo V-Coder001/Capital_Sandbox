@@ -4,6 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Datenschutz — Capital Sandbox</title>
+<!-- Gleiches Thema wie im Spiel (Vermessung / Kartenpapier), im Browser gemerkt -->
+<script>try{document.documentElement.dataset.theme=localStorage.getItem("cs_thema")==="papier"?"papier":"vermessung"}catch(e){}</script>
 <style>
 :root{
   --bg:#0a0e15; --panel:#121824; --panel2:#1a2231; --line:#273144;
@@ -47,6 +49,19 @@ body{background:#070b10}
   color:#7dd3fc;opacity:0;transition:opacity .8s ease-out;
   -webkit-mask-image:radial-gradient(ellipse 120% 100% at 50% 45%,#000 55%,transparent 100%);
           mask-image:radial-gradient(ellipse 120% 100% at 50% 45%,#000 55%,transparent 100%)}
+
+/* Kartenpapier-Thema */
+html[data-theme="papier"]{--bg:#ede6d6;--panel:#f8f4ea;--panel2:#fffdf7;--line:rgba(31,26,20,.4);--text:#1f1a14;--dim:#4a4134;--accent:#9c3b1f;--accent2:#2b6cb0}
+html[data-theme="papier"] body{background:#ede6d6;color:#1f1a14}
+html[data-theme="papier"] #bgTopo{color:#3b3226}
+html[data-theme="papier"] .wrap{background:#f8f4ea;border:1.5px solid #1f1a14;border-radius:0;box-shadow:6px 6px 0 #1f1a14;-webkit-backdrop-filter:none;backdrop-filter:none}
+html[data-theme="papier"] .card{background:#fffdf7;border:1px solid #1f1a14;border-radius:0}
+html[data-theme="papier"] p,html[data-theme="papier"] li{color:#3d352a}
+html[data-theme="papier"] h1{text-transform:uppercase;letter-spacing:-.01em}
+html[data-theme="papier"] h2{border-bottom:1.5px solid #1f1a14}
+html[data-theme="papier"] .note{background:rgba(156,59,31,.08);border-color:rgba(156,59,31,.4);border-radius:0}
+html[data-theme="papier"] .warn{border-radius:0}
+html[data-theme="papier"] .mono{background:#efe8da}
 </style>
 </head>
 <body>

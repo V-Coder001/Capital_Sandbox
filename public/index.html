@@ -9619,6 +9619,19 @@ document.getElementById("planRequestBtn").addEventListener("click", () => {
   });
 });
 
+/* Lexikon/Firma: welche Aufklapp-Gruppen offen sind, und der Suchtext.
+ * render() baut die Panels bei jedem Update neu — ohne Merker klappten sie
+ * jede Sekunde wieder zu. */
+const LEX_OFFEN = new Set(); let LEX_SUCHE = "";
+document.addEventListener("toggle", e => {
+  const d = e.target; if (!(d instanceof HTMLDetailsElement) || !d.dataset.lex) return;
+  if (d.open) LEX_OFFEN.add(d.dataset.lex); else LEX_OFFEN.delete(d.dataset.lex);
+}, true);
+document.addEventListener("click", e => {
+  if (!e.target.closest("[data-tx-alle]")) return;
+  try { sessionStorage.setItem("cs_tx_alle", sessionStorage.getItem("cs_tx_alle") === "1" ? "0" : "1"); } catch {}
+  store.set({});
+});
 function render({ state, me, myId, chat, room }) {
   if (!state || !me) return;
   tutCheck(state, myId);
@@ -10037,86 +10050,136 @@ function render({ state, me, myId, chat, room }) {
       : `<span class="meta">Du hältst keine fremden Anteile. Kaufe oben einen Block — steigt der Marktwert der Firma, kannst du ihn teurer weiterverkaufen.</span>`;
   }
 
-  /* Firmen-Dashboard: Rang, Verlauf, Bilanz, Verkaufsstatistik, Transaktionen */
+  /* Firmen-Dashboard: Kennzahlen oben, Verlauf, Bilanz; Details eingeklappt.
+   * Fehlende Werte (z. B. vor dem ersten Server-Update) zeigen „—" statt $NaN. */
   if (document.getElementById("p-firma").classList.contains("open")) {
     const bal = me.balance || {};
+    const geld = v => (v == null || isNaN(v)) ? "—" : fmt(v);
     const nRank = my?.rank ?? "—", nPlayers = Object.keys(state.players).length;
-    /* Sparkline aus dem Nettovermögens-Verlauf */
     const h = me.nwHist?.length > 1 ? me.nwHist : [bal.total || 0, bal.total || 0];
     const min = Math.min(...h), max = Math.max(...h), span = Math.max(1, max - min);
     const pts = h.map((v, i) => `${(i / (h.length - 1) * 380).toFixed(1)},${(60 - (v - min) / span * 52 + 4).toFixed(1)}`).join(" ");
-    const line = (label, val, neg) => `<tr><td>${label}</td><td style="text-align:right;color:${neg ? "var(--down)" : "var(--text)"}">${neg ? "− " : ""}${fmt(Math.abs(val))}</td></tr>`;
+    const zeile = (label, val, neg, cls = "") => `<tr class="${cls}"><td>${label}</td><td class="betrag${neg ? " minus" : ""}">${neg && val ? "− " : ""}${geld(val == null ? val : Math.abs(val))}</td></tr>`;
     const sales = Object.entries(me.sales || {});
+    const tx = me.tx || [];
+    let alleTx = false; try { alleTx = sessionStorage.getItem("cs_tx_alle") === "1"; } catch {}
+    const offen = id => LEX_OFFEN.has(id) ? "open" : "";
     document.getElementById("firmabody").innerHTML = `
-      <div style="display:flex;justify-content:space-between;align-items:baseline">
-        <div style="font-size:20px;font-weight:700">Rang #${nRank} <span class="meta">von ${nPlayers}</span></div>
-        <div class="meta">Rating ${my?.rating ?? "—"} · Level ${me.lvl}</div>
+      <div class="fKennzahlen">
+        <div><span>Rang</span><b>#${nRank}</b><small>von ${nPlayers}</small></div>
+        <div class="haupt"><span>Nettovermögen</span><b>${geld(bal.total)}</b><small>Ziel ${geld(state.winGoal)}</small></div>
+        <div><span>Rating</span><b>${my?.rating ?? "—"}</b><small>Level ${me.lvl ?? me.level ?? "—"}</small></div>
       </div>
-      <svg viewBox="0 0 380 64" style="width:100%;height:64px;margin:10px 0">
-        <polyline points="${pts}" fill="none" stroke="var(--up)" stroke-width="2"/>
-        <polyline points="${pts} 380,64 0,64" fill="rgba(79,195,106,.12)" stroke="none"/>
-      </svg>
-      <div class="meta" style="display:flex;justify-content:space-between"><span>${fmt(min)}</span><span>Unternehmenswert (20 min)</span><span>${fmt(max)}</span></div>
-      <div class="sec">Vermögensaufstellung</div>
-      <table>
-        ${line("Bargeld", bal.cash)}
-        ${line("Inventar (zu Marktwert)", bal.invVal)}
-        ${line("Gebäude", bal.bldVal)}
-        ${line("Anleihen-Investitionen", bal.bondVal)}
-        ${bal.debtVal ? line("Verbindlichkeiten", bal.debtVal, true) : ""}
-        <tr><td style="font-weight:600">Firmenwert gesamt</td><td style="text-align:right;font-weight:600">${fmt(bal.firmVal)}</td></tr>
-        ${line(`davon dein Anteil (${Math.round((bal.ownShare ?? 1) * 100)} %)`, (bal.firmVal || 0) * (bal.ownShare ?? 1))}
-        ${bal.holdings ? line("Beteiligungen an anderen Firmen", bal.holdings) : ""}
-        <tr><td style="font-weight:700">Nettovermögen</td><td style="text-align:right;font-weight:700;color:var(--accent)">${fmt(bal.total)}</td></tr>
+      <div class="fVerlauf">
+        <svg viewBox="0 0 380 64" preserveAspectRatio="none" role="img" aria-label="Verlauf des Unternehmenswerts">
+          <polyline points="${pts}" fill="none" stroke="var(--up)" stroke-width="2"/>
+          <polyline points="${pts} 380,64 0,64" fill="rgba(79,195,106,.12)" stroke="none"/>
+        </svg>
+        <div class="meta fAchse"><span>${geld(min)}</span><span>Unternehmenswert · 20 min</span><span>${geld(max)}</span></div>
+      </div>
+      <div class="sec">Bilanz</div>
+      <table class="fBilanz">
+        ${zeile("Bargeld", bal.cash)}
+        ${zeile("Warenlager (Marktwert)", bal.invVal)}
+        ${zeile("Gebäude", bal.bldVal)}
+        ${bal.bondVal ? zeile("Anleihen", bal.bondVal) : ""}
+        ${bal.debtVal ? zeile("Verbindlichkeiten", bal.debtVal, true) : ""}
+        ${zeile("Firmenwert", bal.firmVal, false, "summe")}
+        ${(bal.ownShare ?? 1) < 1 ? zeile(`davon dein Anteil (${Math.round((bal.ownShare ?? 1) * 100)} %)`, (bal.firmVal || 0) * (bal.ownShare ?? 1)) : ""}
+        ${bal.holdings ? zeile("Beteiligungen", bal.holdings) : ""}
+        ${zeile("Nettovermögen", bal.total, false, "gesamt")}
       </table>
-      <div class="sec">Zinsen</div>
-      <table>${line("Zinserträge", me.fin?.zinsErtrag || 0)}${(me.fin?.zinsAufwand) ? line("Zinsausgaben", me.fin.zinsAufwand, true) : line("Zinsausgaben", 0)}</table>
-      <div class="sec">Verkäufe je Ware</div>
-      ${sales.length ? `<table><tr><th>Ware</th><th>an Bots</th><th>an Spieler</th><th>Einkäufe</th></tr>` +
+      <div class="fZinsen">
+        <div><span>Zinserträge</span><b class="plus">${geld(me.fin?.zinsErtrag || 0)}</b></div>
+        <div><span>Zinsausgaben</span><b class="${me.fin?.zinsAufwand ? "minus" : ""}">${me.fin?.zinsAufwand ? "− " : ""}${geld(me.fin?.zinsAufwand || 0)}</b></div>
+      </div>
+      <details class="fMehr" data-lex="f-verkauf" ${offen("f-verkauf")}><summary>Verkäufe je Ware <span>${sales.length}</span></summary>
+      ${sales.length ? `<table><tr><th>Ware</th><th>an Stadt</th><th>an Spieler</th><th>Einkäufe</th></tr>` +
         sales.map(([g, s]) => `<tr><td>${gname(g)}</td>
           <td>${s.botQty || 0}× · ${fmt(s.botRev || 0)}</td>
           <td>${s.playerQty || 0}× · ${fmt(s.playerRev || 0)}</td>
           <td>${s.buyQty || 0}× · ${fmt(s.buyCost || 0)}</td></tr>`).join("") + "</table>"
-        : `<span class="meta">Noch keine Verkäufe.</span>`}
-      <div class="sec">Bewegungen (${(me.tx || []).length})</div>
-      ${(me.tx || []).length ? `<table>` + me.tx.map(x => `<tr>
+        : `<p class="meta">Noch keine Verkäufe.</p>`}
+      </details>
+      <details class="fMehr" data-lex="f-tx" ${offen("f-tx")}><summary>Bewegungen <span>${tx.length}</span></summary>
+      ${tx.length ? `<table>` + (alleTx ? tx : tx.slice(0, 8)).map(x => `<tr>
           <td><span class="meta">${x.cat}</span> ${x.text}</td>
-          <td style="text-align:right;font-family:var(--mono);color:${x.amt >= 0 ? "var(--up)" : "var(--down)"}">${x.amt >= 0 ? "+" : "−"} ${fmt(Math.abs(x.amt))}</td>
+          <td class="betrag ${x.amt >= 0 ? "plus" : "minus"}">${x.amt >= 0 ? "+" : "−"} ${fmt(Math.abs(x.amt))}</td>
         </tr>`).join("") + "</table>"
-        : `<span class="meta">Noch keine Bewegungen — baue, handle oder erfülle Vertriebsaufträge.</span>`}`;
+        + (tx.length > 8 ? `<button type="button" class="qMehr" data-tx-alle>${alleTx ? "Weniger anzeigen" : `Alle ${tx.length} anzeigen`}</button>` : "")
+        : `<p class="meta">Noch keine Bewegungen — baue, handle oder erfülle Vertriebsaufträge.</p>`}
+      </details>`;
   }
 
-  /* Lexikon: alle Gebäude, Waren & Mechaniken */
+  /* Lexikon: Suche + einklappbare Gruppen (eigene Branche offen) + kompakte
+   * Gebäudekarten. Offene Gruppen bleiben über Aktualisierungen hinweg offen. */
   if (document.getElementById("p-lexikon").classList.contains("open")) {
     const B = BTYPES(), avg = state.avg || {};
-    const ZNAME = { agrar:"Agrar (grün)", zentrum:"Zentrum (blau)", industrie:"Industrie — $2.500/Kachel", kueste:"Küste — $12.000/Kachel" };
+    const ZNAME = { agrar: "Agrar", zentrum: "Zentrum", industrie: "Industrie · $2.500/Kachel", kueste: "Küste · $12.000/Kachel" };
+    const INAME = { agrar: "Agrar", rohstoff: "Rohstoff & Bau", versorger: "Versorger", tech: "Technologie", touristik: "Touristik", ruestung: "Rüstung" };
+    const kartell = store.get().state?.mode === "kartell";
+    const suche = (LEX_SUCHE || "").trim().toLowerCase();
+    const r2 = n => (+(+n).toFixed(2)).toLocaleString("de-DE");   // 0.333333 → 0,33
     const bcard = (bid) => {
       const b = B[bid]; if (!b) return "";
-      let what = "";
-      if (b.out) what = `Produziert <b>${b.rate} ${gname(b.out)}/s</b>` +
-        (b.boosts ? `<br>Boost: je 1 ${b.boosts.map(r => gname(r)).join(" / ")}/s aus dem Lager → <b>+75 %</b> (beides = ×2,5)` : "");
-      else if (b.proc) what = `Verarbeitet <b>${Object.entries(b.proc.in).map(([g,n]) => `${n} ${gname(g)}`).join(" + ")}/s</b> zu <b>${b.proc.rate} ${gname(b.proc.out)}/s</b> — läuft automatisch, solange Inputs im Lager sind`;
-      else if (b.ad) what = `<b>Schaltet Werbekampagnen frei.</b> Reichweite hebt den Preis, den deine Läden ohne Tempoverlust verlangen können — bis +20 % mit einer Agentur, je weitere +10 % (Höchstwert +40 %). Die Reichweite zerfällt laufend: ohne neue Kampagne sind die Preise nach gut zwei Minuten wieder beim Ø-Kurs.`;
-      else if (b.retail) what = `<b>${b.retail.slots} Verkaufsslot${b.retail.slots > 1 ? "s" : ""}</b> für ${b.retail.goods.map(g => gname(g)).join(", ")} · Grundtempo ${b.retail.base}/s, je nach Ware zwischen ${(b.retail.base * Math.min(...b.retail.goods.map(g => store.get().meta?.retailFlow?.[g] ?? 1))).toFixed(2)} und ${(b.retail.base * Math.max(...b.retail.goods.map(g => store.get().meta?.retailFlow?.[g] ?? 1))).toFixed(2)}/s<br>Du setzt den Preis selbst — Ø-Kurs = volle Rate, teurer verkauft langsamer, billiger schneller (max. ×2). Konfigurieren per Klick aufs Gebäude.`;
-      return `<div class="bond" style="align-items:flex-start">
-        <img src="assets/${bid}-0.png" width="44" height="44" style="image-rendering:auto;flex-shrink:0" alt="">
-        <div style="flex:1"><b>${b.name}</b> <span class="meta">· ${fmt(b.cost)} · ${ZNAME[b.zone] || b.zone}</span>
-        <div class="meta" style="margin-top:3px;line-height:1.5">${what}</div>
-        <div class="meta" style="margin-top:2px;color:var(--dim)">${store.get().state?.mode === "kartell" ? "Bar bezahlt — im Kartell baut jede Familie alles" : `Baumaterial: ${Math.ceil(b.cost/400)} Ziegel${b.cost >= 4000 && b.proc?.out !== "beton" ? ` + ${Math.ceil(b.cost/2000)} Beton` : ""}`}${(b.out || b.proc) ? " · auflevelbar (+30 %/Stufe)" : ""} · Abriss erstattet ${fmt(b.cost * 0.5)}${store.get().state?.mode === "kartell" ? "" : b.industry ? ` · <b style="color:var(--accent2)">nur ${({agrar:"Agrar",rohstoff:"Rohstoff & Bau",versorger:"Versorger",tech:"Technologie"})[b.industry]}</b>` : " · jede Industrie"}</div></div></div>`;
+      if (suche && !(`${b.name} ${b.out ? gname(b.out) : ""} ${b.proc ? gname(b.proc.out) + " " + Object.keys(b.proc.in).map(gname).join(" ") : ""}`.toLowerCase().includes(suche))) return "";
+      let was = "", mehr = "";
+      if (b.out) { was = `→ <b>${gname(b.out)}</b> ${r2(b.rate)}/s`;
+        if (b.boosts) mehr = `Boost: je 1 ${b.boosts.map(r => gname(r)).join(" / ")}/s aus dem Lager → +75 % (beides = ×2,5).`; }
+      else if (b.proc) { was = `${Object.entries(b.proc.in).map(([g, n]) => `${r2(n)} ${gname(g)}`).join(" + ")} → <b>${r2(b.proc.rate)} ${gname(b.proc.out)}</b>/s`;
+        mehr = "Läuft automatisch, solange die Zutaten im Lager sind."; }
+      else if (b.ad) { was = "<b>Werbekampagnen</b>";
+        mehr = "Reichweite hebt den Preis, den deine Läden ohne Tempoverlust verlangen können — bis +20 % mit einer Agentur, je weitere +10 % (max. +40 %). Ohne neue Kampagne nach gut zwei Minuten wieder beim Ø-Kurs."; }
+      else if (b.retail) { was = `<b>${b.retail.slots} Regal${b.retail.slots > 1 ? "e" : ""}</b> · ${b.retail.goods.map(g => gname(g)).join(", ")}`;
+        mehr = "Du setzt den Preis: Ø-Kurs = volle Rate, teurer verkauft langsamer, billiger schneller (max. ×2). Einrichten per Klick aufs Gebäude."; }
+      else if (b.racing) { was = "<b>Motorsport</b> · Garage für Rennwagen"; }
+      const chips = [
+        ZNAME[b.zone] || b.zone,
+        kartell ? "bar bezahlt" : `${Math.ceil(b.cost / 400)} Ziegel${b.cost >= 4000 && b.proc?.out !== "beton" ? ` + ${Math.ceil(b.cost / 2000)} Beton` : ""}`,
+        (b.out || b.proc) ? "auflevelbar" : "",
+        !kartell && b.industry ? `nur ${INAME[b.industry] || b.industry}` : "",
+      ].filter(Boolean);
+      return `<div class="lexKarte">
+        <img src="${spriteUrl(bid, 0, 0) || `assets/${bid}-0.png`}" alt="">
+        <div class="lexText">
+          <div class="lexKopf"><b>${bname(bid)}</b><span class="lexPreis">${fmt(b.cost)}</span></div>
+          ${was ? `<div class="lexWas">${was}</div>` : ""}
+          <div class="lexChips">${chips.map(c => `<span>${c}</span>`).join("")}</div>
+          ${mehr ? `<div class="lexMehr">${mehr} Abriss erstattet ${fmt(b.cost * .5)}.</div>` : ""}
+        </div></div>`;
     };
-    document.getElementById("lexbody").innerHTML = `
-      <div class="sec">Agrarwirtschaft</div>${["farm","plantage","imkerei","saftpresse","pharma","baeckerei"].map(bcard).join("")}
-      <div class="sec">Rohstoff- &amp; Bauindustrie</div>${["mine","ziegelei","stahlwerk","betonwerk","reifenwerk"].map(bcard).join("")}
-      <div class="sec">Grundbedürfnisse (Versorger)</div>${["brunnen","wasserwerk","ewerk","windpark","oelpumpe","raffinerie"].map(bcard).join("")}
-      <div class="sec">Technologie &amp; Elektronik</div>${["siliziummine","chipfabrik","autowerk","dieselwerk","eautowerk","rennlabor"].map(bcard).join("")}
-      <div class="sec">Touristik</div>${["campingplatz","strandhotel"].map(bcard).join("")}
-      <div class="sec">Rüstungsindustrie</div>${["munitionsfabrik","waffenschmiede","panzerwerk"].map(bcard).join("")}
-      <div class="sec">Verkauf (jede Industrie)</div>${["markt","bauhandel","kontor","laden","autohaus","waffenhandel","werbeagentur"].map(bcard).join("")}
-      <div class="sec">Motorsport (jede Industrie)</div>${["rennstall"].map(bcard).join("")}
+    const meineInd = store.get().state?.players?.[myId]?.industry;
+    const GRUPPEN = [
+      ["agrar", "Agrarwirtschaft", ["farm","plantage","imkerei","saftpresse","pharma","baeckerei"]],
+      ["rohstoff", "Rohstoff & Bau", ["mine","ziegelei","stahlwerk","betonwerk","reifenwerk"]],
+      ["versorger", "Versorger: Wasser, Strom & Öl", ["brunnen","wasserwerk","ewerk","windpark","oelpumpe","raffinerie"]],
+      ["tech", "Technologie & Elektronik", ["siliziummine","chipfabrik","autowerk","dieselwerk","eautowerk","rennlabor"]],
+      ["touristik", "Touristik", ["campingplatz","strandhotel"]],
+      ["ruestung", "Rüstung", ["munitionsfabrik","waffenschmiede","panzerwerk"]],
+      ["laden", "Läden (jede Branche)", ["markt","bauhandel","kontor","laden","autohaus","waffenhandel","werbeagentur"]],
+      ["renn", "Motorsport", ["rennstall"]],
+    ];
+    const gruppe = ([id, titel, ids]) => {
+      const karten = ids.map(bcard).join("");
+      if (!karten) return "";
+      const auf = suche || LEX_OFFEN.has("lex-" + id) || (!LEX_OFFEN.size && id === meineInd);
+      return `<details class="lexGruppe" data-lex="lex-${id}" ${auf ? "open" : ""}><summary>${titel}<span>${ids.filter(i => B[i]).length}</span></summary>${karten}</details>`;
+    };
+    const suchFeld = document.getElementById("lexSuche");
+    if (!suchFeld) {
+      document.getElementById("lexbody").insertAdjacentHTML("beforebegin",
+        `<div class="lexSucheZeile"><input id="lexSuche" type="search" placeholder="Gebäude oder Ware suchen …" aria-label="Lexikon durchsuchen"></div>`);
+      document.getElementById("lexSuche").addEventListener("input", e => { LEX_SUCHE = e.target.value; store.set({}); });
+    }
+    document.getElementById("lexbody").innerHTML = GRUPPEN.map(gruppe).join("")
+      + (suche ? "" : `
+      <details class="lexGruppe" data-lex="lex-waren" ${LEX_OFFEN.has("lex-waren") ? "open" : ""}><summary>Waren & aktuelle Ø-Kurse<span>${Object.keys(GOODS()).length}</span></summary>
       <div class="sec">Waren &amp; aktuelle Ø-Kurse</div>
       <table><tr><th>Ware</th><th>Kategorie</th><th>Ø-Kurs</th></tr>
       ${Object.entries(GOODS()).map(([k]) => `<tr><td>${gname(k)}</td><td>${catname(k)}</td><td>${fmt(avg[k] ?? 0)}</td></tr>`).join("")}</table>
-      <div class="meta" style="margin-top:6px;line-height:1.5">Kurse regeln sich selbst: Überangebot drückt den Anker bis −50 %, Knappheit hebt ihn bis +30 %. Kurzfristige Schwankung max. ±$5.</div>
+      <p class="meta">Kurse regeln sich selbst: Überangebot drückt den Anker bis −50 %, Knappheit hebt ihn bis +30 %. Kurzfristige Schwankung max. ±$5.</p>
+      </details>
+      <details class="lexGruppe" data-lex="lex-regeln" ${LEX_OFFEN.has("lex-regeln") ? "open" : ""}><summary>Regeln kompakt<span>2</span></summary>
       <div class="sec">Geld verdienen — die Rangfolge</div>
       <table>
         <tr><td>Großauftrag</td><td style="text-align:right">Ø-Kurs <b style="color:var(--accent)">×2 fixiert</b></td></tr>
@@ -10127,7 +10190,8 @@ function render({ state, me, myId, chat, room }) {
         <tr><td>Anleihen &amp; Auktionen</td><td style="text-align:right">Zinsen / Schnäppchen</td></tr>
       </table>
       <div class="sec">Finanzen kompakt</div>
-      <div class="meta" style="line-height:1.6">Anleihen: selbst emittieren bringt Sofort-Kapital; Kupon läuft pro Sekunde. <b style="color:var(--down)">3 verpasste Zahlungen → Pfandrecht, 15 → Zwangsversteigerung</b> (Erlös an den Gläubiger, Startgebot 30 % des Neuwerts). Rating AAA–D entsteht aus Verschuldungsgrad und Firmengröße. Sieg: Rundenziel-Nettovermögen = Cash + Lager (Ø-Kurs) + 70 % Gebäudewert + Anleihen − Schulden.</div>`;
+      <div class="meta" style="line-height:1.6">Anleihen: selbst emittieren bringt Sofort-Kapital; Kupon läuft pro Sekunde. <b style="color:var(--down)">3 verpasste Zahlungen → Pfandrecht, 15 → Zwangsversteigerung</b> (Erlös an den Gläubiger, Startgebot 30 % des Neuwerts). Rating AAA–D entsteht aus Verschuldungsgrad und Firmengröße. Sieg: Rundenziel-Nettovermögen = Cash + Lager (Ø-Kurs) + 70 % Gebäudewert + Anleihen − Schulden.</div>
+      </details>`);
   }
 
   /* Chat */
