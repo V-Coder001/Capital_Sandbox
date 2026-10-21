@@ -87,16 +87,14 @@ app.get("/api/invite", (_req, res) => {
 /* ---------- Bugreports ----------
  * Spieler melden Fehler mit Beschreibung und optionalem Screenshot; die
  * Meldungen landen als JSON-Zeilen plus Bilddateien im Ordner bugreports/.
- * Die Admin-Ansicht unter /bugs ist mit einem Schlüssel geschützt, der beim
- * ersten Start erzeugt und in bugreports/.key abgelegt wird (überschreibbar
- * per Umgebungsvariable BUGS_KEY). Der fertige Link steht im Server-Log. */
+ * Die Admin-Ansicht unter /bugs ist mit einem festen Schlüssel geschützt
+ * (FESTER_SCHLUESSEL, überschreibbar per BUGS_KEY / ADMIN_KEY). */
 const BUGDIR = path.join(__dirname, "bugreports");
 fs.mkdirSync(BUGDIR, { recursive: true });
-let BUGKEY = process.env.BUGS_KEY || "";
-if (!BUGKEY) {
-  try { BUGKEY = fs.readFileSync(path.join(BUGDIR, ".key"), "utf8").trim(); } catch {}
-  if (!BUGKEY) { BUGKEY = crypto.randomBytes(6).toString("hex"); fs.writeFileSync(path.join(BUGDIR, ".key"), BUGKEY); }
-}
+/* Fester Schlüssel für Bugreports und Adminpanel — bleibt über Neustarts und
+ * Deploys gleich. Per Umgebungsvariable (ADMIN_KEY / BUGS_KEY) überschreibbar. */
+const FESTER_SCHLUESSEL = "79ce89d";
+const BUGKEY = process.env.BUGS_KEY || process.env.ADMIN_KEY || FESTER_SCHLUESSEL;
 app.post("/api/bugreport", express.json({ limit: "8mb" }), (req, res) => {
   const text = String(req.body?.text || "").slice(0, 4000).trim();
   if (!text) return res.status(400).json({ error: "Beschreibung fehlt" });
@@ -209,6 +207,20 @@ app.post("/admin/logout", (_req, res) => {
  * frueher oder spaeter auseinanderlaufen, und zwar genau bei der Pruefung, die
  * man in der einen Fassung nachtraegt und in der anderen vergisst. */
 function adminEingriff({ pid, art, betrag, good, menge }) {
+  /* Finanzamt-Konten der Stadt setzen (kein Spieler nötig) */
+  if (art === "stadtkasse" || art === "reserve") {
+    const v = Math.max(0, Math.round(+betrag));
+    if (!Number.isFinite(v)) return { status: 400, error: "Betrag fehlt" };
+    if (art === "stadtkasse") G.stadtkasse = v; else G.wettReserve = v;
+    pushState();
+    return { ok: true };
+  }
+  if (art === "projekt") {
+    if (G.stadtprojekt) return { status: 400, error: "Es läuft schon ein Stadtprojekt" };
+    if (G.stadtkasse < 1000) return { status: 400, error: "Stadtkasse fast leer — erst Geld setzen" };
+    stadtprojektStarten(); pushState();
+    return { ok: true };
+  }
   const p = G.players[String(pid || "")];
   if (!p) return { status: 404, error: "Spieler unbekannt" };
   if (art === "geld") {
@@ -323,6 +335,7 @@ app.get("/admin", (req, res) => {
       <td class="num">${geld(p.cash)}</td>
       <td class="num">${geld(netWorth(p))}</td>
       <td class="num">${rating(p)}</td>
+      <td class="num">${geld(p.stats.steuern || 0)}${p.steuerSchuld > 0 ? `<br><span class="pill">${geld(p.steuerSchuld)} offen</span>` : ""}</td>
       <td class="num">${geb}</td>
       <td><input type="number" step="1000" value="10000" id="b-${escHtml(p.id)}">
         <button onclick="geld('${escHtml(p.id)}')">Geld geben</button></td>
@@ -348,9 +361,21 @@ app.get("/admin", (req, res) => {
   · <form method="post" action="admin/logout" style="display:inline"><button class="geist" type="submit">Abmelden</button></form>
 </div>
 <div class="karte">
+  <h2>Finanzamt</h2>
+  ${finanzamtAktiv() ? `<div class="sub">Steuern gesamt ${geld(G.steuernGesamt)} · nächster Steuertermin in ${Math.floor(G.nextDividendIn / 60)}:${String(G.nextDividendIn % 60).padStart(2, "0")}
+    ${G.stadtprojekt ? ` · läuft: <b>${escHtml(G.stadtprojekt.name)}</b> (${Math.floor(G.stadtprojekt.ttl / 60)} min)` : ""}
+    ${G.stadtprojekteFertig.length ? ` · gebaut: ${G.stadtprojekteFertig.map(f => escHtml(f.name)).join(", ")}` : ""}</div>
+  <table><tr><th>Konto</th><th class="num">Stand</th><th>Setzen</th></tr>
+    <tr><td>Stadtkasse</td><td class="num">${geld(G.stadtkasse)}</td><td><input type="number" step="1000" value="${Math.round(G.stadtkasse)}" id="fa-stadtkasse">
+      <button onclick="konto('stadtkasse')">Setzen</button> <button class="geist" onclick="senden({ art: 'projekt' })">Stadtprojekt starten</button></td></tr>
+    <tr><td>Bankreserve (Kurswetten)</td><td class="num">${geld(G.wettReserve)}</td><td><input type="number" step="1000" value="${Math.round(G.wettReserve)}" id="fa-reserve">
+      <button onclick="konto('reserve')">Setzen</button></td></tr></table>`
+  : `<div class="sub">Im Modus ${escHtml(MODE)} gibt es kein Finanzamt.</div>`}
+</div>
+<div class="karte">
   <h2>Firmen</h2>
   ${spieler.length ? `<table><tr><th>Firma</th><th class="num">Bargeld</th><th class="num">Nettovermögen</th>
-    <th class="num">Rating</th><th class="num">Gebäude</th><th>Geld</th><th>Ware</th></tr>${zeilen}</table>`
+    <th class="num">Rating</th><th class="num">Steuern</th><th class="num">Gebäude</th><th>Geld</th><th>Ware</th></tr>${zeilen}</table>`
     : "<div class='sub'>Noch niemand in dieser Runde.</div>"}
 </div>
 <script>
@@ -362,6 +387,7 @@ async function senden(nutzlast) {
   location.reload();
 }
 const geld = pid => senden({ art: "geld", pid, betrag: +document.getElementById("b-" + pid).value });
+const konto = art => senden({ art, betrag: +document.getElementById("fa-" + art).value });
 const ware = pid => senden({ art: "ware", pid,
   good: document.getElementById("w-" + pid).value, menge: +document.getElementById("m-" + pid).value });
 </script>`);
@@ -2465,7 +2491,21 @@ function buildStadtMap({ w = 32, h = 32, seed = 0, ufer = "ecke",
 }
 
 /* ---------- Karte (deterministisch, damit alle Clients identisch rendern) ---------- */
+/* Das Finanzamt steht als städtisches Gebäude im Zentrum, mit Abstand zu Bank
+ * und Nachrichtenzentrale, damit die Beschriftungen frei bleiben. Im Kartell-
+ * und Planmodus gibt es kein Finanzamt. */
 function buildMap(mode = "sandbox") {
+  const tiles = buildMapRoh(mode);
+  if (mode !== "kartell" && mode !== "plan") {
+    const bank = tiles.find(t => t.bank);
+    const frei = tiles.filter(t => t.zone === "zentrum" && !t.road && !t.water && !t.park && !t.bank && !t.news && !t.finanzamt && !t.deko && !t.owner
+      && !tiles.some(o => (o.bank || o.news || o.deko) && Math.hypot(o.x - t.x, o.y - t.y) < 2.5));
+    if (bank) frei.sort((a, b) => Math.hypot(a.x - bank.x, a.y - bank.y) - Math.hypot(b.x - bank.x, b.y - bank.y));
+    if (frei[0]) Object.assign(frei[0], { finanzamt: true, park: false, field: false, locked: false, unlockCost: 0 });
+  }
+  return tiles;
+}
+function buildMapRoh(mode = "sandbox") {
   /* Einsteiger und Sandkasten laufen beide auf einer entworfenen Stadt, aber
    * mit deutlich anderer Flaeche. Nur die Planwirtschaft benutzt noch den
    * prozeduralen Code weiter unten. */
@@ -2730,7 +2770,7 @@ function renntagAusstatten(p) {
   /* Platz suchen: bevorzugt in der Industriezone (dort gehoert ein Rennstall
    * hin), sonst irgendwo frei — niemand soll ohne Stall dastehen, bloss weil
    * die Zone voll ist. */
-  const passt = t => !t.road && !t.water && !t.park && !t.owner && !t.bank && !t.news && !t.deko;
+  const passt = t => !t.road && !t.water && !t.park && !t.owner && !t.bank && !t.news && !t.finanzamt && !t.deko;
   const platz = G.map.find(t => passt(t) && t.zone === "industrie") || G.map.find(passt);
   if (!platz) return;
   Object.assign(platz, { owner: p.id, btype: "rennstall", level: 1, locked: false, unlockCost: 0 });
@@ -2788,6 +2828,10 @@ const G = {
   wettrunde: { nr: 1, phase: "annahme", rest: 120, start: {} },   // Kurswetten (long/short auf Firmenwerte)
   wetten: [],            // {id, spielerId, firmaId, richtung, einsatz}
   wettLetzte: [],        // Ergebnis der letzten Runde je Firma
+  wettReserve: 20000,    // Bankreserve für die Kurswetten (WETT_RESERVE)
+  stadtkasse: 0,         // Finanzamt: Anteil der Steuern für Großauftrags-Prämien und Stadtprojekte
+  steuernGesamt: 0,
+  stadtprojekt: null, projektPause: 120, stadtprojekteFertig: [],
   fahrer: [],            // Fahrerpool der Runde: {id, name, land, Werte…, teamId, autoId}
   fahrerGehaltIn: FAHRER_GEHALT_TAKT,
   rennen: null,                    // laufender Renntag (Anmeldung/Rennen/Ergebnis)
@@ -2828,7 +2872,7 @@ function newPlayer(pid, name, color, industry, socketId) {
     stats: { produziert: {}, umsatz: 0, ausgaben: 0, gebaut: 0, abgerissen: 0,
              grossauftraege: 0, besterHandel: null, dividendeRein: 0, dividendeRaus: 0,
              werbung: 0, anteileGekauft: 0, anteileVerkauft: 0, fusionen: 0,
-             zinsErtrag: 0, zinsAufwand: 0, aufgelevelt: 0 },
+             zinsErtrag: 0, zinsAufwand: 0, aufgelevelt: 0, steuern: 0, projekte: 0 },
     fin: { zinsErtrag: 0, zinsAufwand: 0 },
     nwHist: [],        // Nettovermögens-Verlauf für den Chart
     equity: { [pid]: 4 },   // Cap-Table: holderId -> Anzahl 25%-Anteile (Summe immer 4)
@@ -3012,18 +3056,22 @@ function spawnGroupOrder() {
     needs[g] = { req: Math.max(3, Math.round(targetVal / MM[g].price)), have: 0,
       pay: Math.round(MM[g].price * GROUP_PAYOUT_MULT * 100) / 100 };   // Stückpreis beim Spawn fixiert
   }
-  G.groupOrder = { id: id(), city, needs, contrib: {}, ttl: GROUP_TTL };
+  G.groupOrder = { id: id(), city, needs, contrib: {}, ttl: GROUP_TTL, praemie: 0 };
+  grossauftragPraemie(G.groupOrder);
   const txt = Object.entries(needs).map(([g, n]) => `${n.req}× ${GOODS[g].name}`).join(" und ");
-  const vol = Object.entries(needs).reduce((s, [g, n]) => s + n.req * n.pay, 0);
-  io.emit("notice", { text: `GROSSAUFTRAG: ${city} braucht ${txt} — Gesamttopf ~${Math.round(vol).toLocaleString("de-DE")} $ (Ø×${GROUP_PAYOUT_MULT}, beste Vergütung im Spiel)! ${GROUP_TTL / 60} Minuten Zeit.` });
+  const vol = Object.entries(needs).reduce((s, [g, n]) => s + n.req * n.pay, 0) + G.groupOrder.praemie;
+  G.groupOrder.volumen = Math.round(vol);
+  io.emit("notice", { text: `GROSSAUFTRAG: ${city} braucht ${txt} — Gesamttopf ~${Math.round(vol).toLocaleString("de-DE")} $${G.groupOrder.praemie ? ` inkl. ${G.groupOrder.praemie.toLocaleString("de-DE")} $ Prämie der Stadtkasse` : ` (Ø×${GROUP_PAYOUT_MULT})`}! ${GROUP_TTL / 60} Minuten Zeit.` });
 }
 function finishGroupOrder() {
   const o = G.groupOrder;
+  /* Prämie der Stadtkasse anteilig nach geliefertem Wert verteilen */
+  const wertVon = goods => Object.entries(goods).reduce((a, [g, q]) => a + q * o.needs[g].pay, 0);
+  const gesamtWert = Object.values(o.contrib).reduce((a, goods) => a + wertVon(goods), 0) || 1;
   for (const [pid, goods] of Object.entries(o.contrib)) {
     const p = G.players[pid];
     if (!p) continue;
-    let sum = 0;
-    for (const [g, qty] of Object.entries(goods)) sum += qty * o.needs[g].pay;   // fixierter Stückpreis
+    let sum = wertVon(goods) * (1 + (o.praemie || 0) / gesamtWert);   // fixierter Stückpreis + Prämie
     p.cash += sum; addRevenue(p, sum); gainXp(p, 40); p.stats.grossauftraege++;
     logTx(p, "Gruppenauftrag", `${o.city} beliefert (Ø×${GROUP_PAYOUT_MULT})`, sum);
     emitTo(pid, "notice", { text: `${o.city} abgeschlossen — deine Auszahlung: ${Math.round(sum)} $` });
@@ -3229,6 +3277,139 @@ function distributeDividends() {
 }
 
 
+
+/* ---------- Finanzamt ----------
+ * Gewinnsteuer alle 10 Minuten (mit der Dividende): 8 % auf den Gewinn des
+ * Zeitraums über einem Freibetrag von 1.000 $. Gewinn = Umsatz + Dividenden
+ * + Zinserträge − Ausgaben (Bau, Ausbau, Einkauf, Werbung, Gehälter) −
+ * ausgezahlte Dividenden − Zinsaufwand. Wettgewinne: 10 % auf den Reingewinn.
+ * Bots zahlen genauso wie Spieler. Einnahmen: 40 % Bankreserve (Kurswetten),
+ * 60 % Stadtkasse (Großauftrags-Prämien und Stadtprojekte). */
+const STEUER_SATZ = 0.08, STEUER_FREI = 1000, WETT_STEUER = 0.10;
+const STEUER_RESERVE_ANTEIL = 0.4, RESERVE_MAX_ANTEIL = 0.10;
+const PRAEMIE_ANTEIL = 0.2, PROJEKT_SCHWELLE = 25000, PROJEKT_BUDGET = 0.8, PROJEKT_TTL = 600, PROJEKT_PAUSE = 300;
+const STADTPROJEKTE = [
+  { key: "stadion", name: "Stadion" }, { key: "krankenhaus", name: "Krankenhaus" },
+  { key: "hafen", name: "Hafenterminal" }, { key: "bibliothek", name: "Stadtbibliothek" },
+  { key: "messe", name: "Messehalle" }, { key: "bahnhof", name: "Hauptbahnhof" },
+];
+const finanzamtAktiv = () => MODE !== "kartell" && MODE !== "plan";
+function steuerBasis(p) {
+  const st = p.stats;
+  return (st.umsatz || 0) + (st.dividendeRein || 0) + (st.zinsErtrag || 0)
+       - (st.ausgaben || 0) - (st.dividendeRaus || 0) - (st.zinsAufwand || 0);
+}
+function steuerSchaetzung(p) {
+  const gewinn = steuerBasis(p) - (p.steuerStand ?? 0);
+  return { gewinn: Math.round(gewinn),
+           steuer: Math.ceil(Math.max(0, gewinn - STEUER_FREI) * STEUER_SATZ) + Math.round(p.steuerSchuld || 0) };
+}
+function finanzamtEinnahme(betrag) {
+  if (!(betrag > 0)) return;
+  G.steuernGesamt += betrag;
+  const r = betrag * STEUER_RESERVE_ANTEIL;
+  G.wettReserve += r; G.stadtkasse += betrag - r;
+  /* Obergrenze: die Bankreserve wächst mit der Wirtschaft, aber nicht ins
+   * Uferlose — Überschuss läuft in die Stadtkasse. */
+  const gesamt = Object.values(G.players).reduce((a, q) => a + netWorth(q), 0);
+  const cap = Math.max(WETT_RESERVE, gesamt * RESERVE_MAX_ANTEIL);
+  if (G.wettReserve > cap) { G.stadtkasse += G.wettReserve - cap; G.wettReserve = cap; }
+}
+function steuernErheben() {
+  if (!finanzamtAktiv()) return;
+  for (const p of Object.values(G.players)) {
+    const basis = steuerBasis(p);
+    const gewinn = basis - (p.steuerStand ?? 0);
+    p.steuerStand = basis;
+    const faellig = Math.ceil(Math.max(0, gewinn - STEUER_FREI) * STEUER_SATZ) + (p.steuerSchuld || 0);
+    const zahl = Math.min(faellig, Math.max(0, Math.floor(p.cash)));
+    p.cash -= zahl; p.steuerSchuld = faellig - zahl;
+    p.stats.steuern = (p.stats.steuern || 0) + zahl;
+    finanzamtEinnahme(zahl);
+    p.steuerLetzter = { gewinn: Math.round(gewinn), steuer: zahl, schuld: Math.round(p.steuerSchuld), tick: G.tick };
+    if (zahl > 0) logTx(p, "Steuer", `Gewinnsteuer (Gewinn ${Math.round(gewinn).toLocaleString("de-DE")} $)`, -zahl);
+    if (!p.bot && faellig > 0) emitTo(p.id, "notice", { text: `Steuerbescheid: ${zahl.toLocaleString("de-DE")} $ Gewinnsteuer${p.steuerSchuld > 0 ? ` — ${Math.round(p.steuerSchuld)} $ gestundet` : ""}.` });
+  }
+}
+function steuerVorwarnung() {
+  if (!finanzamtAktiv()) return;
+  for (const p of Object.values(G.players)) {
+    if (p.bot) continue;
+    const { steuer } = steuerSchaetzung(p);
+    if (steuer > 0) emitTo(p.id, "notice", { text: `Finanzamt: Steuerbescheid in 1 min — voraussichtlich ${steuer.toLocaleString("de-DE")} $. Investitionen senken den Gewinn.` });
+  }
+}
+/* Großauftrag: Prämie aus der Stadtkasse beim Erscheinen reservieren */
+function grossauftragPraemie(o) {
+  if (!finanzamtAktiv() || G.stadtkasse < 100) return;
+  o.praemie = Math.floor(G.stadtkasse * PRAEMIE_ANTEIL);
+  G.stadtkasse -= o.praemie;
+}
+/* Stadtprojekt: großer Auftrag mit drei Waren, komplett aus der Stadtkasse */
+function stadtprojektStarten() {
+  const frei = STADTPROJEKTE.filter(sp => !G.stadtprojekteFertig.some(f => f.key === sp.key));
+  const art = (frei.length ? frei : STADTPROJEKTE)[Math.floor(Math.random() * (frei.length || STADTPROJEKTE.length))];
+  /* Budget: bis 80 % der Kasse, aber in einer Größe, die die Runde in zehn
+   * Minuten auch liefern kann — skaliert wie die Großaufträge mit der Spielerzahl. */
+  const playerScale = Math.max(1, 0.5 + Object.keys(G.players).length * 0.5);
+  const budget = Math.floor(Math.min(G.stadtkasse * PROJEKT_BUDGET, 7000 * playerScale));
+  G.stadtkasse -= budget;
+  /* Keine Billigware (Strom, Wasser …), sonst wären es Tausende Stück */
+  const teuer = PRODUCTS.filter(g => BASEP[g] >= 6);
+  const goods = [...(teuer.length >= 3 ? teuer : PRODUCTS)].sort(() => Math.random() - 0.5).slice(0, 3);
+  const needs = {};
+  for (const g of goods) {
+    const pay = Math.round(MM[g].price * GROUP_PAYOUT_MULT * 100) / 100;
+    needs[g] = { req: Math.max(5, Math.floor(budget / goods.length / pay)), have: 0, pay };
+  }
+  G.stadtprojekt = { id: id(), key: art.key, name: art.name, budget, needs, contrib: {}, ttl: PROJEKT_TTL };
+  const txt = Object.entries(needs).map(([g, n]) => `${n.req}× ${GOODS[g].name}`).join(", ");
+  io.emit("notice", { text: `STADTPROJEKT: Die Stadt baut ein ${art.name}! Gebraucht: ${txt} — Budget ${budget.toLocaleString("de-DE")} $ aus der Stadtkasse, 10 Minuten Zeit.` });
+}
+function stadtprojektAbrechnen(fertig) {
+  const o = G.stadtprojekt;
+  let ausgezahlt = 0;
+  const lieferanten = [];
+  for (const [pid, goods] of Object.entries(o.contrib)) {
+    const p = G.players[pid];
+    if (!p) continue;
+    let sum = 0;
+    for (const [g, qty] of Object.entries(goods)) sum += qty * o.needs[g].pay;
+    sum = Math.min(sum, o.budget - ausgezahlt);
+    if (!(sum > 0)) continue;
+    ausgezahlt += sum;
+    p.cash += sum; addRevenue(p, sum); gainXp(p, fertig ? 80 : 30); p.stats.projekte = (p.stats.projekte || 0) + 1;
+    logTx(p, "Stadtprojekt", `${o.name}: Lieferung bezahlt`, sum);
+    lieferanten.push(p.name);
+    if (!p.bot) emitTo(pid, "notice", { text: `${o.name}: deine Auszahlung ${Math.round(sum).toLocaleString("de-DE")} $` });
+  }
+  G.stadtkasse += o.budget - ausgezahlt;   // Rest zurück in die Kasse
+  if (fertig) {
+    /* Das fertige Projekt steht danach sichtbar in der Stadt */
+    const fin = G.map.find(t => t.finanzamt) || G.map.find(t => t.bank);
+    const platz = G.map.filter(t => (t.zone === "zentrum" || t.zone === "stadt") && !t.road && !t.water && !t.park && !t.bank
+        && !t.news && !t.finanzamt && !t.deko && !t.denkmal && !t.owner && !t.schwarz
+        && !G.map.some(o => (o.bank || o.news || o.finanzamt || o.denkmal) && Math.hypot(o.x - t.x, o.y - t.y) < 2.5))
+      .sort((a, b) => fin ? Math.hypot(a.x - fin.x, a.y - fin.y) - Math.hypot(b.x - fin.x, b.y - fin.y) : 0)[0];
+    if (platz) Object.assign(platz, { denkmal: o.key, denkmalName: o.name, locked: false, field: false });
+    G.stadtprojekteFertig.push({ key: o.key, name: o.name, tick: G.tick, lieferanten });
+    io.emit("notice", { text: `Das ${o.name} ist fertig! Danke an ${lieferanten.join(", ") || "alle"}.` });
+  } else io.emit("notice", { text: `Stadtprojekt ${o.name} nicht rechtzeitig fertig — Lieferungen wurden bezahlt, der Rest geht zurück in die Stadtkasse.` });
+  G.stadtprojekt = null; G.projektPause = PROJEKT_PAUSE;
+}
+function finanzamtTick() {
+  if (!finanzamtAktiv()) return;
+  if (G.nextDividendIn === 60) steuerVorwarnung();
+  if (G.stadtprojekt) { if (--G.stadtprojekt.ttl <= 0) stadtprojektAbrechnen(false); }
+  else if (--G.projektPause <= 0 && G.stadtkasse >= PROJEKT_SCHWELLE) stadtprojektStarten();
+}
+function finanzamtPublic() {
+  return { aktiv: finanzamtAktiv(), stadtkasse: Math.round(G.stadtkasse), reserve: Math.round(G.wettReserve),
+    gesamt: Math.round(G.steuernGesamt), satz: STEUER_SATZ, frei: STEUER_FREI, wettSteuer: WETT_STEUER,
+    reserveAnteil: STEUER_RESERVE_ANTEIL, praemieAnteil: PRAEMIE_ANTEIL, schwelle: PROJEKT_SCHWELLE,
+    naechsterIn: G.nextDividendIn, fertig: G.stadtprojekteFertig };
+}
+
 /* ---------- Kurswetten (long / short auf Firmenwerte) ----------
  * Geschlossene Wirtschaft: es entsteht kein Geld. Wer verliert, zahlt in den
  * Topf der Gegenseite; die Bank behält 5 % als Gebühr (Geldsenke).
@@ -3240,6 +3421,11 @@ function distributeDividends() {
 const WETT_ANNAHME = 120, WETT_LAUFZEIT = 300;
 const WETT_GEBUEHR = 0.05, WETT_HEBEL = 10, WETT_SCHWELLE = 0.005;
 const WETT_MIN = 100, WETT_MAX_ANTEIL = 0.2;
+/* Die Bank als Gegenpartei: beim Einfrieren füllt sie die kleinere Seite jeder
+ * Firma bis zur Größe der anderen auf — aus einer Reserve, die pro Spielrunde
+ * mit 20.000 $ startet und in die alle Gebühren und die Gewinne der Bank
+ * fließen. Ist sie leer, nimmt die Bank nicht mehr teil. */
+const WETT_RESERVE = 20000, BANK_ID = "__bank";
 let wettSeq = 1;
 
 function wettMax(p) { return Math.max(0, Math.floor(Math.min(p.cash, netWorth(p) * WETT_MAX_ANTEIL))); }
@@ -3268,6 +3454,7 @@ function wettPools(firmaId) {
   return { long, short, n };
 }
 function wettAuszahlen(w, betrag, text) {
+  if (w.bank) { G.wettReserve += betrag; return; }
   const p = G.players[w.spielerId];
   if (!p) return;
   p.wettOffen = Math.max(0, (p.wettOffen || 0) - w.einsatz);
@@ -3288,7 +3475,7 @@ function wettenAbrechnen() {
     const name = firma?.name ?? "—";
     if (!firma || !start || Math.abs(aend) < WETT_SCHWELLE || !pools.long || !pools.short) {
       for (const w of ws) wettAuszahlen(w, w.einsatz, `Wette auf ${name} zurückerstattet`);
-      for (const w of ws) emitTo(w.spielerId, "notice", { text: `Kurswette ${name}: ${!pools.long || !pools.short ? "keine Gegenseite" : "kaum Bewegung"} — Einsatz zurück.` });
+      for (const w of ws) if (!w.bank) emitTo(w.spielerId, "notice", { text: `Kurswette ${name}: ${!pools.long || !pools.short ? "keine Gegenseite" : "kaum Bewegung"} — Einsatz zurück.` });
       ergebnisse.push({ firmaId: fid, name, aenderung: aend, gewinner: null, topf: 0 });
       continue;
     }
@@ -3298,14 +3485,18 @@ function wettenAbrechnen() {
     for (const w of ws) if (w.richtung !== gew) {
       const verlust = w.einsatz * anteil; topf += verlust;
       wettAuszahlen(w, w.einsatz - verlust, `Wette auf ${name} verloren (Rest)`);
-      emitTo(w.spielerId, "notice", { text: `Kurswette ${name} verloren: −${Math.round(verlust)} $` });
+      if (!w.bank) emitTo(w.spielerId, "notice", { text: `Kurswette ${name} verloren: −${Math.round(verlust)} $` });
     }
     const netto = topf * (1 - WETT_GEBUEHR);
+    G.wettReserve += topf * WETT_GEBUEHR;   // Gebühr bleibt bei der Bank
     const gewPool = gew === "long" ? pools.long : pools.short;
     for (const w of ws) if (w.richtung === gew) {
-      const plus = netto * (w.einsatz / gewPool);
+      let plus = netto * (w.einsatz / gewPool);
+      /* Finanzamt: 10 % auf den Reingewinn der Spieler (nicht der Bank) */
+      if (!w.bank && finanzamtAktiv()) { const st = plus * WETT_STEUER; plus -= st; finanzamtEinnahme(st);
+        const wp = G.players[w.spielerId]; if (wp) wp.stats.steuern = (wp.stats.steuern || 0) + st; }
       wettAuszahlen(w, w.einsatz + plus, `Wette auf ${name} gewonnen`);
-      emitTo(w.spielerId, "notice", { text: `Kurswette ${name} gewonnen: +${Math.round(plus)} $` });
+      if (!w.bank) emitTo(w.spielerId, "notice", { text: `Kurswette ${name} gewonnen: +${Math.round(plus)} $${finanzamtAktiv() ? " (nach Steuer)" : ""}` });
     }
     ergebnisse.push({ firmaId: fid, name, aenderung: aend, gewinner: gew, topf: Math.round(topf) });
   }
@@ -3318,23 +3509,35 @@ function botsWetten() {
   const firmen = Object.values(G.players);
   if (firmen.length < 2) return;
   for (const b of firmen) {
-    if (!b.bot || Math.random() > 0.35 || b.cash < 1500) continue;
+    if (!b.bot || Math.random() > 0.6 || b.cash < 1500) continue;
     const ziel = firmen[Math.floor(Math.random() * firmen.length)];
     if (wettVerbot(b, ziel)) continue;
     const h = G.firmHist[ziel.id] || [];
     const trend = h.length > 3 ? h[h.length - 1] - h[h.length - 4] : 0;
     const richtung = Math.random() < (trend > 0 ? 0.6 : trend < 0 ? 0.4 : 0.5) ? "long" : "short";
-    const einsatz = Math.max(WETT_MIN, Math.min(Math.round(b.cash * 0.04), 1500, wettMax(b)));
+    const einsatz = Math.min(Math.round(b.cash * (0.1 + Math.random() * 0.05) / 100) * 100, wettMax(b));
     if (einsatz >= WETT_MIN) wetteBuchen(b, ziel, richtung, einsatz);
+  }
+}
+function bankGegenpartei() {
+  for (const fid of [...new Set(G.wetten.map(w => w.firmaId))]) {
+    const { long, short } = wettPools(fid);
+    /* Pro Firma höchstens ein Viertel der Reserve — sonst bindet eine einzige
+     * Runde mit großen Bot-Einsätzen die ganze Bank. */
+    const b = Math.min(Math.abs(long - short), Math.floor(G.wettReserve * 0.25));
+    if (b < WETT_MIN) continue;
+    G.wettReserve -= b;
+    G.wetten.push({ id: wettSeq++, spielerId: BANK_ID, firmaId: fid, richtung: long > short ? "short" : "long", einsatz: b, bank: true });
   }
 }
 function wettTick() {
   const R = G.wettrunde;
-  if (R.phase === "annahme" && R.rest % 30 === 15) botsWetten();
+  if (R.phase === "annahme" && R.rest % 20 === 10) botsWetten();
   if (--R.rest > 0) return;
   if (R.phase === "annahme") {
     R.phase = "laufzeit"; R.rest = WETT_LAUFZEIT;
     R.start = Object.fromEntries(Object.values(G.players).map(p => [p.id, companyValue(p)]));
+    bankGegenpartei();
   } else {
     wettenAbrechnen();
     Object.assign(R, { nr: R.nr + 1, phase: "annahme", rest: WETT_ANNAHME, start: {} });
@@ -3343,9 +3546,11 @@ function wettTick() {
 function wettrundePublic() {
   const R = G.wettrunde;
   return { nr: R.nr, phase: R.phase, rest: R.rest, dauer: R.phase === "annahme" ? WETT_ANNAHME : WETT_LAUFZEIT,
-    gebuehr: WETT_GEBUEHR, hebel: WETT_HEBEL, min: WETT_MIN,
+    gebuehr: WETT_GEBUEHR, hebel: WETT_HEBEL, min: WETT_MIN, reserve: Math.round(G.wettReserve),
     firmen: Object.values(G.players).map(p => {
       const pools = wettPools(p.id);
+      const bw = G.wetten.find(w => w.bank && w.firmaId === p.id);
+      pools.bank = bw ? { richtung: bw.richtung, einsatz: Math.round(bw.einsatz) } : null;
       return { id: p.id, name: p.name, farbe: p.color, jetzt: Math.round(companyValue(p)),
                start: R.start[p.id] != null ? Math.round(R.start[p.id]) : null, ...pools };
     }),
@@ -3890,7 +4095,7 @@ function snapshot() {
     map: G.map.map(t => ({ x: t.x, y: t.y, zone: t.zone, road: t.road, water: t.water,
       park: t.park, field: t.field, sand: t.sand, deep: t.deep, rock: t.rock,
       piazza: t.piazza, fontana: t.fontana, pier: t.pier, leuchtturm: t.leuchtturm, questura: t.questura, gcasino: t.gcasino, wz: t.wz, famhaus: t.famhaus,
-      bank: t.bank, news: t.news, schwarz: t.schwarz, deko: t.deko, locked: t.locked, unlockCost: t.unlockCost, owner: t.owner, btype: t.btype, lien: t.lien, shop: t.shop, paused: t.paused, level: t.level, autos: autosDyn(t), sperre: t.sperre ?? null })),
+      bank: t.bank, news: t.news, finanzamt: t.finanzamt, denkmal: t.denkmal, denkmalName: t.denkmalName, schwarz: t.schwarz, deko: t.deko, locked: t.locked, unlockCost: t.unlockCost, owner: t.owner, btype: t.btype, lien: t.lien, shop: t.shop, paused: t.paused, level: t.level, autos: autosDyn(t), sperre: t.sperre ?? null })),
     players: Object.fromEntries(Object.entries(G.players).map(([sid, p]) =>
       [sid, { id: sid, name: p.name, color: p.color, lvl: p.lvl, xp: p.xp, industry: p.industry, industries: p.industries,
               familie: p.familie || null,
@@ -3915,6 +4120,11 @@ function snapshot() {
       toName: l.toId ? (G.players[l.toId]?.name ?? "—") : null })),
     nextDividendIn: G.nextDividendIn,
     wettrunde: wettrundePublic(),
+    finanzamt: finanzamtPublic(),
+    stadtprojekt: G.stadtprojekt ? { id: G.stadtprojekt.id, name: G.stadtprojekt.name, key: G.stadtprojekt.key,
+      budget: G.stadtprojekt.budget, ttl: G.stadtprojekt.ttl, needs: G.stadtprojekt.needs,
+      contrib: Object.fromEntries(Object.entries(G.stadtprojekt.contrib).map(([pid, goods]) =>
+        [pid, { name: G.players[pid]?.name ?? "—", color: G.players[pid]?.color, bot: !!G.players[pid]?.bot, goods }])) } : null,
     auctions: G.auctions,
     fahrer: G.fahrer,
     rennen: G.rennen ? (() => {
@@ -4006,6 +4216,8 @@ function privateState(p) {
     meineWetten: G.wetten.filter(w => w.spielerId === p.id)
       .map(w => ({ ...w, firma: G.players[w.firmaId]?.name ?? "—" })),
     wettLog: p.wettLog || [], wettMax: wettMax(p),
+    steuer: finanzamtAktiv() ? { ...steuerSchaetzung(p), letzter: p.steuerLetzter || null,
+      schuld: Math.round(p.steuerSchuld || 0), gezahlt: Math.round(p.stats.steuern || 0) } : null,
     ownPct: (p.equity[p.id] || 0) * 25, portfolio, revenue: Math.round(p.revenue),
     marketValue: Math.round(companyValue(p)), blockPrice: blockPrice(p), rev10: Math.round(rev10(p)),
     /* Bilanz: erst die Substanz der eigenen Firma, dann der Anteil daran, den man
@@ -4041,7 +4253,7 @@ function dropContract(c) {
  * Nach dem ersten Snapshot reist die Karte nur noch als Differenz über diese
  * Liste. Der Vergleich läuft über JSON, verschachtelte Arrays sind also
  * abgedeckt (derselbe Grund, aus dem `shop` hier steht). */
-const DYNAMIC_TILE_KEYS = ["locked", "owner", "btype", "lien", "shop", "paused", "level", "autos", "sperre"];
+const DYNAMIC_TILE_KEYS = ["locked", "owner", "btype", "lien", "shop", "paused", "level", "autos", "sperre", "denkmal", "denkmalName"];
 /* undefined wird zu null normalisiert, damit auch "Feld gelöscht" (z. B. der
  * Abriss räumt t.shop weg) beim Empfänger sicher ankommt. */
 /* Fahrzeuge gehen MIT ihren gerechneten Werten über die Leitung. Sie hier
@@ -5328,6 +5540,8 @@ io.on("connection", socket => {
     if (t.water || t.road || t.park || t.piazza || t.pier || t.leuchtturm || t.questura || t.gcasino || t.wz || t.famhaus) return ack?.({ error: "Nicht bebaubar" });
     if (t.bank) return ack?.({ error: "Die Stadtbank gehört der Stadt" });
     if (t.news) return ack?.({ error: "Die Nachrichtenzentrale gehört der Stadt" });
+    if (t.finanzamt) return ack?.({ error: "Das Finanzamt gehört der Stadt" });
+    if (t.denkmal) return ack?.({ error: "Hier steht ein Stadtprojekt" });
     if (t.deko) return ack?.({ error: "Das Hochhaus gehört der Stadt" });
     if (t.schwarz) return ack?.({ error: "Hier wird nur unter der Hand gehandelt" });
     if (t.owner) return ack?.({ error: "Kachel bereits belegt" });
@@ -5854,6 +6068,22 @@ io.on("connection", socket => {
     ack?.({ ok: true });
   }));
 
+  /* --- Stadtprojekt: Waren liefern (Spieler und Bots) --- */
+  socket.on("projektLiefern", guard((p, { good, qty } = {}, ack) => {
+    const o = G.stadtprojekt;
+    if (!o) return ack?.({ error: "Kein laufendes Stadtprojekt" });
+    const need = o.needs[good];
+    if (!need) return ack?.({ error: "Diese Ware wird nicht gebraucht" });
+    qty = Math.min(Math.floor(+qty), need.req - need.have);
+    if (!(qty > 0)) return ack?.({ error: "Menge ungültig oder Bedarf gedeckt" });
+    if ((p.inv[good] || 0) < qty) return ack?.({ error: `Nicht genug ${GOODS[good].name} im Lager` });
+    p.inv[good] -= qty; need.have += qty;
+    (o.contrib[p.id] ??= {})[good] = (o.contrib[p.id][good] || 0) + qty;
+    logTx(p, "Stadtprojekt", `${qty}× ${GOODS[good].name} an ${o.name} geliefert`, 0);
+    if (Object.values(o.needs).every(n => n.have >= n.req)) stadtprojektAbrechnen(true);
+    ack?.({ ok: true });
+  }));
+
   /* --- Anleihen: nur Spieler emittieren & kaufen --- */
   socket.on("issueBond", guard((p, { principal, rate, term }, ack) => {
     if (MODE === "plan") return ack?.({ error: "In der Planwirtschaft gibt es keinen Kapitalmarkt" });
@@ -6060,7 +6290,9 @@ io.on("connection", socket => {
     G.started = false; G.hostId = null;   // neue Runde beginnt wieder im Warteraum
     G.groupOrder = null; G.nextGroupIn = 20;
     G.nextDividendIn = DIVIDEND_INTERVAL;
-    G.wettrunde = { nr: 1, phase: "annahme", rest: WETT_ANNAHME, start: {} }; G.wetten = []; G.wettLetzte = [];
+    G.wettrunde = { nr: 1, phase: "annahme", rest: WETT_ANNAHME, start: {} }; G.wetten = []; G.wettLetzte = []; G.wettReserve = WETT_RESERVE;
+    G.stadtkasse = 0; G.steuernGesamt = 0; G.stadtprojekt = null; G.projektPause = 120; G.stadtprojekteFertig = [];
+    for (const pl of Object.values(G.players)) { pl.steuerStand = undefined; pl.steuerSchuld = 0; pl.steuerLetzter = null; }
     for (const pl of Object.values(G.players)) { pl.wettOffen = 0; pl.wettLog = []; }
     /* Preisanker zurücksetzen — sonst startet die neue Runde mit den
      * verzerrten Kursen der alten (z. B. dauerhaft gedrücktem Ölpreis). */
@@ -6755,6 +6987,7 @@ function runTick() {
       const p = G.players[pid];
       if (p) for (const [g, qty] of Object.entries(goods)) p.inv[g] += qty;
     }
+    G.stadtkasse += G.groupOrder.praemie || 0;
     io.emit("notice", { text: `Gruppenauftrag für ${G.groupOrder.city} abgelaufen — Einzahlungen wurden zurückerstattet.` });
     G.groupOrder = null; G.nextGroupIn = GROUP_GAP();
   }
@@ -6788,7 +7021,8 @@ function runTick() {
   /* Kartellmodus: keine Nachrichtenzentrale — die Stadt redet nicht mit der Presse. */
   if (MODE !== "plan" && MODE !== "kartell" && G.tick > 60 && G.tick % NEWS_INTERVAL === 0) sendeMarktbericht();
   /* Aktien: Dividendenausschüttung alle 10 min */
-  if (--G.nextDividendIn <= 0) { distributeDividends(); G.nextDividendIn = DIVIDEND_INTERVAL; }
+  if (--G.nextDividendIn <= 0) { distributeDividends(); steuernErheben(); G.nextDividendIn = DIVIDEND_INTERVAL; }
+  finanzamtTick();
   /* Kurswetten: Annahme → Laufzeit → Abrechnung */
   wettTick();
   /* Fahrergehälter: eine laufende Verpflichtung, kein Einmalkauf. Wer nicht
@@ -7257,7 +7491,7 @@ async function spawnBot(cfg, lvl = BOT_LEVELS[BOT_LEVEL_DEFAULT]) {
                   price: Math.round((st.avg[fehlt[0]] || BASEP[fehlt[0]] || 1) * 1.12 * 100) / 100 });
             } else {
               const frei = t2 => t2.zone === btF.zone && !t2.road && !t2.water && !t2.park
-                && !t2.bank && !t2.news && !t2.deko && !t2.schwarz && !t2.owner;
+                && !t2.bank && !t2.news && !t2.finanzamt && !t2.deko && !t2.schwarz && !t2.owner;
               /* Die Piazza Grande zuerst: Wer sie hält, führt das Casino. */
               const kandidaten = st.map.filter(t2 => frei(t2) && !t2.locked)
                 .sort((a2, b2) => (bezirkVon(a2.x, a2.y) === GCASINO_BEZIRK ? 0 : 1) -
@@ -7405,6 +7639,11 @@ async function spawnBot(cfg, lvl = BOT_LEVELS[BOT_LEVEL_DEFAULT]) {
           if (!sl && goods[0]) em("configureShop", { x: t.x, y: t.y, slot: i, good: goods[0],
             price: Math.round(st.avg[goods[0]] * 100) / 100 });
         });
+      }
+      /* Stadtprojekt: ebenfalls die Hälfte des Lagers liefern */
+      if (st.stadtprojekt) for (const [g, n] of Object.entries(st.stadtprojekt.needs)) {
+        const q = Math.min(Math.floor((me.inv[g] || 0) / 2), n.req - n.have);
+        if (q > 0) await em("projektLiefern", { good: g, qty: q });
       }
       /* Großauftrag: die Hälfte des Lagers beisteuern */
       if (st.groupOrder) for (const [g, n] of Object.entries(st.groupOrder.needs)) {
@@ -7601,7 +7840,7 @@ async function spawnBot(cfg, lvl = BOT_LEVELS[BOT_LEVEL_DEFAULT]) {
            * davon zuerst, scheitert sein Bau in jedem Zyklus erneut an derselben
            * Kachel — er käme in der Zone nie voran. Bei der Bank lag das seit
            * jeher latent vor, mit der zweiten Stadtkachel wird es wahrscheinlicher. */
-          const frei = t => t.zone === bt.zone && !t.road && !t.water && !t.park && !t.bank && !t.news && !t.deko;
+          const frei = t => t.zone === bt.zone && !t.road && !t.water && !t.park && !t.bank && !t.news && !t.finanzamt && !t.deko;
           let t = st.map.find(t => frei(t) && !t.locked && !t.owner);
           if (!t) {   // Zone gesperrt → passende Kachel wird beim Bauen mit-freigeschaltet
             const lt = st.map.find(t => frei(t) && t.locked);

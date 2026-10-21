@@ -210,12 +210,8 @@ proxy.on("error", (_err, _req, res) => {
 /* ---------- Adminpanel: Uebersicht aller Runden ----------
  * Das Gateway ist die einzige Stelle, die alle laufenden Runden kennt — die
  * Rundenprozesse wissen nichts voneinander. Der Schluessel ist derselbe wie in
- * den Rundenservern: ADMIN_KEY, sonst BUGS_KEY, sonst die Datei
- * bugreports/.key, die sich alle Prozesse teilen. */
-let ADMINKEY = process.env.ADMIN_KEY || process.env.BUGS_KEY || "";
-if (!ADMINKEY) {
-  try { ADMINKEY = fs.readFileSync(path.join(__dirname, "bugreports", ".key"), "utf8").trim(); } catch {}
-}
+ * den Rundenservern: ADMIN_KEY, sonst BUGS_KEY, sonst der feste Schlüssel. */
+const ADMINKEY = process.env.ADMIN_KEY || process.env.BUGS_KEY || "79ce89d";
 const escHtml = v => String(v ?? "").replace(/[&<>"']/g, c =>
   ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 function adminSchluessel(req) {

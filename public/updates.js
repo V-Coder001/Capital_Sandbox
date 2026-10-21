@@ -5,13 +5,28 @@
  * `art`: "neu" (neue Funktion), "besser" (Verbesserung), "fix" (Fehler behoben). */
 window.UPDATES = [
   {
+    id: "2026-10-21c", datum: "2026-10-21",
+    titel: { de: "Das Finanzamt öffnet", en: "The tax office opens" },
+    punkte: [
+      { art: "neu", de: "Finanzamt im Zentrum: 8 % Gewinnsteuer alle 10 Minuten, die ersten 1.000 $ Gewinn sind frei. Investitionen senken die Steuer.",
+        en: "Tax office downtown: 8 % profit tax every 10 minutes, the first 1,000 $ are tax-free. Investments lower the tax." },
+      { art: "neu", de: "Wettgewinne werden mit 10 % versteuert. 40 % der Steuern gehen an die Bankreserve, 60 % in die Stadtkasse.",
+        en: "Betting profits are taxed at 10 %. 40 % of taxes go to the bank reserve, 60 % to the city treasury." },
+      { art: "neu", de: "Großaufträge bekommen eine Prämie aus der Stadtkasse.", en: "Big orders get a bonus from the city treasury." },
+      { art: "neu", de: "Stadtprojekte: Ab 25.000 $ in der Stadtkasse baut die Stadt Stadion, Krankenhaus & Co. — Spieler und Bots liefern, das fertige Gebäude steht danach in der Stadt.",
+        en: "City projects: from 25,000 $ in the treasury the city builds a stadium, hospital and more — players and bots deliver, the finished building appears in town." }
+    ]
+  },
+  {
     id: "2026-10-21b", datum: "2026-10-21",
     titel: { de: "Kurswetten in der Stadtbank", en: "Stock bets at the city bank" },
     punkte: [
       { art: "neu", de: "Long oder Short auf den Firmenwert der Mitspieler setzen — Runden mit 2 min Annahme und 5 min Laufzeit.",
         en: "Go long or short on other players' company value — rounds with 2 min betting and 5 min run time." },
-      { art: "neu", de: "Verlierer zahlen in den Topf der Gewinner, kein Geld entsteht aus dem Nichts. 5 % Bankgebühr.",
-        en: "Losers pay into the winners' pot, no money is created. 5 % bank fee." },
+      { art: "neu", de: "Verlierer zahlen in den Topf der Gewinner, 5 % Gebühr gehen an die Bank.",
+        en: "Losers pay into the winners' pot, 5 % fee goes to the bank." },
+      { art: "neu", de: "Die Bank ist Gegenpartei: Sie füllt die kleinere Seite aus einer Reserve von 20.000 $ pro Spielrunde auf.",
+        en: "The bank takes the other side, topping up the smaller pot from a 20,000 $ reserve per game." },
       { art: "neu", de: "Keine Wetten auf die eigene Firma oder Firmen, an denen du 50 % oder mehr hältst.",
         en: "No bets on your own company or companies you hold 50 % or more of." },
       { art: "neu", de: "Diese Neuigkeiten-Spalte auf der Startseite.", en: "This news column on the start page." },
