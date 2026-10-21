@@ -30,13 +30,14 @@ rm -rf "$ZIEL"; mkdir -p "$ZIEL"
 cp -R "$HIER/public/." "$ZIEL/"
 
 # Die eine Zeile, die diese Fassung ausmacht.
-python3 - "$ZIEL/index.html" "$SERVER" <<'PY'
+# Seit dem Aufteilen steht das Hauptskript in app.js, nicht mehr in index.html.
+python3 - "$ZIEL/app.js" "$SERVER" <<'PY'
 import sys
 pfad, server = sys.argv[1], sys.argv[2]
 s = open(pfad, encoding="utf-8").read()
 alt = 'const SERVER = "";'
 if alt not in s:
-    sys.exit("const SERVER = \"\"; nicht gefunden — hat sich index.html geaendert?")
+    sys.exit("const SERVER = \"\"; nicht gefunden — hat sich app.js geaendert?")
 open(pfad, "w", encoding="utf-8").write(s.replace(alt, f'const SERVER = "{server}";', 1))
 print(f"  Serveradresse gesetzt: {server}")
 PY

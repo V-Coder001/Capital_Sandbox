@@ -11,6 +11,7 @@ import crypto from "crypto";
 import { Server } from "socket.io";
 import path from "path";
 import { fileURLToPath } from "url";
+import { statisch, cacheKoepfe } from "./statisch.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -58,17 +59,8 @@ app.use((req, res, next) => {
 /* Vom Standort dieser Datei aus, nicht vom Arbeitsverzeichnis: Sonst liefert
  * der Server stillschweigend nichts aus, sobald er von woanders gestartet wird
  * — genau das ist beim Dev-Server passiert. */
-app.use(express.static(path.join(__dirname, "public"), {
-  /* Client-Side Caching: Bilder/Assets 7 Tage cachen, HTML nicht (damit Updates
-   * schnell ankommen). Das reduziert Bandbreite massiv bei wiederholtem Besuch. */
-  setHeaders: (res, fpath) => {
-    if (fpath.endsWith(".html")) {
-      res.setHeader("Cache-Control", "public, max-age=0, must-revalidate");
-    } else {
-      res.setHeader("Cache-Control", "public, max-age=604800, immutable");
-    }
-  }
-}));
+app.use(statisch(path.join(__dirname, "public")));
+app.use(express.static(path.join(__dirname, "public"), { setHeaders: cacheKoepfe }));
 
 /* Einladungslink: LAN-IP ermitteln, optional öffentlicher Tunnel (npm run share) */
 let publicUrl = null;
@@ -235,7 +227,7 @@ function adminEingriff({ pid, art, betrag, good, menge }) {
   }
   if (art === "projekt") {
     if (G.stadtprojekt) return { status: 400, error: "Es läuft schon ein Stadtprojekt" };
-    if (G.stadtkasse < 1000) return { status: 400, error: "Stadtkasse fast leer — erst Geld setzen" };
+    if (stadtFrei() < 1000) return { status: 400, error: "Kaum Geld über dem Grundstock (20.000 $) — erst Geld setzen" };
     stadtprojektStarten(); pushState();
     return { ok: true };
   }
@@ -457,6 +449,10 @@ function hofSpeichern() {
 const httpServer = http.createServer(app);
 const io = new Server(httpServer, {
   cors: { origin: (origin, cb) => cb(null, herkunftErlaubt(origin)), credentials: false },
+  /* Nachrichten ab 2 KB komprimiert über die Leitung (Socket.io hat das von Haus
+   * aus aus). Der volle Stand beim Beitreten ist mit Karte ~200 KB JSON und
+   * schrumpft so auf einen Bruchteil; kleine Teil-Stände bleiben unkomprimiert. */
+  perMessageDeflate: { threshold: 2048 },
 });
 
 /* ---------- Stammdaten ---------- */
@@ -2851,7 +2847,7 @@ const G = {
   wetten: [],            // {id, spielerId, firmaId, richtung, einsatz}
   wettLetzte: [],        // Ergebnis der letzten Runde je Firma
   wettReserve: 20000,    // Bankreserve für die Kurswetten (WETT_RESERVE)
-  stadtkasse: 0, steuerStufe: 2, boerseGebuehren: 0,         // Finanzamt: Anteil der Steuern für Großauftrags-Prämien und Stadtprojekte
+  stadtkasse: 20000, steuerStufe: 2, boerseGebuehren: 0,         // Finanzamt: Anteil der Steuern für Großauftrags-Prämien und Stadtprojekte
   steuernGesamt: 0,
   stadtprojekt: null, projektPause: 120, stadtprojekteFertig: [],
   fahrer: [],            // Fahrerpool der Runde: {id, name, land, Werte…, teamId, autoId}
@@ -3313,7 +3309,16 @@ function distributeDividends() {
  * 60 % Stadtkasse (Großauftrags-Prämien und Stadtprojekte). */
 const STEUER_SATZ = 0.08, STEUER_FREI = 1000, WETT_STEUER = 0.10;
 const STEUER_RESERVE_ANTEIL = 0.4, RESERVE_MAX_ANTEIL = 0.10;
-const PRAEMIE_ANTEIL = 0.2, PROJEKT_SCHWELLE = 25000, PROJEKT_BUDGET = 0.8, PROJEKT_TTL = 600, PROJEKT_PAUSE = 300;
+/* Grundstock der Stadt: Mit dieser Summe startet die Kasse, und sie bleibt als
+ * eiserne Rücklage immer liegen. Prämien und Stadtprojekte zahlt die Stadt nur
+ * aus dem Geld DARÜBER. Vorher nahm ein Projekt 80 % der ganzen Kasse — direkt
+ * danach rief das Finanzamt den Notstand aus, den die Stadt selbst verursacht
+ * hatte, und die Steuern stiegen ausgerechnet nach dem Bau. Jetzt kann die
+ * Lage nur noch durch echte Verluste fallen (etwa Kurswetten gegen die Bank). */
+const STADT_GRUNDSTOCK = 20000;
+const stadtFrei = () => Math.max(0, G.stadtkasse - STADT_GRUNDSTOCK);
+/* Projekt erst, wenn 15.000 $ über dem Grundstock liegen (Kasse ab 35.000 $). */
+const PRAEMIE_ANTEIL = 0.2, PROJEKT_SCHWELLE = STADT_GRUNDSTOCK + 15000, PROJEKT_BUDGET = 0.8, PROJEKT_TTL = 600, PROJEKT_PAUSE = 300;
 const STADTPROJEKTE = [
   { key: "stadion", name: "Stadion" }, { key: "krankenhaus", name: "Krankenhaus" },
   { key: "hafen", name: "Hafenterminal" }, { key: "bibliothek", name: "Stadtbibliothek" },
@@ -3328,19 +3333,18 @@ const BOERSE_GEBUEHR = 0.20;
  * die für die Bank gut liefen, machen die Stadt reicher; schlecht gelaufene
  * ziehen sie runter). Pro Prüfung höchstens eine Stufe, damit nichts springt.
  * Ein Faktor gilt für alle drei Sätze: Gewinnsteuer, Wettsteuer, Börsengebühr. */
+/* Ab 20.000 $ ist alles normal — keine Rabatte darüber. Da die Kasse mit dem
+ * Grundstock (20.000 $) startet und Projekte/Prämien ihn nicht anrühren, fällt
+ * die Lage nur durch echte Verluste der Bank (Kurswetten) darunter. */
 const STEUER_STUFEN = [
-  { key: "notstand",  name: "Notstand",  faktor: 1.25, bis: 3000 },
-  { key: "knapp",     name: "Knappe Kasse", faktor: 1.10, bis: 10000 },
-  { key: "normal",    name: "Normal",    faktor: 1.00, bis: 35000 },
-  { key: "gut",       name: "Gute Lage", faktor: 0.90, bis: 60000 },
-  { key: "wohlstand", name: "Wohlstand", faktor: 0.75, bis: Infinity },
+  { key: "notstand",  name: "Notstand",     faktor: 1.25, bis: 3000 },
+  { key: "knapp",     name: "Knappe Kasse", faktor: 1.10, bis: 20000 },
+  { key: "normal",    name: "Normal",       faktor: 1.00, bis: Infinity },
 ];
 const STUFE_TEXT = {
-  notstand:  "NOTSTAND: Die Stadtkasse ist fast leer — alle Steuern und Gebühren +25 %.",
+  notstand:  "NOTSTAND: Die Stadt hat kaum noch Geld — alle Steuern und Gebühren +25 %.",
   knapp:     "Die Stadtkasse wird knapp — Steuern und Gebühren steigen um 10 %.",
-  normal:    "Die Stadtfinanzen sind im Lot — Steuern und Gebühren wieder auf Normalniveau.",
-  gut:       "Der Stadt geht es gut — Steuern und Gebühren sinken um 10 %.",
-  wohlstand: "Wohlstand! Die Stadt hat reichlich Geld — Steuern und Gebühren −25 %.",
+  normal:    "Die Stadtfinanzen sind im Lot — Steuern und Gebühren wieder normal.",
 };
 const stadtVermoegen = () => G.stadtkasse + Math.max(-WETT_RESERVE, G.wettReserve - WETT_RESERVE);
 const steuerStufe = () => STEUER_STUFEN[G.steuerStufe ?? 2];
@@ -3374,8 +3378,13 @@ function finanzamtEinnahme(betrag) {
   G.wettReserve += r; G.stadtkasse += betrag - r;
   /* Obergrenze: die Bankreserve wächst mit der Wirtschaft, aber nicht ins
    * Uferlose — Überschuss läuft in die Stadtkasse. */
-  const gesamt = Object.values(G.players).reduce((a, q) => a + netWorth(q), 0);
-  const cap = Math.max(WETT_RESERVE, gesamt * RESERVE_MAX_ANTEIL);
+  /* Gesamtvermögen nur einmal je Tick: seit der Börsengebühr läuft das hier
+   * bei JEDEM Handel, und netWorth aller Firmen ist nicht billig. */
+  if (finanzamtEinnahme.tick !== G.tick) {
+    finanzamtEinnahme.tick = G.tick;
+    finanzamtEinnahme.gesamt = Object.values(G.players).reduce((a, q) => a + netWorth(q), 0);
+  }
+  const cap = Math.max(WETT_RESERVE, finanzamtEinnahme.gesamt * RESERVE_MAX_ANTEIL);
   if (G.wettReserve > cap) { G.stadtkasse += G.wettReserve - cap; G.wettReserve = cap; }
 }
 function steuernErheben() {
@@ -3405,17 +3414,17 @@ function steuerVorwarnung() {
 /* Großauftrag: Prämie aus der Stadtkasse beim Erscheinen reservieren */
 function grossauftragPraemie(o) {
   if (!finanzamtAktiv() || G.stadtkasse < 100) return;
-  o.praemie = Math.floor(G.stadtkasse * PRAEMIE_ANTEIL);
+  o.praemie = Math.floor(stadtFrei() * PRAEMIE_ANTEIL);
   G.stadtkasse -= o.praemie;
 }
 /* Stadtprojekt: großer Auftrag mit drei Waren, komplett aus der Stadtkasse */
 function stadtprojektStarten() {
   const frei = STADTPROJEKTE.filter(sp => !G.stadtprojekteFertig.some(f => f.key === sp.key));
   const art = (frei.length ? frei : STADTPROJEKTE)[Math.floor(Math.random() * (frei.length || STADTPROJEKTE.length))];
-  /* Budget: bis 80 % der Kasse, aber in einer Größe, die die Runde in zehn
+  /* Budget: bis 80 % des Geldes über dem Grundstock, aber in einer Größe, die die Runde in zehn
    * Minuten auch liefern kann — skaliert wie die Großaufträge mit der Spielerzahl. */
   const playerScale = Math.max(1, 0.5 + Object.keys(G.players).length * 0.5);
-  const budget = Math.floor(Math.min(G.stadtkasse * PROJEKT_BUDGET, 7000 * playerScale));
+  const budget = Math.floor(Math.min(stadtFrei() * PROJEKT_BUDGET, 7000 * playerScale));
   G.stadtkasse -= budget;
   /* Keine Billigware (Strom, Wasser …), sonst wären es Tausende Stück */
   const teuer = PRODUCTS.filter(g => BASEP[g] >= 6);
@@ -3473,7 +3482,7 @@ function finanzamtPublic() {
     boerse: satzBoerse(), boerseBasis: BOERSE_GEBUEHR, stufe: steuerStufe().key, stufeName: steuerStufe().name,
     faktor: steuerFaktor(), lage: Math.round(stadtVermoegen()), stufen: STEUER_STUFEN.map(st => ({ key: st.key, name: st.name, faktor: st.faktor, bis: isFinite(st.bis) ? st.bis : null })),
     boerseGesamt: Math.round(G.boerseGebuehren || 0),
-    reserveAnteil: STEUER_RESERVE_ANTEIL, praemieAnteil: PRAEMIE_ANTEIL, schwelle: PROJEKT_SCHWELLE,
+    reserveAnteil: STEUER_RESERVE_ANTEIL, praemieAnteil: PRAEMIE_ANTEIL, schwelle: PROJEKT_SCHWELLE, grundstock: STADT_GRUNDSTOCK,
     naechsterIn: G.nextDividendIn, fertig: G.stadtprojekteFertig };
 }
 
@@ -4407,7 +4416,7 @@ function buildReport(siegerId) {
 /* Throttle: pushState() wird max. alle 100ms aufgerufen. Dazwischen werden
  * Calls ignoriert, aber als "pending" markiert — beim nächsten echten Push
  * wird dann sofort nochmal gepusht. Das reduziert Network-Load massiv. */
-let pushScheduled = false, pushPending = false;
+let pushScheduled = false, pushPending = false, letzteFeldSigs = {};
 function pushState() {
   if (pushScheduled) { pushPending = true; return; }
   pushScheduled = true;
@@ -4416,8 +4425,25 @@ function pushState() {
   const t0 = PERF ? process.hrtime.bigint() : 0n;
   const voll = snapshot();
   const delta = tileDelta();
+  /* Nicht mehr jedes Mal den ganzen Stand: Gemessen gingen bei 12 Firmen rund
+   * 36 KB pro Push und Spieler raus, fast alles unverändert (Orderbuch,
+   * Auswertung, Rangliste, Fahrer …). Jetzt kommt je oberstem Feld nur, was
+   * sich seit dem letzten Push geändert hat, markiert mit teil: true. Der
+   * Client legt es über seinen letzten Stand (mergeState). Wer neu verbunden
+   * ist, bekommt weiterhin den vollen Stand samt Karte. */
+  const sigs = {};
   let schlank = null;
-  if (delta !== null) { schlank = { ...voll, mapDelta: delta }; delete schlank.map; }
+  if (delta !== null) {
+    schlank = { teil: true, mapDelta: delta };
+    for (const k in voll) {
+      if (k === "map") continue;
+      const sig = JSON.stringify(voll[k] ?? null);
+      sigs[k] = sig;
+      if (letzteFeldSigs[k] !== sig) schlank[k] = voll[k] ?? null;
+    }
+    for (const k in letzteFeldSigs) if (!(k in sigs)) schlank[k] = null;
+  } else for (const k in voll) if (k !== "map") sigs[k] = JSON.stringify(voll[k] ?? null);
+  letzteFeldSigs = sigs;
   for (const sock of io.sockets.sockets.values()) {
     /* Wer die Karte noch nie bekommen hat — frisch verbunden oder erster Push
      * überhaupt —, bekommt sie vollständig; alle anderen nur die Änderungen. */
@@ -4428,7 +4454,20 @@ function pushState() {
     const ps = privateState(p);
     const sitz = G.gpoker?.spieler?.find(s => s.pid === p.id);
     if (sitz?.karten?.length && G.gpoker.phase !== "warten") ps.gpokerKarten = sitz.karten.map(kartePub);
-    io.to(p.socketId).emit("me", ps);
+    /* Wie beim öffentlichen Stand: je Verbindung nur geänderte Felder. Eine neue
+     * Verbindung (Beitritt, Reconnect) hat noch keine Signaturen → voll. */
+    const sock = io.sockets.sockets.get(p.socketId);
+    let out = ps;
+    if (sock) {
+      /* Signaturen gelten nur für denselben Spieler auf dieser Verbindung — nach
+       * einem Rundenreset meldet sich dieselbe Verbindung als neue Firma an. */
+      const alt = sock.data.mePid === p.id ? sock.data.meSigs : null, neu = {}, teil = { teil: true };
+      sock.data.mePid = p.id;
+      for (const k in ps) { const sig = JSON.stringify(ps[k] ?? null); neu[k] = sig; if (!alt || alt[k] !== sig) teil[k] = ps[k] ?? null; }
+      if (alt) { for (const k in alt) if (!(k in neu)) teil[k] = null; out = teil; }
+      sock.data.meSigs = neu;
+    }
+    io.to(p.socketId).emit("me", out);
   }
   if (PERF) { perf.pushes++; perf.snapMs += Number(process.hrtime.bigint() - t0) / 1e6; }
 
@@ -4614,7 +4653,7 @@ io.on("connection", socket => {
       G.map = buildMap("kartell");
       G.groupOrder = null;
       lastTileSigs = null;
-      for (const sock of io.sockets.sockets.values()) sock.data.gotMap = false;
+      for (const sock of io.sockets.sockets.values()) { sock.data.gotMap = false; sock.data.meSigs = null; }
       io.emit("notice", { text: "Die vier Familien teilen die Stadt unter sich auf — Respekt entscheidet, wer das Sagen hat." });
     }
     if (MODE === "renntag") {
@@ -4623,7 +4662,7 @@ io.on("connection", socket => {
        * an alle gehen — der Kachel-Diff traegt nur veraenderliche Felder. */
       G.map = buildMap("renntag");
       lastTileSigs = null;
-      for (const sock of io.sockets.sockets.values()) sock.data.gotMap = false;
+      for (const sock of io.sockets.sockets.values()) { sock.data.gotMap = false; sock.data.meSigs = null; }
       for (const sp of Object.values(G.players)) renntagAusstatten(sp);
       /* Renntage kommen haeufiger — sie sind der Zweck des Modus, nicht Beiwerk. */
       G.naechstesRennenIn = Math.min(G.naechstesRennenIn, 45);
@@ -4634,7 +4673,7 @@ io.on("connection", socket => {
        * bekommen — der Kachel-Diff traegt nur veraenderliche Felder. */
       G.map = buildMap("einsteiger");
       lastTileSigs = null;
-      for (const sock of io.sockets.sockets.values()) sock.data.gotMap = false;
+      for (const sock of io.sockets.sockets.values()) { sock.data.gotMap = false; sock.data.meSigs = null; }
     }
     if (MODE === "plan") {
       /* Eigene Spielfläche für die Planwirtschaft — Gebäude gibt es zu diesem
@@ -4645,7 +4684,7 @@ io.on("connection", socket => {
       G.map = buildMap("plan");
       G.groupOrder = null;   // kein Stadt-Großauftrag im Plan-Modus
       lastTileSigs = null;
-      for (const sock of io.sockets.sockets.values()) sock.data.gotMap = false;
+      for (const sock of io.sockets.sockets.values()) { sock.data.gotMap = false; sock.data.meSigs = null; }
       G.plan = { phase: 0, rest: 0, spieler: {}, markt: [] };
       planPhaseStarten();
       io.emit("notice", { text: `Planwirtschaft: Der Fünfjahresplan beginnt — ${PLAN_ZIEL} Planpunkte machen dich zum Helden der Arbeit.` });
@@ -6351,7 +6390,7 @@ io.on("connection", socket => {
     G.map = buildMap();
     /* Frische Karte → Kachel-Diff zurücksetzen, alle bekommen sie voll. */
     lastTileSigs = null;
-    for (const sock of io.sockets.sockets.values()) sock.data.gotMap = false;
+    for (const sock of io.sockets.sockets.values()) { sock.data.gotMap = false; sock.data.meSigs = null; }
     G.players = {}; G.socketToPid = {};
     G.orders = []; G.bonds = []; G.auctions = []; G.contracts = [];
     G.shareListings = []; G.shareBids = [];
@@ -6371,7 +6410,7 @@ io.on("connection", socket => {
     G.groupOrder = null; G.nextGroupIn = 20;
     G.nextDividendIn = DIVIDEND_INTERVAL;
     G.wettrunde = { nr: 1, phase: "annahme", rest: WETT_ANNAHME, start: {} }; G.wetten = []; G.wettLetzte = []; G.wettReserve = WETT_RESERVE;
-    G.stadtkasse = 0; G.steuerStufe = 2; G.boerseGebuehren = 0; G.steuernGesamt = 0; G.stadtprojekt = null; G.projektPause = 120; G.stadtprojekteFertig = [];
+    G.stadtkasse = STADT_GRUNDSTOCK; G.steuerStufe = 2; G.boerseGebuehren = 0; G.steuernGesamt = 0; G.stadtprojekt = null; G.projektPause = 120; G.stadtprojekteFertig = [];
     for (const pl of Object.values(G.players)) { pl.steuerStand = undefined; pl.steuerSchuld = 0; pl.steuerLetzter = null; }
     for (const pl of Object.values(G.players)) { pl.wettOffen = 0; pl.wettLog = []; }
     /* Preisanker zurücksetzen — sonst startet die neue Runde mit den
@@ -6380,7 +6419,7 @@ io.on("connection", socket => {
     G.priceHist = {}; G.firmHist = {}; G.news = [];
     /* Alle Clients bekommen die Karte danach wieder vollständig */
     lastTileSigs = null;
-    for (const sock of io.sockets.sockets.values()) sock.data.gotMap = false;
+    for (const sock of io.sockets.sockets.values()) { sock.data.gotMap = false; sock.data.meSigs = null; }
     io.emit("roundReset", {});
     ack?.({ ok: true });
     pushState();
@@ -7469,7 +7508,7 @@ async function spawnBot(cfg, lvl = BOT_LEVELS[BOT_LEVEL_DEFAULT]) {
   const { io: ioClient } = await import("socket.io-client");
   const s = ioClient(`http://localhost:${PORT}`);
   let me = null, st = null, myId = null, lastBuild = 0;
-  s.on("me", m => me = m);
+  s.on("me", m => { if (m.teil && me) { const { teil, ...f } = m; me = { ...me, ...f }; } else me = m; });
   /* Auch die Bots bekommen die Karte nur noch als Diff — sie lesen st.map aber
    * direkt, also hier dieselbe Zusammenführung wie im Browser-Client. */
   let botMap = null;
@@ -7481,7 +7520,9 @@ async function spawnBot(cfg, lvl = BOT_LEVELS[BOT_LEVEL_DEFAULT]) {
         if (t) for (const k in d) if (k !== "i") t[k] = d[k];
       }
     }
-    st = botMap ? { ...x, map: botMap } : x;
+    /* Teil-Stände (nur geänderte Felder) über den letzten Stand legen. */
+    const basis = x.teil && st ? st : {};
+    st = botMap ? { ...basis, ...x, map: botMap } : { ...basis, ...x };
   });
   let botMeta = null;   // Registrierungsdaten (Tuning-Tabelle, Schwellen) für die Rennlogik
   s.on("connect", () => s.emit("register", { name: cfg.name, color: cfg.color, industry: cfg.industry, botToken: BOT_TOKEN, familieWunsch: cfg.polizei ? "polizei" : cfg.kartellFamilie },

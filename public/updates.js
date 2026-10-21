@@ -5,15 +5,29 @@
  * `art`: "neu" (neue Funktion), "besser" (Verbesserung), "fix" (Fehler behoben). */
 window.UPDATES = [
   {
+    id: "2026-10-21e", datum: "2026-10-21",
+    titel: { de: "Grundstock für die Stadt und schnelleres Laden", en: "City base fund and faster loading" },
+    punkte: [
+      { art: "besser", de: "Die Stadtkasse startet mit 20.000 $ Grundstock, den die Stadt nie ausgibt. Stadtprojekte und Prämien zahlt sie nur aus dem Geld darüber — ein Projekt löst also keinen Notstand mehr aus.",
+        en: "The city treasury starts with a 20,000 $ base fund it never spends. City projects and bonuses are paid only from money above it — a project no longer triggers an emergency." },
+      { art: "besser", de: "Stadtprojekte starten ab 35.000 $ in der Kasse (15.000 $ über dem Grundstock).",
+        en: "City projects start at 35,000 $ in the treasury (15,000 $ above the base fund)." },
+      { art: "besser", de: "Das Spiel lädt deutlich schneller: Dateien kommen komprimiert, und beim zweiten Besuch wird nur noch geprüft, ob sich etwas geändert hat.",
+        en: "The game loads much faster: files are compressed, and on later visits the browser only checks whether anything changed." },
+      { art: "besser", de: "Weniger Datenverkehr im Spiel: Der Server schickt nur noch, was sich wirklich geändert hat.",
+        en: "Less in-game traffic: the server only sends what actually changed." }
+    ]
+  },
+  {
     id: "2026-10-21d", datum: "2026-10-21",
     titel: { de: "Dynamische Steuersätze und Börsengebühr", en: "Dynamic tax rates and exchange fee" },
     punkte: [
-      { art: "neu", de: "Die Finanzamt-Sätze passen sich dynamisch an die Stadtkasse an: Läuft die Kasse leer, steigen alle Sätze (bis +25 %); geht es der Stadt gut, sinken sie (bis −25 %).",
-        en: "Tax office rates adjust dynamically based on the city treasury: when it runs low, all rates rise (up to +25 %); when it does well, they fall (down to −25 %)." },
-      { art: "neu", de: "Börsengebühr: Bei jedem Verkauf an der Warenbörse zahlt der Verkäufer 15–25 % des Erlöses ans Finanzamt. Der Satz passt sich mit an — je besser der Stadt, desto niedriger die Gebühr.",
-        en: "Exchange fee: on every sale at the commodity exchange, the seller pays 15–25 % of the proceeds to the tax office. This rate adjusts too — the better the city does, the lower the fee." },
-      { art: "besser", de: "Finanzamt-Panel zeigt die aktuelle Steuerlage mit Farb-Indikator und erklärt, wie sie berechnet wird.",
-        en: "Tax office panel shows the current tax situation with color indicator and explains how it's calculated." }
+      { art: "neu", de: "Die Steuersätze richten sich nach der Lage der Stadt: ab 20.000 $ normal, darunter +10 %, unter 3.000 $ Notstand mit +25 %.",
+        en: "Tax rates follow the city's situation: normal from 20,000 $, +10 % below that, emergency (+25 %) below 3,000 $." },
+      { art: "neu", de: "Börsengebühr: Bei jedem Verkauf an der Warenbörse zahlt der Verkäufer 20 % des Erlöses ans Finanzamt (22 % bei knapper Kasse, 25 % im Notstand).",
+        en: "Exchange fee: on every sale at the commodity exchange the seller pays 20 % of the proceeds to the tax office (22 % when funds are tight, 25 % in an emergency)." },
+      { art: "besser", de: "Das Finanzamt zeigt die aktuelle Steuerlage und erklärt, wann sich die Sätze ändern.",
+        en: "The tax office shows the current tax situation and explains when rates change." }
     ]
   },
   {
