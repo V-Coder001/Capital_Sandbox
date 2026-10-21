@@ -1543,6 +1543,15 @@ td:first-child{font-family:var(--font)}
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="8" y="6" width="8" height="12" rx="4"/><path d="M12 6V3M8 10H4M8 15H5M16 10h4M16 15h3M9 6l-2-2M15 6l2-2"/></svg>
       </button>
       <button id="help" title="Tutorial erneut ansehen" style="background:none;border:1px solid var(--line);border-radius:7px;color:var(--dim);width:24px;height:24px;cursor:pointer;font-size:13px">?</button>
+      <!-- Menü für Nebensachen (Ton, Kartenstil, Sprache, Fehler melden, Tutorial).
+           Die Knöpfe oben werden beim Laden hier hineingehängt — ihre bestehenden
+           Klick-Funktionen bleiben dabei erhalten. -->
+      <div id="hudMenuWrap">
+        <button id="hudMenuBtn" type="button" aria-haspopup="true" aria-expanded="false" aria-label="Einstellungen und Hilfe" title="Einstellungen und Hilfe">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+        </button>
+        <div id="hudMenu" role="menu" hidden></div>
+      </div>
     </div>
   </div>
 </div>
@@ -1630,16 +1639,17 @@ td:first-child{font-family:var(--font)}
 <div class="panel" id="p-boerse">
   <div class="phead"><h2>Warenbörse (P2P)</h2><button class="x" data-close>✕</button></div>
   <div class="pbody">
-    <div class="formrow">
-      <select id="oGood"></select>
-      <select id="oSide"><option value="sell">Verkauf</option><option value="buy">Kauf</option></select>
-      <input id="oQty" type="number" min="1" placeholder="Menge">
-      <input id="oPrice" type="number" min="0.01" step="0.01" placeholder="Preis $">
+    <!-- Orderformular: beschriftete Felder im Raster, ein klarer Knopf darunter -->
+    <div class="orderform">
+      <label><span>Ware</span><select id="oGood"></select></label>
+      <label><span>Richtung</span><select id="oSide"><option value="sell">Verkauf</option><option value="buy">Kauf</option></select></label>
+      <label><span>Menge</span><input id="oQty" type="number" min="1" placeholder="Menge"></label>
+      <label><span>Preis $</span><input id="oPrice" type="number" min="0.01" step="0.01" placeholder="Preis $"></label>
       <button class="buyb" id="oPlace">Order platzieren</button>
     </div>
-    <div class="formrow" style="margin-top:0">
-      <span class="meta">Anzeigen:</span>
-      <select id="exFilter"><option value="">${t("Alle Waren")}</option></select>
+    <div class="orderfilter">
+      <label for="exFilter" class="meta">Orderbuch zeigen</label>
+      <select id="exFilter"><option value="">Alle Waren</option></select>
     </div>
     <div id="exbook"></div>
   </div>
@@ -1751,9 +1761,10 @@ td:first-child{font-family:var(--font)}
   <form id="chatform"><input id="chatin" placeholder="Nachricht…" autocomplete="off"><button>➤</button></form>
 </div>
 
-<div id="quests" style="position:fixed;top:84px;left:14px;z-index:14;width:236px;background:rgba(10,15,22,.9);border:1px solid #1c2637;border-left:2px solid var(--accent2);border-radius:0 3px 3px 0;padding:11px 12px;display:none;backdrop-filter:blur(6px)">
-  <div style="font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--accent2);margin-bottom:7px">Starter-Aufgaben</div>
-  <div id="questlist" style="display:flex;flex-direction:column;gap:6px;font-size:12px"></div>
+<!-- Aufgaben: kompakt — Fortschritt + nächste Aufgabe, Rest aufklappbar. -->
+<div id="quests" style="display:none">
+  <div class="qKopf">Starter-Aufgaben</div>
+  <div id="questlist"></div>
 </div>
 
 <div id="tut">
@@ -1968,6 +1979,32 @@ td:first-child{font-family:var(--font)}
 <script src="vendor/peerjs.min.js"></script>
 <script src="topo.js"></script>
 <script src="flaeche.js"></script>
+<script>
+/* ---- Kopfleisten-Menü ----
+ * Ton, Kartenstil, Sprache, Fehler melden und Tutorial stehen nicht mehr als
+ * neun Einzelknöpfe in der Leiste, sondern hinter einem Menüknopf. Die
+ * vorhandenen Elemente werden nur umgehängt — ihre Klick-Logik bleibt. */
+document.addEventListener("DOMContentLoaded", () => {
+  const menu = document.getElementById("hudMenu"), btn = document.getElementById("hudMenuBtn");
+  if (!menu || !btn) return;
+  const ZEILEN = [["tonPill", "Ton"], ["themeBtn", "Kartenstil"], ["langBtn", "Sprache"], ["help", "Tutorial ansehen"], ["bugBtn", "Fehler melden"]];
+  for (const [id, text] of ZEILEN) {
+    const el = document.getElementById(id); if (!el) continue;
+    const zeile = document.createElement("div"); zeile.className = "hmZeile";
+    const lab = document.createElement("span"); lab.textContent = text;
+    zeile.append(lab, el); menu.append(zeile);
+  }
+  const auf = an => { menu.hidden = !an; btn.setAttribute("aria-expanded", String(an)); btn.classList.toggle("on", an); };
+  btn.addEventListener("click", e => { e.stopPropagation(); auf(menu.hidden); });
+  document.addEventListener("click", e => { if (!menu.hidden && !e.target.closest("#hudMenuWrap")) auf(false); });
+  document.addEventListener("keydown", e => { if (e.key === "Escape") auf(false); });
+});
+document.addEventListener("click", e => {
+  if (!e.target.closest("[data-quests-toggle]")) return;
+  let alle = false; try { alle = localStorage.getItem("cs_quests_alle") === "1"; localStorage.setItem("cs_quests_alle", alle ? "0" : "1"); } catch {}
+  if (window.store) store.set({});   // neu zeichnen
+});
+</script>
 <script>
 /* ---- Themenwechsel: Vermessung (Standard) <-> Kartenpapier ----
  * Setzt <html data-theme>, merkt die Wahl und sagt der Topo-Karte und der
@@ -4525,6 +4562,9 @@ async function oeffentlicheLaden() {
     const startOderWarteraum = () => joinEl.style.display !== "none" || lobbyEl.classList.contains("on");
     startTopo(document.body, document.getElementById("bgTopo"), {
       seed: 26, interactiveWhen: startOderWarteraum, calmSpeed: 0.5, calmFrameMs: 66,
+      /* Während die Karte bewegt wird, steht der Hintergrund still — spart die
+       * Rechenzeit fürs Spiel, gerade beim Scrollen. */
+      pausiertWenn: () => performance.now() - (window.KAMERA_BEWEGT || 0) < 450,
     });
     const ebeneSetzen = () => document.body.classList.toggle("topoVorn", startOderWarteraum());
     ebeneSetzen(); setInterval(ebeneSetzen, 200);
@@ -4742,7 +4782,10 @@ let PLAN_LOOK = false;
  * sandsteinfarbene Straßen, türkiseres Meer. Reiner Farb-Schleier über den
  * fertigen Kachel-Texturen, keine eigenen Sprites nötig. */
 let ITALIA_LOOK = false;
-function resize(){ cv.width = innerWidth * devicePixelRatio; cv.height = innerHeight * devicePixelRatio;
+/* Pixeldichte auf 2 gedeckelt — auf 3x-Displays wären es sonst 2,25x so viele
+ * Pixel je Bild, ohne sichtbaren Gewinn bei einer bewegten Karte. */
+const DPR = () => Math.min(2, window.devicePixelRatio || 1);
+function resize(){ cv.width = innerWidth * DPR(); cv.height = innerHeight * DPR();
   cv.style.width = innerWidth + "px"; cv.style.height = innerHeight + "px";
   /* Ein Resize setzt den Kontext zurück — die Glättungsqualität danach neu setzen. */
   cx.imageSmoothingQuality = "high"; }
@@ -5567,26 +5610,50 @@ function drawClouds(now) {
  * Rändern. Die Verläufe werden pro Fenstergröße einmal gebaut. */
 let ATMO = null, ATMO_KEY = "";
 /* Die Spielkarte liegt auf durchsichtigem Grund über der Höhenlinien-Karte
- * (#bgTopo). Die Atmosphäre-Pässe unten sind Vollbild-Fills — ohne Maske
- * würden sie (v. a. der deckende Multiply-Tint) den Hintergrund zudecken.
- * Darum: Deckkraft der fertig gezeichneten Szene merken und die Atmosphäre
- * am Ende genau darauf zurückschneiden. Zwei GPU-Kopien je Bild. */
-const ATMO_MASKE = document.createElement("canvas"), atmoMx = ATMO_MASKE.getContext("2d");
-function drawAtmosphere() {
-  if (ATMO_MASKE.width !== cv.width || ATMO_MASKE.height !== cv.height) {
-    ATMO_MASKE.width = cv.width; ATMO_MASKE.height = cv.height;
+ * (#bgTopo). Die Atmosphäre-Pässe unten sind Vollbild-Fills — sie dürfen nur
+ * auf der Insel landen, sonst deckt v. a. der Multiply-Tint den Hintergrund zu.
+ * Früher per Pixelmaske (zwei Vollbild-Kopien je Bild — der größte Bremsklotz
+ * beim Scrollen). Jetzt: einfacher Umriss der Insel (konvexe Hülle aller
+ * Kachelecken, nach oben um Gebäudehöhe erweitert) als Clip. */
+let HUELLE = null, HUELLE_KEY = "";
+/* Exakter Umriss aller Kacheln, zusammengefasst zu Streifen: je Reihe werden
+ * aufeinanderfolgende Kacheln zu EINEM Parallelogramm — bei der 30x30-Insel
+ * 30 statt 900 Teilflächen. Kein Überstand, also auch kein Schleier über
+ * leerem Hintergrund. */
+function inselHuelle(map) {
+  const key = map.length + ":" + (map[0]?.x ?? 0) + ":" + (map[map.length - 1]?.y ?? 0);
+  if (HUELLE && HUELLE_KEY === key) return HUELLE;
+  const reihen = new Map();
+  for (const t of map) { if (!reihen.has(t.y)) reihen.set(t.y, []); reihen.get(t.y).push(t.x); }
+  HUELLE = new Path2D();
+  for (const [y, xs] of reihen) {
+    xs.sort((a, b) => a - b);
+    let a = xs[0];
+    for (let k = 1; k <= xs.length; k++) {
+      if (k < xs.length && xs[k] === xs[k - 1] + 1) continue;
+      const b = xs[k - 1];
+      const [ax, ay] = iso(a, y), [bx, by] = iso(b, y);
+      HUELLE.moveTo(ax, ay - 1);                       // Spitze der ersten Kachel
+      HUELLE.lineTo(bx + TW / 2 + 1, by + TH / 2);     // rechte Ecke der letzten
+      HUELLE.lineTo(bx, by + TH + 1);                  // untere Ecke der letzten
+      HUELLE.lineTo(ax - TW / 2 - 1, ay + TH / 2);     // linke Ecke der ersten
+      HUELLE.closePath();
+      if (k < xs.length) a = xs[k];
+    }
   }
-  atmoMx.clearRect(0, 0, ATMO_MASKE.width, ATMO_MASKE.height);
-  atmoMx.drawImage(cv, 0, 0);
+  HUELLE_KEY = key;
+  return HUELLE;
+}
+function drawAtmosphere() {
+  const st = store.get().state;
+  cx.save();
+  if (st?.map?.length && draw.welt) { cx.setTransform(draw.welt); cx.clip(inselHuelle(st.map)); }
   atmosphaereMalen();
-  cx.setTransform(1, 0, 0, 1, 0, 0);
-  cx.globalCompositeOperation = "destination-in";
-  cx.drawImage(ATMO_MASKE, 0, 0);
-  cx.globalCompositeOperation = "source-over";
-  cx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
+  cx.restore();
+  cx.setTransform(DPR(), 0, 0, DPR(), 0, 0);
 }
 function atmosphaereMalen() {
-  cx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
+  cx.setTransform(DPR(), 0, 0, DPR(), 0, 0);
   const key = innerWidth + "x" + innerHeight;
   if (ATMO_KEY !== key) {
     const haze = cx.createLinearGradient(0, 0, 0, innerHeight);
@@ -6040,7 +6107,7 @@ function drawSchatten(img, sx, sy, gr) {
 function draw() {
   requestAnimationFrame(draw);
   const st = store.get().state, now = Date.now();
-  cx.setTransform(devicePixelRatio,0,0,devicePixelRatio,0,0);
+  cx.setTransform(DPR(),0,0,DPR(),0,0);
   /* Kein Himmelsbild mehr: die Karte wird auf durchsichtigem Grund gezeichnet,
    * dahinter läuft dieselbe Höhenlinien-Karte wie auf dem Startbildschirm
    * (#bgTopo, public/topo.js) — ein durchgehender Look für Spiel und Website. */
@@ -6079,8 +6146,13 @@ function draw() {
    * Zonenfarben, Höhenlinien, Bezirksgrenzen. Planwirtschaft und Kartell
    * behalten ihren eigenen Look. */
   const FL = !!window.FLAECHE && !ITALIA_LOOK && !PLAN_LOOK;
-  if (FL) FLAECHE.unter(cx, st.map);
+  draw.welt = cx.getTransform();   // für den Atmosphären-Clip
+  /* Kamera bewegt? Dann pausiert der Topo-Hintergrund kurz (siehe startTopo). */
+  const camSig = cam.x + "|" + cam.y + "|" + cam.z;
+  if (draw.camSig !== camSig) { draw.camSig = camSig; window.KAMERA_BEWEGT = performance.now(); }
+  if (FL) FLAECHE.boden(cx, st.map);   // Sockel, Kacheln, Schlösser, Linien — ein Bild
   for (const t of st.map) {
+    if (FL) break;                     // im gebackenen Boden enthalten
     const [sx, sy] = iso(t.x, t.y);
     cx.beginPath(); cx.moveTo(sx,sy); cx.lineTo(sx+TW/2,sy+TH/2); cx.lineTo(sx,sy+TH); cx.lineTo(sx-TW/2,sy+TH/2); cx.closePath();
     const img = FL ? FLAECHE.tile(t) : tileSprite(t);
@@ -6702,7 +6774,26 @@ addEventListener("mousemove", e => { if (!drag) return;
   if (Math.abs(dx)+Math.abs(dy) > 4) drag.moved = true;
   cam.x = drag.cx+dx; cam.y = drag.cy+dy; });
 addEventListener("mouseup", e => { if (drag && !drag.moved) clickTile(e); drag = null; cv.classList.remove("drag"); });
-cv.addEventListener("wheel", e => { e.preventDefault(); cam.z = Math.max(.5, Math.min(2.2, cam.z * (e.deltaY<0?1.1:.9))); }, { passive:false });
+/* ---- Mausrad und Trackpad ----
+ * Vorher zoomte JEDES Rad-Ereignis um feste 10 % zur Bildschirmmitte. Ein
+ * Trackpad feuert pro Geste Dutzende Ereignisse — die Karte sprang. Jetzt:
+ *  - Zoom proportional zur Drehung und zum Mauszeiger hin (der Punkt unter
+ *    dem Zeiger bleibt stehen)
+ *  - Zwei-Finger-Wischen auf dem Trackpad verschiebt die Karte
+ *  - Kneifen (Pinch, kommt als Rad + Strg) zoomt */
+cv.addEventListener("wheel", e => {
+  e.preventDefault();
+  const zeilen = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? innerHeight : 1;
+  const dx = e.deltaX * zeilen, dy = e.deltaY * zeilen;
+  const trackpadWisch = !e.ctrlKey && e.deltaMode === 0 && (Math.abs(dx) > 0 || Math.abs(dy) < 40);
+  if (trackpadWisch) { cam.x -= dx; cam.y -= dy; return; }
+  const faktor = Math.exp(-dy * (e.ctrlKey ? .01 : .0018));
+  const z2 = Math.max(.5, Math.min(2.2, cam.z * faktor));
+  // Weltpunkt unter dem Zeiger festhalten
+  const ax = e.clientX - innerWidth / 2 - cam.x, ay = e.clientY - 120 - cam.y;
+  cam.x -= ax * (z2 / cam.z - 1); cam.y -= ay * (z2 / cam.z - 1);
+  cam.z = z2;
+}, { passive:false });
 
 const tm = document.getElementById("tilemenu");
 function pickTile(mx, my) {
@@ -9575,12 +9666,22 @@ function render({ state, me, myId, chat, room }) {
    * der Planwirtschaft nicht, dort bleibt das Widget aus. */
   if (!polizeiWidget && open.length && !state.winner && state.mode !== "plan") {
     qEl.style.display = "block";
-    document.getElementById("questlist").innerHTML = open.map(d => {
+    /* Übersicht statt Liste: Fortschritt, die NÄCHSTE Aufgabe groß, der Rest
+     * nur auf Wunsch (Zustand wird gemerkt). */
+    const fertig = qdefs.length - open.length;
+    let alle = false; try { alle = localStorage.getItem("cs_quests_alle") === "1"; } catch {}
+    const zeile = (d, gross) => {
       const n = Math.min(d.target, Math.floor(me.quests?.[d.id]?.n || 0));
-      return `<div style="display:flex;justify-content:space-between;gap:8px">
+      return `<div class="qZeile${gross ? " gross" : ""}">
         <span>${SPRACHE === "en" ? (d.en ?? d.text) : d.text}</span>
-        <span style="font-family:var(--mono);color:var(--dim);white-space:nowrap">${d.target > 1 ? `${n}/${d.target}` : ""} <b style="color:var(--accent)">+$${d.reward}</b></span></div>`;
-    }).join("");
+        <span class="qWert">${d.target > 1 ? `${n}/${d.target} · ` : ""}<b>+$${d.reward}</b></span>
+        ${gross && d.target > 1 ? `<i class="qBalken"><i style="width:${Math.round(n / d.target * 100)}%"></i></i>` : ""}</div>`;
+    };
+    document.getElementById("questlist").innerHTML = `
+      <div class="qStand"><span>${fertig} von ${qdefs.length} erledigt</span><i class="qBalken"><i style="width:${Math.round(fertig / Math.max(1, qdefs.length) * 100)}%"></i></i></div>
+      ${zeile(open[0], true)}
+      ${open.length > 1 ? `${alle ? open.slice(1).map(d => zeile(d, false)).join("") : ""}
+        <button type="button" class="qMehr" data-quests-toggle>${alle ? "Weniger anzeigen" : `+ ${open.length - 1} weitere`}</button>` : ""}`;
   } else if (!polizeiWidget) qEl.style.display = "none";
   document.getElementById("players").innerHTML = Object.values(state.players)
     /* Chips oben: Logo statt Buchstabe, wo eines vorliegt. Entscheidend ist das

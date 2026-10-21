@@ -135,6 +135,9 @@
     const interactiveWhen = opts.interactiveWhen || (() => true);
     const calmSpeed = opts.calmSpeed ?? speed;
     const calmFrameMs = opts.calmFrameMs ?? IDLE_FRAME_MS;
+    /* Pausieren, solange das Spiel Rechenzeit braucht (z. B. beim Scrollen der
+     * Karte) — der Hintergrund bewegt sich dann ohnehin kaum merklich. */
+    const pausiertWenn = opts.pausiertWenn || (() => false);
     const ctx = canvas.getContext("2d");
     if (!ctx) return () => {};
 
@@ -239,8 +242,9 @@
       while (ripples.length && now - ripples[0].start > RIPPLE_MS) ripples.shift();
       const settling = hillMoving || ripples.length > 0;
       const live = interactiveWhen();
-      time += dt * (live ? speed : calmSpeed);
-      if (settling || now - lastPaint >= (live ? IDLE_FRAME_MS : calmFrameMs)) { paint(now); lastPaint = now; }
+      const pause = !live && !settling && pausiertWenn();
+      if (!pause) time += dt * (live ? speed : calmSpeed);
+      if (!pause && (settling || now - lastPaint >= (live ? IDLE_FRAME_MS : calmFrameMs))) { paint(now); lastPaint = now; }
       if (speed > 0 || settling) raf = requestAnimationFrame(frame);
     };
     const start = () => {
