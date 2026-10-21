@@ -4087,8 +4087,8 @@ const EN = {
   "Pfandrecht aktiv": "Lien active", "Pausiert": "Paused", "Bauen hier": "Build here",
   /* Finanzamt: dynamische Steuerlage (2026-10-21d) */
   "Steuerlage der Stadt": "City tax situation",
-  "Läuft die Stadtkasse leer, steigen alle Sätze; geht es der Stadt gut (z. B. weil die Kurswetten für die Bank liefen), sinken sie. Geprüft wird jede Minute.":
-    "When the city treasury runs low, all rates rise; when the city does well (e.g., because stock bets favored the bank), they fall. Checked every minute.",
+  "Unter 3.000 $: Notstand (+25 %). 3–20 k: Knappe Kasse (+10 %). Ab 20 k: Normal (100 %). Geprüft wird jede Minute.":
+    "Below 3,000 $: emergency (+25 %). 3–20 k: tight (+10 %). 20 k+: normal (100 %). Checked every minute.",
   "Börsengebühr": "Exchange fee",
   "der Verkäufer gibt sie vom Erlös ans Finanzamt ab": "the seller pays it from sale proceeds to the tax office",
 };
@@ -7575,7 +7575,7 @@ function finanzamtRendern(state, me, myId) {
     <div class="sec">Steuerlage der Stadt <span class="meta">· Kasse + Bankreserve über Start: ${fmt(F.lage)}</span></div>
     <div class="faLage">${F.stufen.map(s => `<div class="faStufe${s.key === F.stufe ? " on" : ""}" data-stufe="${s.key}">
         <b>${s.faktor === 1 ? "±0" : (s.faktor > 1 ? "+" : "−") + Math.round(Math.abs(s.faktor - 1) * 100)} %</b><span>${s.name}</span></div>`).join("")}</div>
-    <div class="meta faLageText">Läuft die Stadtkasse leer, steigen alle Sätze; geht es der Stadt gut (z. B. weil die Kurswetten für die Bank liefen), sinken sie. Geprüft wird jede Minute.</div>
+    <div class="meta faLageText">Unter 3.000 $: Notstand (+25 %). 3–20 k: Knappe Kasse (+10 %). Ab 20 k: Normal (100 %). Geprüft wird jede Minute.</div>
     <div class="sec">Dein Steuerbescheid <span class="meta">· nächster in ${uhr(F.naechsterIn)}</span></div>
     <div class="faBescheid">
       <div class="kzrow"><span>Gewinn seit dem letzten Bescheid</span><b>${fmt(st.gewinn || 0)}</b></div>

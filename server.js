@@ -3320,17 +3320,13 @@ const BOERSE_GEBUEHR = 0.20;
  * Ein Faktor gilt für alle drei Sätze: Gewinnsteuer, Wettsteuer, Börsengebühr. */
 const STEUER_STUFEN = [
   { key: "notstand",  name: "Notstand",  faktor: 1.25, bis: 3000 },
-  { key: "knapp",     name: "Knappe Kasse", faktor: 1.10, bis: 10000 },
-  { key: "normal",    name: "Normal",    faktor: 1.00, bis: 35000 },
-  { key: "gut",       name: "Gute Lage", faktor: 0.90, bis: 60000 },
-  { key: "wohlstand", name: "Wohlstand", faktor: 0.75, bis: Infinity },
+  { key: "knapp",     name: "Knappe Kasse", faktor: 1.10, bis: 20000 },
+  { key: "normal",    name: "Normal",    faktor: 1.00, bis: Infinity },
 ];
 const STUFE_TEXT = {
   notstand:  "NOTSTAND: Die Stadtkasse ist fast leer — alle Steuern und Gebühren +25 %.",
   knapp:     "Die Stadtkasse wird knapp — Steuern und Gebühren steigen um 10 %.",
-  normal:    "Die Stadtfinanzen sind im Lot — Steuern und Gebühren wieder auf Normalniveau.",
-  gut:       "Der Stadt geht es gut — Steuern und Gebühren sinken um 10 %.",
-  wohlstand: "Wohlstand! Die Stadt hat reichlich Geld — Steuern und Gebühren −25 %.",
+  normal:    "Über 20.000 $ in der Stadtkasse — normale Sätze, alles im Lot.",
 };
 const stadtVermoegen = () => G.stadtkasse + Math.max(-WETT_RESERVE, G.wettReserve - WETT_RESERVE);
 const steuerStufe = () => STEUER_STUFEN[G.steuerStufe ?? 2];
