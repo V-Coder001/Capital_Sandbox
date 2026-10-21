@@ -868,3 +868,19 @@ html[data-theme="papier"] .faLieferanten span,html[data-theme="papier"] .faBalke
 html[data-theme="papier"] .faKonto,html[data-theme="papier"] .faProjekt,html[data-theme="papier"] .faRegeln div{background:#fffdf7;border:1px solid #1f1a14}
 html[data-theme="papier"] .faBalken i{background:#5b3f9e}
 html[data-theme="papier"] .faRegeln b,html[data-theme="papier"] .faSteuer{color:#5b3f9e!important}
+
+/* ---------- Finanzamt: dynamische Steuerlage ---------- */
+.faLage{display:grid;grid-template-columns:repeat(5,1fr);gap:4px;margin:4px 0 6px}
+.faStufe{border:1px solid var(--line,rgba(255,255,255,.12));border-radius:8px;padding:6px 2px;text-align:center;opacity:.45;font-size:11px;line-height:1.25}
+.faStufe b{display:block;font-size:13px}
+.faStufe.on{opacity:1;border-width:2px}
+.faStufe[data-stufe=notstand].on,.faStufeMini[data-stufe=notstand]{border-color:#ef4444;color:#ef4444}
+.faStufe[data-stufe=knapp].on,.faStufeMini[data-stufe=knapp]{border-color:#f59e0b;color:#f59e0b}
+.faStufe[data-stufe=normal].on,.faStufeMini[data-stufe=normal]{border-color:#94a3b8}
+.faStufe[data-stufe=gut].on,.faStufeMini[data-stufe=gut]{border-color:#4ade80;color:#4ade80}
+.faStufe[data-stufe=wohlstand].on,.faStufeMini[data-stufe=wohlstand]{border-color:#22c55e;color:#22c55e}
+.faLageText{margin-bottom:6px}
+.oGebuehr{font-size:12px;margin:8px 0 2px;opacity:.85;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.faStufeMini{border:1px solid;border-radius:999px;padding:1px 8px;font-size:11px;font-weight:600}
+html[data-theme="papier"] .faStufe{border-color:#1b1b1b33}
+html[data-theme="papier"] .faStufe[data-stufe=normal].on,html[data-theme="papier"] .faStufeMini[data-stufe=normal]{border-color:#1b1b1b}

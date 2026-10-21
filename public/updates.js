@@ -5,6 +5,18 @@
  * `art`: "neu" (neue Funktion), "besser" (Verbesserung), "fix" (Fehler behoben). */
 window.UPDATES = [
   {
+    id: "2026-10-21d", datum: "2026-10-21",
+    titel: { de: "Dynamische Steuersätze und Börsengebühr", en: "Dynamic tax rates and exchange fee" },
+    punkte: [
+      { art: "neu", de: "Die Finanzamt-Sätze passen sich dynamisch an die Stadtkasse an: Läuft die Kasse leer, steigen alle Sätze (bis +25 %); geht es der Stadt gut, sinken sie (bis −25 %).",
+        en: "Tax office rates adjust dynamically based on the city treasury: when it runs low, all rates rise (up to +25 %); when it does well, they fall (down to −25 %)." },
+      { art: "neu", de: "Börsengebühr: Bei jedem Verkauf an der Warenbörse zahlt der Verkäufer 15–25 % des Erlöses ans Finanzamt. Der Satz passt sich mit an — je besser der Stadt, desto niedriger die Gebühr.",
+        en: "Exchange fee: on every sale at the commodity exchange, the seller pays 15–25 % of the proceeds to the tax office. This rate adjusts too — the better the city does, the lower the fee." },
+      { art: "besser", de: "Finanzamt-Panel zeigt die aktuelle Steuerlage mit Farb-Indikator und erklärt, wie sie berechnet wird.",
+        en: "Tax office panel shows the current tax situation with color indicator and explains how it's calculated." }
+    ]
+  },
+  {
     id: "2026-10-21c", datum: "2026-10-21",
     titel: { de: "Das Finanzamt öffnet", en: "The tax office opens" },
     punkte: [

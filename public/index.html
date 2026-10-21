@@ -1675,6 +1675,7 @@ td:first-child{font-family:var(--font)}
       <label><span>Preis $</span><input id="oPrice" type="number" min="0.01" step="0.01" placeholder="Preis $"></label>
       <button class="buyb" id="oPlace">Order platzieren</button>
     </div>
+    <div id="oGebuehr" class="oGebuehr" hidden></div>
     <div class="orderfilter">
       <label for="exFilter" class="meta">Orderbuch zeigen</label>
       <select id="exFilter"><option value="">Alle Waren</option></select>
@@ -4084,6 +4085,12 @@ const EN = {
   /* Kachelmenü */
   "Besitzer": "Owner", "Du": "You", "Produziert": "Produces", "Verarbeitet": "Processes",
   "Pfandrecht aktiv": "Lien active", "Pausiert": "Paused", "Bauen hier": "Build here",
+  /* Finanzamt: dynamische Steuerlage (2026-10-21d) */
+  "Steuerlage der Stadt": "City tax situation",
+  "Läuft die Stadtkasse leer, steigen alle Sätze; geht es der Stadt gut (z. B. weil die Kurswetten für die Bank liefen), sinken sie. Geprüft wird jede Minute.":
+    "When the city treasury runs low, all rates rise; when the city does well (e.g., because stock bets favored the bank), they fall. Checked every minute.",
+  "Börsengebühr": "Exchange fee",
+  "der Verkäufer gibt sie vom Erlös ans Finanzamt ab": "the seller pays it from sale proceeds to the tax office",
 };
 const t = de => SPRACHE === "en" ? (EN[de] ?? de) : de;
 /* Feste Beschriftungen im Markup übersetzen. Sie stehen als deutscher Text
@@ -7565,11 +7572,15 @@ function finanzamtRendern(state, me, myId) {
         <div class="faBalken"><i style="width:${Math.min(100, F.stadtkasse / F.schwelle * 100).toFixed(1)}%"></i></div></div>
       <div class="faKonto"><span>Bankreserve</span><b>${fmt(F.reserve)}</b><em>Gegenpartei der Kurswetten</em></div>
     </div>
+    <div class="sec">Steuerlage der Stadt <span class="meta">· Kasse + Bankreserve über Start: ${fmt(F.lage)}</span></div>
+    <div class="faLage">${F.stufen.map(s => `<div class="faStufe${s.key === F.stufe ? " on" : ""}" data-stufe="${s.key}">
+        <b>${s.faktor === 1 ? "±0" : (s.faktor > 1 ? "+" : "−") + Math.round(Math.abs(s.faktor - 1) * 100)} %</b><span>${s.name}</span></div>`).join("")}</div>
+    <div class="meta faLageText">Läuft die Stadtkasse leer, steigen alle Sätze; geht es der Stadt gut (z. B. weil die Kurswetten für die Bank liefen), sinken sie. Geprüft wird jede Minute.</div>
     <div class="sec">Dein Steuerbescheid <span class="meta">· nächster in ${uhr(F.naechsterIn)}</span></div>
     <div class="faBescheid">
       <div class="kzrow"><span>Gewinn seit dem letzten Bescheid</span><b>${fmt(st.gewinn || 0)}</b></div>
       <div class="kzrow"><span>Freibetrag</span><b>−${fmt(F.frei)}</b></div>
-      <div class="kzrow"><span>Voraussichtliche Steuer (${Math.round(F.satz * 100)} %)</span><b class="faSteuer">${fmt(st.steuer || 0)}</b></div>
+      <div class="kzrow"><span>Voraussichtliche Steuer (${Math.round(F.satz * 1000) / 10} %)</span><b class="faSteuer">${fmt(st.steuer || 0)}</b></div>
       ${st.schuld ? `<div class="kzrow"><span>davon gestundet aus dem letzten Bescheid</span><b>${fmt(st.schuld)}</b></div>` : ""}
       <div class="meta" style="padding-top:6px">Investitionen (Bau, Ausbau, Werbung, Einkauf) senken den Gewinn. Zuletzt gezahlt: ${st.letzter ? fmt(st.letzter.steuer) : "—"} · insgesamt ${fmt(st.gezahlt || 0)}.</div>
     </div>
@@ -7585,8 +7596,9 @@ function finanzamtRendern(state, me, myId) {
       <div class="faLieferanten">${Object.values(P.contrib).map(c => `<span style="--f:${c.color || "#888"}">${c.name}${c.bot ? " · Bot" : ""}</span>`).join("") || `<span class="meta">Noch keine Lieferungen — Spieler und Bots liefern gemeinsam.</span>`}</div>` : ""}
     <div class="sec">So arbeitet das Finanzamt</div>
     <div class="faRegeln">
-      <div><b>${Math.round(F.satz * 100)} %</b><span>Gewinnsteuer alle 10 min, die ersten ${fmt(F.frei)} frei</span></div>
-      <div><b>${Math.round(F.wettSteuer * 100)} %</b><span>auf Gewinne aus Kurswetten</span></div>
+      <div><b>${Math.round(F.satz * 1000) / 10} %</b><span>Gewinnsteuer alle 10 min, die ersten ${fmt(F.frei)} frei</span></div>
+      <div><b>${Math.round(F.boerse * 1000) / 10} %</b><span>Börsengebühr vom Erlös jedes Verkaufs an der Warenbörse</span></div>
+      <div><b>${Math.round(F.wettSteuer * 1000) / 10} %</b><span>auf Gewinne aus Kurswetten</span></div>
       <div><b>${Math.round(F.reserveAnteil * 100)} / ${Math.round(100 - F.reserveAnteil * 100)}</b><span>Bankreserve / Stadtkasse</span></div>
       <div><b>${Math.round(F.praemieAnteil * 100)} %</b><span>der Stadtkasse als Prämie je Großauftrag</span></div>
     </div>
@@ -10107,6 +10119,10 @@ function render({ state, me, myId, chat, room }) {
         <span class="meta oname">${o.player}</span>
         <button class="${gesuch ? "sellb" : "buyb"}" data-take="${o.id}">${gesuch ? t("Beliefern") : t("Kaufen")}</button>
       </div>`;
+    { const F = state.finanzamt, gb = document.getElementById("oGebuehr");
+      gb.hidden = !(F?.aktiv && F.boerse > 0);
+      if (!gb.hidden) gb.innerHTML = `<span class="faStufeMini" data-stufe="${F.stufe}">${F.stufeName}</span>
+        Börsengebühr <b>${Math.round(F.boerse * 1000) / 10} %</b> — der Verkäufer gibt sie vom Erlös ans Finanzamt ab.`; }
     document.getElementById("exbook").innerHTML =
       /* Auf eine Ware gefiltert: grosser Kursverlauf statt nur der Sparkline.
        * Genau das fehlte bisher — dass Stahl von 115 auf 137 gelaufen war, sah
