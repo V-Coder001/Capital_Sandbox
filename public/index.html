@@ -6958,9 +6958,14 @@ function draw() {
   }
   verkehrRest();          // was ausserhalb der Karte liegt, nicht verschlucken
   if (FL) FLAECHE.schilder(cx, st.map);
-  drawEffekte(now);
-  drawClouds(now);
-  drawAtmosphere();
+
+  /* Performance: Effekte/Wolken/Atmosphäre sind teuer. Bei niedriger FPS weglassen. */
+  const fps = 1000 / Math.max(1, pnow - draw.fps_t || 16);
+  draw.fps = (draw.fps || fps) * .7 + fps * .3;  // exponential moving average
+  draw.fps_t = pnow;
+  if (draw.fps > 40) { drawEffekte(now); drawClouds(now); }
+  if (draw.fps > 50) drawAtmosphere();
+
   rennStreckeZeichnen();
 }
 requestAnimationFrame(draw);
@@ -7562,6 +7567,10 @@ document.getElementById("p-bank").addEventListener("click", e => {
 function finanzamtRendern(state, me, myId) {
   const F = state.finanzamt, el = document.getElementById("finanzamtbody");
   if (!F?.aktiv) { el.innerHTML = `<div class="meta">In diesem Modus gibt es kein Finanzamt.</div>`; return; }
+  /* Perf: Nur rendern wenn sich was ändert (Stadtkasse, Finanzamt-Sätze, etc.) */
+  const sig = JSON.stringify({ F: { stadtkasse: F.stadtkasse, stufe: F.stufe, satz: F.satz }, me: me.steuer, P: state.stadtprojekt?.name });
+  if (finanzamtRendern.lastSig === sig) return;
+  finanzamtRendern.lastSig = sig;
   const uhr = s => `${Math.floor(s / 60)}:${String(Math.max(0, s) % 60).padStart(2, "0")}`;
   const st = me.steuer || {};
   const P = state.stadtprojekt;

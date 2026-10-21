@@ -58,7 +58,17 @@ app.use((req, res, next) => {
 /* Vom Standort dieser Datei aus, nicht vom Arbeitsverzeichnis: Sonst liefert
  * der Server stillschweigend nichts aus, sobald er von woanders gestartet wird
  * — genau das ist beim Dev-Server passiert. */
-app.use(express.static(path.join(__dirname, "public")));
+app.use(express.static(path.join(__dirname, "public"), {
+  /* Client-Side Caching: Bilder/Assets 7 Tage cachen, HTML nicht (damit Updates
+   * schnell ankommen). Das reduziert Bandbreite massiv bei wiederholtem Besuch. */
+  setHeaders: (res, fpath) => {
+    if (fpath.endsWith(".html")) {
+      res.setHeader("Cache-Control", "public, max-age=0, must-revalidate");
+    } else {
+      res.setHeader("Cache-Control", "public, max-age=604800, immutable");
+    }
+  }
+}));
 
 /* Einladungslink: LAN-IP ermitteln, optional öffentlicher Tunnel (npm run share) */
 let publicUrl = null;
