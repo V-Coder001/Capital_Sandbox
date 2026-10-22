@@ -5,6 +5,16 @@
  * `art`: "neu" (neue Funktion), "besser" (Verbesserung), "fix" (Fehler behoben). */
 window.UPDATES = [
   {
+    id: "2026-10-22a", datum: "2026-10-22",
+    titel: { de: "Einzelaktien leichter handeln", en: "Trading single shares is easier" },
+    punkte: [
+      { art: "neu", de: "Teilkauf: Aus jedem Angebot lässt sich eine beliebige Anzahl kaufen, z. B. eine einzelne Aktie. Der Rest bleibt als Angebot stehen.",
+        en: "Partial buys: take any number from an offer, e.g. a single share. The rest stays on the market." },
+      { art: "besser", de: "Jedes Angebot zeigt den Preis je Aktie. Im Verkaufsformular setzt „Preis = Kurs × Aktien“ den Preis zum aktuellen Kurs.",
+        en: "Every offer shows the price per share. In the sell form, “Price = price × shares” sets the price at the current share price." }
+    ]
+  },
+  {
     id: "2026-10-21f", datum: "2026-10-21",
     titel: { de: "Aktien mit Kurs und Wert", en: "Shares with price and value" },
     punkte: [

@@ -5391,6 +5391,19 @@ document.querySelectorAll("[data-close]").forEach(x => x.addEventListener("click
   x.closest(".panel").classList.remove("open");
   document.querySelectorAll(".dockbtn").forEach(b => b.classList.toggle("on", b.dataset.p === "karte")); }));
 let pendingMerge = null;   // Firma, für die gerade die Fusions-Rückfrage offen ist
+/* Stückzahl je Angebot, die der Spieler gerade eingetippt hat (Teilkauf) */
+const shMenge = {};
+let shKursSel = 0;          // Kurs je Aktie der im Verkaufsformular gewählten Firma
+document.addEventListener("input", e => {
+  const n = e.target.closest?.("[data-shn]");
+  if (n) shMenge[n.dataset.shn] = Math.max(1, Math.floor(+n.value) || 1);
+});
+/* Eingabefeld + Kaufen-Knopf für ein Angebot; Stückzahl bis zur Angebotsgröße */
+const shKaufZeile = l => {
+  const v = Math.min(l.count, shMenge[l.id] ?? 1);
+  return `<span class="shKauf"><input type="number" class="shN" data-shn="${l.id}" min="1" max="${l.count}" step="1" value="${v}" title="Aktien aus diesem Angebot (1–${l.count})">
+    <button class="buyb" data-shbuy="${l.id}">Kaufen</button></span>`;
+};
 openPanel("karte", true);
 
 function initSelects() {
@@ -5452,7 +5465,11 @@ document.getElementById("p-bank").addEventListener("click", e => {
   const ask = e.target.closest("[data-merge]");
   if (ask) { pendingMerge = ask.dataset.merge; render(store.get()); return; }
   const buy = e.target.closest("[data-shbuy]");
-  if (buy) { act("buyShares", { listingId: +buy.dataset.shbuy }); return; }
+  if (buy) {
+    const menge = document.querySelector(`[data-shn="${buy.dataset.shbuy}"]`);
+    act("buyShares", { listingId: +buy.dataset.shbuy, count: menge ? Math.floor(+menge.value) || 1 : undefined });
+    return;
+  }
   const cancel = e.target.closest("[data-shcancel]");
   if (cancel) { act("cancelShareListing", { listingId: +cancel.dataset.shcancel }); return; }
   const bidOk = e.target.closest("[data-bidok]");
@@ -5619,6 +5636,13 @@ document.getElementById("bidSend").addEventListener("click", () => act("bidShare
   companyId: document.getElementById("bidCompany").value,
   count: document.getElementById("bidCount").value,
   price: document.getElementById("bidPrice").value }));
+document.getElementById("shKurs").addEventListener("click", () => {
+  const n = Math.max(1, Math.floor(+document.getElementById("shCount").value) || 1);
+  if (!shKursSel) return toast("Erst eine Firma mit Aktien wählen", true);
+  document.getElementById("shPrice").value = Math.max(1, Math.round(shKursSel * n));
+  document.getElementById("shHint").textContent = `Kurs ${fk(shKursSel)} je Aktie → ${n} Aktien ≈ ${fmt(shKursSel * n)}. Angeboten zum Kurs.`;
+  SFX.spiel("klick");
+});
 document.getElementById("shList").addEventListener("click", () => act("listShares", {
   companyId: document.getElementById("shCompany").value || null,
   count: document.getElementById("shCount").value, price: document.getElementById("shPrice").value,
@@ -8208,6 +8232,7 @@ function render({ state, me, myId, chat, room }) {
     const sel = sellable.find(o => o.id === shCo.value);
     const shN = Math.max(1, Math.min(sel?.aktien || 1, +document.getElementById("shCount").value || 1));
     document.getElementById("shCount").max = sel?.aktien || 1;
+    shKursSel = sel?.kurs || 0;
     document.getElementById("shHint").textContent = sel
       ? `Kurs ${fk(sel.kurs)} je Aktie → ${shN} Aktien ≈ ${fmt(sel.kurs * shN)}. Du hältst ${sel.aktien}.`
       : "Du hältst gerade keine Aktien zum Verkauf.";
@@ -8254,7 +8279,7 @@ function render({ state, me, myId, chat, room }) {
               const fair = (p.kurs || 0) * l.count, diff = fair ? Math.round((l.price / fair - 1) * 100) : 0;
               return `<div class="bAng"><span>${l.count} Aktien · ${l.isIssue ? "Emission" : `von ${l.seller}`}${l.toId ? " · <b>nur für dich</b>" : ""}
                 <em class="${diff <= 0 ? "plus" : diff > 25 ? "minus" : ""}">${diff > 0 ? "+" : ""}${diff} % zum Kurs</em></span>
-                <b>${fmt(l.price)}</b><button class="buyb" data-shbuy="${l.id}">Kaufen</button></div>`; }).join("")}</div>` : ""}
+                <b>${fmt(l.price)}<span class="meta"> · ${fk(l.price / l.count)} je Aktie</span></b>${shKaufZeile(l)}</div>`; }).join("")}</div>` : ""}
           ${p.id !== myId && (p.ownPct ?? 0) > 0 ? `<button type="button" class="mini bAnfrage" data-zu-handeln="${p.id}">Kaufanfrage an ${p.name} stellen</button>` : ""}
           <div class="meta" style="padding-top:4px">${p.ausschuettung != null ? `${p.name} schüttet fest ${fmt(p.ausschuettung)}` : `Ausgeschüttet werden ${Math.round((store.get().meta?.dividendRate ?? 0) * 100)} % des Umsatzes`} je ${takt} Minuten, verteilt auf ${AKTIEN_JE_FIRMA()} Aktien. Der Kurs folgt dem Wert F mit Verzögerung.</div>
         </div>` : "");
@@ -8280,8 +8305,8 @@ function render({ state, me, myId, chat, room }) {
     };
     const offerRow = l => `<div class="bond">
       <div><b>${l.company}</b><div class="meta">${l.count} Aktien · ${l.isIssue ? "Emission der Firma" : `von ${l.seller}`}${priceTag(l)}</div></div>
-      <div style="display:flex;align-items:center;gap:8px"><span style="font-family:var(--mono)">${fmt(l.price)}</span>
-      <button class="buyb" data-shbuy="${l.id}">Kaufen</button></div></div>`;
+      <div style="display:flex;align-items:center;gap:8px"><span style="font-family:var(--mono)">${fmt(l.price)}<span class="meta"> · ${fk(l.price / l.count)} je Aktie</span></span>
+      ${shKaufZeile(l)}</div></div>`;
     document.getElementById("sharelist").innerHTML =
       (mine.length ? `<div class="sec">Deine Angebote</div>` + mine.map(l =>
         `<div class="bond"><div><b>${l.company}</b><div class="meta">${l.count} Aktien für ${fmt(l.price)}${l.toId ? ` · nur für ${l.toName}` : " · offener Markt"}</div></div>
