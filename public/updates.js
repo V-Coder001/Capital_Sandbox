@@ -5,6 +5,18 @@
  * `art`: "neu" (neue Funktion), "besser" (Verbesserung), "fix" (Fehler behoben). */
 window.UPDATES = [
   {
+    id: "2026-10-22b", datum: "2026-10-22",
+    titel: { de: "Übersichtlichere Börse, Fonds überstehen Fusionen", en: "Clearer stock market, funds survive mergers" },
+    punkte: [
+      { art: "besser", de: "Stadtbank → Markt: Aktien und Branchenfonds als Tabellen mit Kurs, Verlauf und Abstand zum Wert untereinander. Kaufen klappt beim Fonds ein kleines Feld mit Schnellbeträgen auf; Erklärung und älteres Marktgeschehen sind eingeklappt.",
+        en: "City bank → Market: shares and industry funds as tables with price, trend and gap to value lined up. Buying a fund opens a small field with quick amounts; the explanation and older market events are collapsed." },
+      { art: "besser", de: "Jeder Fonds zeigt seine Firmen und wie viele Aktien er von jeder hält.",
+        en: "Every fund shows its companies and how many shares it holds of each." },
+      { art: "fix", de: "Fusion: Kauft eine Firma eine andere ganz auf, verschwindet deren Fonds nicht mehr. Die aufgekaufte Firma fliegt raus, die übernehmende kommt in den Fonds (markiert mit „Fusion“).",
+        en: "Mergers: when a company buys another outright, its fund no longer disappears. The acquired company is removed and the acquirer joins the fund (marked “Merger”)." }
+    ]
+  },
+  {
     id: "2026-10-22a", datum: "2026-10-22",
     titel: { de: "Einzelaktien leichter handeln", en: "Trading single shares is easier" },
     punkte: [
