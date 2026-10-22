@@ -5672,7 +5672,7 @@ function softwareRendern(state, me, myId) {
     let entw = "";
     if (eigene) {
       const dev = eigene.entwicklung;
-      const BAUM = state.swBaeume || {}, STUFE = state.swStufe || [], AUS = state.swAusbau || [];
+      const BAUM = state.swBaeume || {}, STUFE = state.swStufe || [], AUS = state.swAusbau || [], EFF = state.swBaumEffekt || {};
       const version = (eigene.version || 0) + 1;
       const besitzt = m => !!eigene.module?.[m];
       const gewaehlt = m => swModulWahl.has(m);
@@ -5703,7 +5703,7 @@ function softwareRendern(state, me, myId) {
         const etikett = istEigen ? (idx === 0 ? "Schwerpunkt" : `${idx + 1}. Branche`)
           : idx === 0 ? "frei wählbar" : `${idx + 1}. Branche · ab v${aus.abVersion} · ${aus.epFaktor}× EP · ${fmt(aus.cash)}`;
         const stufen = [1, 2, 3].map(k => {
-          const m = `${br}:${k}`, st = STUFE[k - 1] || {};
+          const m = `${br}:${k}`, st = { ...(STUFE[k - 1] || {}), ...(((EFF[br] || [])[k - 1]) || {}) };
           const vorher = k === 1 || besitzt(`${br}:${k - 1}`) || gewaehlt(`${br}:${k - 1}`);
           const frei = vorher && !zuFrueh && !(andereNeu && !istEigen);
           const sperre = zuFrueh ? `ab v${aus.abVersion}` : !vorher ? `erst Stufe ${k - 1}` : "nur eine neue Branche je Version";

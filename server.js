@@ -3421,6 +3421,18 @@ const SW_BAEUME = {
   ruestung:  { name: "Rüstung",        module: ["Lizenz-Prüfung", "Behörden-Portal", "Sicherheitstransport"] },
 };
 const SW_STUFE = [ { ep: 90, tempo: 0.15 }, { ep: 140, tempo: 0.15 }, { ep: 200, preis: 0.08 } ];
+/* Branchen-Effekte je Stufe: jede Branche hat ihren eigenen Schwerpunkt statt
+ * überall gleich zu wirken (vorher: +15 % / +15 % / +8 % für alle). Stufe 1–2
+ * geben Tempo, Stufe 3 Preisspielraum. Die EP-Kosten je Stufe bleiben in SW_STUFE. */
+const SW_BAUM_EFFEKT = {
+  agrar:     [{ tempo: 0.20 }, { tempo: 0.10 }, { preis: 0.05 }],   // Frische: schnell verkauft
+  rohstoff:  [{ tempo: 0.10 }, { tempo: 0.20 }, { preis: 0.06 }],   // Großmengen, wenig Marge
+  versorger: [{ tempo: 0.15 }, { tempo: 0.15 }, { preis: 0.10 }],   // Dauerkunden, Abo-Preise
+  tech:      [{ tempo: 0.10 }, { tempo: 0.10 }, { preis: 0.12 }],   // Premiumpreise
+  touristik: [{ tempo: 0.25 }, { tempo: 0.05 }, { preis: 0.04 }],   // Last-Minute-Tempo
+  ruestung:  [{ tempo: 0.05 }, { tempo: 0.10 }, { preis: 0.14 }],   // Sicherheit hat seinen Preis
+};
+const swEffekt = (br, k) => (br && SW_BAUM_EFFEKT[br]?.[k - 1]) || {};
 /* ---- Website-Design je Shop-System ----
  * Jede Software-Firma gestaltet die Website, auf der ihre Kunden verkaufen:
  * Schrift, Farben, Kopfzeile, Produktkarten, Bezahlkarte, Slogan und Banner.
@@ -3558,16 +3570,16 @@ function swTempoFuer(prod, g) {
   let t = 1;
   for (const [m, an] of Object.entries(prod.module || {})) if (an && SW_MODULE[m]?.tempo) t += SW_MODULE[m].tempo;
   const br = wareBranche(g);
-  if (br) for (let k = 1; k <= 3; k++) if (prod.module?.[swModulId(br, k)]) t += SW_STUFE[k - 1].tempo || 0;
+  if (br) for (let k = 1; k <= 3; k++) if (prod.module?.[swModulId(br, k)]) t += swEffekt(br, k).tempo || 0;
   return t;
 }
-const swPreisFuer = (prod, g) => { const br = wareBranche(g); return prod && !prod.portal && br && prod.module?.[swModulId(br, 3)] ? 1 + SW_STUFE[2].preis : 1; };
+const swPreisFuer = (prod, g) => { const br = wareBranche(g); return prod && !prod.portal && br && prod.module?.[swModulId(br, 3)] ? 1 + (swEffekt(br, 3).preis || 0) : 1; };
 /* Dasselbe je Kundenbranche (für Bewertung und Anzeige) */
 function swTempoBranche(prod, br) {
   if (!prod || prod.portal) return 1;
   let t = 1;
   for (const [m, an] of Object.entries(prod.module || {})) if (an && SW_MODULE[m]?.tempo) t += SW_MODULE[m].tempo;
-  if (br) for (let k = 1; k <= 3; k++) if (prod.module?.[swModulId(br, k)]) t += SW_STUFE[k - 1].tempo || 0;
+  if (br) for (let k = 1; k <= 3; k++) if (prod.module?.[swModulId(br, k)]) t += swEffekt(br, k).tempo || 0;
   return t;
 }
 const STADTPORTAL = "stadtportal";
@@ -3668,7 +3680,7 @@ function swTick() {
 function swWert(prod, br = null) {
   if (!prod || !(prod.version >= 1)) return -1;
   const ruf = prod.portal ? 1 : Math.min(1, (prod.ruf ?? SW.RUF_START) / 80);
-  const preis = !prod.portal && br && prod.module?.[swModulId(br, 3)] ? 1 + SW_STUFE[2].preis : 1;
+  const preis = !prod.portal && br && prod.module?.[swModulId(br, 3)] ? 1 + (swEffekt(br, 3).preis || 0) : 1;
   return (swTempoBranche(prod, br) * preis * (prod.faktorSchnitt ?? prod.faktor ?? 1) * (1 - prod.gebuehr / 100) + (prod.module?.werbung ? 0.06 : 0)) * ruf
     - (prod.einrichtung || 0) / 20000;
 }
@@ -4949,7 +4961,7 @@ function snapshot() {
   return {
     tick: G.tick, winner: G.winner, winGoal: WIN_NW, report: G.report || null,
     etf: etfPublic(),
-    software: softwarePublic(), swModule: SW_MODULE, swBaeume: SW_BAEUME, swStufe: SW_STUFE, swAusbau: [0, 1, 2, 3].map(swAusbau), paint: paintPublic(), paintCfg: { stufen: PAINT.STUFEN, abSystem: PAINT.AB_SYSTEM, preisMin: PAINT.PREIS_MIN, preisMax: PAINT.PREIS_MAX, palette: PAINT.PALETTE },
+    software: softwarePublic(), swModule: SW_MODULE, swBaeume: SW_BAEUME, swStufe: SW_STUFE, swBaumEffekt: SW_BAUM_EFFEKT, swAusbau: [0, 1, 2, 3].map(swAusbau), paint: paintPublic(), paintCfg: { stufen: PAINT.STUFEN, abSystem: PAINT.AB_SYSTEM, preisMin: PAINT.PREIS_MIN, preisMax: PAINT.PREIS_MAX, palette: PAINT.PALETTE },
     logoV: Object.fromEntries(Object.values(G.players).filter(p => p.logo).map(p => [p.id, p.logo.v])), swDesign: SW_DESIGN, swDesignAb: SW_DESIGN_AB, swCfg: { install: SW.INSTALL, portalInstall: SW.PORTAL_INSTALL, versionEp: SW.VERSION_EP, werbeBoost: SW.WERBE_BOOST, gebMin: SW.GEB_MIN, gebMax: SW.GEB_MAX, einrMax: SW.EINR_MAX, aboMin: SW.ABO_MIN, aboMax: SW.ABO_MAX, handelssteuer: Math.round(satzBoerse() * SW.HANDELSSTEUER * 1000) / 10, markenwert: SW.MARKENWERT },
     marktLog: (G.marktLog || []).slice(0, 20), marktCfg: { aktien: AKTIEN, tag: MARKT.TAG, beta: MARKT.BETA, bauDauer: MARKT.BAU_DAUER, afaDauer: MARKT.AFA_DAUER },
     /* Countdown bis zum naechsten Renntag — ohne ihn sieht man erst bei der
