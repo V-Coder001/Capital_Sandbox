@@ -5651,7 +5651,8 @@ function softwareRendern(state, me, myId) {
           <div><b>${eigene.kunden}/${eigene.plaetze ?? 0}</b><span>Kunden / Plätze</span></div>
           <div><b>${eigene.ruf}</b><span>Ruf</span></div>
           <div><b style="color:var(--up)">${fmt(eigene.einnahmen10 || 0)}</b><span>Einnahmen 10 min</span></div>
-        </div>` : `<div class="note">Lege Name und Preise fest, dann entwickelst du Version 1 im Entwicklerstudio.</div>`}
+        </div>
+        <div class="note" style="margin:-4px 0 10px">Markenwert <b>${fmt(eigene.markenwert || 0)}</b> — zählt zum Firmenwert und Aktienkurs (Einnahmen der letzten 10 min × ${cfg.markenwert ?? 2}).</div>` : `<div class="note">Lege Name und Preise fest, dann entwickelst du Version 1 im Entwicklerstudio.</div>`}
       ${felder}${entw}`;
   }
   document.getElementById("softwarebody").innerHTML = tabelle + bau;
@@ -6229,9 +6230,9 @@ const TUT_IND = {
   ],
   software: [
     { t: "Baue ein Entwicklerstudio", build: "entwicklerstudio",
-      p: `Im <em>blauen Zentrum</em>: <b>Entwicklerstudio</b> ($4.000). Es macht aus <em>Strom und etwas Elektronik</em> Entwicklungspunkte (EP). Lege im Panel <b>Software</b> Name, Farbe und Gebühr deines <b>Shop-Systems</b> fest und starte Version 1 — rund 2,5 Minuten Entwicklung.` },
+      p: `Im <em>blauen Zentrum</em>: <b>Entwicklerstudio</b> ($3.000). Es macht aus <em>Strom</em> Entwicklungspunkte (EP) — mit etwas Elektronik doppelt so schnell. Lege im Panel <b>Software</b> Name, Farbe und Gebühr deines <b>Shop-Systems</b> fest und starte Version 1 — rund 2,5 Minuten Entwicklung.` },
     { t: "Baue ein Rechenzentrum", build: "rechenzentrum",
-      p: `In der <em>Industrie-Zone</em>: <b>Rechenzentrum</b> ($6.000). Es trägt deine Kunden — 5 Online-Marktplätze je Stufe — und braucht dauernd <b>Strom</b>. Ohne Strom fällt dein System aus, und deine Kunden verkaufen nichts.` },
+      p: `Ebenfalls im <em>Zentrum</em>: <b>Rechenzentrum</b> ($3.500). Es trägt deine Kunden — 5 Online-Marktplätze je Stufe — und braucht dauernd <b>Strom</b>. Ohne Strom fällt dein System aus, und deine Kunden verkaufen nichts.` },
     { t: "Dein Geschäft",
       p: `Jede Firma kann einen <b>Online-Marktplatz</b> bauen, verkauft dort aber erst mit einem installierten Shop-System. Du verdienst an der <b>Einrichtung</b>, an der <b>Gebühr je Verkauf</b> und am <b>Werbe-Abo</b> — Werbung läuft hier nur noch über Werbemodule. Neue Versionen mit mehr Funktionen ziehen Kunden an; die Bots prüfen jede neue Software und wechseln, wenn sie besser ist. Die Konkurrenz ist das <b>Stadtportal</b>: teuer (5 %), aber immer da.` },
   ],

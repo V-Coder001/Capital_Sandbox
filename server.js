@@ -2111,9 +2111,9 @@ const BTYPES = {
    * hatte 0 Plätze, und kein einziger Marktplatz konnte es nehmen.
    * Stromverbrauch so, dass fünf Kunden das Rechenzentrum deutlich tragen. */
   entwicklerstudio: { name: "Entwicklerstudio", en: "Dev studio", cost: 3000, out: null, rate: 0, zone: "zentrum", industry: "software",
-                      studio: { in: { strom: 0.5, elektronik: 0.005 }, ep: 1 } },
+                      studio: { in: { strom: 0.3, elektronik: 0.005 }, ep: 1 } },
   rechenzentrum:    { name: "Rechenzentrum", en: "Data centre", cost: 3500, out: null, rate: 0, zone: "zentrum", industry: "software",
-                      rz: { in: { strom: 0.5 }, plaetze: 5 } },
+                      rz: { in: { strom: 0.3 }, plaetze: 5 } },
   /* Online-Marktplatz: der EINZIGE Laden. Er führt alle Waren, die früher
    * Marktstand, Baustoffhandel, Kontor, Grüner Laden, Autohaus und
    * Waffenhandel verkauften — nur Kartell-Ware nicht. Verkauf an die Stadt
@@ -2980,6 +2980,7 @@ function buildingValueOf(pid) {
 }
 function substance(p) {
   let v = p.cash + buildingValueOf(p.id) + (p.wettOffen || 0);   // laufende Kurswetten gehören weiter dem Spieler
+  v += swMarkenwert(p);   // Software-Firmen: das System selbst ist ein Wert
   v -= p.steuerSchuld || 0;   // gestundete Steuern sind Schulden — sonst gewänne man mit offenen Steuern
   for (const k in p.inv) v += p.inv[k] * MM[k].price;
   for (const b of G.bonds) {
@@ -3356,7 +3357,11 @@ const SW = {
   PORTAL_GEBUEHR: 5,                 // % je Verkauf beim Stadtportal
   VERSION_EP: 60,                    // Grundaufwand jeder neuen Version
   WERBE_BOOST: 0.20,                 // Werbemodul: wie eine volle Agentur-Kampagne (+20 %)
-  GEB_MIN: 0.5, GEB_MAX: 4, EINR_MAX: 1500,
+  /* Gebühr bis 8 %: Mit höchstens 4 % (und Bots bei 1,5–3,5 %) blieb einer
+   * Software-Firma nur ein Bruchteil dessen, was ihre Kunden verdienten.
+   * Ein gutes System macht +30–40 % Tempo — da lohnen sich auch 6 % noch
+   * deutlich gegenüber dem Stadtportal (5 %, ohne Module). */
+  GEB_MIN: 0.5, GEB_MAX: 8, EINR_MAX: 1500,
   /* Werbe-Abo je Marktplatz und Minute. Eine dauerhaft volle Kampagne der
    * alten Werbeagentur kostete rund 660 $/min (11 $/s, siehe AD_PACKAGES).
    * Das erste Abo mit 15–25 $/min war also um das Dreißigfache zu billig —
@@ -3365,6 +3370,12 @@ const SW = {
   HANDELSSTEUER: 0.5,                // Shop-Kauf zwischen Firmen: halbe Börsengebühr an die Stadt
   EP_SPEICHER: 600,                  // so viele EP sammelt ein Studio ohne laufende Entwicklung an
   RUF_START: 80,
+  /* Markenwert: Eine Software-Firma hat kaum Lager und wenige Gebäude — ihr
+   * Wert steckt im System. Gemessen standen Byteforge und Pixelwerk nach
+   * 45 Minuten mit 11–13k $ da, die Produzenten mit 40–180k $, obwohl ihre
+   * Systeme in der halben Stadt liefen. Darum zählt das Ertragswert-Prinzip:
+   * die Einnahmen der letzten 10 Minuten × MARKENWERT gehen in den Firmenwert. */
+  MARKENWERT: 2,
 };
 /* ---- Skill-Tree je Branche ----
  * Die allgemeinen Module oben wirken auf alle Waren. Daneben hat jede Branche
@@ -3426,6 +3437,11 @@ const portalProdukt = () => ({ id: STADTPORTAL, ownerId: null, name: "Stadtporta
   einrichtung: 0, gebuehr: SW.PORTAL_GEBUEHR, werbeAbo: 0, ruf: 70, portal: true });
 const swVon = id => id === STADTPORTAL ? portalProdukt() : (G.software || {})[id] || null;
 const swEigenes = p => Object.values(G.software || {}).find(s => s.ownerId === p.id) || null;
+/* Markenwert des eigenen Systems (siehe SW.MARKENWERT) — Teil der Substanz. */
+const swMarkenwert = p => {
+  const prod = G.software && swEigenes(p);
+  return prod ? (prod.eb || []).reduce((a, b) => a + b, 0) * SW.MARKENWERT : 0;
+};
 const swKunden = prod => G.map.filter(t => t.system?.produktId === prod.id).length;
 const swPlaetze = prod => prod.portal ? Infinity : G.map
   .filter(t => t.owner === prod.ownerId && BTYPES[t.btype]?.rz && t.rzAktiv && !imBau(t))
@@ -3522,6 +3538,7 @@ function softwarePublic() {
       kunden, plaetze: Number.isFinite(plaetze) ? plaetze : null, faktor: Math.round((G.swFaktor?.[s.id] ?? 1) * 100) / 100,
       ruf: Math.round(s.ruf ?? SW.RUF_START), portal: !!s.portal, tempo: Math.round(swTempo(s) * 100) / 100,
       einnahmen10: Math.round((s.eb || []).reduce((a, b) => a + b, 0)),
+      markenwert: Math.round((s.eb || []).reduce((a, b) => a + b, 0) * SW.MARKENWERT),
       entwicklung: s.entwicklung ? { ep: Math.floor(s.entwicklung.ep), ziel: s.entwicklung.ziel, version: s.entwicklung.version, module: s.entwicklung.module, branchen: s.entwicklung.branchen } : null };
     pub.branchen = s.branchen || [];
     pub.stufen = Object.fromEntries(Object.keys(SW_BAEUME).map(br => [br, swStufeVon(s, br)]));
@@ -3543,12 +3560,21 @@ function swBetrieb(t, p, bt, sperr = 1) {
    * nicht an (30), sonst fällt bei knappem Strom das laufende System aus, nur weil
    * nebenher an der nächsten Version gearbeitet wird. */
   const RZ_RESERVE = { strom: 30 };
-  let frac = 1;
-  for (const [g, need] of Object.entries(bt.studio.in)) frac = Math.min(frac, Math.max(0, (p.inv[g] || 0) - (RZ_RESERVE[g] || 0)) / (need * lvl));
+  /* Strom ist Pflicht. Elektronik (Dev-Hardware) ist ein Beschleuniger: Ohne
+   * sie arbeitet das Studio mit halbem Tempo weiter. Gemessen stand Byteforge
+   * über zehn Minuten bei 240/260 EP, nur weil 0,3 Elektronik/min fehlten. */
+  const strom = bt.studio.in.strom * lvl;
+  let frac = Math.min(1, Math.max(0, (p.inv.strom || 0) - RZ_RESERVE.strom) / strom);
   if (!(frac > 0)) return;
   frac *= sperr;
-  for (const [g, need] of Object.entries(bt.studio.in)) p.inv[g] -= need * lvl * frac;
-  const ep = bt.studio.ep * lvl * frac;
+  p.inv.strom -= strom * frac;
+  const elNeed = (bt.studio.in.elektronik || 0) * lvl * frac;
+  let tempo = 1;
+  if (elNeed > 0) {
+    if ((p.inv.elektronik || 0) >= elNeed) p.inv.elektronik -= elNeed;
+    else tempo = 0.5;
+  }
+  const ep = bt.studio.ep * lvl * frac * tempo;
   const prod = swEigenes(p);
   if (prod?.entwicklung) {
     prod.entwicklung.ep += ep;
@@ -4744,7 +4770,7 @@ function snapshot() {
   return {
     tick: G.tick, winner: G.winner, winGoal: WIN_NW, report: G.report || null,
     etf: etfPublic(),
-    software: softwarePublic(), swModule: SW_MODULE, swBaeume: SW_BAEUME, swStufe: SW_STUFE, swAusbau: [0, 1, 2, 3].map(swAusbau), swCfg: { install: SW.INSTALL, portalInstall: SW.PORTAL_INSTALL, versionEp: SW.VERSION_EP, werbeBoost: SW.WERBE_BOOST, gebMin: SW.GEB_MIN, gebMax: SW.GEB_MAX, einrMax: SW.EINR_MAX, aboMin: SW.ABO_MIN, aboMax: SW.ABO_MAX, handelssteuer: Math.round(satzBoerse() * SW.HANDELSSTEUER * 1000) / 10 },
+    software: softwarePublic(), swModule: SW_MODULE, swBaeume: SW_BAEUME, swStufe: SW_STUFE, swAusbau: [0, 1, 2, 3].map(swAusbau), swCfg: { install: SW.INSTALL, portalInstall: SW.PORTAL_INSTALL, versionEp: SW.VERSION_EP, werbeBoost: SW.WERBE_BOOST, gebMin: SW.GEB_MIN, gebMax: SW.GEB_MAX, einrMax: SW.EINR_MAX, aboMin: SW.ABO_MIN, aboMax: SW.ABO_MAX, handelssteuer: Math.round(satzBoerse() * SW.HANDELSSTEUER * 1000) / 10, markenwert: SW.MARKENWERT },
     marktLog: (G.marktLog || []).slice(0, 20), marktCfg: { aktien: AKTIEN, tag: MARKT.TAG, beta: MARKT.BETA, bauDauer: MARKT.BAU_DAUER, afaDauer: MARKT.AFA_DAUER },
     /* Countdown bis zum naechsten Renntag — ohne ihn sieht man erst bei der
      * Ankuendigung, dass etwas ansteht, und kann nichts vorbereiten. */
@@ -8392,10 +8418,10 @@ const BOT_CFGS = [
    * das Stadtportal. */
   { name: "Byteforge",       industry: "software",  color: "#60a5fa",
     plan: ["rechenzentrum", "entwicklerstudio"], needs: ["strom", "elektronik"], vorrat: { strom: 150, elektronik: 5 },
-    sw: { name: "KassenKlick", einrichtung: 300, gebuehr: 1.5, abo: 120, module: ["bewertungen", "lieferung"] } },
+    sw: { name: "KassenKlick", einrichtung: 300, gebuehr: 3, abo: 120, module: ["bewertungen", "lieferung"] } },
   { name: "Pixelwerk",       industry: "software",  color: "#f472b6",
     plan: ["entwicklerstudio", "rechenzentrum"], needs: ["strom", "elektronik"], vorrat: { strom: 150, elektronik: 5 },
-    sw: { name: "ShopStern", einrichtung: 600, gebuehr: 2.2, abo: 180, module: ["lieferung", "bewertungen"] } },
+    sw: { name: "ShopStern", einrichtung: 600, gebuehr: 4, abo: 180, module: ["lieferung", "bewertungen"] } },
 ];
 let botsStarted = false;
 /* Vom ersten Spieler der Runde gewählt (siehe register): wie viele Bots je
@@ -8775,11 +8801,11 @@ async function spawnBot(cfg, lvl = BOT_LEVELS[BOT_LEVEL_DEFAULT]) {
           swPreisZeit = Date.now();
           const fremdeMitKunden = (st.software || []).some(s2 => s2.ownerId !== myId && !s2.portal && s2.kunden > 0);
           let geb = meins.gebuehr;
-          /* Untergrenze 1,5 %: Im Messlauf drückte Byteforge seine Gebühr auf
+          /* Untergrenze 2,5 %: Im Messlauf drückte Byteforge seine Gebühr auf
            * 1 % und kam nie über 6.000 $ Vermögen — zu wenig für Strom und
            * Rechenzentren. Kunden gewinnt man über den Branchenbaum. */
-          if (meins.kunden === 0 && fremdeMitKunden) geb = Math.max(1.5, geb - 0.25);
-          else if (meins.plaetze > 0 && meins.kunden >= meins.plaetze) geb = Math.min(3.5, geb + 0.25);
+          if (meins.kunden === 0 && fremdeMitKunden) geb = Math.max(2.5, geb - 0.5);
+          else if (meins.plaetze > 0 && meins.kunden >= meins.plaetze) geb = Math.min(6, geb + 0.5);
           if (geb !== meins.gebuehr) await em("softwareEinstellen", { gebuehr: geb });
         }
         if (meins?.plaetze > 0 && meins.version >= 1 && meins.kunden >= meins.plaetze - 1 && me.cash > 4200
@@ -8835,8 +8861,18 @@ async function spawnBot(cfg, lvl = BOT_LEVELS[BOT_LEVEL_DEFAULT]) {
       }
       for (const t of st.map) {
         if (t.owner !== myId || !t.shop) continue;
-        const goods = (BTYPES[t.btype]?.retail?.goods || []).filter(g => me.inv[g] > 5 && eigeneWare.has(g))
+        /* Grundversorgung (alwaysSell: Strom, Wasser, Öl) gehört an die Börse —
+         * andere Firmen brauchen sie zum Produzieren. Gemessen stellten die
+         * Stadtwerke ihren Strom ins Regal, die Stadt kaufte das E-Werk leer,
+         * und beide Software-Firmen standen 35 Minuten ohne Strom da. Nur echter
+         * Überschuss darf ins Regal. */
+        const grund = new Set(cfg.alwaysSell || []);
+        const goods = (BTYPES[t.btype]?.retail?.goods || []).filter(g => me.inv[g] > (grund.has(g) ? 300 : 5) && eigeneWare.has(g))
           .sort((a2, b2) => (me.inv[b2] || 0) * (st.avg[b2] || 0) - (me.inv[a2] || 0) * (st.avg[a2] || 0));
+        /* Grundversorgung wieder aus dem Regal nehmen, sobald der Überschuss weg ist. */
+        t.shop.forEach((sl, i) => {
+          if (sl && grund.has(sl.good) && (me.inv[sl.good] || 0) < 100) { em("configureShop", { x: t.x, y: t.y, slot: i, good: null }); t.shop[i] = null; }
+        });
         const belegt = new Set(t.shop.filter(Boolean).map(sl => sl.good));
         t.shop.forEach((sl, i) => {
           if (sl) return;
@@ -9190,6 +9226,12 @@ async function spawnBot(cfg, lvl = BOT_LEVELS[BOT_LEVEL_DEFAULT]) {
          * 26 s) kamen höchstens 23 an — sie lief also selbst bei perfekt
          * gefüllten Orders dauerhaft am Limit und stand die meiste Zeit still. */
         const wunsch = Math.max(10, Math.ceil(vorratZiel - (me.inv[g] || 0)));
+        /* Software-Bots: Strom ist ihr Lebensnerv. Gemessen lief Byteforge bei
+         * 836 $ Bargeld der Strom aus — KassenKlick fiel aus, alle Kunden
+         * wanderten zu ShopStern ab, und die Firma kam nie wieder auf die Beine.
+         * Wird der Vorrat knapp, darf der Bot fast sein ganzes Geld dafür nehmen. */
+        if (cfg.vorrat?.[g] && (me.inv[g] || 0) < cfg.vorrat[g] / 3)
+          einkaufsbudget = Math.max(einkaufsbudget, me.cash * 0.9 - tilgungsReserve);
         const qty = Math.min(wunsch, Math.floor(einkaufsbudget / preis));
         if (qty < 1) continue;
         einkaufsbudget -= qty * preis;
