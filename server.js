@@ -3241,7 +3241,13 @@ const fondsId = br => FONDS_PREFIX + br;
 const istFonds = holderId => typeof holderId === "string" && holderId.startsWith(FONDS_PREFIX);
 const fondsBranche = holderId => holderId.slice(FONDS_PREFIX.length);
 const fondsVon = br => ((G.fonds ??= {})[br] ??= { cash: 0, anteile: 0 });
-const etfFirmen = br => Object.values(G.players).filter(p => p.industry === br);
+/* Mitglied im Fonds ist jede Firma, die in der Branche tätig ist — auch über
+ * eine Fusion. Vorher zählte nur die Startbranche: Kaufte eine Firma die
+ * einzige Firma einer anderen Branche auf, stand deren Fonds ohne Firmen da
+ * und verschwand. Jetzt fliegt die aufgekaufte Firma raus (sie existiert nicht
+ * mehr), und die übernehmende kommt in den Fonds. */
+const branchenVon = p => p.industries?.length ? p.industries : [p.industry];
+const etfFirmen = br => Object.values(G.players).filter(p => branchenVon(p).includes(br));
 const fondsAktien = (br, co) => (co.equity[fondsId(br)] || 0)
   + G.shareListings.filter(l => l.companyId === co.id && l.sellerId === fondsId(br)).reduce((a, l) => a + l.count, 0);
 function fondsWert(br, buch = false) {
@@ -3298,8 +3304,13 @@ function etfPublic() {
   return Object.keys(INDUSTRIES).map(br => {
     const pr = etfPreis(br); if (pr == null) return null;
     const f = fondsVon(br);
+    /* Ehemalige Mitglieder, deren Aktien der Fonds noch hält (z. B. nach einem
+     * Branchenwechsel), zählen mit — sonst fehlten sie im angezeigten Bestand. */
+    const mitglieder = Object.values(G.players).filter(co => branchenVon(co).includes(br) || fondsAktien(br, co) > 0);
     return { branche: br, name: INDUSTRIES[br].name, preis: pr, kasse: Math.round(f.cash), wert: Math.round(fondsWert(br)),
-      firmen: etfFirmen(br).map(p => p.name), aktien: etfFirmen(br).map(co => ({ firma: co.name, aktien: fondsAktien(br, co) })).filter(x => x.aktien > 0),
+      firmen: etfFirmen(br).map(p => p.name), aktien: mitglieder.map(co => ({ firma: co.name, aktien: fondsAktien(br, co) })).filter(x => x.aktien > 0),
+      mitglieder: mitglieder.map(co => ({ id: co.id, name: co.name, farbe: co.color, aktien: fondsAktien(br, co), wert: Math.round(fondsAktien(br, co) * kursVon(co)),
+        fusion: co.industry !== br })),
       verlauf: (G.etfHist?.[br] || []).slice(-30) };
   }).filter(Boolean);
 }
@@ -6961,7 +6972,18 @@ io.on("connection", socket => {
     G.shareBids = G.shareBids.filter(b => b.companyId !== targetId && b.bidderId !== targetId);
     /* Neue Industrie(n) übernehmen (keine Duplikate) */
     p.stats.fusionen++;
-    p.industries = [...new Set([...(p.industries || [p.industry]), ...(target.industries || [target.industry])])];
+    const vorherBranchen = branchenVon(p);
+    p.industries = [...new Set([...vorherBranchen, ...branchenVon(target)])];
+    /* Branchenfonds anpassen: die aufgekaufte Firma fliegt raus, die
+     * übernehmende ist ab jetzt Mitglied (wirksam über etfFirmen). */
+    for (const br of branchenVon(target)) {
+      if (!INDUSTRIES[br]) continue;
+      const f = fondsVon(br);
+      if (!(f.anteile > 0) && !(f.cash > 0) && !G.etfHist?.[br]?.length) continue;
+      marktLog("etf-wechsel", vorherBranchen.includes(br)
+        ? `${INDUSTRIES[br].name}-Fonds: ${target.name} fliegt raus (von ${p.name} übernommen)`
+        : `${INDUSTRIES[br].name}-Fonds: ${target.name} raus, ${p.name} neu im Fonds`, { branche: br, firmaId: p.id, raus: target.name, rein: p.name });
+    }
     logTx(p, "Fusion", `${target.name} übernommen (+${INDUSTRIES[target.industry]?.name ?? target.industry})`, target.cash);
     io.emit("notice", { text: `${p.name} fusioniert mit ${target.name} — jetzt auch in ${INDUSTRIES[target.industry]?.name ?? target.industry} tätig!` });
     /* Falls die aufgelöste Firma selbst Anteile an DRITTEN Firmen hielt, gehen
