@@ -9127,14 +9127,17 @@ async function spawnBot(cfg, lvl = BOT_LEVELS[BOT_LEVEL_DEFAULT]) {
         /* Bewertet wird aus Sicht der eigenen Branche: Ein Agrar-Bot zieht ein
          * System mit Agrar-Baum vor, auch wenn ein anderes mehr Module hat. */
         const wertVon = s2 => s2?.wertJe?.[cfg.industry] ?? s2?.wert ?? -1;
-        const beste = angebote.filter(s2 => hatPlatz(s2) && leistbar(s2) && (s2.portal || s2.ruf >= 50))
+        /* Nur Systeme, die die eigene Branche unterstützen (Skill-Baum der Branche
+         * gewählt) oder das Stadtportal. Software-Firmen sind davon ausgenommen. */
+        const stuetzt = s2 => s2.portal || cfg.industry === "software" || s2.ownerId === myId || (s2.branchen || []).includes(cfg.industry);
+        const beste = angebote.filter(s2 => stuetzt(s2) && hatPlatz(s2) && leistbar(s2) && (s2.portal || s2.ruf >= 50))
           .sort((a2, b2) => wertVon(b2) - wertVon(a2))[0];
         if (!t2.system) {
           if (beste) { const r = await em("installSystem", { x: t2.x, y: t2.y, produktId: beste.id }); if (r?.ok) swWechsel[key] = Date.now(); }
           continue;
         }
         if (t2.system.bis > st.tick) continue;   // Installation läuft noch
-        if (beste && beste.id !== jetzt?.id && (!jetzt || wertVon(beste) > wertVon(jetzt) * 1.05)
+        if (beste && beste.id !== jetzt?.id && (!jetzt || !stuetzt(jetzt) || wertVon(beste) > wertVon(jetzt) * 1.05)
             && Date.now() - (swWechsel[key] || 0) > 180_000) {
           const r = await em("installSystem", { x: t2.x, y: t2.y, produktId: beste.id });
           if (r?.ok) { swWechsel[key] = Date.now(); continue; }
