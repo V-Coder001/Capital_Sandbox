@@ -496,6 +496,23 @@ export const GOODS = {
   zigaretten: { name: "Schmuggelzigaretten", en: "Contraband cigarettes", cat: "Illegal", catEn: "Illegal" },
 };
 const ILLEGAL = ["schnaps", "falschgeld", "goldbarren", "zigaretten"];
+/* Strom und Elektronik kauft die Stadt im Online-Marktplatz nur gebremst —
+ * beides brauchen die Firmen selbst. Gemessen gingen sonst rund die Hälfte des
+ * Stroms (300–500 von 660 Einheiten je Minute) und die Hälfte der Elektronik an
+ * Stadtkunden, während an der Börse dauerhaft Kaufgesuche offen blieben. Ganz
+ * ohne Stadtkunden stapelten sich dagegen 9.000 Strom bei den Stadtwerken und
+ * 790 Elektronik bei ChipWerke, und beide verloren 30–40 % Vermögen. */
+const NUR_FIRMEN = [];
+const STADT_FLOW_MAX = { strom: 2, elektronik: 0.15 };   // statt rund 8 bzw. 0,3
+/* Stadtnetz: Notversorgung der Stadt an der Börse. Sie bietet Strom und
+ * Elektronik als ganz normales Angebot an — aber deutlich über dem Grundpreis
+ * und nur begrenzt nachgefüllt. Damit steht niemand völlig ohne da (frühes
+ * Spiel, kein Versorger am Tisch), eigene Produktion bleibt trotzdem billiger. */
+const STADTNETZ_ID = "stadtnetz";
+const STADTNETZ = {
+  strom:      { faktor: 1.6, proMin: 150, max: 300 },
+  elektronik: { faktor: 1.5, proMin: 8,   max: 20 },
+};
 /* Fahrzeuge sind Endprodukte: hoher Stückwert, dafür langsame Fertigung und ein
  * eigener Absatzweg (Autohaus). Am Handelskontor wären sie mit dessen hoher
  * Grundrate ein Gelddrucker, deshalb sind sie dort ausgenommen. */
@@ -2086,7 +2103,7 @@ const BTYPES = {
   baeckerei:  { name: "Bäckerei", en: "Bakery",    cost: 3400, out: null, rate: 0, zone: "zentrum",   industry: "agrar",    proc: { in: { obst: 1.1, honig: 0.35 }, out: "gebaeck", rate: 10/30 } },
   stahlwerk:  { name: "Stahlwerk", en: "Steel mill",   cost: 6000, out: null, rate: 0, zone: "industrie", industry: "rohstoff", proc: { in: { erze: 1.0, oel: 0.2 },  out: "stahl",   rate: 10/30 } },
   raffinerie: { name: "Raffinerie", en: "Refinery",  cost: 4200, out: null, rate: 0, zone: "industrie", industry: "versorger", proc: { in: { oel: 0.5 },             out: "diesel",  rate: 10/30 } },
-  chipfabrik: { name: "Chipfabrik", en: "Chip factory",  cost: 3200, out: null, rate: 0, zone: "industrie", industry: "tech",      proc: { in: { silizium: 0.7, strom: 0.5 }, out: "elektronik", rate: 10/30 } },
+  chipfabrik: { name: "Chipfabrik", en: "Chip factory",  cost: 3200, out: null, rate: 0, zone: "industrie", industry: "tech",      proc: { in: { silizium: 0.7, strom: 0.5 }, out: "elektronik", rate: 15/30 } },
   /* Fahrzeugbau der Technologie-Industrie: drei Antriebsarten, die jeweils eine
    * andere Industrie mitversorgen — Benzin zieht Öl, Diesel zieht die Raffinerie,
    * Elektro zieht Strom und viel Elektronik. Stahl braucht jedes davon. */
@@ -2120,7 +2137,7 @@ const BTYPES = {
    * (frisches Geld) läuft nur noch hier, und erst mit installiertem
    * Shop-System. 3 Regale, jede Ausbaustufe bringt eines dazu. */
   onlinemarkt: { name: "Online-Marktplatz", en: "Online marketplace", cost: 3000, out: null, rate: 0, zone: "zentrum", online: true,
-                 retail: { slots: 3, base: 0.6, goods: Object.keys(GOODS).filter(g => !ILLEGAL.includes(g)) } },
+                 retail: { slots: 3, base: 0.6, goods: Object.keys(GOODS).filter(g => !ILLEGAL.includes(g) && !NUR_FIRMEN.includes(g)) } },
   /* ---- Rüstungsindustrie ----
    * Die Branche am Ende der Kette: Sie verarbeitet, was Rohstoff und
    * Technologie liefern, und erzeugt die wertvollsten Güter im Spiel. Ihre
@@ -2202,7 +2219,7 @@ const shopSpeed = (good, price, ref = MM[good].price) => Math.min(2, Math.pow(re
  * sonst entstünde eine Rückkopplung (Preis fällt -> mehr Durchsatz -> Preis
  * fällt weiter). */
 const RETAIL_REF = 30, RETAIL_K = 0.75;
-const retailFlow = good => Math.min(10, Math.max(0.30, Math.pow(RETAIL_REF / BASEP[good], RETAIL_K)));
+const retailFlow = good => Math.min(STADT_FLOW_MAX[good] ?? 10, Math.max(0.30, Math.pow(RETAIL_REF / BASEP[good], RETAIL_K)));
 
 /* ---------- Werbung ----------
  * Reichweite ist ein Vorrat, der laufend zerfällt: gebuchte Kampagnen füllen ihn
@@ -2876,7 +2893,7 @@ const G = {
   wettLetzte: [],        // Ergebnis der letzten Runde je Firma
   wettReserve: 20000,    // Bankreserve für die Kurswetten (WETT_RESERVE)
   markt: {}, marktLog: [], panikTag: null, panikErledigt: false,   // Aktienkurse (siehe marktTag)
-  fonds: {}, etfHist: {}, faEtf: {}, software: {}, swFaktor: {},   // Branchenfonds (ETFs), Fondsanteile des Finanzamts
+  fonds: {}, etfHist: {}, faEtf: {}, software: {}, paint: {}, swFaktor: {},   // Branchenfonds (ETFs), Fondsanteile des Finanzamts
   stadtkasse: 20000, steuerStufe: 2, boerseGebuehren: 0,         // Finanzamt: Anteil der Steuern für Großauftrags-Prämien und Stadtprojekte
   steuernGesamt: 0,
   stadtprojekt: null, projektPause: 120, stadtprojekteFertig: [],
@@ -2903,6 +2920,14 @@ function newPlayer(pid, name, color, industry, socketId) {
    * 6 Stück decken genau ein Gebäude bis 12.000 $ ab — danach führt der Weg über
    * die Börse. */
   inv.beton = 6;
+  /* Grundausstattung Strom und Elektronik: Die ersten Minuten gab es gemessen
+   * gar keinen Strom (das erste E-Werk lief frühestens in Minute 4) und bis
+   * Minute 5 keine einzige Einheit Elektronik — Boosts, Studio und der erste
+   * Ausbau standen bei allen still. */
+  inv.strom = 60;
+  inv.elektronik = 4;
+  /* Software-Firmen brauchen zusätzlich den eigenen Online-Shop (8 Ziegel) für ihre Programme. */
+  if (industry === "software") inv.ziegel += 16;
   /* Testhilfe (nur per Umgebungsvariable): TEST_GARAGE=1 legt jedem neuen
    * Spieler Fahrzeuge, Tuningteile und Baumaterial ins Lager — zum schnellen
    * Durchspielen des Renntags, ohne die Produktionskette hochzuziehen. */
@@ -3396,6 +3421,120 @@ const SW_BAEUME = {
   ruestung:  { name: "Rüstung",        module: ["Lizenz-Prüfung", "Behörden-Portal", "Sicherheitstransport"] },
 };
 const SW_STUFE = [ { ep: 90, tempo: 0.15 }, { ep: 140, tempo: 0.15 }, { ep: 200, preis: 0.08 } ];
+/* ---- Website-Design je Shop-System ----
+ * Jede Software-Firma gestaltet die Website, auf der ihre Kunden verkaufen:
+ * Schrift, Farben, Kopfzeile, Produktkarten, Bezahlkarte, Slogan und Banner.
+ * Jede neue Version schaltet weitere Optionen frei ("ab": Mindestversion) —
+ * so sieht man jedem Shop an, mit welchem System er läuft und von wem es ist.
+ * Speichern kostet nichts und geht jederzeit. */
+const SW_DESIGN = {
+  schrift: { modern: { name: "Modern", ab: 1 }, klassisch: { name: "Klassisch", ab: 1 }, freundlich: { name: "Freundlich", ab: 1 },
+             plakativ: { name: "Plakativ", ab: 2 }, technik: { name: "Technik", ab: 3 }, handschrift: { name: "Handschrift", ab: 3 },
+             elegant: { name: "Elegant", ab: 4 }, retro: { name: "Retro-Pixel", ab: 5 } },
+  thema:   { hell: { name: "Hell", ab: 1 }, creme: { name: "Creme", ab: 2 }, dunkel: { name: "Dunkel", ab: 2 }, neon: { name: "Neon", ab: 4 } },
+  ecken:   { rund: { name: "Rund", ab: 1 }, eckig: { name: "Eckig", ab: 2 }, pille: { name: "Sehr rund", ab: 3 } },
+  kopf:    { flaeche: { name: "Farbfläche", ab: 1 }, minimal: { name: "Minimal", ab: 2 }, verlauf: { name: "Verlauf", ab: 2 },
+             streifen: { name: "Streifen", ab: 3 }, punkte: { name: "Punkte", ab: 3 }, welle: { name: "Welle", ab: 4 } },
+  karten:  { standard: { name: "Standard", ab: 1 }, schatten: { name: "Schwebend", ab: 2 }, rahmen: { name: "Farbrahmen", ab: 3 }, glas: { name: "Glas", ab: 5 } },
+  motiv:   { verlauf: { name: "Verlauf", ab: 1 }, streifen: { name: "Streifen", ab: 2 }, kreise: { name: "Kreise", ab: 3 }, holo: { name: "Holo", ab: 4 }, metall: { name: "Metall", ab: 5 } },
+  effekt:  { aus: { name: "Keiner", ab: 1 }, glanz: { name: "Glanz", ab: 5 }, konfetti: { name: "Konfetti beim Kauf", ab: 6 } },
+};
+/* Freitexte und Zweitfarbe: ab welcher Version */
+const SW_DESIGN_AB = { slogan: 1, akzent: 2, banner: 3 };
+const SW_DESIGN_START = { schrift: "modern", thema: "hell", ecken: "rund", kopf: "flaeche", karten: "standard", motiv: "verlauf", effekt: "aus", slogan: "", banner: "", akzent: null };
+/* ---- Malprogramm ----
+ * Das zweite Produkt einer Software-Firma. Sie entwickelt es im Studio (ab
+ * Shop-System v2) und verkauft Lizenzen über einen EIGENEN Online-Marktplatz —
+ * ohne eigenen Shop kann niemand es kaufen. Wer eine Lizenz hat, malt damit
+ * sein Firmenlogo: Es erscheint im Shop, im Kopf, an der Börse und als Schild
+ * an den Gebäuden. Updates der Lizenz sind gratis; jede Version kann mehr. */
+const PAINT = {
+  AB_SYSTEM: 2,
+  STUFEN: [
+    { ep: 180, groesse: 16, farben: 8,  werkzeuge: ["stift", "radierer"] },
+    { ep: 220, groesse: 24, farben: 16, werkzeuge: ["stift", "radierer", "fuellen"] },
+    { ep: 300, groesse: 32, farben: 0,  werkzeuge: ["stift", "radierer", "fuellen", "spiegeln"] },   // 0 = frei wählbar (bis 16)
+  ],
+  PREIS_MIN: 100, PREIS_MAX: 6000, PREIS_START: 900,
+  PALETTE: ["#111827", "#ffffff", "#ef4444", "#f59e0b", "#facc15", "#22c55e", "#3b82f6", "#a855f7",
+            "#6b7280", "#d1d5db", "#7f1d1d", "#ea580c", "#14532d", "#0ea5e9", "#1e3a8a", "#ec4899"],
+};
+const PX_ZEICHEN = "0123456789abcdef";
+const paintVon = id => G.paint?.[id] || null;
+const paintEigenes = p => Object.values(G.paint || {}).find(x => x.ownerId === p.id) || null;
+/* Welche Stufe darf diese Firma benutzen? Eigenes Programm oder Lizenz. */
+function paintStufeVon(p) {
+  const eigen = paintEigenes(p);
+  const lz = p.paintLizenz ? paintVon(p.paintLizenz) : null;
+  const v = Math.max(eigen?.version || 0, lz?.version || 0, lz ? 0 : (p.paintLizenzStufe || 0));
+  return v >= 1 ? { version: v, ...PAINT.STUFEN[Math.min(v, PAINT.STUFEN.length) - 1], programm: (eigen?.version >= v ? eigen : lz)?.name || p.paintLizenzName || "Malprogramm" } : null;
+}
+/* Logo prüfen: Raster, Palette und Größe passend zur Stufe */
+function logoPruefen(l, stufe) {
+  if (!l || !stufe) return null;
+  const g = Math.floor(+l.g);
+  if (![16, 24, 32].includes(g) || g > stufe.groesse) return null;
+  if (!Array.isArray(l.pal) || l.pal.length < 1 || l.pal.length > 16) return null;
+  const pal = l.pal.map(c => String(c).toLowerCase());
+  if (!pal.every(c => /^#[0-9a-f]{6}$/.test(c))) return null;
+  if (stufe.farben && !pal.every(c => PAINT.PALETTE.slice(0, stufe.farben).includes(c))) return null;
+  const px = String(l.px || "");
+  if (px.length !== g * g || !/^[0-9a-f.]+$/.test(px)) return null;
+  if ([...px].some(ch => ch !== "." && PX_ZEICHEN.indexOf(ch) >= pal.length)) return null;
+  if (!/[0-9a-f]/.test(px)) return null;   // leeres Bild
+  return { g, pal, px };
+}
+/* Logo für Bots: symmetrisches Pixelmuster in der Firmenfarbe, passend zur
+ * Stufe des Programms (Größe, erlaubte Farben). */
+function botLogo(farbe, seed, stufe) {
+  const rgb = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
+  const abst = (a, b) => rgb(a).reduce((s2, v, i) => s2 + (v - rgb(b)[i]) ** 2, 0);
+  const erlaubt = stufe.farben ? PAINT.PALETTE.slice(0, stufe.farben) : null;
+  const naechste = c => erlaubt ? [...erlaubt].filter(x => x !== "#ffffff" && x !== "#111827").sort((a, b) => abst(a, c) - abst(b, c))[0] : c;
+  const dunkel = c => "#" + rgb(c).map(v => Math.round(v * 0.55).toString(16).padStart(2, "0")).join("");
+  const haupt = naechste(sichereFarbe(farbe));
+  const pal = ["#ffffff", haupt, erlaubt ? "#111827" : dunkel(haupt)];
+  let h = 2166136261; for (const ch of String(seed)) h = Math.imul(h ^ ch.charCodeAt(0), 16777619) >>> 0;
+  const bit = i => (h >>> (i % 31)) & 1 ^ ((Math.imul(h, i + 7) >>> 13) & 1);
+  const g = stufe.groesse, b = g / 8, px = [];
+  for (let y = 0; y < g; y++) for (let x = 0; x < g; x++) {
+    const bx = Math.floor(x / b), by = Math.floor(y / b);
+    if (bx === 0 || by === 0 || bx === 7 || by === 7) { px.push(1); continue; }   // Rahmen
+    const sx = bx <= 3 ? bx : 7 - bx;
+    px.push(bit(by * 4 + sx) ? (by > 4 ? 2 : 1) : 0);
+  }
+  return { g, pal, px: px.map(v => v.toString(16)).join("") };
+}
+function paintPublic() {
+  return Object.values(G.paint || {}).map(x => {
+    const owner = G.players[x.ownerId];
+    const laeden = G.map.filter(t => t.owner === x.ownerId && t.btype === "onlinemarkt").map(t => ({ x: t.x, y: t.y, offen: swOffen(t) }));
+    return { id: x.id, ownerId: x.ownerId, anbieter: owner?.name ?? "—", name: x.name, farbe: owner?.color || "#64748b", version: x.version || 0, preis: x.preis,
+      verkauft: x.verkauft || 0, einnahmen10: Math.round((x.eb || []).reduce((a, b) => a + b, 0)), laeden,
+      stufe: x.version >= 1 ? PAINT.STUFEN[x.version - 1] : null,
+      entwicklung: x.entwicklung ? { version: x.entwicklung.version, ep: Math.floor(x.entwicklung.ep), ziel: x.entwicklung.ziel } : null };
+  });
+}
+function paintVeroeffentlichen(x, p) {
+  x.version = x.entwicklung.version; x.entwicklung = null;
+  const st = PAINT.STUFEN[x.version - 1];
+  marktLog("software", `${p.name} veröffentlicht ${x.name} v${x.version} (${st.groesse}×${st.groesse} Pixel${st.farben ? `, ${st.farben} Farben` : ", freie Farben"})`, { firmaId: p.id });
+  io.emit("notice", { text: `Neues Malprogramm: ${x.name} v${x.version} von ${p.name} — Lizenz ${x.preis.toLocaleString("de-DE")} $ in ihrem Online-Shop.` });
+  for (const k of Object.values(G.players)) if (k.paintLizenz === x.id && k.id !== p.id)
+    emitTo(k.id, "notice", { text: `Gratis-Update: ${x.name} v${x.version} — jetzt ${st.groesse}×${st.groesse} Pixel${st.werkzeuge.includes("fuellen") ? ", Füllen" : ""}${st.werkzeuge.includes("spiegeln") ? ", Spiegeln" : ""}.` });
+}
+/* Wunsch gegen die freigeschaltete Version prüfen; Gesperrtes bleibt beim alten Wert. */
+function swDesignPruefen(wunsch = {}, alt = SW_DESIGN_START, version = 1) {
+  const d = { ...SW_DESIGN_START, ...alt };
+  for (const [k, optionen] of Object.entries(SW_DESIGN)) {
+    const w = wunsch[k];
+    if (w != null && optionen[w] && optionen[w].ab <= version) d[k] = w;
+  }
+  if (wunsch.slogan != null && version >= SW_DESIGN_AB.slogan) d.slogan = sicherText(String(wunsch.slogan).trim().slice(0, 40));
+  if (wunsch.banner != null && version >= SW_DESIGN_AB.banner) d.banner = sicherText(String(wunsch.banner).trim().slice(0, 70));
+  if (wunsch.akzent !== undefined && version >= SW_DESIGN_AB.akzent) d.akzent = wunsch.akzent ? sichereFarbe(wunsch.akzent) : null;
+  return d;
+}
 /* Weitere Branchen: ab welcher Version, EP-Faktor und Lizenzkosten */
 const swAusbau = n => ({ abVersion: 1 + 2 * n, epFaktor: 2 ** n, cash: 2000 * n * n });
 /* Welche Branche eine Ware herstellt (aus den Gebäuden abgeleitet) */
@@ -3439,8 +3578,9 @@ const swVon = id => id === STADTPORTAL ? portalProdukt() : (G.software || {})[id
 const swEigenes = p => Object.values(G.software || {}).find(s => s.ownerId === p.id) || null;
 /* Markenwert des eigenen Systems (siehe SW.MARKENWERT) — Teil der Substanz. */
 const swMarkenwert = p => {
-  const prod = G.software && swEigenes(p);
-  return prod ? (prod.eb || []).reduce((a, b) => a + b, 0) * SW.MARKENWERT : 0;
+  const prod = G.software && swEigenes(p), mp = G.paint && paintEigenes(p);
+  const summe = (prod?.eb || []).reduce((a, b) => a + b, 0) + (mp?.eb || []).reduce((a, b) => a + b, 0);
+  return summe * SW.MARKENWERT;
 };
 const swKunden = prod => G.map.filter(t => t.system?.produktId === prod.id).length;
 const swPlaetze = prod => prod.portal ? Infinity : G.map
@@ -3494,6 +3634,10 @@ function swTick() {
     if (G.tick % 10 === 0) prod.ruf = Math.max(0, Math.min(100, (prod.ruf ?? SW.RUF_START) + (ueber ? -1 : 0.2)));
     if (G.tick % 60 === 0) { (prod.eb ??= [0]).unshift(0); if (prod.eb.length > 10) prod.eb.length = 10; }
   }
+  if (G.tick % 60 === 0) for (const x of Object.values(G.paint || {})) {
+    if (!G.players[x.ownerId]) { delete G.paint[x.id]; continue; }   // Lizenzen bleiben gültig (Stufe gemerkt)
+    (x.eb ??= [0]).unshift(0); if (x.eb.length > 10) x.eb.length = 10;
+  }
   /* Werbung: Wer sie im System eingeschaltet hat, zahlt das Abo je Minute
    * und je Marktplatz an den Anbieter. */
   G.werbeAktiv = new Set();
@@ -3535,6 +3679,7 @@ function softwarePublic() {
     const owner = s.ownerId ? G.players[s.ownerId] : null;
     const pub = { faktorSchnitt: s.portal ? 1 : Math.round((s.faktorEma ?? 1) * 100) / 100, id: s.id, ownerId: s.ownerId, anbieter: owner?.name ?? "Stadt", name: s.name, farbe: s.farbe, version: s.version || 0,
       module: s.module || {}, einrichtung: s.einrichtung, gebuehr: s.gebuehr, werbeAbo: s.werbeAbo || 0,
+      design: s.portal ? { ...SW_DESIGN_START, kopf: "minimal", schrift: "klassisch" } : (s.design || SW_DESIGN_START),
       kunden, plaetze: Number.isFinite(plaetze) ? plaetze : null, faktor: Math.round((G.swFaktor?.[s.id] ?? 1) * 100) / 100,
       ruf: Math.round(s.ruf ?? SW.RUF_START), portal: !!s.portal, tempo: Math.round(swTempo(s) * 100) / 100,
       einnahmen10: Math.round((s.eb || []).reduce((a, b) => a + b, 0)),
@@ -3575,11 +3720,20 @@ function swBetrieb(t, p, bt, sperr = 1) {
     else tempo = 0.5;
   }
   const ep = bt.studio.ep * lvl * frac * tempo;
-  const prod = swEigenes(p);
+  const prod = swEigenes(p), mp = paintEigenes(p);
+  /* Laufen Shop-System und Malprogramm gleichzeitig, teilt das Studio seine
+   * EP halb und halb — sonst käme das Malprogramm bei Firmen, die ständig am
+   * System weiterbauen, nie voran. */
+  const beide = !!(prod?.entwicklung && mp?.entwicklung), lauf = !!(prod?.entwicklung || mp?.entwicklung);
   if (prod?.entwicklung) {
-    prod.entwicklung.ep += ep;
+    prod.entwicklung.ep += beide ? ep / 2 : ep;
     if (prod.entwicklung.ep >= prod.entwicklung.ziel) swVeroeffentlichen(prod, p);
-  } else p.swEp = Math.min(SW.EP_SPEICHER, (p.swEp || 0) + ep);
+  }
+  if (mp?.entwicklung) {
+    mp.entwicklung.ep += beide ? ep / 2 : ep;
+    if (mp.entwicklung.ep >= mp.entwicklung.ziel) paintVeroeffentlichen(mp, p);
+  }
+  if (!lauf) p.swEp = Math.min(SW.EP_SPEICHER, (p.swEp || 0) + ep);
 }
 function swVeroeffentlichen(prod, p) {
   const e = prod.entwicklung;
@@ -3591,6 +3745,30 @@ function swVeroeffentlichen(prod, p) {
   marktLog("software", `${p.name} veröffentlicht ${prod.name} v${prod.version}${was ? ` (${was})` : ""}`, { firmaId: p.id });
   io.emit("notice", { text: `Neue Software: ${prod.name} v${prod.version} von ${p.name} — ${prod.gebuehr.toLocaleString("de-DE")} % je Verkauf.` });
   logTx(p, "Software", `${prod.name} v${prod.version} veröffentlicht`, 0);
+  /* Neue Design-Optionen dieser Version melden */
+  const neu = Object.values(SW_DESIGN).flatMap(o => Object.values(o).filter(x => x.ab === prod.version).map(x => x.name))
+    .concat(Object.entries(SW_DESIGN_AB).filter(([, ab]) => ab === prod.version).map(([k]) => ({ slogan: "Slogan", akzent: "Zweitfarbe", banner: "Banner" })[k]));
+  if (neu.length) emitTo(p.id, "notice", { text: `Website-Design: Mit v${prod.version} neu freigeschaltet — ${neu.join(", ")}.` });
+}
+
+/* Stadtnetz-Angebot je Ware nachfüllen (siehe STADTNETZ). Die Menge
+ * wächst fließend, im Orderbuch steht der ganzzahlige Teil. */
+function stadtnetzTick() {
+  G.stadtnetz ??= {};
+  for (const [g, c] of Object.entries(STADTNETZ)) {
+    const st = G.stadtnetz[g] ??= { vorrat: c.max / 2, orderId: null, qty: 0 };
+    let o = st.orderId != null ? G.orders.find(o2 => o2.id === st.orderId) : null;
+    st.vorrat -= st.qty - (o ? o.qty : 0);              // seit dem letzten Tick verkauft
+    st.vorrat = Math.min(c.max, Math.max(0, st.vorrat) + c.proMin / 60);
+    const qty = Math.floor(st.vorrat);
+    if (qty < 1) { if (o) G.orders.splice(G.orders.indexOf(o), 1); st.orderId = null; st.qty = 0; continue; }
+    if (!o) {
+      o = { id: id(), side: "sell", good: g, qty, price: 0, playerId: STADTNETZ_ID, player: "Stadtnetz · Notversorgung", ts: Date.now(), stadt: true };
+      G.orders.push(o); st.orderId = o.id;
+    }
+    o.qty = qty; o.price = Math.round(BASEP[g] * c.faktor * 100) / 100;
+    st.qty = qty;
+  }
 }
 
 /* Öffentliche Kursdaten je Firma */
@@ -3642,7 +3820,8 @@ function settleTrade(good, qty, price, buyerId, sellerId) {
   if (buyer) { buyer.inv[good] += qty; gainXp(buyer, 2);
     const r = salesRec(buyer, good); r.buyQty += qty; r.buyCost += qty * price;
     buyer.stats.ausgaben += qty * price;
-    logTx(buyer, "Kauf", `Kauf ${qty}× ${gname} von ${seller?.name ?? "?"}`, -qty * price); }
+    logTx(buyer, "Kauf", `Kauf ${qty}× ${gname} von ${seller?.name ?? (sellerId === STADTNETZ_ID ? "Stadtnetz" : "?")}`, -qty * price); }
+  if (sellerId === STADTNETZ_ID) G.stadtkasse += qty * price;   // Notversorgung: Erlös an die Stadt
   if (seller) {
     const geb = Math.round(qty * price * satzBoerse() * 100) / 100;
     seller.cash += qty * price - geb; addRevenue(seller, qty * price - geb); gainXp(seller, 2);
@@ -3655,7 +3834,7 @@ function settleTrade(good, qty, price, buyerId, sellerId) {
     logTx(seller, "Verkauf", `Verkauf ${qty}× ${gname} an ${buyer?.name ?? "?"}${geb > 0 ? ` (−${Math.round(geb)} $ Börsengebühr)` : ""}`, qty * price - geb);
     kartellUmsatzMerken(seller, good, qty * price); }
   G.lastTrade[good] = price;
-  io.emit("trade", { good, qty, price, buyer: buyer?.name, seller: seller?.name });
+  io.emit("trade", { good, qty, price, buyer: buyer?.name, seller: seller?.name ?? (sellerId === STADTNETZ_ID ? "Stadtnetz" : undefined) });
 }
 function matchOrder(order) {
   const opp = order.side === "sell" ? "buy" : "sell";
@@ -4770,7 +4949,8 @@ function snapshot() {
   return {
     tick: G.tick, winner: G.winner, winGoal: WIN_NW, report: G.report || null,
     etf: etfPublic(),
-    software: softwarePublic(), swModule: SW_MODULE, swBaeume: SW_BAEUME, swStufe: SW_STUFE, swAusbau: [0, 1, 2, 3].map(swAusbau), swCfg: { install: SW.INSTALL, portalInstall: SW.PORTAL_INSTALL, versionEp: SW.VERSION_EP, werbeBoost: SW.WERBE_BOOST, gebMin: SW.GEB_MIN, gebMax: SW.GEB_MAX, einrMax: SW.EINR_MAX, aboMin: SW.ABO_MIN, aboMax: SW.ABO_MAX, handelssteuer: Math.round(satzBoerse() * SW.HANDELSSTEUER * 1000) / 10, markenwert: SW.MARKENWERT },
+    software: softwarePublic(), swModule: SW_MODULE, swBaeume: SW_BAEUME, swStufe: SW_STUFE, swAusbau: [0, 1, 2, 3].map(swAusbau), paint: paintPublic(), paintCfg: { stufen: PAINT.STUFEN, abSystem: PAINT.AB_SYSTEM, preisMin: PAINT.PREIS_MIN, preisMax: PAINT.PREIS_MAX, palette: PAINT.PALETTE },
+    logoV: Object.fromEntries(Object.values(G.players).filter(p => p.logo).map(p => [p.id, p.logo.v])), swDesign: SW_DESIGN, swDesignAb: SW_DESIGN_AB, swCfg: { install: SW.INSTALL, portalInstall: SW.PORTAL_INSTALL, versionEp: SW.VERSION_EP, werbeBoost: SW.WERBE_BOOST, gebMin: SW.GEB_MIN, gebMax: SW.GEB_MAX, einrMax: SW.EINR_MAX, aboMin: SW.ABO_MIN, aboMax: SW.ABO_MAX, handelssteuer: Math.round(satzBoerse() * SW.HANDELSSTEUER * 1000) / 10, markenwert: SW.MARKENWERT },
     marktLog: (G.marktLog || []).slice(0, 20), marktCfg: { aktien: AKTIEN, tag: MARKT.TAG, beta: MARKT.BETA, bauDauer: MARKT.BAU_DAUER, afaDauer: MARKT.AFA_DAUER },
     /* Countdown bis zum naechsten Renntag — ohne ihn sieht man erst bei der
      * Ankuendigung, dass etwas ansteht, und kann nichts vorbereiten. */
@@ -4985,6 +5165,7 @@ function privateState(p) {
     ownPct: Math.round((p.equity[p.id] || 0) / AKTIEN * 1000) / 10, ownAktien: p.equity[p.id] || 0, aktien: AKTIEN,
     portfolio, revenue: Math.round(p.revenue), ausschuettung: p.ausschuettung,
     swEp: Math.floor(p.swEp || 0),
+    paintStufe: paintStufeVon(p), paintLizenz: p.paintLizenz || null,
     etf: Object.entries(p.etf || {}).map(([br, n]) => ({ branche: br, name: INDUSTRIES[br]?.name ?? br, anteile: Math.round(n * 100) / 100,
       wert: Math.round(n * (etfPreis(br) || 0)), buchwert: Math.round(n * (etfPreis(br, true) || 0)), einstand: Math.round(p.etfEinstand?.[br] || 0) })),
     marketValue: Math.round(companyValue(p)), rev10: Math.round(rev10(p)), ...marktPublic(p),
@@ -4992,7 +5173,7 @@ function privateState(p) {
      * selbst noch hält, plus die Beteiligungen an fremden Firmen. Nur so passt
      * die Summe zum Nettovermögen in der Kopfzeile. */
     balance: { cash: Math.round(p.cash), invVal: Math.round(invVal), bldVal: Math.round(bldVal),
-               bondVal, debtVal,
+               bondVal, debtVal, markenwert: Math.round(swMarkenwert(p)),
                firmVal: Math.round(substance(p)),
                ownShare: (p.equity[p.id] || 0) / AKTIEN,
                holdings: Math.round(portfolio.reduce((sum, h) => sum + h.buchwert, 0)),   // Buchwert — wie im Nettovermögen
@@ -7179,7 +7360,7 @@ io.on("connection", socket => {
     lastTileSigs = null;
     for (const sock of io.sockets.sockets.values()) { sock.data.gotMap = false; sock.data.meSigs = null; }
     G.players = {}; G.socketToPid = {};
-    G.orders = []; G.bonds = []; G.auctions = []; G.contracts = [];
+    G.orders = []; G.stadtnetz = {}; G.bonds = []; G.auctions = []; G.contracts = [];
     G.shareListings = []; G.shareBids = [];
     G.lastTrade = {};
     G.chat = Object.fromEntries(ROOMS.map(r => [r, []]));
@@ -7197,7 +7378,7 @@ io.on("connection", socket => {
     G.groupOrder = null; G.nextGroupIn = 20;
     G.nextDividendIn = DIVIDEND_INTERVAL;
     G.wettrunde = { nr: 1, phase: "annahme", rest: WETT_ANNAHME, start: {} }; G.wetten = []; G.wettLetzte = []; G.wettReserve = WETT_RESERVE;
-    G.markt = {}; G.marktLog = []; G.panikTag = null; G.panikErledigt = false; G.fonds = {}; G.etfHist = {}; G.faEtf = {}; G.software = {}; G.swFaktor = {}; G.werbeAktiv = new Set();
+    G.markt = {}; G.marktLog = []; G.panikTag = null; G.panikErledigt = false; G.fonds = {}; G.etfHist = {}; G.faEtf = {}; G.software = {}; G.paint = {}; G.swFaktor = {}; G.werbeAktiv = new Set();
     G.stadtkasse = STADT_GRUNDSTOCK; G.steuerStufe = 2; G.boerseGebuehren = 0; G.steuernGesamt = 0; G.stadtprojekt = null; G.projektPause = 120; G.stadtprojekteFertig = [];
     for (const pl of Object.values(G.players)) { pl.steuerStand = undefined; pl.steuerSchuld = 0; pl.steuerLetzter = null; }
     for (const pl of Object.values(G.players)) { pl.wettOffen = 0; pl.wettLog = []; }
@@ -7238,6 +7419,87 @@ io.on("connection", socket => {
     prod.gebuehr = Math.round(zahl(d.gebuehr, SW.GEB_MIN, SW.GEB_MAX, prod.gebuehr) * 10) / 10;
     prod.werbeAbo = Math.round(zahl(d.werbeAbo, SW.ABO_MIN, SW.ABO_MAX, prod.werbeAbo));
     ack?.({ ok: true, id: prod.id });
+  }));
+  /* --- Malprogramm: Name und Lizenzpreis --- */
+  socket.on("paintEinstellen", guard((p, d = {}, ack) => {
+    if (!istSoftwareFirma(p)) return ack?.({ error: "Nur Software-Firmen entwickeln Malprogramme" });
+    const sys = swEigenes(p);
+    if (!(sys?.version >= PAINT.AB_SYSTEM)) return ack?.({ error: `Erst ab Shop-System v${PAINT.AB_SYSTEM}` });
+    let x = paintEigenes(p);
+    const name = sicherText(String(d.name ?? x?.name ?? "").trim().slice(0, 16));
+    if (name.length < 3) return ack?.({ error: "Name: mindestens 3 Zeichen" });
+    if (Object.values(G.paint || {}).some(o => o !== x && o.name.toLowerCase() === name.toLowerCase())) return ack?.({ error: "Diesen Namen gibt es schon" });
+    const preis = Math.round(Math.min(PAINT.PREIS_MAX, Math.max(PAINT.PREIS_MIN, +d.preis || x?.preis || PAINT.PREIS_START)) / 10) * 10;
+    if (!x) { x = { id: "mp_" + id(), ownerId: p.id, name, version: 0, preis, verkauft: 0, eb: [0], entwicklung: null }; (G.paint ??= {})[x.id] = x; }
+    x.name = name; x.preis = preis;
+    ack?.({ ok: true, id: x.id });
+  }));
+  socket.on("paintEntwickeln", guard((p, _d, ack) => {
+    const x = istSoftwareFirma(p) && paintEigenes(p);
+    if (!x) return ack?.({ error: "Lege zuerst Name und Preis des Malprogramms fest" });
+    if (x.entwicklung) return ack?.({ error: `v${x.entwicklung.version} ist schon in Arbeit` });
+    if ((x.version || 0) >= PAINT.STUFEN.length) return ack?.({ error: "Dein Malprogramm ist voll ausgebaut" });
+    if (!G.map.some(t => t.owner === p.id && BTYPES[t.btype]?.studio)) return ack?.({ error: "Dafür brauchst du ein Entwicklerstudio" });
+    const version = (x.version || 0) + 1, ep = PAINT.STUFEN[version - 1].ep;
+    const vorrat = Math.min(ep, p.swEp || 0);
+    p.swEp = (p.swEp || 0) - vorrat;
+    x.entwicklung = { version, ziel: ep, ep: vorrat };
+    marktLog("software", `${p.name} entwickelt das Malprogramm ${x.name} v${version}`, { firmaId: p.id });
+    if (x.entwicklung.ep >= ep) paintVeroeffentlichen(x, p);
+    ack?.({ ok: true, ep });
+  }));
+  /* --- Lizenz im Online-Shop der Software-Firma kaufen ---
+   * Wie ein Shop-Kauf: Gebühr an das installierte Shop-System (fällt weg,
+   * wenn es das eigene ist), halbe Börsengebühr als Handelssteuer an die Stadt. */
+  socket.on("lizenzKaufen", guard((p, { x: tx, y: ty } = {}, ack) => {
+    const t = tileAt(tx, ty);
+    if (!t || t.btype !== "onlinemarkt" || !t.owner) return ack?.({ error: "Kein Online-Shop" });
+    const haendler = G.players[t.owner], mp = haendler && paintEigenes(haendler);
+    if (!mp || !(mp.version >= 1)) return ack?.({ error: "Dieser Shop verkauft kein Malprogramm" });
+    if (t.owner === p.id) return ack?.({ error: "Dein eigenes Programm hast du schon" });
+    if (!swOffen(t)) return ack?.({ error: "Der Shop ist gerade geschlossen" });
+    const sys = swVon(t.system.produktId);
+    if (!sys || (!sys.portal && !((G.swFaktor?.[sys.id] ?? 1) > 0))) return ack?.({ error: "Das Bezahlsystem des Shops ist ausgefallen" });
+    if (p.paintLizenz === mp.id) return ack?.({ error: "Du hast diese Lizenz schon — Updates kommen automatisch" });
+    if (p.cash < mp.preis) return ack?.({ error: `Zu wenig Geld (${mp.preis.toLocaleString("de-DE")} $)` });
+    const summe = mp.preis;
+    const gebuehr = sys.ownerId === haendler.id ? 0 : Math.round(summe * (sys.gebuehr || 0)) / 100;
+    const steuer = Math.round(summe * satzBoerse() * SW.HANDELSSTEUER * 100) / 100;
+    p.cash -= summe; p.stats.ausgaben += summe;
+    haendler.cash += summe - gebuehr - steuer; addRevenue(haendler, summe);
+    if (gebuehr) { haendler.stats.ausgaben += gebuehr; swGebuehr(sys, gebuehr); }
+    finanzamtEinnahme(steuer); haendler.stats.steuern = (haendler.stats.steuern || 0) + steuer;
+    mp.verkauft = (mp.verkauft || 0) + 1; (mp.eb ??= [0])[0] += summe - gebuehr - steuer;
+    Object.assign(p, { paintLizenz: mp.id, paintLizenzStufe: mp.version, paintLizenzName: mp.name });
+    (t.bestellungen ??= []).unshift({ id: G.tick + "lz" + p.id, g: "lizenz", n: 1, b: summe, t: G.tick, von: p.name, name: mp.name });
+    if (t.bestellungen.length > 8) t.bestellungen.length = 8;
+    logTx(p, "Software", `Lizenz ${mp.name} von ${haendler.name}`, -summe);
+    logTx(haendler, "Software", `Lizenz ${mp.name} an ${p.name}`, summe - gebuehr - steuer);
+    marktLog("software", `${p.name} kauft eine Lizenz für ${mp.name}`, { firmaId: haendler.id, betrag: summe });
+    emitTo(haendler.id, "notice", { text: `${p.name} hat eine Lizenz für ${mp.name} gekauft (+${Math.round(summe - gebuehr - steuer).toLocaleString("de-DE")} $).` });
+    ack?.({ ok: true, summe, gebuehr, steuer, steuerSatz: Math.round(satzBoerse() * SW.HANDELSSTEUER * 1000) / 10, system: sys.name, programm: mp.name, version: mp.version });
+  }));
+  /* --- Logo speichern / abrufen --- */
+  socket.on("logoSpeichern", guard((p, { logo } = {}, ack) => {
+    const stufe = paintStufeVon(p);
+    if (!stufe) return ack?.({ error: "Du brauchst ein Malprogramm — Lizenzen gibt es im Online-Shop einer Software-Firma" });
+    const l = logoPruefen(logo, stufe);
+    if (!l) return ack?.({ error: `Logo ungültig (höchstens ${stufe.groesse}×${stufe.groesse} Pixel${stufe.farben ? `, ${stufe.farben} Grundfarben` : ""})` });
+    p.logo = { ...l, v: (p.logo?.v || 0) + 1 };
+    ack?.({ ok: true, v: p.logo.v });
+  }));
+  socket.on("logoHolen", (ids, ack) => {
+    if (typeof ack !== "function") return;
+    const liste = Array.isArray(ids) ? ids.slice(0, 40) : [];
+    ack(Object.fromEntries(liste.map(pid => [pid, G.players[pid]?.logo || null])));
+  });
+  /* --- Software: Website-Design des Shop-Systems --- */
+  socket.on("softwareDesign", guard((p, d = {}, ack) => {
+    const prod = istSoftwareFirma(p) && swEigenes(p);
+    if (!prod) return ack?.({ error: "Lege zuerst dein Shop-System an" });
+    const vorher = JSON.stringify(prod.design || SW_DESIGN_START);
+    prod.design = swDesignPruefen(d, prod.design, Math.max(1, prod.version || 0));
+    ack?.({ ok: true, design: prod.design, geaendert: JSON.stringify(prod.design) !== vorher });
   }));
   /* --- Software: neue Version mit (weiteren) Modulen entwickeln --- */
   socket.on("softwareEntwickeln", guard((p, { module = {} } = {}, ack) => {
@@ -7414,6 +7676,10 @@ io.on("connection", socket => {
     /* Shop-Systeme der aufgelösten Firma laufen beim Käufer weiter — samt
      * Kunden. Ihre Rechenzentren gehören ihm ja jetzt auch. */
     for (const sw of Object.values(G.software || {})) if (sw.ownerId === targetId) sw.ownerId = p.id;
+    /* Malprogramm samt Lizenz geht mit; das eigene Logo bleibt. */
+    if (!paintEigenes(p)) for (const x of Object.values(G.paint || {})) if (x.ownerId === targetId) x.ownerId = p.id;
+    if (!p.paintLizenz && target.paintLizenz) Object.assign(p, { paintLizenz: target.paintLizenz, paintLizenzStufe: target.paintLizenzStufe, paintLizenzName: target.paintLizenzName });
+    if (!p.logo && target.logo) p.logo = { ...target.logo, v: (target.logo.v || 0) + 1 };
     p.swEp = (p.swEp || 0) + (target.swEp || 0);
     /* Falls die aufgelöste Firma selbst Anteile an DRITTEN Firmen hielt, gehen
      * die mit auf die übernehmende Firma über — sonst blieben sie verwaist. */
@@ -7904,6 +8170,7 @@ function runTick() {
    * Vorphase verfehlt, läuft jede Produktion nur mit halber Kraft. */
   const SPERR = (MODE === "plan" && G.plan?.stromsperre) ? 0.5 : 1;
   swTick();   // Software: Auslastung, Ruf, Werbe-Abos — vor dem Verkauf
+  stadtnetzTick();
   /* Produktion: Enabler-Rohstoffe im Lager boosten (und werden verbraucht) */
   for (const t of G.map) {
     if (!t.btype || !t.owner) continue;
@@ -8418,10 +8685,10 @@ const BOT_CFGS = [
    * das Stadtportal. */
   { name: "Byteforge",       industry: "software",  color: "#60a5fa",
     plan: ["rechenzentrum", "entwicklerstudio"], needs: ["strom", "elektronik"], vorrat: { strom: 150, elektronik: 5 },
-    sw: { name: "KassenKlick", einrichtung: 300, gebuehr: 3, abo: 120, module: ["bewertungen", "lieferung"] } },
+    sw: { name: "KassenKlick", paint: "PixelPinsel", paintPreis: 800, einrichtung: 300, gebuehr: 3, abo: 120, module: ["bewertungen", "lieferung"] } },
   { name: "Pixelwerk",       industry: "software",  color: "#f472b6",
     plan: ["entwicklerstudio", "rechenzentrum"], needs: ["strom", "elektronik"], vorrat: { strom: 150, elektronik: 5 },
-    sw: { name: "ShopStern", einrichtung: 600, gebuehr: 4, abo: 180, module: ["lieferung", "bewertungen"] } },
+    sw: { name: "ShopStern", paint: "MalMeister", paintPreis: 1200, einrichtung: 600, gebuehr: 4, abo: 180, module: ["lieferung", "bewertungen"] } },
 ];
 let botsStarted = false;
 /* Vom ersten Spieler der Runde gewählt (siehe register): wie viele Bots je
@@ -8493,6 +8760,7 @@ async function spawnBot(cfg, lvl = BOT_LEVELS[BOT_LEVEL_DEFAULT]) {
   const s = ioClient(`http://localhost:${PORT}`);
   let me = null, st = null, myId = null, lastBuild = 0;
   let swPreisZeit = Date.now();   // Software-Anbieter: wann zuletzt die Gebühr überprüft wurde
+  let botLogoGroesse = 0;            // Malprogramm: Größe des zuletzt gemalten Logos
   const swWechsel = {};           // Online-Marktplatz: wann zuletzt das System gewechselt wurde (je Kachel)
   s.on("me", m => { if (m.teil && me) { const { teil, ...f } = m; me = { ...me, ...f }; } else me = m; });
   /* Auch die Bots bekommen die Karte nur noch als Diff — sie lesen st.map aber
@@ -8813,6 +9081,32 @@ async function spawnBot(cfg, lvl = BOT_LEVELS[BOT_LEVEL_DEFAULT]) {
           const r = await botBaue("rechenzentrum");
           if (r?.ok) lastBuild = Date.now();
         }
+      }
+      /* --- Malprogramm (Software-Bots): ab Shop-System v3 einen eigenen
+       * Online-Shop bauen — ohne ihn kann niemand die Lizenz kaufen —, dann das
+       * Programm Stufe für Stufe entwickeln. --- */
+      if (cfg.sw?.paint && cfg.industry === "software") {
+        const meins = (st.software || []).find(s2 => s2.ownerId === myId);
+        const mp = (st.paint || []).find(x => x.ownerId === myId);
+        const laden = st.map.find(t2 => t2.owner === myId && t2.btype === "onlinemarkt");
+        if (meins?.version >= 3) {
+          if (!laden && me.cash > 5500 && Date.now() - lastBuild > lvl.bauPause / 2) { const r = await botBaue("onlinemarkt"); if (r?.ok) lastBuild = Date.now(); }
+          if (!mp) await em("paintEinstellen", { name: cfg.sw.paint, preis: cfg.sw.paintPreis || 900 });
+          else if (!mp.entwicklung && mp.version < PAINT.STUFEN.length && me.cash > 1500) await em("paintEntwickeln", {});
+        }
+      }
+      /* --- Firmenlogo: Bots kaufen eine Malprogramm-Lizenz, sobald sie genug
+       * Polster haben, und malen sich ein Logo (nach jedem Update größer). --- */
+      if (!me.paintStufe) {
+        const ang = (st.paint || []).filter(x => x.version >= 1 && x.ownerId !== myId && x.laeden.some(l => l.offen))
+          .sort((a2, b2) => b2.version - a2.version || a2.preis - b2.preis)[0];
+        if (ang && me.cash > ang.preis * 4 + 3000 && Math.random() < 0.35) {
+          const l = ang.laeden.find(l2 => l2.offen);
+          await em("lizenzKaufen", { x: l.x, y: l.y });
+        }
+      } else if (botLogoGroesse !== me.paintStufe.groesse) {
+        const r = await em("logoSpeichern", { logo: botLogo(cfg.color, cfg.name, me.paintStufe) });
+        if (r?.ok) botLogoGroesse = me.paintStufe.groesse;
       }
       /* --- Online-Marktplatz (Kunde): Jeder Bot prüft in jedem Durchlauf alle
        * veröffentlichten Systeme. Ohne System installiert er das beste, das er
@@ -9220,7 +9514,14 @@ async function spawnBot(cfg, lvl = BOT_LEVELS[BOT_LEVEL_DEFAULT]) {
          * sich Erz und Silizium ungenutzt stapelten. Da jedes Gebäude Ziegel
          * kostet und jedes Upgrade Elektronik, konnte danach niemand mehr
          * bauen oder aufleveln. */
-        const preis = Math.max(0.05, Math.round(st.avg[g] * (lvl.kaufAufschlag + 0.03) * 100) / 100);
+        let preis = Math.max(0.05, Math.round(st.avg[g] * (lvl.kaufAufschlag + 0.03) * 100) / 100);
+        /* Fast leer: notfalls zum günstigsten Angebot kaufen — auch beim
+         * teuren Stadtnetz (bis 1,7 × Ø). Sonst stehen Studio, Rechenzentrum
+         * und Boosts still, während die eigene Order unter dem Angebot liegt. */
+        if ((me.inv[g] || 0) < vorratZiel / 3) {
+          const ask = st.orders.filter(o => o.good === g && o.side === "sell" && o.playerId !== myId).reduce((m, o) => Math.min(m, o.price), Infinity);
+          if (ask > preis && ask <= st.avg[g] * 1.7) preis = ask;
+        }
         /* Bis zur eigenen Obergrenze auffüllen statt pauschal 10 Stück. Eine
          * Chipfabrik verbrennt 36 Strom/Minute; mit 10 Stück je Zyklus (Takt
          * 26 s) kamen höchstens 23 an — sie lief also selbst bei perfekt
@@ -9332,10 +9633,17 @@ async function spawnBot(cfg, lvl = BOT_LEVELS[BOT_LEVEL_DEFAULT]) {
       let eingestellt = 0;
       for (const g of Object.keys(me.inv)) {
         if (me.inv[g] < 18) continue;
-        const bookQty = st.orders.filter(o => o.side === "sell" && o.good === g).reduce((s, o) => s + o.qty, 0);
+        /* Das Stadtnetz zählt nicht mit: Sein teures Notangebot (20 Elektronik)
+         * hielt ChipWerke sonst davon ab, je selbst Elektronik anzubieten —
+         * gemessen lagen nach 45 Minuten 890 Stück ungenutzt in ihrem Lager. */
+        const bookQty = st.orders.filter(o => o.side === "sell" && o.good === g && o.playerId !== STADTNETZ_ID).reduce((s, o) => s + o.qty, 0);
         if (bookQty >= 15) continue;   // Spieler-Angebot hat Vorrang
         if (st.orders.some(o => o.playerId === myId && o.side === "sell" && o.good === g)) continue;
-        await em("placeOrder", { side: "sell", good: g, qty: Math.min(10, Math.floor(me.inv[g] - 8)),
+        /* Großer Überschuss geht in größeren Posten raus: Mit höchstens 10 Stück
+         * je Zyklus lagen bei ChipWerke nach 45 Minuten 770 Elektronik, während
+         * andere sie händeringend suchten. */
+        const posten = Math.max(10, Math.min(200, Math.floor((me.inv[g] - 8) * 0.25)));
+        await em("placeOrder", { side: "sell", good: g, qty: Math.min(posten, Math.floor(me.inv[g] - 8)),
           price: Math.round(st.avg[g] * (lvl.verkaufKurs + 0.04) * 100) / 100 });
         if (++eingestellt >= 2) break;   // zwei Waren je Zyklus statt einer
       }

@@ -4826,6 +4826,15 @@ function draw() {
         // Sprite direkt auf die Kachel — Grundfläche mittig, ohne Bodenschatten
         const oben = standY(sy, spr, 64);
         cx.drawImage(spr, sx-32, oben, 64, 64);
+        /* Firmenschild: das selbst gemalte Logo des Besitzers am Gebäude */
+        const schild = st.logoV?.[t.owner] != null && FLOGO[t.owner]?.canvas;
+        if (schild) {
+          const gx = sx + 12, gy = oben + 10;
+          cx.fillStyle = "#fff"; cx.fillRect(gx - 1.5, gy - 1.5, 19, 19);
+          cx.strokeStyle = col; cx.lineWidth = 1; cx.strokeRect(gx - 1.5, gy - 1.5, 19, 19);
+          const glatt = cx.imageSmoothingEnabled; cx.imageSmoothingEnabled = false;
+          cx.drawImage(schild, gx, gy, 16, 16); cx.imageSmoothingEnabled = glatt;
+        }
         /* Aktive Industrie raucht; pausierte nicht. */
         if (RAUCHER.has(t.btype) && !t.paused) drawRauch(sx, oben, t.x * 5 + t.y, now);
         /* Nachts warmes Fensterlicht über dem Gebäude. */
@@ -5028,7 +5037,7 @@ function clickTile(e) {
             <button class="mini tmOk" data-slot="${i}" aria-label="Regal ${i + 1} übernehmen">✓</button>
           </div>
           <div class="tmSlotInfo">${info}</div></div>`;
-      }).join("");
+      }).join("") + (bt.online ? `<div class="tmSlotInfo" style="margin-top:4px">Strom und Elektronik kauft die Stadt nur langsam — beides brauchen die Firmen. An der Börse wirst du es schneller los.</div>` : "");
     }
     const lvl = t.level || 1;
     const canLevel = !!(bt.out || bt.proc || bt.racing || bt.studio || bt.rz || bt.online);
@@ -5554,6 +5563,77 @@ document.getElementById("p-bank").addEventListener("click", e => {
 const swEntwurf = {};
 const SW_BAEUME_NAME = (state, br) => state.swBaeume?.[br] ? `für ${state.swBaeume[br].name}` : "allgemein";
 const swModulWahl = new Set();
+const swDesignEntwurf = {};
+/* Website-Baukasten: Optionen je Kategorie, Gesperrtes mit Mindestversion,
+ * daneben eine Live-Vorschau mit Beispielwaren — so sieht jede Kunden-Website
+ * aus, die mit diesem System läuft. */
+function swDesignHtml(state, eigene) {
+  const OPT = state.swDesign || {}, AB = state.swDesignAb || {};
+  const v = Math.max(1, eigene.version || 0);
+  const d = { ...(eigene.design || {}), ...swDesignEntwurf };
+  const farbe = swEntwurf.farbe || eigene.farbe;
+  const titel = { schrift: "Schrift", thema: "Thema", ecken: "Ecken", kopf: "Kopfzeile", karten: "Produktkarten", motiv: "Bezahlkarte", effekt: "Effekt" };
+  const reihen = Object.entries(titel).map(([k, t]) => `<div class="swDesignReihe"><span>${t}</span><div class="swDesignWahl">
+    ${Object.entries(OPT[k] || {}).map(([id, o]) => `<button type="button" data-swdes="${k}" data-wert="${id}" class="${d[k] === id ? "an" : ""}" ${o.ab > v ? "disabled" : ""}>${o.name}${o.ab > v ? `<em>🔒 v${o.ab}</em>` : ""}</button>`).join("")}
+  </div></div>`).join("");
+  const gesperrt = (k) => v < (AB[k] || 1);
+  const texte = `<div class="swDesignTexte">
+    <label>Slogan${gesperrt("slogan") ? ` 🔒 v${AB.slogan}` : ""}<input id="swdSlogan" maxlength="40" value="${escapeHtml(rohText(d.slogan || ""))}" placeholder="z. B. Einkaufen in Sekunden" ${gesperrt("slogan") ? "disabled" : ""}></label>
+    <label>Banner${gesperrt("banner") ? ` 🔒 v${AB.banner}` : ""}<input id="swdBanner" maxlength="70" value="${escapeHtml(rohText(d.banner || ""))}" placeholder="z. B. Heute Lieferung gratis!" ${gesperrt("banner") ? "disabled" : ""}></label>
+    <label>Zweitfarbe${gesperrt("akzent") ? ` 🔒 v${AB.akzent}` : ""}<input id="swdAkzent" type="color" value="${d.akzent || "#1f2937"}" ${gesperrt("akzent") ? "disabled" : ""}></label>
+  </div>`;
+  const ware = [["obst", 7.4, 128], ["honig", 15.2, 46]];
+  const vorschau = `<div class="sfBrowser sfMini" ${sfDesignAttr(d, farbe)}>
+    <div class="sfLeiste"><span class="sfPunkte"><i></i><i></i><i></i></span><span class="sfUrl">🔒 ${shopSlug(eigene.name)}.cs/deine-kunden</span></div>
+    <header class="sfKopf"><div class="sfMarke"><span class="sfLogo" style="background:#16a34a">A</span><div><b>Apfelhof</b><small>Online-Shop · 2 Produkte</small></div></div>
+      <span class="sfBadge">💳 Bezahlt mit <b>${escapeHtml(rohText(eigene.name))}</b> v${v}${d.slogan ? `<span class="sfSlogan">${escapeHtml(rohText(d.slogan))}</span>` : ""}</span></header>
+    ${d.banner ? `<div class="sfBanner"><b>✦</b><span>${escapeHtml(rohText(d.banner))}</span></div>` : ""}
+    <div class="sfInhalt"><div class="sfGrid">${ware.map(([g, pr, n]) => `<article class="sfProdukt">${eigene.module?.werbung ? `<span class="sfBand">Empfohlen</span>` : ""}
+      <div class="sfBild"><span>${WAREN_ICON[g]}</span></div><h5>${gname(g)}</h5><div class="sfPreis"><b>${fp(pr)}</b><span>je Stück</span></div>
+      <div class="sfInfo">${n} auf Lager</div><button type="button" class="sfKaufen" tabindex="-1">Kaufen</button></article>`).join("")}</div>
+      <div class="sfKarte"><div class="sfKarteOben"><b>${escapeHtml(rohText(eigene.name))}</b><span class="sfChip"></span></div><div class="sfKarteNr">•••• •••• •••• 4821</div><div class="sfKarteUnten"><span>Kunde</span><span>08/29</span></div></div></div>
+    <footer class="sfFuss">${logoHtml(eigene.ownerId, "sfFussLogo", farbe)}<span>Diese Website läuft mit <b>${escapeHtml(rohText(eigene.name))}</b> v${v} · entwickelt von <b>${escapeHtml(rohText(eigene.anbieter))}</b></span></footer>
+  </div>`;
+  const geaendert = Object.keys(swDesignEntwurf).length > 0;
+  return `<div class="sec" style="margin-top:16px">Website-Design · so sehen alle Shops mit deinem System aus</div>
+    <div class="note" style="margin:0 0 8px">Jede neue Version schaltet weitere Schriften, Themen und Effekte frei. Speichern kostet nichts.</div>
+    <div class="swDesign">${reihen}${texte}${vorschau}
+      <button class="buyb" id="swDesignSpeichern" ${geaendert ? "" : "disabled"}>${geaendert ? "Design übernehmen" : "Design ist aktuell"}</button></div>`;
+}
+const paintEntwurf = {};
+/* Malprogramm: das zweite Produkt einer Software-Firma, verkauft als Lizenz
+ * im eigenen Online-Shop. */
+function paintHtml(state, me, eigene) {
+  const cfg = state.paintCfg || {}, STUFEN = cfg.stufen || [];
+  const mp = (state.paint || []).find(x => x.ownerId === eigene.ownerId);
+  const kopf = `<div class="sec" style="margin-top:16px">Malprogramm · dein zweites Produkt</div>`;
+  if ((eigene.version || 0) < (cfg.abSystem || 2))
+    return kopf + `<div class="note">Ab Shop-System v${cfg.abSystem || 2} kannst du ein Malprogramm entwickeln. Firmen kaufen eine Lizenz in deinem Online-Shop und malen damit ihr Logo — es erscheint im Shop, an der Börse und als Schild an ihren Gebäuden.</div>`;
+  const e = { name: mp?.name ?? "", preis: mp?.preis ?? 900, ...paintEntwurf };
+  const stufeText = st => `${st.groesse}×${st.groesse} Pixel · ${st.farben ? `${st.farben} Farben` : "freie Farben"} · ${st.werkzeuge.map(w => ({ stift: "Stift", radierer: "Radierer", fuellen: "Füllen", spiegeln: "Spiegeln" })[w]).join(", ")}`;
+  const laeden = mp?.laeden || state.map.filter(t => t.owner === eigene.ownerId && t.btype === "onlinemarkt").map(t => ({ x: t.x, y: t.y, offen: false }));
+  const offen = laeden.filter(l => l.offen);
+  const naechste = STUFEN[(mp?.version || 0)];
+  const dev = mp?.entwicklung;
+  return kopf + `<div class="note" style="margin:0 0 8px">Firmen kaufen eine Lizenz in <b>deinem eigenen Online-Shop</b> und malen damit ihr Firmenlogo. Updates bekommen sie gratis — jede Version kann mehr.</div>
+    ${mp ? `<div class="swZahlen">
+      <div><b>${mp.version >= 1 ? "v" + mp.version : "—"}</b><span>Version</span></div>
+      <div><b>${mp.verkauft}</b><span>Lizenzen verkauft</span></div>
+      <div><b>${fmt(mp.preis)}</b><span>Lizenzpreis</span></div>
+      <div><b style="color:var(--up)">${fmt(mp.einnahmen10 || 0)}</b><span>Einnahmen 10 min</span></div></div>` : ""}
+    ${mp?.version >= 1 && !offen.length ? `<div class="mpWarn">⚠ ${laeden.length ? "Dein Online-Marktplatz ist noch nicht offen — installiere ein Shop-System (z. B. dein eigenes)." : "Du hast keinen eigenen Online-Marktplatz. Ohne ihn kann niemand dein Programm kaufen — bau einen im Zentrum und installiere dein System."}</div>` : ""}
+    <div class="swForm">
+      <label class="breit"><span>Name</span><input id="mpName" maxlength="16" value="${escapeHtml(rohText(e.name))}" placeholder="z. B. PixelPinsel"></label>
+      <label><span>Lizenzpreis $</span><input id="mpPreis" type="number" min="${cfg.preisMin ?? 100}" max="${cfg.preisMax ?? 6000}" step="50" value="${e.preis}"></label>
+      <button class="buyb" id="mpSpeichern">${mp ? "Übernehmen" : "Malprogramm anlegen"}</button>
+    </div>
+    ${mp ? (dev ? `<div class="swDev"><div class="swDevKopf"><span>${escapeHtml(rohText(mp.name))} v${dev.version} in Arbeit</span><b class="mono">${dev.ep} / ${dev.ziel} EP</b></div>
+        <div class="swBalken"><i style="width:${Math.min(100, dev.ep / dev.ziel * 100).toFixed(1)}%"></i></div>
+        <div class="note" style="margin:4px 0 0">Neu: ${stufeText(STUFEN[dev.version - 1])}${eigene.entwicklung ? " · wartet, bis das Shop-System fertig ist" : ""}</div></div>`
+      : naechste ? `<button class="tmHaupt" id="mpEntwickeln"><span>${escapeHtml(rohText(mp.name))} v${(mp.version || 0) + 1} entwickeln</span><small>${naechste.ep} EP · ${stufeText(naechste)}${eigene.entwicklung ? " · startet nach dem Shop-System" : ""}</small></button>`
+      : `<div class="note">Voll ausgebaut: ${stufeText(STUFEN[STUFEN.length - 1])}.</div>`) : ""}
+    ${mp?.version >= 1 ? `<div class="mpZeile"><button class="mini" id="mpMalen">🎨 Eigenes Logo malen</button>${offen[0] ? `<button class="mini" data-shopauf="${offen[0].x},${offen[0].y}">🛒 Deinen Shop ansehen</button>` : ""}</div>` : ""}`;
+}
 function softwareRendern(state, me, myId) {
   const liste = state.software || [];
   const MOD = state.swModule || {}, cfg = state.swCfg || {};
@@ -5653,15 +5733,56 @@ function softwareRendern(state, me, myId) {
           <div><b style="color:var(--up)">${fmt(eigene.einnahmen10 || 0)}</b><span>Einnahmen 10 min</span></div>
         </div>
         <div class="note" style="margin:-4px 0 10px">Markenwert <b>${fmt(eigene.markenwert || 0)}</b> — zählt zum Firmenwert und Aktienkurs (Einnahmen der letzten 10 min × ${cfg.markenwert ?? 2}).</div>` : `<div class="note">Lege Name und Preise fest, dann entwickelst du Version 1 im Entwicklerstudio.</div>`}
-      ${felder}${entw}`;
+      ${felder}${eigene ? swDesignHtml(state, eigene) : ""}${entw}${eigene ? paintHtml(state, me, eigene) : ""}`;
+    if (eigene) sfSchriftenLaden();
   }
-  document.getElementById("softwarebody").innerHTML = tabelle + bau;
+  /* Nur neu setzen, wenn sich etwas geändert hat — sonst liefen Holo- und
+   * Glanz-Animation der Vorschau jede Sekunde von vorn. */
+  const body = document.getElementById("softwarebody"), html = tabelle + bau;
+  if (body._sig !== html) { body._sig = html; body.innerHTML = html; }
 }
 document.getElementById("p-software").addEventListener("input", e => {
   const map = { swName: "name", swFarbe: "farbe", swEinr: "einrichtung", swGeb: "gebuehr", swAbo: "werbeAbo" };
   if (map[e.target.id]) swEntwurf[map[e.target.id]] = e.target.value;
+  if (e.target.id === "mpName") paintEntwurf.name = e.target.value;
+  if (e.target.id === "mpPreis") paintEntwurf.preis = e.target.value;
+  const dmap = { swdSlogan: "slogan", swdBanner: "banner", swdAkzent: "akzent" };
+  if (dmap[e.target.id]) {
+    swDesignEntwurf[dmap[e.target.id]] = e.target.value;
+    /* Vorschau sofort mitziehen, ohne das Panel neu zu bauen (Fokus bleibt) */
+    const mini = document.querySelector("#p-software .sfMini");
+    if (mini && e.target.id === "swdAkzent") mini.style.setProperty("--akz", e.target.value);
+    if (mini && e.target.id === "swdSlogan") { const b = mini.querySelector(".sfBadge"); let sl = b?.querySelector(".sfSlogan"); if (b && !sl) { sl = document.createElement("span"); sl.className = "sfSlogan"; b.appendChild(sl); } if (sl) sl.textContent = e.target.value; }
+    if (mini && e.target.id === "swdBanner") { let bn = mini.querySelector(".sfBanner"); if (!bn) { bn = document.createElement("div"); bn.className = "sfBanner"; mini.querySelector(".sfKopf").after(bn); } bn.innerHTML = `<b>✦</b><span></span>`; bn.querySelector("span").textContent = e.target.value; bn.hidden = !e.target.value; }
+    const knopf = document.getElementById("swDesignSpeichern"); if (knopf) { knopf.disabled = false; knopf.textContent = "Design übernehmen"; }
+  }
 });
 document.getElementById("p-software").addEventListener("click", e => {
+  if (e.target.closest("#mpSpeichern")) {
+    socket.emit("paintEinstellen", { name: document.getElementById("mpName")?.value, preis: document.getElementById("mpPreis")?.value }, r => {
+      if (r?.error) return toast(r.error, true);
+      for (const k of Object.keys(paintEntwurf)) delete paintEntwurf[k];
+      toast("Malprogramm gespeichert"); render(store.get());
+    });
+    return;
+  }
+  if (e.target.closest("#mpEntwickeln")) {
+    socket.emit("paintEntwickeln", {}, r => { if (r?.error) return toast(r.error, true); toast(`Entwicklung gestartet: ${r.ep} EP`); render(store.get()); });
+    return;
+  }
+  if (e.target.closest("#mpMalen")) return malOeffnen();
+  const sa = e.target.closest("[data-shopauf]");
+  if (sa) { const [x, y] = sa.dataset.shopauf.split(",").map(Number); return shopOeffnen(x, y); }
+  const dz = e.target.closest("[data-swdes]");
+  if (dz && !dz.disabled) { swDesignEntwurf[dz.dataset.swdes] = dz.dataset.wert; SFX.spiel("klick"); render(store.get()); return; }
+  if (e.target.closest("#swDesignSpeichern")) {
+    socket.emit("softwareDesign", { ...swDesignEntwurf }, r => {
+      if (r?.error) return toast(r.error, true);
+      for (const k of Object.keys(swDesignEntwurf)) delete swDesignEntwurf[k];
+      toast("Website-Design übernommen — alle Shops mit deinem System sehen jetzt so aus"); render(store.get());
+    });
+    return;
+  }
   const m = e.target.closest("[data-swmod]");
   if (m) {
     const id = m.dataset.swmod;
@@ -5699,6 +5820,34 @@ const WAREN_ICON = { strom: "⚡", wasser: "💧", oel: "🛢️", obst: "🍎",
   saft: "🧃", stahl: "🔩", medizin: "💊", gebaeck: "🥐", diesel: "⛽", uebernachtung: "🛏️", ziegel: "🧱", beton: "🏗️",
   elektronik: "🔌", munition: "🎯", rennreifen: "🛞", rennsoftware: "💾" };
 const SHOP = { offen: false, x: 0, y: 0, kasse: null, menge: {}, gesehen: new Set() };
+/* Website-Design des Shop-Systems: Schriften erst laden, wenn eine Shop-Seite
+ * oder der Design-Baukasten zum ersten Mal zu sehen ist. */
+let sfSchriftenGeladen = false;
+function sfSchriftenLaden() {
+  if (sfSchriftenGeladen) return; sfSchriftenGeladen = true;
+  const l = document.createElement("link"); l.rel = "stylesheet";
+  l.href = "https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Caveat:wght@600;700&family=DM+Serif+Display&family=Fredoka:wght@500;700&family=Playfair+Display:wght@700;800&family=Press+Start+2P&display=swap";
+  document.head.appendChild(l);
+}
+/* Design auf ein .sfBrowser-Element anwenden (Shop-Fenster und Vorschau) */
+function sfDesignSetzen(el, design, farbe) {
+  const d = design || {};
+  for (const k of ["schrift", "thema", "ecken", "kopf", "karten", "motiv", "effekt"]) el.dataset[k] = d[k] || "";
+  el.style.setProperty("--sys", farbe || "#64748b");
+  if (d.akzent) el.style.setProperty("--akz", d.akzent); else el.style.removeProperty("--akz");
+}
+const sfDesignAttr = (design, farbe) => {
+  const d = design || {};
+  return ["schrift", "thema", "ecken", "kopf", "karten", "motiv", "effekt"].map(k => `data-${k}="${d[k] || ""}"`).join(" ")
+    + ` style="--sys:${farbe || "#64748b"};${d.akzent ? `--akz:${d.akzent}` : ""}"`;
+};
+/* Firmenlogo (gemalt mit einem Malprogramm) oder Anfangsbuchstabe */
+function logoHtml(pid, cls = "sfLogo", farbe) {
+  const st = store.get().state, p = st.players?.[pid];
+  const bild = logoBild(pid);
+  if (bild) return `<img class="${cls} hatBild" src="${bild}" alt="Logo ${escapeHtml(rohText(p?.name || ""))}">`;
+  return `<span class="${cls}" style="background:${farbe || p?.color || "#64748b"}">${rohText(p?.name || "?").slice(0, 1)}</span>`;
+}
 const shopSlug = s => rohText(s).toLowerCase().replace(/ä/g, "ae").replace(/ö/g, "oe").replace(/ü/g, "ue").replace(/ß/g, "ss").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 function shopOeffnen(x, y) {
   Object.assign(SHOP, { offen: true, x, y, kasse: null, menge: {}, gesehen: new Set(), sig: {} });
@@ -5712,12 +5861,15 @@ function shopOeffnen(x, y) {
     <div class="sfLeiste"><span class="sfPunkte"><i></i><i></i><i></i></span>
       <span class="sfUrl"></span><button type="button" class="sfZu" data-sfzu aria-label="Schließen">✕</button></div>
     <header class="sfKopf"></header>
+    <div class="sfBanner" hidden></div>
     <div class="sfHinweis" hidden></div>
     <div class="sfInhalt"><div class="sfGrid"></div>
       <aside class="sfFeed"><h4><span class="sfLive"></span>Bestellungen</h4><ul></ul></aside></div>
+    <footer class="sfFuss"></footer>
     <div class="sfKasse" hidden></div>
   </div>`;
   SFX.spiel("klick");
+  sfSchriftenLaden();
   shopZeichnen(true);
 }
 function shopSchliessen() {
@@ -5747,12 +5899,17 @@ function shopZeichnen(neu = false) {
   const { state, me, t, sys, owner, meins, offen } = d;
   const fenster = document.getElementById("shopFenster");
   const farbe = sys?.farbe || "#64748b", avg = state.avg || {};
-  fenster.querySelector(".sfBrowser").style.setProperty("--sys", farbe);
+  sfDesignSetzen(fenster.querySelector(".sfBrowser"), sys?.design, farbe);
+  const dsg = sys?.design || {};
   const regale = (t.shop || []).map((sl, i) => ({ sl, i })).filter(({ sl }) => sl?.good && sl.price > 0);
   shopSetze(".sfUrl", `🔒 ${shopSlug(sys?.name || "shop")}.cs/${shopSlug(owner?.name || "firma")}`, "url");
-  shopSetze(".sfKopf", `<div class="sfMarke"><span class="sfLogo" style="background:${owner?.color || farbe}">${(rohText(owner?.name || "?")).slice(0, 1)}</span>
+  shopSetze(".sfKopf", `<div class="sfMarke">${logoHtml(t.owner, "sfLogo", owner?.color || farbe)}
       <div><b>${owner?.name || "—"}</b><small>Online-Shop · ${regale.length} Produkt${regale.length === 1 ? "" : "e"}${sys?.module?.lieferung ? " · Lieferung sofort" : ""}</small></div></div>
-    <span class="sfBadge">${offen ? `💳 Bezahlt mit <b>${sys.name}</b> v${sys.version}` : "Shop geschlossen"}</span>`, "kopf");
+    <span class="sfBadge">${offen ? `💳 Bezahlt mit <b>${sys.name}</b> v${sys.version}${dsg.slogan ? `<span class="sfSlogan">${dsg.slogan}</span>` : ""}` : "Shop geschlossen"}</span>`, "kopf" + (logoBild(t.owner) || "").length);
+  const banner = fenster.querySelector(".sfBanner");
+  banner.hidden = !(offen && dsg.banner);
+  shopSetze(".sfBanner", dsg.banner ? `<b>✦</b><span>${dsg.banner}</span>` : "", "banner");
+  shopSetze(".sfFuss", sys ? `${sys.portal ? `<span class="sfFussLogo">🏛</span>` : logoHtml(sys.ownerId, "sfFussLogo", sys.farbe)}<span>Diese Website läuft mit <b>${sys.name}</b>${sys.portal ? " — dem Notportal der Stadt" : ` v${sys.version} · entwickelt von <b>${sys.anbieter}</b>`}</span>` : "", "fuss" + (sys && !sys.portal ? (logoBild(sys.ownerId) || "").length : 0));
   const hinweis = fenster.querySelector(".sfHinweis");
   hinweis.hidden = !meins;
   shopSetze(".sfHinweis", "Vorschau: So sehen andere Spieler deinen Shop. Stadtkunden kaufen hier automatisch, Mitspieler können direkt bestellen.", "hinweis");
@@ -5774,7 +5931,20 @@ function shopZeichnen(neu = false) {
         <div class="sfMenge"><button type="button" data-sfm="${i}" data-d="-1" aria-label="weniger">−</button><input type="number" min="1" max="${vorrat || 1}" step="1" value="${n}" data-sfn="${i}" aria-label="Menge"><button type="button" data-sfm="${i}" data-d="1" aria-label="mehr">+</button></div>
         <button type="button" class="sfKaufen" data-sfkauf="${i}" ${offen && !leer ? "" : "disabled"}>Kaufen · ${fmt(n * sl.price)}</button></div>`}
     </article>`; }).join("");
-  shopSetze(".sfGrid", karten || `<div class="sfLeer">Gerade keine Ware im Regal.</div>`, "grid");
+  /* Malprogramm der Software-Firma: Lizenz als eigenes Produkt im Shop */
+  const mp = (state.paint || []).find(x => x.ownerId === t.owner && x.version >= 1);
+  const lizenzKarte = mp ? (() => {
+    const hat = me.paintLizenz === mp.id, st = mp.stufe || {};
+    return `<article class="sfProdukt sfLizenz"><span class="sfBand">Software</span>
+      <div class="sfBild"><span>🎨</span></div>
+      <h5>${mp.name} <small>v${mp.version}</small></h5>
+      <div class="sfPreis"><b>${fmt(mp.preis)}</b><span>Lizenz · Updates gratis</span></div>
+      <div class="sfInfo">🖌️ Malprogramm fürs Firmenlogo · ${st.groesse}×${st.groesse} Pixel · ${st.farben ? `${st.farben} Farben` : "freie Farben"}</div>
+      ${meins ? `<div class="sfEigen">Dein Programm · ${mp.verkauft} verkauft</div>`
+        : hat ? `<div class="sfKauf"><button type="button" class="sfKaufen" data-sfmalen>🎨 Logo malen</button></div>`
+        : `<div class="sfKauf"><button type="button" class="sfKaufen" data-sflizenz ${offen ? "" : "disabled"}>Lizenz kaufen · ${fmt(mp.preis)}</button></div>`}
+    </article>`; })() : "";
+  shopSetze(".sfGrid", (lizenzKarte + karten) || `<div class="sfLeer">Gerade keine Ware im Regal.</div>`, "grid");
   /* Feed: neu aufbauen nur bei neuen Bestellungen — die Zeitangaben werden
    * an Ort und Stelle aktualisiert. Sonst entstünden jede Sekunde neue
    * Elemente, und die Einflug-Animation liefe ständig von vorn. */
@@ -5784,8 +5954,8 @@ function shopZeichnen(neu = false) {
   if (SHOP.sig.feed !== feedSig) {
     SHOP.sig.feed = feedSig;
     const ul = document.querySelector("#shopFenster .sfFeed ul");
-    ul.innerHTML = bestellungen.map(b => `<li data-bid="${b.id}"><span class="sfFeedIcon">${WAREN_ICON[b.g] || "📦"}</span>
-      <span><b>${b.n}× ${gname(b.g)}</b><small><span>${b.von}</span> · <span class="sfVor">${vorTxt(b)}</span></small></span>
+    ul.innerHTML = bestellungen.map(b => `<li data-bid="${b.id}"><span class="sfFeedIcon">${b.g === "lizenz" ? "🎨" : WAREN_ICON[b.g] || "📦"}</span>
+      <span><b>${b.g === "lizenz" ? `Lizenz ${b.name || ""}` : `${b.n}× ${gname(b.g)}`}</b><small><span>${b.von}</span> · <span class="sfVor">${vorTxt(b)}</span></small></span>
       <span class="sfFeedBetrag">${fmt(b.b)}<i style="background:${farbe}">${sys?.name ? rohText(sys.name).slice(0, 1) : "$"}</i></span></li>`).join("")
       || `<li class="sfLeerFeed">Noch keine Bestellung — sie erscheinen hier live.</li>`;
     ul.querySelectorAll("li[data-bid]").forEach(li => {
@@ -5801,17 +5971,21 @@ function shopZeichnen(neu = false) {
 function shopBezahlen(slot) {
   const d = shopDaten(); if (!d) return;
   const { t, sys, me, owner, state, myId } = d;
-  const sl = t.shop?.[slot]; if (!sl) return;
-  const feld = document.querySelector(`#shopFenster [data-sfn="${slot}"]`);
-  const n = Math.max(1, Math.floor(+feld?.value || SHOP.menge[slot] || 10));
+  const lizenz = slot === "lizenz";
+  const mp = lizenz ? (state.paint || []).find(x => x.ownerId === t.owner && x.version >= 1) : null;
+  if (lizenz && !mp) return;
+  const sl = lizenz ? { good: "lizenz", price: mp.preis } : t.shop?.[slot]; if (!sl) return;
+  const feld = lizenz ? null : document.querySelector(`#shopFenster [data-sfn="${slot}"]`);
+  const n = lizenz ? 1 : Math.max(1, Math.floor(+feld?.value || SHOP.menge[slot] || 10));
   const summe = n * sl.price;
+  const artikel = lizenz ? `Lizenz ${mp.name} v${mp.version}` : `${n}× ${gname(sl.good)}`;
   const farbe = sys?.farbe || "#64748b";
   const ich = state.players[myId];
   const kasse = document.querySelector("#shopFenster .sfKasse");
   SHOP.kasse = { slot, n };
   kasse.hidden = false;
   kasse.innerHTML = `<div class="sfKasseBox" style="--sys:${farbe}">
-    <div class="sfKasseKopf"><b>Kasse</b><span>${n}× ${gname(sl.good)} · ${fmt(summe)}</span></div>
+    <div class="sfKasseKopf"><b>Kasse</b><span>${artikel} · ${fmt(summe)}</span></div>
     <div class="sfBuehne">
       <div class="sfKarte">
         <div class="sfKarteOben"><b>${sys?.name || "Karte"}</b><span class="sfChip"></span></div>
@@ -5828,7 +6002,7 @@ function shopBezahlen(slot) {
   requestAnimationFrame(() => box.classList.add("auflegen"));
   setTimeout(() => { box.classList.add("funkt"); status.textContent = "Zahlung wird geprüft …"; }, 900);
   setTimeout(() => {
-    socket.emit("shopKaufen", { x: t.x, y: t.y, slot, qty: n }, r => {
+    socket.emit(lizenz ? "lizenzKaufen" : "shopKaufen", lizenz ? { x: t.x, y: t.y } : { x: t.x, y: t.y, slot, qty: n }, r => {
       const beleg = kasse.querySelector(".sfBeleg");
       box.classList.remove("funkt");
       if (r?.error) {
@@ -5841,19 +6015,28 @@ function shopBezahlen(slot) {
       }
       box.classList.add("ok"); status.textContent = "Bezahlt ✓";
       SFX.spiel("geld");
+      if (sys?.design?.effekt === "konfetti") sfKonfetti(kasse, farbe, sys.design.akzent);
       beleg.hidden = false;
       beleg.innerHTML = `<div class="sfErgebnis"><svg viewBox="0 0 52 52"><circle cx="26" cy="26" r="24"/><path d="M15 27l7 7 15-16"/></svg><b>Zahlung erfolgreich</b></div>
         <dl class="sfBon">
-          <div><dt>${r.n}× ${gname(sl.good)} à ${fp(sl.price)}</dt><dd>${fmt(r.summe)}</dd></div>
+          <div><dt>${lizenz ? `Lizenz ${r.programm} v${r.version}` : `${r.n}× ${gname(sl.good)} à ${fp(sl.price)}`}</dt><dd>${fmt(r.summe)}</dd></div>
           <div><dt>Händler</dt><dd>${owner?.name || ""}</dd></div>
           <div><dt>Zahlungsdienst</dt><dd>${r.system}</dd></div>
-          <div class="klein"><dt>Gebühr ${String(sys?.gebuehr ?? "").replace(".", ",")} % an ${r.system} (zahlt der Händler)</dt><dd>${fp(r.gebuehr)}</dd></div>
+          ${lizenz && !r.gebuehr ? "" : `<div class="klein"><dt>Gebühr ${String(sys?.gebuehr ?? "").replace(".", ",")} % an ${r.system} (zahlt der Händler)</dt><dd>${fp(r.gebuehr)}</dd></div>`}
           <div class="klein"><dt>Handelssteuer ${String(r.steuerSatz ?? "").replace(".", ",")} % an die Stadt (zahlt der Händler)</dt><dd>${fp(r.steuer || 0)}</dd></div>
         </dl>
-        <div class="sfBonFuss">${r.n}× ${gname(sl.good)} liegen jetzt in deinem Lager.</div>
-        <button type="button" class="sfWeiter" data-sfweiter>Weiter einkaufen</button>`;
+        ${lizenz ? `<div class="sfBonFuss">Die Lizenz gehört dir — Updates von ${r.programm} bekommst du gratis.</div>
+        <div class="mpZeile"><button type="button" class="sfWeiter" data-sfmalen>🎨 Jetzt Logo malen</button><button type="button" class="sfWeiter hell" data-sfweiter>Zurück zum Shop</button></div>`
+        : `<div class="sfBonFuss">${r.n}× ${gname(sl.good)} liegen jetzt in deinem Lager.</div>
+        <button type="button" class="sfWeiter" data-sfweiter>Weiter einkaufen</button>`}`;
     });
   }, 1900);
+}
+function sfKonfetti(ziel, f1, f2) {
+  const box = document.createElement("div"); box.className = "sfKonfetti";
+  const farben = [f1, f2 || "#fbbf24", "#f472b6", "#60a5fa", "#34d399"];
+  box.innerHTML = Array.from({ length: 46 }, (_, i) => `<i style="left:${(i * 37) % 100}%;background:${farben[i % farben.length]};animation-delay:${(i % 9) * 0.05}s;transform:rotate(${i * 23}deg)"></i>`).join("");
+  ziel.appendChild(box); setTimeout(() => box.remove(), 2200);
 }
 document.getElementById("shopFenster").addEventListener("click", e => {
   if (e.target.closest("[data-sfzu]") || e.target.id === "shopFenster") return shopSchliessen();
@@ -5862,6 +6045,8 @@ document.getElementById("shopFenster").addEventListener("click", e => {
   if (e.target.closest(".sfKasse") && !e.target.closest(".sfKasseBox")) return;
   const k = e.target.closest("[data-sfkauf]");
   if (k) return shopBezahlen(+k.dataset.sfkauf);
+  if (e.target.closest("[data-sflizenz]:not(:disabled)")) return shopBezahlen("lizenz");
+  if (e.target.closest("[data-sfmalen]")) { shopSchliessen(); return malOeffnen(); }
   if (e.target.closest("[data-sfweiter]")) {
     SHOP.kasse = null; SHOP.sig = {};
     const k2 = document.querySelector("#shopFenster .sfKasse"); k2.hidden = true; k2.innerHTML = "";
@@ -5875,6 +6060,181 @@ document.getElementById("shopFenster").addEventListener("input", e => {
     if (b && sl) b.textContent = `Kaufen · ${fmt(SHOP.menge[+n.dataset.sfn] * sl.price)}`; }
 });
 document.addEventListener("keydown", e => { if (e.key === "Escape" && SHOP.offen) shopSchliessen(); });
+
+/* ---------- Firmenlogos (gemalt mit einem Malprogramm) ----------
+ * Der Server schickt nur Versionsnummern (state.logoV); fehlende oder neuere
+ * Logos holt der Client gesammelt nach und rendert sie einmal als Canvas. */
+const FLOGO = {};
+let logoHolenLaeuft = false;
+function logoZuCanvas(l) {
+  const c = document.createElement("canvas"); c.width = c.height = l.g;
+  const cx = c.getContext("2d");
+  for (let i = 0; i < l.px.length; i++) {
+    const ch = l.px[i]; if (ch === ".") continue;
+    cx.fillStyle = l.pal[parseInt(ch, 16)] || "#000"; cx.fillRect(i % l.g, Math.floor(i / l.g), 1, 1);
+  }
+  return c;
+}
+function logosAbgleichen(state) {
+  const v = state.logoV || {};
+  for (const pid of Object.keys(FLOGO)) if (!(pid in v)) delete FLOGO[pid];
+  const fehlt = Object.entries(v).filter(([pid, n]) => FLOGO[pid]?.v !== n).map(([pid]) => pid);
+  if (!fehlt.length || logoHolenLaeuft) return;
+  logoHolenLaeuft = true;
+  socket.emit("logoHolen", fehlt, res => {
+    logoHolenLaeuft = false;
+    for (const [pid, l] of Object.entries(res || {})) {
+      if (!l) continue;
+      const c = logoZuCanvas(l);
+      /* Für die Anzeige hochskaliert ohne Weichzeichnen — Pixel bleiben scharf */
+      const gross = document.createElement("canvas"); gross.width = gross.height = 128;
+      const gx = gross.getContext("2d"); gx.imageSmoothingEnabled = false; gx.drawImage(c, 0, 0, 128, 128);
+      FLOGO[pid] = { v: l.v, roh: l, canvas: c, url: gross.toDataURL() };
+    }
+    if (SHOP.offen) { SHOP.sig = {}; shopZeichnen(); }
+    render(store.get());
+  });
+}
+const logoBild = pid => (store.get().state?.logoV?.[pid] != null && FLOGO[pid]?.url) || null;
+
+/* ---------- Malprogramm: Logo-Editor ---------- */
+const MAL = { offen: false, g: 16, px: [], pal: [], farbe: 0, werkzeug: "stift", spiegeln: false, verlauf: [], malt: false };
+function malOeffnen(versuch = 0) {
+  const { state, me, myId } = store.get();
+  const st = me.paintStufe;
+  /* Direkt nach dem Lizenzkauf kann das nächste Update noch unterwegs sein */
+  if (!st && versuch < 2) return setTimeout(() => malOeffnen(versuch + 1), 800);
+  if (!st) return toast("Du brauchst ein Malprogramm — Lizenzen gibt es im Online-Shop einer Software-Firma.", true);
+  const PAL = state.paintCfg?.palette || [];
+  const alt = FLOGO[myId]?.roh;
+  MAL.pal = st.farben ? PAL.slice(0, st.farben) : (alt?.pal?.length ? [...alt.pal, ...PAL].slice(0, 16) : PAL.slice(0, 16));
+  MAL.g = alt ? Math.min(alt.g, st.groesse) : st.groesse;
+  MAL.px = new Array(MAL.g * MAL.g).fill(-1);
+  if (alt && alt.g === MAL.g) for (let i = 0; i < alt.px.length; i++) {
+    if (alt.px[i] === ".") continue;
+    const farbe = alt.pal[parseInt(alt.px[i], 16)], idx = MAL.pal.indexOf(farbe);
+    MAL.px[i] = idx >= 0 ? idx : 0;
+  }
+  Object.assign(MAL, { offen: true, farbe: Math.min(2, MAL.pal.length - 1), werkzeug: "stift", spiegeln: false, verlauf: [] });
+  let el = document.getElementById("malFenster");
+  if (!el) { el = document.createElement("div"); el.id = "malFenster"; document.body.appendChild(el); el.addEventListener("click", malKlick); el.addEventListener("input", malEingabe); }
+  el.hidden = false;
+  malAufbauen();
+}
+function malSchliessen() { MAL.offen = false; const el = document.getElementById("malFenster"); if (el) { el.hidden = true; el.innerHTML = ""; } }
+function malAufbauen() {
+  const { me, state } = store.get(), st = me.paintStufe, my = state.players[store.get().myId];
+  const groessen = [16, 24, 32].filter(n => n <= st.groesse);
+  const w = st.werkzeuge || [];
+  document.getElementById("malFenster").innerHTML = `<div class="malBox" role="dialog" aria-label="Logo malen">
+    <header class="malKopf"><div><b>🎨 ${escapeHtml(rohText(st.programm))} <em>v${st.version}</em></b><small>Firmenlogo für ${escapeHtml(rohText(my?.name || ""))} — erscheint im Shop, an der Börse und an deinen Gebäuden</small></div>
+      <button type="button" class="malZu" data-malzu aria-label="Schließen">✕</button></header>
+    <div class="malHaupt">
+      <div class="malLeinwandRahmen"><canvas id="malLeinwand" width="${MAL.g * 16}" height="${MAL.g * 16}"></canvas></div>
+      <aside class="malSeite">
+        <div class="malGruppe"><span>Werkzeug</span><div class="malWerkzeuge">
+          ${[["stift", "✏️ Stift"], ["radierer", "🧽 Radierer"], ["fuellen", "🪣 Füllen"]].map(([id, t]) => `<button type="button" data-malw="${id}" class="${MAL.werkzeug === id ? "an" : ""}" ${w.includes(id) ? "" : "disabled"}>${t}${w.includes(id) ? "" : " <em>🔒</em>"}</button>`).join("")}
+          <button type="button" data-malspiegel class="${MAL.spiegeln ? "an" : ""}" ${w.includes("spiegeln") ? "" : "disabled"}>🪞 Spiegeln${w.includes("spiegeln") ? "" : " <em>🔒</em>"}</button>
+        </div></div>
+        <div class="malGruppe"><span>Größe</span><div class="malWerkzeuge">${[16, 24, 32].map(n => `<button type="button" data-malg="${n}" class="${MAL.g === n ? "an" : ""}" ${groessen.includes(n) ? "" : "disabled"}>${n}×${n}${groessen.includes(n) ? "" : " <em>🔒</em>"}</button>`).join("")}</div></div>
+        <div class="malGruppe"><span>Farben${st.farben ? ` · ${st.farben} Grundfarben` : " · frei wählbar — gewählte Farbe nochmal antippen"}</span><div class="malPalette">
+          ${MAL.pal.map((c, i) => `<button type="button" data-malf="${i}" class="${MAL.farbe === i ? "an" : ""}" style="background:${c}" aria-label="Farbe ${i + 1}">${st.farben ? "" : `<input type="color" value="${c}" data-malfarbe="${i}" tabindex="-1">`}</button>`).join("")}
+        </div></div>
+        <div class="malGruppe"><span>Vorschau</span><div class="malVorschau"><canvas id="malKlein" width="${MAL.g}" height="${MAL.g}"></canvas><div class="malKopfProbe" style="background:${my?.color || "#64748b"}"><canvas id="malMittel" width="${MAL.g}" height="${MAL.g}"></canvas><b>${escapeHtml(rohText(my?.name || ""))}</b></div></div></div>
+        <div class="malKnoepfe"><button type="button" data-malzurueck>↶ Rückgängig</button><button type="button" data-malleeren>Leeren</button></div>
+        <button type="button" class="buyb" data-malspeichern>Logo speichern</button>
+        ${st.version < 3 ? `<div class="note" style="margin:0">Mit einem Update deines Programms kommen ${st.version < 2 ? "24×24 Pixel, 16 Farben und Füllen" : "32×32 Pixel, freie Farben und Spiegeln"} dazu — gratis.</div>` : ""}
+      </aside>
+    </div></div>`;
+  malZeichnen();
+}
+function malZeichnen() {
+  const c = document.getElementById("malLeinwand"); if (!c) return;
+  const cx = c.getContext("2d"), z = c.width / MAL.g;
+  for (let y = 0; y < MAL.g; y++) for (let x = 0; x < MAL.g; x++) {
+    const v = MAL.px[y * MAL.g + x];
+    cx.fillStyle = v >= 0 ? MAL.pal[v] : ((x + y) % 2 ? "#e5e7eb" : "#f9fafb");
+    cx.fillRect(x * z, y * z, z, z);
+  }
+  cx.strokeStyle = "rgba(0,0,0,.08)"; cx.lineWidth = 1;
+  for (let i = 0; i <= MAL.g; i++) { cx.beginPath(); cx.moveTo(i * z + .5, 0); cx.lineTo(i * z + .5, c.height); cx.moveTo(0, i * z + .5); cx.lineTo(c.width, i * z + .5); cx.stroke(); }
+  if (MAL.spiegeln) { cx.strokeStyle = "rgba(239,68,68,.6)"; cx.lineWidth = 2; cx.beginPath(); cx.moveTo(c.width / 2, 0); cx.lineTo(c.width / 2, c.height); cx.stroke(); }
+  for (const id of ["malKlein", "malMittel"]) {
+    const k = document.getElementById(id); if (!k) continue;
+    const kx = k.getContext("2d"); kx.clearRect(0, 0, k.width, k.height);
+    for (let i = 0; i < MAL.px.length; i++) if (MAL.px[i] >= 0) { kx.fillStyle = MAL.pal[MAL.px[i]]; kx.fillRect(i % MAL.g, Math.floor(i / MAL.g), 1, 1); }
+  }
+}
+function malSetze(x, y, wert) {
+  if (x < 0 || y < 0 || x >= MAL.g || y >= MAL.g) return;
+  MAL.px[y * MAL.g + x] = wert;
+  if (MAL.spiegeln) MAL.px[y * MAL.g + (MAL.g - 1 - x)] = wert;
+}
+function malFuellen(x, y, wert) {
+  const ziel = MAL.px[y * MAL.g + x]; if (ziel === wert) return;
+  const stapel = [[x, y]];
+  while (stapel.length) {
+    const [a, b] = stapel.pop();
+    if (a < 0 || b < 0 || a >= MAL.g || b >= MAL.g || MAL.px[b * MAL.g + a] !== ziel) continue;
+    MAL.px[b * MAL.g + a] = wert;
+    stapel.push([a + 1, b], [a - 1, b], [a, b + 1], [a, b - 1]);
+  }
+}
+function malPunkt(e) {
+  const c = document.getElementById("malLeinwand"), r = c.getBoundingClientRect();
+  return [Math.floor((e.clientX - r.left) / r.width * MAL.g), Math.floor((e.clientY - r.top) / r.height * MAL.g)];
+}
+function malAnwenden(e, neu) {
+  const [x, y] = malPunkt(e);
+  if (neu) { MAL.verlauf.push(MAL.px.slice()); if (MAL.verlauf.length > 40) MAL.verlauf.shift(); MAL.letzt = null; }
+  if (MAL.werkzeug === "fuellen") { if (neu) { malFuellen(x, y, MAL.farbe); if (MAL.spiegeln) malFuellen(MAL.g - 1 - x, y, MAL.farbe); } }
+  else {
+    /* Lückenlos: von der letzten Zelle zur aktuellen eine Linie ziehen —
+     * bei schnellen Bewegungen springt der Zeiger sonst über Zellen hinweg. */
+    const wert = MAL.werkzeug === "radierer" ? -1 : MAL.farbe;
+    const [x0, y0] = MAL.letzt || [x, y];
+    const n = Math.max(Math.abs(x - x0), Math.abs(y - y0), 1);
+    for (let i = 0; i <= n; i++) malSetze(Math.round(x0 + (x - x0) * i / n), Math.round(y0 + (y - y0) * i / n), wert);
+    MAL.letzt = [x, y];
+  }
+  malZeichnen();
+}
+document.addEventListener("pointerdown", e => { if (e.target.id === "malLeinwand") { MAL.malt = true; e.target.setPointerCapture?.(e.pointerId); malAnwenden(e, true); e.preventDefault(); } });
+document.addEventListener("pointermove", e => { if (MAL.malt && e.target.id === "malLeinwand" && MAL.werkzeug !== "fuellen") malAnwenden(e, false); });
+document.addEventListener("pointerup", () => { MAL.malt = false; });
+function malKlick(e) {
+  if (e.target.id === "malFenster" || e.target.closest("[data-malzu]")) return malSchliessen();
+  const w = e.target.closest("[data-malw]"); if (w && !w.disabled) { MAL.werkzeug = w.dataset.malw; return malAufbauen(); }
+  if (e.target.closest("[data-malspiegel]:not(:disabled)")) { MAL.spiegeln = !MAL.spiegeln; return malAufbauen(); }
+  const f = e.target.closest("[data-malf]"); if (f && !e.target.matches("input")) { MAL.farbe = +f.dataset.malf; if (MAL.werkzeug === "radierer") MAL.werkzeug = "stift"; return malAufbauen(); }
+  const g = e.target.closest("[data-malg]");
+  if (g && !g.disabled) {
+    const neu = +g.dataset.malg, alt = MAL.g, altPx = MAL.px;
+    MAL.verlauf.push({ g: alt, px: altPx.slice() });
+    MAL.g = neu; MAL.px = Array.from({ length: neu * neu }, (_, i) => altPx[Math.floor(Math.floor(i / neu) * alt / neu) * alt + Math.floor((i % neu) * alt / neu)]);
+    return malAufbauen();
+  }
+  if (e.target.closest("[data-malzurueck]")) {
+    const v = MAL.verlauf.pop(); if (!v) return;
+    if (Array.isArray(v)) MAL.px = v; else { MAL.g = v.g; MAL.px = v.px; return malAufbauen(); }
+    return malZeichnen();
+  }
+  if (e.target.closest("[data-malleeren]")) { MAL.verlauf.push(MAL.px.slice()); MAL.px.fill(-1); return malZeichnen(); }
+  if (e.target.closest("[data-malspeichern]")) {
+    if (!MAL.px.some(v => v >= 0)) return toast("Das Logo ist noch leer", true);
+    const logo = { g: MAL.g, pal: MAL.pal, px: MAL.px.map(v => v < 0 ? "." : v.toString(16)).join("") };
+    socket.emit("logoSpeichern", { logo }, r => {
+      if (r?.error) return toast(r.error, true);
+      SFX.spiel("geld"); toast("Logo gespeichert — es erscheint jetzt überall bei deiner Firma");
+      malSchliessen();
+    });
+  }
+}
+function malEingabe(e) {
+  const i = e.target.dataset?.malfarbe;
+  if (i != null) { MAL.pal[+i] = e.target.value; e.target.parentElement.style.background = e.target.value; MAL.farbe = +i; malZeichnen(); }
+}
+document.addEventListener("keydown", e => { if (e.key === "Escape" && MAL.offen) malSchliessen(); });
 
 function finanzamtRendern(state, me, myId) {
   const F = state.finanzamt, el = document.getElementById("finanzamtbody");
@@ -8344,6 +8704,7 @@ document.addEventListener("click", e => {
   store.set({});
 });
 function render({ state, me, myId, chat, room }) {
+  if (state?.logoV) logosAbgleichen(state);
   if (!state || !me) return;
   tutCheck(state, myId);
   kapitalmarktHinweis(state, myId);
@@ -8362,8 +8723,10 @@ function render({ state, me, myId, chat, room }) {
   if (my) { document.getElementById("nwv").textContent = fmt(my.netWorth);
     document.getElementById("myrat").textContent = my.rating;
     document.getElementById("coname").textContent = rohText(my.name);
-    document.getElementById("mylogo").style.background = my.color;
-    document.getElementById("mylogo").textContent = rohText(my.name)[0].toUpperCase(); }
+    const ml = document.getElementById("mylogo"), mb = logoBild(myId);
+    ml.style.background = mb ? `#fff url(${mb}) center/cover` : my.color;
+    ml.style.imageRendering = mb ? "pixelated" : "";
+    ml.textContent = mb ? "" : rohText(my.name)[0].toUpperCase(); }
   if (state.winGoal) document.getElementById("goalv").textContent = fmt(state.winGoal);
 
   /* Starter-Aufgaben-Widget: offene Aufgaben mit Fortschritt, fertig = ausgeblendet */
@@ -8413,7 +8776,10 @@ function render({ state, me, myId, chat, room }) {
      * Mit fester Höhe und freier Breite bleiben die Logos schmal (die meisten
      * sind nahezu quadratisch, nur AgrarGenossen ist breit) und die ganze
      * Reihe passt weiterhin in die Kopfleiste. */
-    .map(p => { const u = logoUrl(p.name), t = `${p.name} · ${fmt(p.netWorth)} · ${p.rating}`;
+    .map(p => { const t = `${p.name} · ${fmt(p.netWorth)} · ${p.rating}`, gemalt = logoBild(p.id);
+      /* Selbst gemaltes Logo (Malprogramm) geht vor */
+      if (gemalt) return `<img class="plLogo gemalt" src="${gemalt}" alt="${p.name}" title="${t}">`;
+      const u = logoUrl(p.name);
       return u ? `<img class="plLogo" src="${u}" alt="${p.name}" title="${t}">`
                : `<span class="pl" style="background:${p.color}" title="${t}">${p.name[0].toUpperCase()}</span>`; }).join("");
   if (state.winner) { document.getElementById("win").style.display = WIN_ZU ? "none" : "grid";
@@ -8842,7 +9208,17 @@ function render({ state, me, myId, chat, room }) {
     const tx = me.tx || [];
     let alleTx = false; try { alleTx = sessionStorage.getItem("cs_tx_alle") === "1"; } catch {}
     const offen = id => LEX_OFFEN.has(id) ? "open" : "";
-    document.getElementById("firmabody").innerHTML = `
+    const eigenesBild = logoBild(myId);
+    const programme = (state.paint || []).filter(x => x.version >= 1 && x.ownerId !== myId);
+    const logoBox = `<div class="fLogo">
+      ${eigenesBild ? `<img src="${eigenesBild}" alt="Dein Logo">` : `<span class="fLogoLeer" style="background:${my?.color || "#64748b"}">${rohText(my?.name || "?").slice(0, 1)}</span>`}
+      <div><b>Firmenlogo</b>
+        ${me.paintStufe ? `<small>Mit ${escapeHtml(rohText(me.paintStufe.programm))} v${me.paintStufe.version} · bis ${me.paintStufe.groesse}×${me.paintStufe.groesse} Pixel</small>
+          <button class="mini" data-malen>🎨 ${eigenesBild ? "Logo bearbeiten" : "Logo malen"}</button>`
+        : `<small>${programme.length ? "Kaufe eine Malprogramm-Lizenz im Online-Shop einer Software-Firma, dann malst du dein Logo selbst." : "Noch bietet keine Software-Firma ein Malprogramm an."}</small>
+          <span class="mpZeile">${programme.map(x => { const l = x.laeden.find(l2 => l2.offen); return l ? `<button class="mini" data-shopauf="${l.x},${l.y}">🛒 ${x.name} · ${fmt(x.preis)}</button>` : `<span class="meta">${x.name} — Shop zu</span>`; }).join("")}</span>`}
+      </div></div>`;
+    document.getElementById("firmabody").innerHTML = logoBox + `
       <div class="fKennzahlen">
         <div><span>Rang</span><b>#${nRank}</b><small>von ${nPlayers}</small></div>
         <div class="haupt"><span>Nettovermögen</span><b>${geld(bal.total)}</b><small>Ziel ${geld(state.winGoal)}</small></div>
@@ -8860,6 +9236,7 @@ function render({ state, me, myId, chat, room }) {
         ${zeile("Bargeld", bal.cash)}
         ${zeile("Warenlager (Marktwert)", bal.invVal)}
         ${zeile("Gebäude", bal.bldVal)}
+        ${bal.markenwert ? zeile("Markenwert (Software)", bal.markenwert) : ""}
         ${bal.bondVal ? zeile("Anleihen", bal.bondVal) : ""}
         ${bal.debtVal ? zeile("Verbindlichkeiten", bal.debtVal, true) : ""}
         ${zeile("Firmenwert", bal.firmVal, false, "summe")}
@@ -9890,6 +10267,9 @@ const kap = k => (SPRACHE === "en" && k.en) ? { ...k, ...k.en } : k;
 
 /* Ausschüttung im Firmen-Panel festlegen */
 document.getElementById("firmabody").addEventListener("click", e => {
+  if (e.target.closest("[data-malen]")) return malOeffnen();
+  const sa = e.target.closest("[data-shopauf]");
+  if (sa) { const [x, y] = sa.dataset.shopauf.split(",").map(Number); return shopOeffnen(x, y); }
   if (e.target.closest("[data-aus-auto]")) { act("setAusschuettung", { betrag: "auto" }); return; }
   if (e.target.closest("[data-aus-setzen]")) {
     const v = document.getElementById("ausBetrag").value;

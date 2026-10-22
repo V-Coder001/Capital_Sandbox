@@ -5,6 +5,20 @@
  * `art`: "neu" (neue Funktion), "besser" (Verbesserung), "fix" (Fehler behoben). */
 window.UPDATES = [
   {
+    id: "2026-10-22d", datum: "2026-10-22",
+    titel: { de: "Strom, Shop-Design & Malprogramm", en: "Power, shop design & paint program" },
+    punkte: [
+      { art: "besser", de: "Strom und Elektronik: Startvorrat (60 Strom, 4 Elektronik), ein Stadtnetz springt bei Knappheit ein, die Stadt kauft weniger weg — Mangel im Früh- und Spätspiel sinkt deutlich.",
+        en: "Power and electronics: starting stock (60 power, 4 electronics), a city grid steps in during shortages and the city buys less — far fewer shortages early and late." },
+      { art: "neu", de: "Shop-Design: Software-Firmen gestalten ihre Shop-Website selbst (Schrift, Thema, Ecken, Kopf, Karten, Motiv, Effekte, Slogan). Mit jeder Version kommen neue Optionen.",
+        en: "Shop design: software companies style their shop website (font, theme, corners, header, cards, motif, effects, slogan). Each version unlocks more options." },
+      { art: "neu", de: "Malprogramm: Software-Firmen entwickeln es und verkaufen Lizenzen in ihrem eigenen Online-Shop. Käufer malen damit ihr Firmenlogo (größer mit jeder Version), sichtbar in Shop, Karte und Firmenliste.",
+        en: "Paint program: software companies develop it and sell licences in their own online shop. Buyers paint their company logo (bigger with every version), shown in shops, map and company list." },
+      { art: "besser", de: "Software-Firmen starten mit mehr Ziegeln für den eigenen Shop; Markenwert enthält Malprogramm-Einnahmen.",
+        en: "Software companies start with more bricks for their own shop; brand value includes paint income." },
+    ]
+  },
+  {
     id: "2026-10-22c", datum: "2026-10-22",
     titel: { de: "Neue Branche: Software", en: "New industry: software" },
     punkte: [
