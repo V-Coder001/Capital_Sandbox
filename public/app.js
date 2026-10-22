@@ -2145,13 +2145,13 @@ document.getElementById("roomCodeTop").addEventListener("click", async () => {
 const lwEl = document.getElementById("lobbyWait");
 const escapeHtml = s => String(s).replace(/[&<>"']/g, c =>
   ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-let lwBotLevel = "mittel", lwBots = { agrar: 1, rohstoff: 1, versorger: 1, tech: 1, touristik: 1, ruestung: 1 };
+let lwBotLevel = "mittel", lwBots = { agrar: 1, rohstoff: 1, versorger: 1, tech: 1, touristik: 1, ruestung: 1, software: 1 };
 let lwEigeneAenderung = 0;   // kurz nach eigener Änderung nicht vom Server überschreiben lassen
 
 /* Kurznamen der Branchen fuer die Warteraumliste — die vollen Namen aus dem
  * Auswahlblock waeren dort zu lang. */
 const BRANCHE_NAME = { agrar: "Landwirtschaft", rohstoff: "Rohstoff & Bau", versorger: "Versorger",
-                       tech: "Technologie", touristik: "Touristik", ruestung: "Rüstung",
+                       tech: "Technologie", touristik: "Touristik", ruestung: "Rüstung", software: "Software",
                        rennclub: "Race Club", rennindustrie: "Rennindustrie" };
 function lobbyWaitZeichnen() {
   const { state, myId } = store.get();
@@ -3291,6 +3291,9 @@ const rohText = v => String(v ?? "").replace(/&(?:amp|lt|gt|quot|#39);/g, e => E
 /* Gebaeude ohne eigenes Sprite leihen sich eins. Der Fan-Hub ist ein
  * Vermarktungsgebaeude wie die Werbeagentur und sieht auch so aus. */
 const SPRITE_LEIHE = { fanhub: "werbeagentur",
+  /* Software: Studio im Bürohaus, Rechenzentrum wie eine Chipfabrik, der
+   * Online-Marktplatz übernimmt das Haus der Werbeagentur (er ersetzt sie). */
+  entwicklerstudio: "buero", rechenzentrum: "chipfabrik", onlinemarkt: "werbeagentur",
   /* Kartellmodus: die Familien-Betriebe und das Casino tarnen sich als
    * unauffaellige Geschaefte — bis eigene Sprites da sind, passt das sogar
    * inhaltlich: illegale Betriebe SOLLEN aussehen wie legale. */
@@ -5028,7 +5031,7 @@ function clickTile(e) {
       }).join("");
     }
     const lvl = t.level || 1;
-    const canLevel = !!(bt.out || bt.proc || bt.racing);
+    const canLevel = !!(bt.out || bt.proc || bt.racing || bt.studio || bt.rz);
     const lvlMult = 1 + 0.3 * (lvl - 1);
     let upgradeHtml = "";
     if (canLevel && mine) {
@@ -5037,7 +5040,7 @@ function clickTile(e) {
       } else {
         const ec = Math.ceil(bt.cost / 2500 * lvl), cc = Math.round(bt.cost * 0.35 * lvl);
         const afford = me.inv.elektronik >= ec && me.cash >= cc;
-        const nutzen = bt.racing ? `${lvl + 1} Stellplätze statt ${lvl}` : "+30 % Ausstoß";
+        const nutzen = bt.racing ? `${lvl + 1} Stellplätze statt ${lvl}` : bt.rz ? `${(lvl + 1) * bt.rz.plaetze} Kunden statt ${lvl * bt.rz.plaetze}` : bt.studio ? "+30 % Entwicklungspunkte" : "+30 % Ausstoß";
         const fehlt = [me.inv.elektronik < ec ? `${ec - (me.inv.elektronik || 0)} Elektronik` : "",
                        me.cash < cc ? fmt(cc - me.cash) : ""].filter(Boolean).join(" + ");
         upgradeHtml = `<button class="tmHaupt" id="upgrade" ${afford ? "" : "disabled"}>
@@ -5090,6 +5093,46 @@ function clickTile(e) {
           Ohne neue Kampagne ist die Reichweite in gut zwei Minuten aufgebraucht.
         </div>` + pakete;
     }
+    /* Software: Shop-System auf dem Online-Marktplatz, Studio, Rechenzentrum */
+    let swHtml = "";
+    const swListe = store.get().state.software || [];
+    const swTick = store.get().state.tick;
+    const swName = id => swListe.find(x => x.id === id);
+    const swChips = x => Object.entries(x.module || {}).filter(([, an]) => an)
+      .map(([m]) => store.get().state.swModule?.[m]?.name || m).join(", ") || "keine Extras";
+    if (bt.online) {
+      const sys = t.system, akt = sys ? swName(sys.produktId) : null;
+      const rest = sys ? sys.bis - swTick : 0;
+      if (!mine) {
+        swHtml = `<div class="tmHinweis">${akt ? `Läuft mit <b>${akt.name}</b> von ${akt.anbieter}.` : "Noch kein Shop-System installiert."}</div>`;
+      } else {
+        const status = !sys ? `<div class="tmSwStatus zu">Kein System — der Marktplatz verkauft noch nichts.</div>`
+          : rest > 0 ? `<div class="tmSwStatus warn">${akt?.name ?? "System"} wird installiert · noch ${rest}s</div>`
+          : `<div class="tmSwStatus an">${akt?.name ?? "System"} v${akt?.version ?? "?"} läuft${akt?.faktor < 1 ? ` · <b>überlastet (${Math.round(akt.faktor * 100)} %)</b>` : ""}</div>`;
+        const werbung = akt?.module?.werbung && rest <= 0
+          ? `<button class="opt" id="swWerbung" data-an="${sys.werbung ? 0 : 1}">${sys.werbung ? "Werbemodul ausschalten" : "Werbemodul einschalten"}
+              <small>${fmt(akt.werbeAbo)}/min · Läden bis +${Math.round((store.get().state.swCfg?.werbeBoost || .2) * 100)} % über Ø-Kurs</small></button>` : "";
+        const optionen = swListe.filter(x => x.version >= 1).sort((a, b) => b.wert - a.wert).map(x => {
+          const voll = !x.portal && x.plaetze != null && x.kunden >= x.plaetze && x.id !== sys?.produktId;
+          const aus = !x.portal && x.plaetze === 0;
+          const jetzt = x.id === sys?.produktId;
+          return `<button class="opt tmSwOpt${jetzt ? " jetzt" : ""}" data-sys="${x.id}" ${jetzt || voll || me.cash < x.einrichtung ? "disabled" : ""}>
+            <span><i style="background:${x.farbe}"></i>${x.name} v${x.version}<em>${x.anbieter}</em></span>
+            <small>${x.einrichtung ? fmt(x.einrichtung) + " einmalig" : "keine Einrichtung"} · ${String(x.gebuehr).replace(".", ",")} % je Verkauf · ${swChips(x)}${x.portal ? "" : ` · Ruf ${x.ruf}`}${aus ? " · <b>fällt gerade aus</b>" : voll ? " · <b>voll</b>" : jetzt ? " · <b>aktiv</b>" : ""}</small></button>`;
+        }).join("");
+        swHtml = status + werbung + `<div class="tmHinweis" style="margin:8px 2px 6px">${sys ? "Wechseln" : "Installieren"} (dauert ${store.get().state.swCfg?.install ?? 45} s, Stadtportal ${store.get().state.swCfg?.portalInstall ?? 90} s):</div>`
+          + optionen + `<button class="tmKlein" id="swPanel" style="margin-top:4px">Alle Systeme vergleichen</button>`;
+      }
+    }
+    if (bt.studio || bt.rz) {
+      const meins = swListe.find(x => x.ownerId === t.owner && !x.portal);
+      const zeilen = [];
+      if (bt.rz) zeilen.push(`Rechenzentrum ${t.rzAktiv ? "<b style=\"color:var(--up)\">am Netz</b>" : "<b style=\"color:var(--down)\">aus — Strom fehlt</b>"}`,
+        meins ? `${meins.name}: <b>${meins.kunden}</b> Kunden auf <b>${meins.plaetze ?? 0}</b> Plätzen` : "Noch kein Shop-System");
+      if (bt.studio) zeilen.push(meins?.entwicklung ? `Entwickelt ${meins.name} v${meins.entwicklung.version}: <b>${meins.entwicklung.ep}/${meins.entwicklung.ziel} EP</b>`
+        : meins ? `${meins.name} v${meins.version} · ${swChips(meins)}` : "Noch kein Shop-System angelegt");
+      swHtml = `<div class="tmHinweis">${zeilen.join("<br>")}</div>` + (mine ? `<button class="tmHaupt" id="swPanel"><span>Software-Baukasten öffnen</span><small>Name, Preise, neue Versionen</small></button>` : "");
+    }
     /* Übersichtliche Gebäudekarte: Kopf (Bild, Name, Stufe, Besitzer, Status),
      * zwei bis drei Kennzahlen, EIN Hauptknopf, kleine Nebenknöpfe. Die
      * Erklärtexte stehen eingeklappt unter „Mehr erfahren". */
@@ -5097,13 +5140,18 @@ function clickTile(e) {
     const sprSrc = spriteUrl(t.btype, t.x, t.y);
     const imBauNoch = t.bauBis && store.get().state.tick < t.bauBis ? t.bauBis - store.get().state.tick : 0;
     const status = imBauNoch ? ["warn", `Im Bau · noch ${imBauNoch}s`] : t.lien ? ["warn", "Pfandrecht"] : t.paused ? ["aus", "Pausiert"]
-      : (bt.out || bt.proc || bt.retail) ? ["an", "Läuft"] : null;
+      : (bt.online && !(t.system && store.get().state.tick >= t.system.bis)) ? ["warn", "Kein System"]
+      : (bt.rz && !t.rzAktiv) ? ["warn", "Kein Strom"]
+      : (bt.out || bt.proc || bt.retail || bt.studio || bt.rz) ? ["an", "Läuft"] : null;
     const kennzahlen = [];
     if (bt.out) kennzahlen.push(["Produziert", `${(bt.rate * lvlMult).toFixed(2)}/s`, gname(bt.out)]);
     if (bt.proc) kennzahlen.push(
       ["Stellt her", `${(bt.proc.rate * lvlMult).toFixed(2)}/s`, gname(bt.proc.out)],
       ["Verbraucht", Object.entries(bt.proc.in).map(([g, n]) => `${(n * lvlMult).toFixed(2)} ${gname(g)}`).join(" + "), "pro Sekunde"]);
     if (bt.racing) kennzahlen.push(["Garage", `${(t.autos || []).length}/${lvl}`, "Stellplätze"]);
+    if (bt.studio) kennzahlen.push(["Entwickelt", `${(bt.studio.ep * lvlMult).toFixed(2)} EP/s`, "Entwicklungspunkte"],
+      ["Verbraucht", Object.entries(bt.studio.in).map(([g, n]) => `${(n * lvlMult).toFixed(2)} ${gname(g)}`).join(" + "), "pro Sekunde"]);
+    if (bt.rz) kennzahlen.push(["Plätze", `${bt.rz.plaetze * lvl}`, "Online-Marktplätze"], ["Verbraucht", `${(bt.rz.in.strom * lvlMult).toFixed(2)} ${gname("strom")}`, "pro Sekunde"]);
     const mehr = [];
     if (bt.out && lvl > 1) mehr.push(`Basisrate ${bt.rate}/s × ${lvlMult.toFixed(1)} durch Stufe ${lvl}.`);
     if (bt.boosts) mehr.push(`<b>Boost:</b> ${bt.boosts.map(r => gname(r)).join(" + ")} im Lager bringen je +75 % Tempo und werden dabei verbraucht.`);
@@ -5129,6 +5177,7 @@ function clickTile(e) {
         ${status ? `<span class="tmStatus ${status[0]}">${status[1]}</span>` : ""}
       </div>
       ${kennzahlen.length ? `<div class="tmZahlen">${kennzahlen.map(([k, v, u]) => `<div><span>${k}</span><b class="${String(v).length > 10 ? "lang" : ""}">${v}</b><small>${u}</small></div>`).join("")}</div>` : ""}
+      ${swHtml ? `<div class="tmAbschnitt">${bt.online ? "Shop-System" : "Software"}</div>${swHtml}` : ""}
       ${shopHtml ? `<div class="tmAbschnitt">Regale</div>${shopHtml}` : ""}
       ${stallHtml ? `<div class="tmAbschnitt">Garage</div>${stallHtml}` : ""}
       ${adHtml ? `<div class="tmAbschnitt">Werbung</div>${adHtml}` : ""}
@@ -5141,6 +5190,13 @@ function clickTile(e) {
       act("bookAd", { paket: b.dataset.ad }); tm.style.display = "none";
     }));
     tm.querySelector("#pause")?.addEventListener("click", () => { act("togglePause", { x: t.x, y: t.y }); tm.style.display = "none"; });
+    tm.querySelectorAll("[data-sys]").forEach(b => b.addEventListener("click", () => {
+      act("installSystem", { x: t.x, y: t.y, produktId: b.dataset.sys }); tm.style.display = "none";
+    }));
+    tm.querySelector("#swWerbung")?.addEventListener("click", ev => {
+      act("systemWerbung", { x: t.x, y: t.y, an: ev.currentTarget.dataset.an === "1" }); tm.style.display = "none";
+    });
+    tm.querySelector("#swPanel")?.addEventListener("click", () => { tm.style.display = "none"; openPanel("software"); });
     tm.querySelector("#upgrade")?.addEventListener("click", () => { act("upgradeBuilding", { x: t.x, y: t.y }); tm.style.display = "none"; });
     tm.querySelectorAll("[data-slot]").forEach(b => b.addEventListener("click", () => {
       const i = +b.dataset.slot;
@@ -5182,7 +5238,9 @@ function clickTile(e) {
     && !(kartellModus && b.racing)
     /* Familien-Gebäude: nur das der eigenen Familie, und nur im Kartellmodus */
     && !(b.familie && (!kartellModus || b.familie !== meineFamilie))
-    && !(b.casino && !kartellModus) && (
+    && !(b.casino && !kartellModus)
+    /* Regel 2: im Sandbox-Modus kommt Werbung aus dem Werbemodul der Shop-Systeme */
+    && !(b.ad && store.get().state?.mode === "sandbox") && (
     store.get().state?.mode === "renntag"
       ? rolleErlaubt.includes(bid)
       /* Kartellmodus: Familien bauen ALLES — Bezirkskontrolle zählt Gebäude,
@@ -5480,6 +5538,99 @@ document.getElementById("p-bank").addEventListener("click", e => {
   if (bidCancel) { act("cancelShareBid", { bidId: +bidCancel.dataset.bidcancel }); return; }
 });
 /* ---------- Finanzamt-Panel ---------- */
+/* ---------- Software-Panel ----------
+ * Oben der Vergleich aller Shop-Systeme (so, wie auch die Bots rechnen),
+ * darunter für Software-Firmen der Baukasten: Name, Farbe, Preise sofort,
+ * neue Funktionen über eine neue Version. Eingaben leben in swEntwurf, damit
+ * das sekündliche Neuzeichnen sie nicht verwirft. */
+const swEntwurf = {};
+const swModulWahl = new Set();
+function softwareRendern(state, me, myId) {
+  const liste = state.software || [];
+  const MOD = state.swModule || {}, cfg = state.swCfg || {};
+  const eigene = liste.find(x => x.ownerId === myId && !x.portal);
+  const binSoftware = (state.players?.[myId]?.industries || [state.players?.[myId]?.industry]).includes("software");
+  const fertig = liste.filter(x => x.version >= 1).sort((a, b) => b.wert - a.wert);
+  const portal = liste.find(x => x.portal);
+  const chips = x => Object.entries(x.module || {}).filter(([, an]) => an).map(([m]) => `<span class="swChip">${MOD[m]?.name || m}</span>`).join("") || `<span class="swChip leer">keine Extras</span>`;
+  const proz = v => String(v).replace(".", ",") + " %";
+  const tabelle = `<div class="sec">Shop-Systeme der Stadt</div>
+    <div class="swTab">
+      <div class="swKopf"><span>System</span><span>Gebühr</span><span>Einrichtung</span><span>Kunden</span><span>Wert</span></div>
+      ${fertig.map((x, i) => `<div class="swZeile${x.ownerId === myId ? " meins" : ""}">
+        <span class="swName"><i style="background:${x.farbe}"></i><span><b>${x.name} <em>v${x.version}</em></b><small>${x.anbieter}${x.portal ? " · Notlösung" : ` · Ruf ${x.ruf}`}</small><span class="swChips">${chips(x)}</span></span></span>
+        <span class="mono">${proz(x.gebuehr)}</span>
+        <span class="mono">${x.einrichtung ? fmt(x.einrichtung) : "—"}</span>
+        <span class="mono">${x.portal ? x.kunden : `${x.kunden}/${x.plaetze ?? 0}`}${!x.portal && x.plaetze === 0 ? ` <b class="swWarn">aus</b>` : x.faktor < 1 ? ` <b class="swWarn">überlastet</b>` : ""}</span>
+        <span class="mono">${portal?.wert ? `${x.wert >= portal.wert ? "+" : ""}${Math.round((x.wert / portal.wert - 1) * 100)} %` : "—"}${i === 0 && fertig.length > 1 ? ` <b class="swBest">beste Wahl</b>` : ""}</span>
+      </div>`).join("")}
+    </div>
+    <div class="note" style="margin-top:6px">„Wert“ vergleicht mit dem Stadtportal: Tempo der Module × (1 − Gebühr), Werbemodul, Ruf und Einrichtung. Genau so entscheiden auch die Bots — sie prüfen jede neue Software und wechseln ab 5 % Vorsprung.</div>`;
+  let bau = "";
+  if (binSoftware) {
+    const e = { name: eigene?.name ?? "", farbe: eigene?.farbe ?? (state.players?.[myId]?.color || "#60a5fa"),
+      einrichtung: eigene?.einrichtung ?? 400, gebuehr: eigene?.gebuehr ?? 2, werbeAbo: eigene?.werbeAbo ?? 20, ...swEntwurf };
+    const felder = `<div class="swForm">
+        <label class="breit"><span>Name</span><input id="swName" maxlength="16" value="${escapeHtml(rohText(e.name))}" placeholder="z. B. KassenKlick"></label>
+        <label><span>Farbe</span><input id="swFarbe" type="color" value="${e.farbe}"></label>
+        <label><span>Einrichtung $</span><input id="swEinr" type="number" min="0" max="${cfg.einrMax ?? 1500}" step="50" value="${e.einrichtung}"></label>
+        <label><span>Gebühr %</span><input id="swGeb" type="number" min="${cfg.gebMin ?? .5}" max="${cfg.gebMax ?? 4}" step="0.1" value="${e.gebuehr}"></label>
+        <label><span>Werbe-Abo $/min</span><input id="swAbo" type="number" min="0" max="${cfg.aboMax ?? 100}" step="5" value="${e.werbeAbo}"></label>
+        <button class="buyb breit" id="swSpeichern">${eigene ? "Preise und Aussehen übernehmen" : "Shop-System anlegen"}</button>
+      </div>`;
+    let entw = "";
+    if (eigene) {
+      const dev = eigene.entwicklung;
+      const kosten = (eigene.version >= 1 ? (cfg.versionEp ?? 60) : (MOD.basis?.ep ?? 150))
+        + [...swModulWahl].filter(m => !eigene.module?.[m]).reduce((a, m) => a + (MOD[m]?.ep || 0), 0);
+      entw = dev
+        ? `<div class="swDev"><div class="swDevKopf"><span>Version ${dev.version} in Arbeit</span><b class="mono">${dev.ep} / ${dev.ziel} EP</b></div>
+            <div class="swBalken"><i style="width:${Math.min(100, dev.ep / dev.ziel * 100).toFixed(1)}%"></i></div>
+            <div class="note" style="margin:4px 0 0">Neu: ${Object.keys(dev.module).filter(m => dev.module[m] && !eigene.module?.[m]).map(m => MOD[m]?.name).join(", ") || "Grundsystem"}</div></div>`
+        : `<div class="swModule">${["werbung", "bewertungen", "lieferung"].map(m => {
+            const drin = !!eigene.module?.[m], an = drin || swModulWahl.has(m);
+            const wirkung = m === "werbung" ? `Kunden-Läden bis +${Math.round((cfg.werbeBoost || .2) * 100)} % über Ø-Kurs, Abo an dich` : `Marktplätze verkaufen +${Math.round((MOD[m]?.tempo || 0) * 100)} % schneller`;
+            return `<button type="button" class="swModul${an ? " an" : ""}${drin ? " drin" : ""}" data-swmod="${m}" ${drin ? "disabled" : ""}>
+              <b>${MOD[m]?.name}</b><span>${wirkung}</span><em>${drin ? "schon drin" : `${MOD[m]?.ep} EP`}</em></button>`; }).join("")}</div>
+           <button class="tmHaupt" id="swEntwickeln" ${eigene.version >= 1 && ![...swModulWahl].some(m => !eigene.module?.[m]) ? "disabled" : ""}>
+             <span>Version ${eigene.version + 1} entwickeln</span><small>${kosten} EP · Vorrat ${me.swEp || 0} EP · ein Studio schafft 1 EP/s</small></button>`;
+    }
+    bau = `<div class="sec" style="margin-top:16px">Dein Shop-System</div>
+      ${eigene ? `<div class="swZahlen">
+          <div><b>${eigene.version >= 1 ? "v" + eigene.version : "—"}</b><span>Version</span></div>
+          <div><b>${eigene.kunden}/${eigene.plaetze ?? 0}</b><span>Kunden / Plätze</span></div>
+          <div><b>${eigene.ruf}</b><span>Ruf</span></div>
+          <div><b style="color:var(--up)">${fmt(eigene.einnahmen10 || 0)}</b><span>Einnahmen 10 min</span></div>
+        </div>` : `<div class="note">Lege Name und Preise fest, dann entwickelst du Version 1 im Entwicklerstudio.</div>`}
+      ${felder}${entw}`;
+  }
+  document.getElementById("softwarebody").innerHTML = tabelle + bau;
+}
+document.getElementById("p-software").addEventListener("input", e => {
+  const map = { swName: "name", swFarbe: "farbe", swEinr: "einrichtung", swGeb: "gebuehr", swAbo: "werbeAbo" };
+  if (map[e.target.id]) swEntwurf[map[e.target.id]] = e.target.value;
+});
+document.getElementById("p-software").addEventListener("click", e => {
+  const m = e.target.closest("[data-swmod]");
+  if (m) { swModulWahl.has(m.dataset.swmod) ? swModulWahl.delete(m.dataset.swmod) : swModulWahl.add(m.dataset.swmod); SFX.spiel("klick"); render(store.get()); return; }
+  if (e.target.closest("#swSpeichern")) {
+    const v = id => document.getElementById(id)?.value;
+    socket.emit("softwareEinstellen", { name: v("swName"), farbe: v("swFarbe"), einrichtung: v("swEinr"), gebuehr: v("swGeb"), werbeAbo: v("swAbo") }, r => {
+      if (r?.error) return toast(r.error, true);
+      for (const k of Object.keys(swEntwurf)) delete swEntwurf[k];
+      toast("Shop-System gespeichert"); render(store.get());
+    });
+    return;
+  }
+  if (e.target.closest("#swEntwickeln")) {
+    const module = Object.fromEntries([...swModulWahl].map(x => [x, true]));
+    socket.emit("softwareEntwickeln", { module }, r => {
+      if (r?.error) return toast(r.error, true);
+      swModulWahl.clear(); toast(`Entwicklung gestartet: ${r.ep} EP`); render(store.get());
+    });
+  }
+});
+
 function finanzamtRendern(state, me, myId) {
   const F = state.finanzamt, el = document.getElementById("finanzamtbody");
   if (!F?.aktiv) { el.innerHTML = `<div class="meta">In diesem Modus gibt es kein Finanzamt.</div>`; return; }
@@ -5832,6 +5983,14 @@ const TUT_IND = {
     { t: "Dein Handelsbedarf",
       p: `Du bist der <b>größte Kunde der Grundversorger</b>: Kaufe <em>Wasser und Strom</em> laufend an der Börse — beides liegt dort meist im Überfluss, weil es sonst kaum jemand abnimmt. Verkaufe deine Übernachtungen über ein <b>Handelskontor</b> ($3.500). Eine <b>Werbeagentur</b> lohnt sich für dich besonders: Sie hebt den Preis, den die Stadt in deinen eigenen Läden akzeptiert.` },
   ],
+  software: [
+    { t: "Baue ein Entwicklerstudio", build: "entwicklerstudio",
+      p: `Im <em>blauen Zentrum</em>: <b>Entwicklerstudio</b> ($4.000). Es macht aus <em>Strom und etwas Elektronik</em> Entwicklungspunkte (EP). Lege im Panel <b>Software</b> Name, Farbe und Gebühr deines <b>Shop-Systems</b> fest und starte Version 1 — rund 2,5 Minuten Entwicklung.` },
+    { t: "Baue ein Rechenzentrum", build: "rechenzentrum",
+      p: `In der <em>Industrie-Zone</em>: <b>Rechenzentrum</b> ($6.000). Es trägt deine Kunden — 5 Online-Marktplätze je Stufe — und braucht dauernd <b>Strom</b>. Ohne Strom fällt dein System aus, und deine Kunden verkaufen nichts.` },
+    { t: "Dein Geschäft",
+      p: `Jede Firma kann einen <b>Online-Marktplatz</b> bauen, verkauft dort aber erst mit einem installierten Shop-System. Du verdienst an der <b>Einrichtung</b>, an der <b>Gebühr je Verkauf</b> und am <b>Werbe-Abo</b> — Werbung läuft hier nur noch über Werbemodule. Neue Versionen mit mehr Funktionen ziehen Kunden an; die Bots prüfen jede neue Software und wechseln, wenn sie besser ist. Die Konkurrenz ist das <b>Stadtportal</b>: teuer (5 %), aber immer da.` },
+  ],
   ruestung: [
     { t: "Schalte Industrie frei & baue eine Munitionsfabrik", build: "munitionsfabrik",
       p: `Klicke eine gesperrte Kachel in der <em>braunen Industrie-Zone</em>, schalte sie frei und baue die <b>Munitionsfabrik</b> ($1.400 + 4 Ziegel). Sie macht aus <em>Erze + Öl</em> <b>Munition</b> — billig im Bau, damit früh Geld hereinkommt.` },
@@ -5842,7 +6001,7 @@ const TUT_IND = {
   ],
 };
 function buildTut(ind) {
-  const IND_NAME = { agrar: "Agrarwirtschaft", rohstoff: "Rohstoff- & Bauindustrie", versorger: "Grundversorgung", tech: "Technologie & Elektronik", touristik: "Touristik", ruestung: "Rüstungsindustrie" };
+  const IND_NAME = { agrar: "Agrarwirtschaft", rohstoff: "Rohstoff- & Bauindustrie", versorger: "Grundversorgung", tech: "Technologie & Elektronik", touristik: "Touristik", ruestung: "Rüstungsindustrie", software: "Software-Branche" };
   return [
     { t: "Willkommen bei Capital Sandbox",
       p: `Ich habe diese Stadt dreißig Jahre lang als CEO geführt — jetzt zeige ich <b>dir</b>, wie man in der <b>${IND_NAME[ind]}</b> ein Imperium aufbaut. Dein Ziel: als Erster das <b>Rundenziel</b> erreichen (oben links). Die Leiste ganz oben ist der <b>Börsenticker</b> mit den Ø-Kursen.` },
@@ -8190,6 +8349,10 @@ function render({ state, me, myId, chat, room }) {
       : `<div class="meta" style="margin-top:10px">Die erste Ausgabe erscheint nach zwei Minuten Spielzeit.</div>`;
   }
 
+  /* Software: Systemvergleich für alle, Baukasten für Software-Firmen */
+  if (document.getElementById("p-software").classList.contains("open") &&
+      !typingIn(document.getElementById("p-software"))) softwareRendern(state, me, myId);
+
   /* Stadtbank: Kurstafel, Angebote und Depot — der gesamte Anteilshandel */
   if (document.getElementById("p-bank").classList.contains("open") &&
       !typingIn(document.getElementById("p-bank"))) {
@@ -8495,7 +8658,7 @@ function render({ state, me, myId, chat, room }) {
   if (document.getElementById("p-lexikon").classList.contains("open")) {
     const B = BTYPES(), avg = state.avg || {};
     const ZNAME = { agrar: "Agrar", zentrum: "Zentrum", industrie: "Industrie · $2.500/Kachel", kueste: "Küste · $12.000/Kachel" };
-    const INAME = { agrar: "Agrar", rohstoff: "Rohstoff & Bau", versorger: "Versorger", tech: "Technologie", touristik: "Touristik", ruestung: "Rüstung" };
+    const INAME = { agrar: "Agrar", rohstoff: "Rohstoff & Bau", versorger: "Versorger", tech: "Technologie", touristik: "Touristik", ruestung: "Rüstung", software: "Software" };
     const kartell = store.get().state?.mode === "kartell";
     const suche = (LEX_SUCHE || "").trim().toLowerCase();
     const r2 = n => (+(+n).toFixed(2)).toLocaleString("de-DE");   // 0.333333 → 0,33
@@ -8509,9 +8672,15 @@ function render({ state, me, myId, chat, room }) {
         mehr = "Läuft automatisch, solange die Zutaten im Lager sind."; }
       else if (b.ad) { was = "<b>Werbekampagnen</b>";
         mehr = "Reichweite hebt den Preis, den deine Läden ohne Tempoverlust verlangen können — bis +20 % mit einer Agentur, je weitere +10 % (max. +40 %). Ohne neue Kampagne nach gut zwei Minuten wieder beim Ø-Kurs."; }
+      else if (b.online) { was = `<b>${b.retail.slots} Regale</b> · alles außer Fahrzeugen und Waffen`;
+        mehr = "Verkauft erst, wenn ein Shop-System installiert ist — von einer Software-Firma oder das Stadtportal (5 % je Verkauf). Das System bestimmt Tempo, Gebühr und ob es ein Werbemodul gibt."; }
       else if (b.retail) { was = `<b>${b.retail.slots} Regal${b.retail.slots > 1 ? "e" : ""}</b> · ${b.retail.goods.map(g => gname(g)).join(", ")}`;
         mehr = "Du setzt den Preis: Ø-Kurs = volle Rate, teurer verkauft langsamer, billiger schneller (max. ×2). Einrichten per Klick aufs Gebäude."; }
       else if (b.racing) { was = "<b>Motorsport</b> · Garage für Rennwagen"; }
+      else if (b.studio) { was = `${Object.entries(b.studio.in).map(([g, n]) => `${r2(n)} ${gname(g)}`).join(" + ")} → <b>${r2(b.studio.ep)} EP</b>/s`;
+        mehr = "Entwicklungspunkte für dein Shop-System: Version 1 kostet 150 EP plus Module, jede weitere 60 EP plus neue Module."; }
+      else if (b.rz) { was = `${r2(b.rz.in.strom)} ${gname("strom")}/s → <b>${b.rz.plaetze} Kunden</b> je Stufe`;
+        mehr = "Trägt die Online-Marktplätze, die dein System nutzen. Mehr Kunden als Plätze bremst alle; ohne Strom fällt das System aus."; }
       const chips = [
         ZNAME[b.zone] || b.zone,
         kartell ? "bar bezahlt" : `${Math.ceil(b.cost / 400)} Ziegel${b.cost >= 4000 && b.proc?.out !== "beton" ? ` + ${Math.ceil(b.cost / 2000)} Beton` : ""}`,
@@ -8535,7 +8704,8 @@ function render({ state, me, myId, chat, room }) {
       ["tech", "Technologie & Elektronik", ["siliziummine","chipfabrik","autowerk","dieselwerk","eautowerk","rennlabor"]],
       ["touristik", "Touristik", ["campingplatz","strandhotel"]],
       ["ruestung", "Rüstung", ["munitionsfabrik","waffenschmiede","panzerwerk"]],
-      ["laden", "Läden (jede Branche)", ["markt","bauhandel","kontor","laden","autohaus","waffenhandel","werbeagentur"]],
+      ["software", "Software & Digitales", ["entwicklerstudio","rechenzentrum"]],
+      ["laden", "Läden (jede Branche)", ["markt","bauhandel","kontor","laden","autohaus","waffenhandel","onlinemarkt", ...(state.mode === "sandbox" ? [] : ["werbeagentur"])]],
       ["renn", "Motorsport", ["rennstall"]],
     ];
     const gruppe = ([id, titel, ids]) => {

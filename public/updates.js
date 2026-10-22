@@ -5,6 +5,20 @@
  * `art`: "neu" (neue Funktion), "besser" (Verbesserung), "fix" (Fehler behoben). */
 window.UPDATES = [
   {
+    id: "2026-10-22c", datum: "2026-10-22",
+    titel: { de: "Neue Branche: Software", en: "New industry: software" },
+    punkte: [
+      { art: "neu", de: "Software-Firmen entwickeln im Entwicklerstudio ein Shop-System und betreiben es im Rechenzentrum. Sie verdienen an Einrichtung, Gebühr je Verkauf und Werbe-Abo.",
+        en: "Software companies develop a shop system in their dev studio and run it in a data centre. They earn from set-up fees, a fee per sale and ad subscriptions." },
+      { art: "neu", de: "Online-Marktplatz für jede Branche: vier Regale, mehr Kundschaft — verkauft aber erst mit installiertem Shop-System. Ohne Software-Firma gibt es das Stadtportal (5 % je Verkauf).",
+        en: "Online marketplace for every industry: four shelves, more customers — but it only sells once a shop system is installed. Without a software company there is the city portal (5 % per sale)." },
+      { art: "besser", de: "Im Sandbox-Modus kommt Werbung jetzt aus dem Werbemodul eines Shop-Systems statt aus der Werbeagentur. Marktstände und Läden verkaufen weiter ohne System.",
+        en: "In sandbox mode, advertising now comes from a shop system's ad module instead of the ad agency. Market stalls and shops keep selling without a system." },
+      { art: "neu", de: "Bots bauen Online-Marktplätze, prüfen jede neue Software und wechseln, wenn sie besser ist. Zwei neue Software-Bots: Byteforge (KassenKlick) und Pixelwerk (ShopStern).",
+        en: "Bots build online marketplaces, check every new software release and switch when it is better. Two new software bots: Byteforge (KassenKlick) and Pixelwerk (ShopStern)." }
+    ]
+  },
+  {
     id: "2026-10-22a", datum: "2026-10-22",
     titel: { de: "Einzelaktien leichter handeln", en: "Trading single shares is easier" },
     punkte: [

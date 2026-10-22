@@ -268,6 +268,10 @@
           <img src="assets/skyline/stahlwerk-0.png" alt="">
           <span class="txt"><span class="head"><b>Rüstung</b><span class="chosen">Gewählt</span></span>
           <small>Munition, Pistolen und Panzer — die wertvollsten Güter, aber am Ende jeder Lieferkette.</small></span></button>
+        <button type="button" data-ind="software" class="indopt" style="--ac:#60a5fa;--ac08:rgba(96,165,250,.03);--ac15:rgba(96,165,250,.08);--ac18:rgba(96,165,250,.09);--ac35:rgba(96,165,250,.21);--ac50:rgba(96,165,250,.31)">
+          <img src="assets/skyline/buero-0.png" alt="">
+          <span class="txt"><span class="head"><b>Software</b><span class="chosen">Gewählt</span></span>
+          <small>Keine Waren, sondern Shop-Systeme: Ohne dich verkauft kein Online-Marktplatz der Stadt.</small></span></button>
       </div>
   </div>
 </div></div>
@@ -389,6 +393,7 @@
       <div class="botrow" data-b="tech"><span>Technik</span><div class="pick"><button type="button" data-n="0">0</button><button type="button" data-n="1" class="on">1</button><button type="button" data-n="2">2</button></div></div>
       <div class="botrow" data-b="touristik"><span>Touristik</span><div class="pick"><button type="button" data-n="0">0</button><button type="button" data-n="1" class="on">1</button><button type="button" data-n="2">2</button></div></div>
       <div class="botrow" data-b="ruestung"><span>Rüstung</span><div class="pick"><button type="button" data-n="0">0</button><button type="button" data-n="1" class="on">1</button><button type="button" data-n="2">2</button></div></div>
+      <div class="botrow" data-b="software"><span>Software</span><div class="pick"><button type="button" data-n="0">0</button><button type="button" data-n="1" class="on">1</button><button type="button" data-n="2">2</button></div></div>
     </div>
     <p id="lwBotSum">—</p>
   </div>
@@ -662,6 +667,13 @@
 <div class="panel" id="p-firma">
   <div class="phead"><h2>Unternehmen</h2><button class="x" data-close>✕</button></div>
   <div class="pbody" id="firmabody"></div>
+</div>
+
+<!-- Software: alle Shop-Systeme der Stadt; für Software-Firmen der Baukasten.
+     Geöffnet über Entwicklerstudio, Rechenzentrum oder Online-Marktplatz. -->
+<div class="panel" id="p-software">
+  <div class="phead"><h2>Software &amp; Shop-Systeme</h2><button class="x" data-close>✕</button></div>
+  <div class="pbody" id="softwarebody"></div>
 </div>
 
 <div class="panel" id="p-motorsport">
