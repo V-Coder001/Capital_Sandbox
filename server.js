@@ -4923,7 +4923,7 @@ function dropContract(c) {
  * Nach dem ersten Snapshot reist die Karte nur noch als Differenz über diese
  * Liste. Der Vergleich läuft über JSON, verschachtelte Arrays sind also
  * abgedeckt (derselbe Grund, aus dem `shop` hier steht). */
-const DYNAMIC_TILE_KEYS = ["locked", "owner", "btype", "lien", "shop", "paused", "level", "autos", "sperre", "denkmal", "denkmalName", "bauBis", "system", "rzAktiv"];
+const DYNAMIC_TILE_KEYS = ["locked", "owner", "btype", "lien", "shop", "paused", "level", "autos", "sperre", "denkmal", "denkmalName", "bauBis", "system", "rzAktiv", "bestellungen", "vorrat"];
 /* undefined wird zu null normalisiert, damit auch "Feld gelöscht" (z. B. der
  * Abriss räumt t.shop weg) beim Empfänger sicher ankommt. */
 /* Fahrzeuge gehen MIT ihren gerechneten Werten über die Leitung. Sie hier
@@ -6686,7 +6686,7 @@ io.on("connection", socket => {
     p.cash += BTYPES[t.btype].cost * 0.5;
     logTx(p, "Bau", `Abriss ${BTYPES[t.btype].name}`, BTYPES[t.btype].cost * 0.5);
     p.stats.abgerissen++;
-    t.owner = null; t.btype = null; t.shop = undefined; t.anlagewert = undefined; t.bauBis = undefined; t.system = undefined; t.rzAktiv = undefined;
+    t.owner = null; t.btype = null; t.shop = undefined; t.anlagewert = undefined; t.bauBis = undefined; t.system = undefined; t.rzAktiv = undefined; t.bestellungen = undefined; t.vorrat = undefined;
     ack?.({ ok: true });
   }));
 
@@ -7179,6 +7179,40 @@ io.on("connection", socket => {
     }
     marktLog("software", `${p.name} ${wechsel ? "wechselt zu" : "installiert"} ${prod.name}`, { firmaId: p.id });
     ack?.({ ok: true, dauer });
+  }));
+  /* --- Im Online-Shop einer anderen Firma einkaufen ---
+   * Bezahlt wird über das installierte Shop-System: Der Käufer zahlt den
+   * Regalpreis, der Händler gibt davon die Gebühr an den Anbieter ab (wie
+   * bei Stadtkunden). Die Ware geht direkt ins Lager des Käufers. */
+  socket.on("shopKaufen", guard((p, { x, y, slot, qty }, ack) => {
+    const t = tileAt(x, y), bt = t?.btype ? BTYPES[t.btype] : null;
+    if (!t || !bt?.online) return ack?.({ error: "Kein Online-Shop" });
+    if (t.owner === p.id) return ack?.({ error: "Das ist dein eigener Shop" });
+    const haendler = G.players[t.owner];
+    const prod = swOffen(t) ? swVon(t.system.produktId) : null;
+    if (!haendler || !prod) return ack?.({ error: "Der Shop ist gerade geschlossen" });
+    if (!prod.portal && (G.swFaktor?.[prod.id] ?? 1) <= 0) return ack?.({ error: `${prod.name} ist gerade ausgefallen — keine Zahlung möglich` });
+    const sl = t.shop?.[slot];
+    if (!sl?.good || !(sl.price > 0)) return ack?.({ error: "Dieses Regal ist leer" });
+    let n = Math.floor(+qty);
+    if (!(n >= 1)) return ack?.({ error: "Menge ungültig" });
+    const vorrat = Math.floor(Math.min(haendler.inv[sl.good] || 0, sl.qty ?? Infinity));
+    if (vorrat < 1) return ack?.({ error: "Ausverkauft" });
+    n = Math.min(n, vorrat);
+    const summe = Math.round(n * sl.price * 100) / 100;
+    if (p.cash < summe) return ack?.({ error: `Zu wenig Geld — ${n}× kosten ${summe.toLocaleString("de-DE")} $` });
+    const gebuehr = summe * prod.gebuehr / 100;
+    p.cash -= summe; p.inv[sl.good] = (p.inv[sl.good] || 0) + n; p.stats.ausgaben += summe;
+    haendler.inv[sl.good] -= n; haendler.cash += summe - gebuehr; addRevenue(haendler, summe); haendler.stats.ausgaben += gebuehr;
+    swGebuehr(prod, gebuehr);
+    if (sl.qty != null) { sl.qty -= n; if (sl.qty <= 0.001) t.shop[slot] = null; }
+    if (t.vorrat) t.vorrat[slot] = Math.max(0, (t.vorrat[slot] || 0) - n);
+    (t.bestellungen ??= []).unshift({ id: G.tick + sl.good + p.id, g: sl.good, n, b: summe, t: G.tick, von: p.name });
+    if (t.bestellungen.length > 8) t.bestellungen.length = 8;
+    logTx(p, "Einkauf", `${n}× ${GOODS[sl.good].name} im Online-Shop von ${haendler.name} (${prod.name})`, -summe);
+    logTx(haendler, "Verkauf", `${n}× ${GOODS[sl.good].name} an ${p.name} über ${prod.name}`, summe - gebuehr);
+    emitTo(haendler.id, "notice", { text: `🛒 ${p.name} kauft ${n}× ${GOODS[sl.good].name} in deinem Online-Shop (${summe.toLocaleString("de-DE")} $, bezahlt mit ${prod.name}).` });
+    ack?.({ ok: true, n, summe, gebuehr: Math.round(gebuehr * 100) / 100, system: prod.name });
   }));
   /* --- Werbemodul ein-/ausschalten (Abo je Minute an den Anbieter) --- */
   socket.on("systemWerbung", guard((p, { x, y, an }, ack) => {
@@ -7769,6 +7803,7 @@ function runTick() {
         const erloes = q * slot.price, gebuehr = swProd ? erloes * swProd.gebuehr / 100 : 0;
         p.cash += erloes - gebuehr; addRevenue(p, erloes);
         if (gebuehr) { p.stats.ausgaben += gebuehr; swGebuehr(swProd, gebuehr); }
+        if (bt.online) { const l = (t._lauf ??= {}); const e = (l[slot.good] ??= { n: 0, b: 0 }); e.n += q; e.b += erloes; }
         const r = salesRec(p, slot.good); r.botQty += q; r.botRev += q * slot.price;
         kartellUmsatzMerken(p, slot.good, q * slot.price);
         noteSold(slot.good, q);
@@ -7781,6 +7816,17 @@ function runTick() {
           }
         }
       });
+      /* Online-Shop: alle 5 s die Verkäufe an Stadtkunden als "Bestellung"
+       * festhalten — daraus speist sich der Live-Feed im Shop-Fenster. */
+      /* Vorrat je Regal öffentlich machen (Lager des Händlers, gedeckelt durch
+       * die Auftragsmenge), damit Käufer im Shop sehen, was es noch gibt. */
+      if (bt.online && G.tick % 5 === 0) t.vorrat = (t.shop || []).map(sl => sl?.good ? Math.floor(Math.min(p.inv[sl.good] || 0, sl.qty ?? Infinity)) : 0);
+      if (bt.online && t._lauf && G.tick % 5 === 0) {
+        for (const [g, e] of Object.entries(t._lauf)) if (e.n >= 0.5)
+          (t.bestellungen ??= []).unshift({ id: G.tick + g, g, n: Math.round(e.n), b: Math.round(e.b * 100) / 100, t: G.tick, von: "Stadtkunde" });
+        if (t.bestellungen?.length > 8) t.bestellungen.length = 8;
+        t._lauf = null;
+      }
       continue;
     }
     if (bt.proc) {   // Verarbeitung: Inputs anteilig verbrauchen, Output erzeugen

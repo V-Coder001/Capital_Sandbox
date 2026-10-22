@@ -5103,8 +5103,10 @@ function clickTile(e) {
     if (bt.online) {
       const sys = t.system, akt = sys ? swName(sys.produktId) : null;
       const rest = sys ? sys.bis - swTick : 0;
+      const offen = akt && rest <= 0;
+      const shopKnopf = offen ? `<button class="tmHaupt" id="shopAuf"><span>🛒 Online-Shop öffnen</span><small>${mine ? "So sehen deine Kunden den Shop" : `Einkaufen, bezahlt mit ${akt.name}`}</small></button>` : "";
       if (!mine) {
-        swHtml = `<div class="tmHinweis">${akt ? `Läuft mit <b>${akt.name}</b> von ${akt.anbieter}.` : "Noch kein Shop-System installiert."}</div>`;
+        swHtml = shopKnopf + `<div class="tmHinweis">${akt ? `Läuft mit <b>${akt.name}</b> von ${akt.anbieter}.` : "Noch kein Shop-System installiert — der Shop ist geschlossen."}</div>`;
       } else {
         const status = !sys ? `<div class="tmSwStatus zu">Kein System — der Marktplatz verkauft noch nichts.</div>`
           : rest > 0 ? `<div class="tmSwStatus warn">${akt?.name ?? "System"} wird installiert · noch ${rest}s</div>`
@@ -5120,7 +5122,7 @@ function clickTile(e) {
             <span><i style="background:${x.farbe}"></i>${x.name} v${x.version}<em>${x.anbieter}</em></span>
             <small>${x.einrichtung ? fmt(x.einrichtung) + " einmalig" : "keine Einrichtung"} · ${String(x.gebuehr).replace(".", ",")} % je Verkauf · ${swChips(x)}${x.portal ? "" : ` · Ruf ${x.ruf}`}${aus ? " · <b>fällt gerade aus</b>" : voll ? " · <b>voll</b>" : jetzt ? " · <b>aktiv</b>" : ""}</small></button>`;
         }).join("");
-        swHtml = status + werbung + `<div class="tmHinweis" style="margin:8px 2px 6px">${sys ? "Wechseln" : "Installieren"} (dauert ${store.get().state.swCfg?.install ?? 45} s, Stadtportal ${store.get().state.swCfg?.portalInstall ?? 90} s):</div>`
+        swHtml = status + shopKnopf + werbung + `<div class="tmHinweis" style="margin:8px 2px 6px">${sys ? "Wechseln" : "Installieren"} (dauert ${store.get().state.swCfg?.install ?? 45} s, Stadtportal ${store.get().state.swCfg?.portalInstall ?? 90} s):</div>`
           + optionen + `<button class="tmKlein" id="swPanel" style="margin-top:4px">Alle Systeme vergleichen</button>`;
       }
     }
@@ -5197,6 +5199,7 @@ function clickTile(e) {
       act("systemWerbung", { x: t.x, y: t.y, an: ev.currentTarget.dataset.an === "1" }); tm.style.display = "none";
     });
     tm.querySelector("#swPanel")?.addEventListener("click", () => { tm.style.display = "none"; openPanel("software"); });
+    tm.querySelector("#shopAuf")?.addEventListener("click", () => { tm.style.display = "none"; shopOeffnen(t.x, t.y); });
     tm.querySelector("#upgrade")?.addEventListener("click", () => { act("upgradeBuilding", { x: t.x, y: t.y }); tm.style.display = "none"; });
     tm.querySelectorAll("[data-slot]").forEach(b => b.addEventListener("click", () => {
       const i = +b.dataset.slot;
@@ -5630,6 +5633,191 @@ document.getElementById("p-software").addEventListener("click", e => {
     });
   }
 });
+
+/* ---------- Online-Shop-Fenster ----------
+ * Das Schaufenster eines Online-Marktplatzes, wie ein Browserfenster: oben die
+ * Adresse des Shop-Systems, die Produkte aus den Regalen mit Lager und Preis,
+ * rechts die Bestellungen der letzten Sekunden. Fremde Spieler kaufen hier
+ * ein; bezahlt wird mit einer Karte im Design des installierten Systems. */
+const WAREN_ICON = { strom: "⚡", wasser: "💧", oel: "🛢️", obst: "🍎", erze: "⛏️", kannabis: "🌿", honig: "🍯", silizium: "🔷",
+  saft: "🧃", stahl: "🔩", medizin: "💊", gebaeck: "🥐", diesel: "⛽", uebernachtung: "🛏️", ziegel: "🧱", beton: "🏗️",
+  elektronik: "🔌", munition: "🎯", rennreifen: "🛞", rennsoftware: "💾" };
+const SHOP = { offen: false, x: 0, y: 0, kasse: null, menge: {}, gesehen: new Set() };
+const shopSlug = s => rohText(s).toLowerCase().replace(/ä/g, "ae").replace(/ö/g, "oe").replace(/ü/g, "ue").replace(/ß/g, "ss").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+function shopOeffnen(x, y) {
+  Object.assign(SHOP, { offen: true, x, y, kasse: null, menge: {}, gesehen: new Set(), sig: {} });
+  const el = document.getElementById("shopFenster");
+  el.hidden = false;
+  /* Gerüst einmal bauen; danach tauscht shopZeichnen nur die Teile aus, die
+   * sich geändert haben. Würde jedes Spiel-Update das ganze Fenster neu
+   * setzen, begänne die Einblendung immer wieder von vorn, und Klicks
+   * gingen zwischen Drücken und Loslassen verloren. */
+  el.innerHTML = `<div class="sfBrowser" role="dialog" aria-label="Online-Shop">
+    <div class="sfLeiste"><span class="sfPunkte"><i></i><i></i><i></i></span>
+      <span class="sfUrl"></span><button type="button" class="sfZu" data-sfzu aria-label="Schließen">✕</button></div>
+    <header class="sfKopf"></header>
+    <div class="sfHinweis" hidden></div>
+    <div class="sfInhalt"><div class="sfGrid"></div>
+      <aside class="sfFeed"><h4><span class="sfLive"></span>Bestellungen</h4><ul></ul></aside></div>
+    <div class="sfKasse" hidden></div>
+  </div>`;
+  SFX.spiel("klick");
+  shopZeichnen(true);
+}
+function shopSchliessen() {
+  SHOP.offen = false; SHOP.kasse = null;
+  const el = document.getElementById("shopFenster");
+  el.hidden = true; el.innerHTML = "";
+}
+function shopDaten() {
+  const { state, me, myId } = store.get();
+  const t = state.map.find(k => k.x === SHOP.x && k.y === SHOP.y);
+  if (!t || t.btype !== "onlinemarkt") return null;
+  const sys = (state.software || []).find(x => x.id === t.system?.produktId);
+  return { state, me, myId, t, sys, owner: state.players[t.owner], meins: t.owner === myId, offen: !!sys && state.tick >= (t.system?.bis || 0) };
+}
+/* Sternwertung je Produkt: nur mit Modul "Kundenbewertungen", aus Ware und
+ * Kachel abgeleitet, damit sie stabil bleibt. */
+const shopSterne = (g, t) => 3.9 + ((g.length * 7 + t.x * 3 + t.y * 5) % 11) / 10;
+/* Teil nur austauschen, wenn sich sein Inhalt geändert hat */
+const shopSetze = (sel, html, key) => {
+  if (SHOP.sig[key] === html) return;
+  SHOP.sig[key] = html;
+  const el = document.querySelector("#shopFenster " + sel); if (el) el.innerHTML = html;
+};
+function shopZeichnen(neu = false) {
+  const d = shopDaten();
+  if (!d) return shopSchliessen();
+  const { state, me, t, sys, owner, meins, offen } = d;
+  const fenster = document.getElementById("shopFenster");
+  const farbe = sys?.farbe || "#64748b", avg = state.avg || {};
+  fenster.querySelector(".sfBrowser").style.setProperty("--sys", farbe);
+  const regale = (t.shop || []).map((sl, i) => ({ sl, i })).filter(({ sl }) => sl?.good && sl.price > 0);
+  shopSetze(".sfUrl", `🔒 ${shopSlug(sys?.name || "shop")}.cs/${shopSlug(owner?.name || "firma")}`, "url");
+  shopSetze(".sfKopf", `<div class="sfMarke"><span class="sfLogo" style="background:${owner?.color || farbe}">${(rohText(owner?.name || "?")).slice(0, 1)}</span>
+      <div><b>${owner?.name || "—"}</b><small>Online-Shop · ${regale.length} Produkt${regale.length === 1 ? "" : "e"}${sys?.module?.lieferung ? " · Lieferung sofort" : ""}</small></div></div>
+    <span class="sfBadge">${offen ? `💳 Bezahlt mit <b>${sys.name}</b> v${sys.version}` : "Shop geschlossen"}</span>`, "kopf");
+  const hinweis = fenster.querySelector(".sfHinweis");
+  hinweis.hidden = !meins;
+  shopSetze(".sfHinweis", "Vorschau: So sehen andere Spieler deinen Shop. Stadtkunden kaufen hier automatisch, Mitspieler können direkt bestellen.", "hinweis");
+  const werbung = !!t.system?.werbung && sys?.module?.werbung;
+  const karten = regale.map(({ sl, i }) => {
+    const vorrat = meins ? Math.floor(Math.min(me.inv[sl.good] || 0, sl.qty ?? Infinity)) : (t.vorrat?.[i] ?? null);
+    const rabatt = avg[sl.good] ? Math.round((1 - sl.price / avg[sl.good]) * 100) : 0;
+    const n = Math.max(1, Math.min(SHOP.menge[i] || 10, vorrat || 1));
+    const sterne = sys?.module?.bewertungen ? shopSterne(sl.good, t) : null;
+    const leer = vorrat != null && vorrat < 1;
+    return `<article class="sfProdukt${leer ? " leer" : ""}">
+      ${leer ? `<span class="sfBand grau">Ausverkauft</span>` : werbung && rabatt > 0 ? `<span class="sfBand">−${rabatt} % unter Ø</span>` : werbung ? `<span class="sfBand">Empfohlen</span>` : ""}
+      <div class="sfBild"><span>${WAREN_ICON[sl.good] || "📦"}</span></div>
+      <h5>${gname(sl.good)}</h5>
+      ${sterne ? `<div class="sfSterne" title="${sterne.toFixed(1)} von 5">${"★".repeat(Math.round(sterne))}${"☆".repeat(5 - Math.round(sterne))}<em>${sterne.toFixed(1).replace(".", ",")}</em></div>` : ""}
+      <div class="sfPreis"><b>${fp(sl.price)}</b><span>je Stück · Ø ${fp(avg[sl.good] || 0)}</span></div>
+      <div class="sfInfo">${sys?.module?.lieferung ? "🚚 Sofort im Lager" : "📦 Abholung im Lager"} · ${vorrat == null ? "—" : leer ? "nichts mehr da" : `${vorrat} auf Lager`}</div>
+      ${meins ? `<div class="sfEigen">Dein Angebot</div>` : `<div class="sfKauf">
+        <div class="sfMenge"><button type="button" data-sfm="${i}" data-d="-1" aria-label="weniger">−</button><input type="number" min="1" max="${vorrat || 1}" step="1" value="${n}" data-sfn="${i}" aria-label="Menge"><button type="button" data-sfm="${i}" data-d="1" aria-label="mehr">+</button></div>
+        <button type="button" class="sfKaufen" data-sfkauf="${i}" ${offen && !leer ? "" : "disabled"}>Kaufen · ${fmt(n * sl.price)}</button></div>`}
+    </article>`; }).join("");
+  shopSetze(".sfGrid", karten || `<div class="sfLeer">Gerade keine Ware im Regal.</div>`, "grid");
+  /* Feed: neu aufbauen nur bei neuen Bestellungen — die Zeitangaben werden
+   * an Ort und Stelle aktualisiert. Sonst entstünden jede Sekunde neue
+   * Elemente, und die Einflug-Animation liefe ständig von vorn. */
+  const bestellungen = t.bestellungen || [];
+  const vorTxt = b => { const vor = Math.max(0, state.tick - b.t); return vor < 5 ? "gerade eben" : vor < 60 ? `vor ${vor} s` : `vor ${Math.floor(vor / 60)} min`; };
+  const feedSig = bestellungen.map(b => b.id).join("|") + farbe;
+  if (SHOP.sig.feed !== feedSig) {
+    SHOP.sig.feed = feedSig;
+    const ul = document.querySelector("#shopFenster .sfFeed ul");
+    ul.innerHTML = bestellungen.map(b => `<li data-bid="${b.id}"><span class="sfFeedIcon">${WAREN_ICON[b.g] || "📦"}</span>
+      <span><b>${b.n}× ${gname(b.g)}</b><small><span>${b.von}</span> · <span class="sfVor">${vorTxt(b)}</span></small></span>
+      <span class="sfFeedBetrag">${fmt(b.b)}<i style="background:${farbe}">${sys?.name ? rohText(sys.name).slice(0, 1) : "$"}</i></span></li>`).join("")
+      || `<li class="sfLeerFeed">Noch keine Bestellung — sie erscheinen hier live.</li>`;
+    ul.querySelectorAll("li[data-bid]").forEach(li => {
+      if (!SHOP.gesehen.has(li.dataset.bid)) { SHOP.gesehen.add(li.dataset.bid); if (!neu) li.classList.add("neu"); }
+    });
+  } else {
+    const spans = document.querySelectorAll("#shopFenster .sfFeed .sfVor");
+    bestellungen.forEach((b, i) => { if (spans[i]) spans[i].textContent = vorTxt(b); });
+  }
+}
+/* Bezahlvorgang: Karte im Design des Systems fährt ins Terminal, Kontaktlos-
+ * Wellen, dann die Antwort des Servers — Haken oder Kreuz, und ein Beleg. */
+function shopBezahlen(slot) {
+  const d = shopDaten(); if (!d) return;
+  const { t, sys, me, owner, state, myId } = d;
+  const sl = t.shop?.[slot]; if (!sl) return;
+  const feld = document.querySelector(`#shopFenster [data-sfn="${slot}"]`);
+  const n = Math.max(1, Math.floor(+feld?.value || SHOP.menge[slot] || 10));
+  const summe = n * sl.price;
+  const farbe = sys?.farbe || "#64748b";
+  const ich = state.players[myId];
+  const kasse = document.querySelector("#shopFenster .sfKasse");
+  SHOP.kasse = { slot, n };
+  kasse.hidden = false;
+  kasse.innerHTML = `<div class="sfKasseBox" style="--sys:${farbe}">
+    <div class="sfKasseKopf"><b>Kasse</b><span>${n}× ${gname(sl.good)} · ${fmt(summe)}</span></div>
+    <div class="sfBuehne">
+      <div class="sfKarte">
+        <div class="sfKarteOben"><b>${sys?.name || "Karte"}</b><span class="sfChip"></span></div>
+        <div class="sfKarteNr">•••• •••• •••• ${String(4000 + (rohText(ich?.name || "").length * 137) % 6000).padStart(4, "0")}</div>
+        <div class="sfKarteUnten"><span>${ich?.name || ""}</span><span>${String((state.tick % 12) + 1).padStart(2, "0")}/29</span></div>
+      </div>
+      <div class="sfTerminal"><div class="sfDisplay"><span class="sfBetrag">${fmt(summe)}</span><span class="sfStatus">Karte auflegen</span></div>
+        <div class="sfWellen"><i></i><i></i><i></i></div></div>
+    </div>
+    <div class="sfBeleg" hidden></div>
+  </div>`;
+  const box = kasse.firstElementChild, status = kasse.querySelector(".sfStatus");
+  SFX.spiel("klick");
+  requestAnimationFrame(() => box.classList.add("auflegen"));
+  setTimeout(() => { box.classList.add("funkt"); status.textContent = "Zahlung wird geprüft …"; }, 900);
+  setTimeout(() => {
+    socket.emit("shopKaufen", { x: t.x, y: t.y, slot, qty: n }, r => {
+      const beleg = kasse.querySelector(".sfBeleg");
+      box.classList.remove("funkt");
+      if (r?.error) {
+        box.classList.add("fehler"); status.textContent = "Abgelehnt";
+        beleg.hidden = false;
+        beleg.innerHTML = `<div class="sfErgebnis"><svg viewBox="0 0 52 52"><circle cx="26" cy="26" r="24"/><path d="M17 17l18 18M35 17L17 35"/></svg><b>Zahlung abgelehnt</b><span>${r.error}</span></div>
+          <button type="button" class="sfWeiter" data-sfweiter>Zurück zum Shop</button>`;
+        SFX.spiel("hinweis");
+        return;
+      }
+      box.classList.add("ok"); status.textContent = "Bezahlt ✓";
+      SFX.spiel("geld");
+      beleg.hidden = false;
+      beleg.innerHTML = `<div class="sfErgebnis"><svg viewBox="0 0 52 52"><circle cx="26" cy="26" r="24"/><path d="M15 27l7 7 15-16"/></svg><b>Zahlung erfolgreich</b></div>
+        <dl class="sfBon">
+          <div><dt>${r.n}× ${gname(sl.good)} à ${fp(sl.price)}</dt><dd>${fmt(r.summe)}</dd></div>
+          <div><dt>Händler</dt><dd>${owner?.name || ""}</dd></div>
+          <div><dt>Zahlungsdienst</dt><dd>${r.system}</dd></div>
+          <div class="klein"><dt>Gebühr ${String(sys?.gebuehr ?? "").replace(".", ",")} % (zahlt der Händler)</dt><dd>${fp(r.gebuehr)}</dd></div>
+        </dl>
+        <div class="sfBonFuss">${r.n}× ${gname(sl.good)} liegen jetzt in deinem Lager.</div>
+        <button type="button" class="sfWeiter" data-sfweiter>Weiter einkaufen</button>`;
+    });
+  }, 1900);
+}
+document.getElementById("shopFenster").addEventListener("click", e => {
+  if (e.target.closest("[data-sfzu]") || e.target.id === "shopFenster") return shopSchliessen();
+  const m = e.target.closest("[data-sfm]");
+  if (m) { const i = +m.dataset.sfm; SHOP.menge[i] = Math.max(1, (SHOP.menge[i] || 10) + (+m.dataset.d) * ((SHOP.menge[i] || 10) >= 20 ? 5 : 1)); return shopZeichnen(); }
+  if (e.target.closest(".sfKasse") && !e.target.closest(".sfKasseBox")) return;
+  const k = e.target.closest("[data-sfkauf]");
+  if (k) return shopBezahlen(+k.dataset.sfkauf);
+  if (e.target.closest("[data-sfweiter]")) {
+    SHOP.kasse = null; SHOP.sig = {};
+    const k2 = document.querySelector("#shopFenster .sfKasse"); k2.hidden = true; k2.innerHTML = "";
+    shopZeichnen();
+  }
+});
+document.getElementById("shopFenster").addEventListener("input", e => {
+  const n = e.target.closest("[data-sfn]");
+  if (n) { SHOP.menge[+n.dataset.sfn] = Math.max(1, Math.floor(+n.value) || 1);
+    const b = document.querySelector(`[data-sfkauf="${n.dataset.sfn}"]`); const d = shopDaten(); const sl = d?.t.shop?.[+n.dataset.sfn];
+    if (b && sl) b.textContent = `Kaufen · ${fmt(SHOP.menge[+n.dataset.sfn] * sl.price)}`; }
+});
+document.addEventListener("keydown", e => { if (e.key === "Escape" && SHOP.offen) shopSchliessen(); });
 
 function finanzamtRendern(state, me, myId) {
   const F = state.finanzamt, el = document.getElementById("finanzamtbody");
@@ -8348,6 +8536,10 @@ function render({ state, me, myId, chat, room }) {
         </article>`; }).join("")
       : `<div class="meta" style="margin-top:10px">Die erste Ausgabe erscheint nach zwei Minuten Spielzeit.</div>`;
   }
+
+  /* Online-Shop-Fenster live halten (Lager, Bestellungen) — außer während
+   * der Bezahlanimation und solange eine Menge eingetippt wird. */
+  if (SHOP.offen && !SHOP.kasse && !(document.activeElement && document.getElementById("shopFenster").contains(document.activeElement) && document.activeElement.tagName === "INPUT")) shopZeichnen();
 
   /* Software: Systemvergleich für alle, Baukasten für Software-Firmen */
   if (document.getElementById("p-software").classList.contains("open") &&

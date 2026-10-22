@@ -14,6 +14,8 @@ window.UPDATES = [
         en: "Online marketplace for every industry: four shelves, more customers — but it only sells once a shop system is installed. Without a software company there is the city portal (5 % per sale)." },
       { art: "besser", de: "Im Sandbox-Modus kommt Werbung jetzt aus dem Werbemodul eines Shop-Systems statt aus der Werbeagentur. Marktstände und Läden verkaufen weiter ohne System.",
         en: "In sandbox mode, advertising now comes from a shop system's ad module instead of the ad agency. Market stalls and shops keep selling without a system." },
+      { art: "neu", de: "Online-Shop zum Durchklicken: Jeder Marktplatz mit System hat ein Schaufenster mit seinen Produkten, Lagerbestand und Live-Bestellungen. Mitspieler kaufen dort direkt ein und bezahlen mit der Karte des Shop-Systems — samt Kartenterminal und Beleg.",
+        en: "Browsable online shop: every marketplace with a system has a storefront with its products, stock and live orders. Other players buy there directly and pay with the shop system's card — complete with card terminal and receipt." },
       { art: "neu", de: "Bots bauen Online-Marktplätze, prüfen jede neue Software und wechseln, wenn sie besser ist. Zwei neue Software-Bots: Byteforge (KassenKlick) und Pixelwerk (ShopStern).",
         en: "Bots build online marketplaces, check every new software release and switch when it is better. Two new software bots: Byteforge (KassenKlick) and Pixelwerk (ShopStern)." }
     ]
