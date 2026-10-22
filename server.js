@@ -9077,7 +9077,9 @@ async function spawnBot(cfg, lvl = BOT_LEVELS[BOT_LEVEL_DEFAULT]) {
           if (geb !== meins.gebuehr) await em("softwareEinstellen", { gebuehr: geb });
         }
         if (meins?.plaetze > 0 && meins.version >= 1 && meins.kunden >= meins.plaetze - 1 && me.cash > 4200
-            && Date.now() - lastBuild > lvl.bauPause / 2) {
+            && Date.now() - lastBuild > lvl.bauPause / 2
+            /* Ziegel für den eigenen Shop zurücklegen (Malprogramm-Bots) */
+            && !(cfg.sw.paint && meins.version >= 2 && me.inv.ziegel < 24 && !st.map.some(t2 => t2.owner === myId && t2.btype === "onlinemarkt"))) {
           const r = await botBaue("rechenzentrum");
           if (r?.ok) lastBuild = Date.now();
         }
