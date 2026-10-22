@@ -1082,3 +1082,27 @@ html[data-theme="papier"] .swModul.an{background:rgba(156,59,31,.08)}
 .sfProdukt.leer{opacity:.6}
 .sfBand.grau{background:#6b7280}
 .sfKarteNr{white-space:nowrap;font-size:12.5px;letter-spacing:.08em}
+/* Skill-Tree je Branche */
+.swBaeume{display:flex;flex-direction:column;gap:8px;margin-bottom:12px}
+.swBaum{border:1px solid var(--line);border-radius:12px;padding:8px 10px}
+.swBaum.eigen{border-color:var(--accent);background:var(--akzent-flaeche)}
+.swBaum.fern{opacity:.7}
+.swBaumKopf{display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:6px}
+.swBaumKopf b{font-size:13px}
+.swBaumKopf span{font:500 10.5px var(--mono);color:var(--dim);text-align:right}
+.swStufen{display:flex;align-items:stretch;gap:0}
+.swStufen.allg{gap:8px;margin-bottom:4px}
+.swLinie{flex:0 0 14px;align-self:center;height:2px;background:var(--line);font-style:normal}
+.swLinie.an{background:var(--up)}
+.swKnoten{flex:1 1 0;min-width:0;display:flex;flex-direction:column;gap:2px;text-align:left;padding:7px 9px;border-radius:9px;border:1px solid var(--line);background:var(--panel2);color:var(--text);cursor:pointer;font:inherit}
+.swKnoten b{font-size:12px;line-height:1.25}
+.swKnoten span{font-size:10.5px;color:var(--dim);line-height:1.3}
+.swKnoten em{font:500 10px var(--mono);font-style:normal;color:var(--dim);min-height:12px}
+.swKnoten.an{border-color:var(--accent);background:var(--akzent-flaeche)}
+.swKnoten.drin{border-color:var(--up)}
+.swKnoten.drin em{color:var(--up)}
+.swKnoten.zu{opacity:.55;cursor:not-allowed}
+.swChip.baum{border-color:var(--accent);color:var(--accent)}
+@media(max-width:560px){ .swStufen{flex-direction:column}.swLinie{flex-basis:8px;width:2px;height:8px;align-self:center} }
+html[data-theme="papier"] .swBaum,html[data-theme="papier"] .swKnoten{border-radius:0;border-color:#1f1a14;background:#fffdf7}
+html[data-theme="papier"] .swBaum.eigen,html[data-theme="papier"] .swKnoten.an{background:rgba(156,59,31,.08)}
