@@ -3110,7 +3110,9 @@ function marktTag() {
  * Kaufte das Finanzamt aus dem ganzen Überschuss über dem Grundstock, wurde
  * kein einziges Projekt mehr fertig (vorher 2). Jetzt nur mit Geld über der
  * Projektschwelle. */
-const faFrei = () => Math.max(0, G.stadtkasse - PROJEKT_SCHWELLE);
+/* Das Finanzamt darf schon über der Notstandsgrenze (3.000 $) kaufen — sonst
+ * bleibt die Stadtkasse unter der Projektschwelle und es kauft nie. */
+const faFrei = () => Math.max(0, G.stadtkasse - STEUER_STUFEN[0].bis);
 const faBestand = co => co.equity[FA_ID] || 0;
 const faVerwahrt = co => G.shareListings.filter(l => l.companyId === co.id && l.sellerId === FA_ID).reduce((a, l) => a + l.count, 0);
 const faGesamt = co => faBestand(co) + faVerwahrt(co);
