@@ -8,12 +8,20 @@ window.UPDATES = [
     id: "2026-10-22c", datum: "2026-10-22",
     titel: { de: "Neue Branche: Software", en: "New industry: software" },
     punkte: [
+      { art: "besser", de: "Der Online-Marktplatz ist jetzt der einzige Laden: Marktstand, Kontor, Baustoffhandel, Grüner Laden, Autohaus und Waffenhandel sind abgeschafft. Er führt alle Waren, hat 3 Regale und bekommt mit jeder Ausbaustufe eins dazu.",
+        en: "The online marketplace is now the only shop: market stall, trading house, builders merchant, green store, car dealership and arms dealer are gone. It carries every good, has 3 shelves and gains one per upgrade." },
+      { art: "neu", de: "Skill-Tree je Branche: Shop-Systeme spezialisieren sich (z. B. Agrar: Frische-Siegel → Gemüsekisten-Abo → Hof-zu-Haus). Ein Branchenbaum wirkt nur auf deren Waren. Eine zweite Branche geht erst ab Version 3 (doppelte Entwicklung + 2.000 $), eine dritte ab Version 5 (vierfach + 8.000 $). Bots wählen das System, das zu ihrer Branche passt.",
+        en: "Skill tree per industry: shop systems specialise (e.g. farming: freshness seal → veg box subscription → farm-to-door). A tree only boosts that industry's goods. A second industry needs version 3 (double development + $2,000), a third version 5 (four times + $8,000). Bots pick the system that fits their industry." },
+      { art: "besser", de: "Werbe-Abo deutlich teurer (60–400 $ je Marktplatz und Minute) — so teuer wie früher eine Dauerkampagne. Shop-Käufe zwischen Firmen kosten die halbe Börsengebühr als Handelssteuer an die Stadt.",
+        en: "Ad subscription much pricier ($60–400 per marketplace per minute) — as much as a permanent campaign used to cost. Shop purchases between companies pay half the exchange fee as trade tax to the city." },
       { art: "neu", de: "Software-Firmen entwickeln im Entwicklerstudio ein Shop-System und betreiben es im Rechenzentrum. Sie verdienen an Einrichtung, Gebühr je Verkauf und Werbe-Abo.",
         en: "Software companies develop a shop system in their dev studio and run it in a data centre. They earn from set-up fees, a fee per sale and ad subscriptions." },
       { art: "neu", de: "Online-Marktplatz für jede Branche: vier Regale, mehr Kundschaft — verkauft aber erst mit installiertem Shop-System. Ohne Software-Firma gibt es das Stadtportal (5 % je Verkauf).",
         en: "Online marketplace for every industry: four shelves, more customers — but it only sells once a shop system is installed. Without a software company there is the city portal (5 % per sale)." },
-      { art: "besser", de: "Im Sandbox-Modus kommt Werbung jetzt aus dem Werbemodul eines Shop-Systems statt aus der Werbeagentur. Marktstände und Läden verkaufen weiter ohne System.",
-        en: "In sandbox mode, advertising now comes from a shop system's ad module instead of the ad agency. Market stalls and shops keep selling without a system." },
+      { art: "besser", de: "Im Sandbox-Modus kommt Werbung jetzt aus dem Werbemodul eines Shop-Systems statt aus der Werbeagentur.",
+        en: "In sandbox mode, advertising now comes from a shop system's ad module instead of the ad agency." },
+      { art: "neu", de: "Online-Shop zum Durchklicken: Jeder Marktplatz mit System hat ein Schaufenster mit seinen Produkten, Lagerbestand und Live-Bestellungen. Mitspieler kaufen dort direkt ein und bezahlen mit der Karte des Shop-Systems — samt Kartenterminal und Beleg.",
+        en: "Browsable online shop: every marketplace with a system has a storefront with its products, stock and live orders. Other players buy there directly and pay with the shop system's card — complete with card terminal and receipt." },
       { art: "neu", de: "Bots bauen Online-Marktplätze, prüfen jede neue Software und wechseln, wenn sie besser ist. Zwei neue Software-Bots: Byteforge (KassenKlick) und Pixelwerk (ShopStern).",
         en: "Bots build online marketplaces, check every new software release and switch when it is better. Two new software bots: Byteforge (KassenKlick) and Pixelwerk (ShopStern)." }
     ]

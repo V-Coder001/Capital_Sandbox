@@ -2114,11 +2114,13 @@ const BTYPES = {
                       studio: { in: { strom: 0.5, elektronik: 0.005 }, ep: 1 } },
   rechenzentrum:    { name: "Rechenzentrum", en: "Data centre", cost: 3500, out: null, rate: 0, zone: "zentrum", industry: "software",
                       rz: { in: { strom: 0.5 }, plaetze: 5 } },
-  /* Online-Marktplatz: darf jede Branche bauen. Vier Regale für alles, was
-   * auch das Kontor führt, und mehr Kundschaft — aber er verkauft erst, wenn
-   * ein Shop-System installiert ist (siehe installSystem). */
+  /* Online-Marktplatz: der EINZIGE Laden. Er führt alle Waren, die früher
+   * Marktstand, Baustoffhandel, Kontor, Grüner Laden, Autohaus und
+   * Waffenhandel verkauften — nur Kartell-Ware nicht. Verkauf an die Stadt
+   * (frisches Geld) läuft nur noch hier, und erst mit installiertem
+   * Shop-System. 3 Regale, jede Ausbaustufe bringt eines dazu. */
   onlinemarkt: { name: "Online-Marktplatz", en: "Online marketplace", cost: 3000, out: null, rate: 0, zone: "zentrum", online: true,
-                 retail: { slots: 4, base: 0.6, goods: Object.keys(GOODS).filter(g => !VEHICLES.includes(g) && !WEAPONS.includes(g) && !ILLEGAL.includes(g)) } },
+                 retail: { slots: 3, base: 0.6, goods: Object.keys(GOODS).filter(g => !ILLEGAL.includes(g)) } },
   /* ---- Rüstungsindustrie ----
    * Die Branche am Ende der Kette: Sie verarbeitet, was Rohstoff und
    * Technologie liefern, und erzeugt die wertvollsten Güter im Spiel. Ihre
@@ -2894,7 +2896,7 @@ const tileAt = (x, y) => (x < 0 || y < 0 || x >= MAP_W || y >= MAP_H) ? null : G
 
 function newPlayer(pid, name, color, industry, socketId) {
   const inv = Object.fromEntries(Object.keys(GOODS).map(k => [k, 0]));
-  inv.ziegel = 22;   // reicht für 2 Grundgebäude + 1 Verarbeitungsgebäude (max. 21 nötig), danach Börse
+  inv.ziegel = 30;   // reicht für 2 Grundgebäude + 1 Verarbeitungsgebäude (max. 21) plus den Online-Marktplatz (8), danach Börse
   /* Beton von Anfang an: alles ab 4.000 $ Baukosten verlangt welchen, hergestellt
    * wird er aber ausschließlich im Betonwerk der Rohstoffindustrie. Spielt niemand
    * diese Industrie, wäre sonst der gesamte zweite Bauabschnitt für alle gesperrt.
@@ -3334,10 +3336,10 @@ function etfPublic() {
  * betreiben es in ihren Rechenzentren. Andere Firmen bauen einen
  * Online-Marktplatz und installieren darauf ein System — erst dann verkauft
  * er. Zwei feste Regeln:
- *  1. Pflicht ist ein System NUR für den Online-Marktplatz. Marktstände und
- *     Läden verkaufen weiter ohne. Gibt es keine Software-Firma (oder geht
- *     der Anbieter verloren), steht das Stadtportal bereit: teurer, ohne
- *     Extras, aber immer da.
+ *  1. Der Online-Marktplatz ist der einzige Laden — Verkauf an die Stadt
+ *     (frisches Geld) gibt es nur dort, und nur mit installiertem System.
+ *     Gibt es keine Software-Firma (oder geht der Anbieter verloren), steht
+ *     das Stadtportal bereit: teurer, ohne Extras, aber immer da.
  *  2. Werbung läuft im Sandbox-Modus über das Werbemodul eines Shop-Systems
  *     statt über die Werbeagentur. In allen anderen Modi (v. a. im Renntag,
  *     wo der Race Club sie braucht) bleibt die Agentur.
@@ -3354,10 +3356,70 @@ const SW = {
   PORTAL_GEBUEHR: 5,                 // % je Verkauf beim Stadtportal
   VERSION_EP: 60,                    // Grundaufwand jeder neuen Version
   WERBE_BOOST: 0.20,                 // Werbemodul: wie eine volle Agentur-Kampagne (+20 %)
-  GEB_MIN: 0.5, GEB_MAX: 4, EINR_MAX: 1500, ABO_MAX: 100,
+  GEB_MIN: 0.5, GEB_MAX: 4, EINR_MAX: 1500,
+  /* Werbe-Abo je Marktplatz und Minute. Eine dauerhaft volle Kampagne der
+   * alten Werbeagentur kostete rund 660 $/min (11 $/s, siehe AD_PACKAGES).
+   * Das erste Abo mit 15–25 $/min war also um das Dreißigfache zu billig —
+   * Werbung lohnte sich für jeden immer. Jetzt liegt sie in derselben Liga. */
+  ABO_MIN: 60, ABO_MAX: 400, ABO_START: 150,
+  HANDELSSTEUER: 0.5,                // Shop-Kauf zwischen Firmen: halbe Börsengebühr an die Stadt
   EP_SPEICHER: 600,                  // so viele EP sammelt ein Studio ohne laufende Entwicklung an
   RUF_START: 80,
 };
+/* ---- Skill-Tree je Branche ----
+ * Die allgemeinen Module oben wirken auf alle Waren. Daneben hat jede Branche
+ * einen eigenen Baum mit drei Stufen, der NUR auf die Waren dieser Branche
+ * wirkt: Stufe 1 und 2 machen den Verkauf schneller, Stufe 3 gibt Spielraum
+ * beim Preis. Vorher gewann einfach das System mit den meisten Modulen und der
+ * niedrigsten Gebühr, und alle Bots wechselten dorthin. Jetzt lohnt sich für
+ * eine Agrarfirma ein Agrar-System, für Tech ein Tech-System.
+ * Spezialisierung hat ihren Preis: Die erste Branche ist normal teuer. Eine
+ * zweite geht erst ab Version 3 und kostet doppelte EP plus 2.000 $, eine
+ * dritte erst ab Version 5, vierfache EP plus 8.000 $ — und so weiter. */
+const SW_BAEUME = {
+  agrar:     { name: "Agrar",          module: ["Frische-Siegel", "Gemüsekisten-Abo", "Hof-zu-Haus"] },
+  rohstoff:  { name: "Rohstoff & Bau", module: ["Baustoff-Rechner", "Großhandels-Konto", "Baustellen-Lieferung"] },
+  versorger: { name: "Versorger",      module: ["Tarifrechner", "Smart-Meter", "Ökostrom-Label"] },
+  tech:      { name: "Technologie",    module: ["Chip-Konfigurator", "B2B-Portal", "Express-Versand"] },
+  touristik: { name: "Touristik",      module: ["Online-Buchung", "Bewertungsportal", "Last-Minute-Börse"] },
+  ruestung:  { name: "Rüstung",        module: ["Lizenz-Prüfung", "Behörden-Portal", "Sicherheitstransport"] },
+};
+const SW_STUFE = [ { ep: 90, tempo: 0.15 }, { ep: 140, tempo: 0.15 }, { ep: 200, preis: 0.08 } ];
+/* Weitere Branchen: ab welcher Version, EP-Faktor und Lizenzkosten */
+const swAusbau = n => ({ abVersion: 1 + 2 * n, epFaktor: 2 ** n, cash: 2000 * n * n });
+/* Welche Branche eine Ware herstellt (aus den Gebäuden abgeleitet) */
+let WARE_BRANCHE = null;
+const wareBranche = g => {
+  if (!WARE_BRANCHE) {
+    WARE_BRANCHE = {};
+    for (const bt of Object.values(BTYPES)) {
+      if (!bt.industry || !SW_BAEUME[bt.industry]) continue;
+      const out = bt.out || bt.proc?.out;
+      if (out && !WARE_BRANCHE[out]) WARE_BRANCHE[out] = bt.industry;
+    }
+  }
+  return WARE_BRANCHE[g] || null;
+};
+const swModulId = (br, stufe) => `${br}:${stufe}`;
+const swStufeVon = (prod, br) => [1, 2, 3].filter(k => prod.module?.[swModulId(br, k)]).length;
+/* Tempo für eine Ware: allgemeine Module + Baum der Branche dieser Ware */
+function swTempoFuer(prod, g) {
+  if (!prod || prod.portal) return 1;
+  let t = 1;
+  for (const [m, an] of Object.entries(prod.module || {})) if (an && SW_MODULE[m]?.tempo) t += SW_MODULE[m].tempo;
+  const br = wareBranche(g);
+  if (br) for (let k = 1; k <= 3; k++) if (prod.module?.[swModulId(br, k)]) t += SW_STUFE[k - 1].tempo || 0;
+  return t;
+}
+const swPreisFuer = (prod, g) => { const br = wareBranche(g); return prod && !prod.portal && br && prod.module?.[swModulId(br, 3)] ? 1 + SW_STUFE[2].preis : 1; };
+/* Dasselbe je Kundenbranche (für Bewertung und Anzeige) */
+function swTempoBranche(prod, br) {
+  if (!prod || prod.portal) return 1;
+  let t = 1;
+  for (const [m, an] of Object.entries(prod.module || {})) if (an && SW_MODULE[m]?.tempo) t += SW_MODULE[m].tempo;
+  if (br) for (let k = 1; k <= 3; k++) if (prod.module?.[swModulId(br, k)]) t += SW_STUFE[k - 1].tempo || 0;
+  return t;
+}
 const STADTPORTAL = "stadtportal";
 const istSoftwareFirma = p => (p.industries || [p.industry]).includes("software");
 const portalProdukt = () => ({ id: STADTPORTAL, ownerId: null, name: "Stadtportal", farbe: "#64748b", version: 1, module: {},
@@ -3368,7 +3430,7 @@ const swKunden = prod => G.map.filter(t => t.system?.produktId === prod.id).leng
 const swPlaetze = prod => prod.portal ? Infinity : G.map
   .filter(t => t.owner === prod.ownerId && BTYPES[t.btype]?.rz && t.rzAktiv && !imBau(t))
   .reduce((a, t) => a + BTYPES[t.btype].rz.plaetze * (t.level || 1), 0);
-const swTempo = prod => 1 + Object.entries(prod.module || {}).reduce((a, [m, an]) => a + (an ? SW_MODULE[m]?.tempo || 0 : 0), 0);
+const swTempo = prod => swTempoBranche(prod, null);   // nur die allgemeinen Module
 const swOffen = t => !!(t.system && G.tick >= t.system.bis);
 /* Gebühr an den Anbieter (oder die Stadt). Zählt bei ihm als Umsatz. */
 function swGebuehr(prod, betrag) {
@@ -3399,6 +3461,11 @@ function swTick() {
     const kunden = swKunden(prod), plaetze = swPlaetze(prod);
     const faktor = kunden ? Math.min(1, plaetze / kunden) : 1;
     G.swFaktor[prod.id] = faktor;
+    /* Geglätteter Wert (rund eine halbe Minute) für die Bewertung: Ein kurzer
+     * Stromausfall soll nicht alle Kunden sofort ins Stadtportal treiben —
+     * gemessen wechselten sonst bei jedem Aussetzer alle Bots weg und zahlten
+     * beim Zurückwechseln jedes Mal wieder die Einrichtung. */
+    prod.faktorEma = (prod.faktorEma ?? 1) * 0.97 + faktor * 0.03;
     const ueber = kunden > 0 && faktor < 1;
     if (ueber !== !!prod.ueberlast) {
       prod.ueberlast = ueber;
@@ -3411,8 +3478,8 @@ function swTick() {
     if (G.tick % 10 === 0) prod.ruf = Math.max(0, Math.min(100, (prod.ruf ?? SW.RUF_START) + (ueber ? -1 : 0.2)));
     if (G.tick % 60 === 0) { (prod.eb ??= [0]).unshift(0); if (prod.eb.length > 10) prod.eb.length = 10; }
   }
-  /* Werbung: Wer sie im System eingeschaltet hat, zahlt das Abo je Minute an
-   * den Anbieter (je Firma und System einmal, nicht je Marktplatz). */
+  /* Werbung: Wer sie im System eingeschaltet hat, zahlt das Abo je Minute
+   * und je Marktplatz an den Anbieter. */
   G.werbeAktiv = new Set();
   const abos = new Map();
   for (const t of G.map) {
@@ -3420,7 +3487,7 @@ function swTick() {
     const prod = swVon(t.system.produktId);
     if (!prod?.module?.werbung || (G.swFaktor[prod.id] ?? 1) <= 0) continue;
     G.werbeAktiv.add(t.owner);
-    abos.set(t.owner + "|" + prod.id, { kunde: G.players[t.owner], prod });
+    abos.set(t.x + "," + t.y, { kunde: G.players[t.owner], prod });
   }
   if (G.tick % 60 === 0) for (const { kunde, prod } of abos.values()) {
     if (!kunde) continue;
@@ -3438,10 +3505,11 @@ function swTick() {
 /* Wert eines Systems aus Sicht eines Kunden — dieselbe Rechnung für Bots und
  * für die Anzeige. Umsatztempo × (1 − Gebühr) + Werbung, gedämpft durch den
  * Ruf, minus die Einrichtung auf rund 20.000 $ Umsatz umgelegt. */
-function swWert(prod) {
+function swWert(prod, br = null) {
   if (!prod || !(prod.version >= 1)) return -1;
   const ruf = prod.portal ? 1 : Math.min(1, (prod.ruf ?? SW.RUF_START) / 80);
-  return (swTempo(prod) * (prod.faktor ?? 1) * (1 - prod.gebuehr / 100) + (prod.module?.werbung ? 0.06 : 0)) * ruf
+  const preis = !prod.portal && br && prod.module?.[swModulId(br, 3)] ? 1 + SW_STUFE[2].preis : 1;
+  return (swTempoBranche(prod, br) * preis * (prod.faktorSchnitt ?? prod.faktor ?? 1) * (1 - prod.gebuehr / 100) + (prod.module?.werbung ? 0.06 : 0)) * ruf
     - (prod.einrichtung || 0) / 20000;
 }
 function softwarePublic() {
@@ -3449,13 +3517,16 @@ function softwarePublic() {
   return liste.map(s => {
     const kunden = swKunden(s), plaetze = swPlaetze(s);
     const owner = s.ownerId ? G.players[s.ownerId] : null;
-    const pub = { id: s.id, ownerId: s.ownerId, anbieter: owner?.name ?? "Stadt", name: s.name, farbe: s.farbe, version: s.version || 0,
+    const pub = { faktorSchnitt: s.portal ? 1 : Math.round((s.faktorEma ?? 1) * 100) / 100, id: s.id, ownerId: s.ownerId, anbieter: owner?.name ?? "Stadt", name: s.name, farbe: s.farbe, version: s.version || 0,
       module: s.module || {}, einrichtung: s.einrichtung, gebuehr: s.gebuehr, werbeAbo: s.werbeAbo || 0,
       kunden, plaetze: Number.isFinite(plaetze) ? plaetze : null, faktor: Math.round((G.swFaktor?.[s.id] ?? 1) * 100) / 100,
       ruf: Math.round(s.ruf ?? SW.RUF_START), portal: !!s.portal, tempo: Math.round(swTempo(s) * 100) / 100,
       einnahmen10: Math.round((s.eb || []).reduce((a, b) => a + b, 0)),
-      entwicklung: s.entwicklung ? { ep: Math.floor(s.entwicklung.ep), ziel: s.entwicklung.ziel, version: s.entwicklung.version, module: s.entwicklung.module } : null };
+      entwicklung: s.entwicklung ? { ep: Math.floor(s.entwicklung.ep), ziel: s.entwicklung.ziel, version: s.entwicklung.version, module: s.entwicklung.module, branchen: s.entwicklung.branchen } : null };
+    pub.branchen = s.branchen || [];
+    pub.stufen = Object.fromEntries(Object.keys(SW_BAEUME).map(br => [br, swStufeVon(s, br)]));
     pub.wert = Math.round(swWert(pub) * 1000) / 1000;
+    pub.wertJe = Object.fromEntries(Object.keys(SW_BAEUME).map(br => [br, Math.round(swWert(pub, br) * 1000) / 1000]));
     return pub;
   });
 }
@@ -3486,10 +3557,11 @@ function swBetrieb(t, p, bt, sperr = 1) {
 }
 function swVeroeffentlichen(prod, p) {
   const e = prod.entwicklung;
-  prod.version = e.version; prod.module = { ...e.module }; prod.entwicklung = null;
+  prod.version = e.version; prod.module = { ...e.module }; prod.branchen = [...(e.branchen || prod.branchen || [])]; prod.entwicklung = null;
   prod.released = G.tick; prod.ruf = Math.min(100, (prod.ruf ?? SW.RUF_START) + 5);
   G.softwareNeu = G.tick;
-  const was = Object.keys(prod.module).filter(m => prod.module[m]).map(m => SW_MODULE[m].name).join(", ");
+  const was = Object.keys(prod.module).filter(m => prod.module[m])
+    .map(m => SW_MODULE[m]?.name || SW_BAEUME[m.split(":")[0]]?.module[+m.split(":")[1] - 1] || m).join(", ");
   marktLog("software", `${p.name} veröffentlicht ${prod.name} v${prod.version}${was ? ` (${was})` : ""}`, { firmaId: p.id });
   io.emit("notice", { text: `Neue Software: ${prod.name} v${prod.version} von ${p.name} — ${prod.gebuehr.toLocaleString("de-DE")} % je Verkauf.` });
   logTx(p, "Software", `${prod.name} v${prod.version} veröffentlicht`, 0);
@@ -4672,7 +4744,7 @@ function snapshot() {
   return {
     tick: G.tick, winner: G.winner, winGoal: WIN_NW, report: G.report || null,
     etf: etfPublic(),
-    software: softwarePublic(), swModule: SW_MODULE, swCfg: { install: SW.INSTALL, portalInstall: SW.PORTAL_INSTALL, versionEp: SW.VERSION_EP, werbeBoost: SW.WERBE_BOOST, gebMin: SW.GEB_MIN, gebMax: SW.GEB_MAX, einrMax: SW.EINR_MAX, aboMax: SW.ABO_MAX },
+    software: softwarePublic(), swModule: SW_MODULE, swBaeume: SW_BAEUME, swStufe: SW_STUFE, swAusbau: [0, 1, 2, 3].map(swAusbau), swCfg: { install: SW.INSTALL, portalInstall: SW.PORTAL_INSTALL, versionEp: SW.VERSION_EP, werbeBoost: SW.WERBE_BOOST, gebMin: SW.GEB_MIN, gebMax: SW.GEB_MAX, einrMax: SW.EINR_MAX, aboMin: SW.ABO_MIN, aboMax: SW.ABO_MAX, handelssteuer: Math.round(satzBoerse() * SW.HANDELSSTEUER * 1000) / 10 },
     marktLog: (G.marktLog || []).slice(0, 20), marktCfg: { aktien: AKTIEN, tag: MARKT.TAG, beta: MARKT.BETA, bauDauer: MARKT.BAU_DAUER, afaDauer: MARKT.AFA_DAUER },
     /* Countdown bis zum naechsten Renntag — ohne ihn sieht man erst bei der
      * Ankuendigung, dass etwas ansteht, und kann nichts vorbereiten. */
@@ -4923,7 +4995,7 @@ function dropContract(c) {
  * Nach dem ersten Snapshot reist die Karte nur noch als Differenz über diese
  * Liste. Der Vergleich läuft über JSON, verschachtelte Arrays sind also
  * abgedeckt (derselbe Grund, aus dem `shop` hier steht). */
-const DYNAMIC_TILE_KEYS = ["locked", "owner", "btype", "lien", "shop", "paused", "level", "autos", "sperre", "denkmal", "denkmalName", "bauBis", "system", "rzAktiv"];
+const DYNAMIC_TILE_KEYS = ["locked", "owner", "btype", "lien", "shop", "paused", "level", "autos", "sperre", "denkmal", "denkmalName", "bauBis", "system", "rzAktiv", "bestellungen", "vorrat"];
 /* undefined wird zu null normalisiert, damit auch "Feld gelöscht" (z. B. der
  * Abriss räumt t.shop weg) beim Empfänger sicher ankommt. */
 /* Fahrzeuge gehen MIT ihren gerechneten Werten über die Leitung. Sie hier
@@ -6259,6 +6331,11 @@ io.on("connection", socket => {
     if (t.schwarz) return ack?.({ error: "Hier wird nur unter der Hand gehandelt" });
     if (t.owner) return ack?.({ error: "Kachel bereits belegt" });
     if (bt.zone !== t.zone) return ack?.({ error: `Nur in Zone ${bt.zone} baubar` });
+    /* Verkauft wird nur noch über den Online-Marktplatz. Die alten Läden
+     * bleiben als Gebäudetyp bestehen (Lexikon, alte Spielstände), lassen
+     * sich aber nicht mehr neu bauen. */
+    if (bt.retail && !bt.online)
+      return ack?.({ error: `${bt.name} gibt es nicht mehr — verkauft wird nur noch über den Online-Marktplatz` });
     /* Regel 2: Im Sandbox-Modus ersetzt das Werbemodul der Shop-Systeme die
      * Werbeagentur. Im Renntag (Race Club) und den übrigen Modi bleibt sie. */
     if (bt.ad && MODE === "sandbox")
@@ -6342,7 +6419,7 @@ io.on("connection", socket => {
     const t = tileAt(x, y), bt = t?.btype ? BTYPES[t.btype] : null;
     /* Der Rennstall produziert nichts, wird aber ausgebaut — jede Stufe ist
      * ein zusätzlicher Stellplatz statt +30 % Ausstoß. */
-    if (!t || t.owner !== p.id || !(bt?.out || bt?.proc || bt?.racing || bt?.fanhub || bt?.studio || bt?.rz))
+    if (!t || t.owner !== p.id || !(bt?.out || bt?.proc || bt?.racing || bt?.fanhub || bt?.studio || bt?.rz || bt?.online))
       return ack?.({ error: "Kein eigenes Produktions- oder Rennstallgebäude" });
     const level = t.level || 1;
     if (level >= LEVEL_MAX) return ack?.({ error: `Bereits auf Höchststufe ${LEVEL_MAX}` });
@@ -6350,6 +6427,7 @@ io.on("connection", socket => {
     if (p.inv.elektronik < cost.elektronik) return ack?.({ error: `Zu wenig Elektronik (${cost.elektronik} nötig)` });
     if (p.cash < cost.cash) return ack?.({ error: "Zu wenig Kapital" });
     p.inv.elektronik -= cost.elektronik; p.cash -= cost.cash; t.level = level + 1; gainXp(p, 25);
+    if (bt.online) (t.shop ??= []).push(null);   // Marktplatz: +1 Regal je Stufe
     t.anlagewert = anlageWert(t) + cost.cash + cost.elektronik * MM.elektronik.price;   // Ausbau erhöht die Anlage
     p.stats.aufgelevelt++; p.stats.ausgaben += cost.cash;
     investieren(p, cost.cash);
@@ -6686,7 +6764,7 @@ io.on("connection", socket => {
     p.cash += BTYPES[t.btype].cost * 0.5;
     logTx(p, "Bau", `Abriss ${BTYPES[t.btype].name}`, BTYPES[t.btype].cost * 0.5);
     p.stats.abgerissen++;
-    t.owner = null; t.btype = null; t.shop = undefined; t.anlagewert = undefined; t.bauBis = undefined; t.system = undefined; t.rzAktiv = undefined;
+    t.owner = null; t.btype = null; t.shop = undefined; t.anlagewert = undefined; t.bauBis = undefined; t.system = undefined; t.rzAktiv = undefined; t.bestellungen = undefined; t.vorrat = undefined;
     ack?.({ ok: true });
   }));
 
@@ -6750,7 +6828,7 @@ io.on("connection", socket => {
     const bt = t?.btype ? BTYPES[t.btype] : null;
     if (!t || t.owner !== p.id || !bt?.retail) return ack?.({ error: "Kein eigenes Verkaufsgebäude" });
     slot = Math.floor(+slot);
-    if (!(slot >= 0 && slot < bt.retail.slots)) return ack?.({ error: "Slot ungültig" });
+    if (!(slot >= 0 && slot < (t.shop?.length ?? bt.retail.slots))) return ack?.({ error: "Slot ungültig" });
     if (good === null) { t.shop[slot] = null; return ack?.({ ok: true }); }   // Slot leeren
     price = Math.round(+price * 100) / 100;
     if (!bt.retail.goods.includes(good)) return ack?.({ error: "Ware hier nicht verkäuflich" });
@@ -7124,7 +7202,7 @@ io.on("connection", socket => {
       return ack?.({ error: "Diesen Namen gibt es schon" });
     const zahl = (v, min, max, alt) => { const n = +v; return Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : alt; };
     if (!prod) {
-      prod = { id: "sw_" + id(), ownerId: p.id, name, farbe: p.color, version: 0, module: {}, einrichtung: 400, gebuehr: 2, werbeAbo: 20,
+      prod = { id: "sw_" + id(), ownerId: p.id, name, farbe: p.color, version: 0, module: {}, branchen: [], einrichtung: 400, gebuehr: 2, werbeAbo: SW.ABO_START,
                ruf: SW.RUF_START, einnahmen: 0, eb: [0], entwicklung: null };
       G.software[prod.id] = prod;
     }
@@ -7132,7 +7210,7 @@ io.on("connection", socket => {
     if (d.farbe) prod.farbe = sichereFarbe(d.farbe);
     prod.einrichtung = Math.round(zahl(d.einrichtung, 0, SW.EINR_MAX, prod.einrichtung));
     prod.gebuehr = Math.round(zahl(d.gebuehr, SW.GEB_MIN, SW.GEB_MAX, prod.gebuehr) * 10) / 10;
-    prod.werbeAbo = Math.round(zahl(d.werbeAbo, 0, SW.ABO_MAX, prod.werbeAbo));
+    prod.werbeAbo = Math.round(zahl(d.werbeAbo, SW.ABO_MIN, SW.ABO_MAX, prod.werbeAbo));
     ack?.({ ok: true, id: prod.id });
   }));
   /* --- Software: neue Version mit (weiteren) Modulen entwickeln --- */
@@ -7142,17 +7220,41 @@ io.on("connection", socket => {
     if (!prod) return ack?.({ error: "Lege zuerst Name und Preise deines Shop-Systems fest" });
     if (prod.entwicklung) return ack?.({ error: `v${prod.entwicklung.version} ist schon in Arbeit` });
     if (!G.map.some(t => t.owner === p.id && BTYPES[t.btype]?.studio)) return ack?.({ error: "Dafür brauchst du ein Entwicklerstudio" });
-    const ziel = { ...(prod.module || {}) };
-    for (const m of ["werbung", "bewertungen", "lieferung"]) if (module[m]) ziel[m] = true;
+    const ziel = { ...(prod.module || {}) }, branchen = [...(prod.branchen || [])];
+    const version = (prod.version || 0) + 1;
+    let ep = prod.version >= 1 ? SW.VERSION_EP : SW_MODULE.basis.ep, kosten = 0, neueBranche = null;
+    /* Allgemeine Module zuerst, Bäume Stufe für Stufe — so darf man Stufe 1
+     * und 2 derselben Branche in einer Version zusammen anstoßen. */
+    const stufe = m => +(m.split(":")[1] || 0);
+    const wunsch = Object.keys(module).filter(m => module[m]).sort((x, y) => stufe(x) - stufe(y));
+    for (const m of wunsch) {
+      if (ziel[m]) continue;
+      if (SW_MODULE[m] && m !== "basis") { ziel[m] = true; ep += SW_MODULE[m].ep; continue; }
+      const [br] = m.split(":"), k = stufe(m);
+      if (!SW_BAEUME[br] || !(k >= 1 && k <= 3)) return ack?.({ error: "Unbekannte Funktion" });
+      if (k > 1 && !ziel[swModulId(br, k - 1)])
+        return ack?.({ error: `${SW_BAEUME[br].module[k - 1]} braucht zuerst ${SW_BAEUME[br].module[k - 2]}` });
+      let idx = branchen.indexOf(br);
+      if (idx < 0) {
+        if (neueBranche) return ack?.({ error: "Je Version kommt höchstens eine neue Branche dazu" });
+        idx = branchen.length;
+        const aus = swAusbau(idx);
+        if (version < aus.abVersion)
+          return ack?.({ error: `Eine ${idx + 1}. Branche geht erst ab Version ${aus.abVersion} — dein System steht bei v${prod.version || 0}` });
+        neueBranche = br; branchen.push(br); kosten += aus.cash;
+      }
+      ziel[m] = true; ep += Math.round(SW_STUFE[k - 1].ep * swAusbau(idx).epFaktor);
+    }
     const neu = Object.keys(ziel).filter(m => ziel[m] && !prod.module?.[m]);
     if (prod.version >= 1 && !neu.length) return ack?.({ error: "Wähle mindestens eine neue Funktion" });
-    const ep = (prod.version >= 1 ? SW.VERSION_EP : SW_MODULE.basis.ep) + neu.reduce((a, m) => a + SW_MODULE[m].ep, 0);
+    if (p.cash < kosten) return ack?.({ error: `Die Erweiterung auf eine weitere Branche kostet ${kosten.toLocaleString("de-DE")} $` });
+    if (kosten) { p.cash -= kosten; p.stats.ausgaben += kosten; logTx(p, "Software", `${prod.name}: Lizenz für die Branche ${SW_BAEUME[neueBranche].name}`, -kosten); }
     const vorrat = Math.min(ep, p.swEp || 0);
     p.swEp = (p.swEp || 0) - vorrat;
-    prod.entwicklung = { version: (prod.version || 0) + 1, module: ziel, ziel: ep, ep: vorrat };
-    marktLog("software", `${p.name} entwickelt ${prod.name} v${prod.entwicklung.version}`, { firmaId: p.id });
+    prod.entwicklung = { version, module: ziel, branchen, ziel: ep, ep: vorrat };
+    marktLog("software", `${p.name} entwickelt ${prod.name} v${version}${neueBranche ? ` für ${SW_BAEUME[neueBranche].name}` : ""}`, { firmaId: p.id });
     if (prod.entwicklung.ep >= ep) swVeroeffentlichen(prod, p);
-    ack?.({ ok: true, ep });
+    ack?.({ ok: true, ep, kosten });
   }));
   /* --- Online-Marktplatz: Shop-System installieren oder wechseln ---
    * Einrichtung zahlt der Kunde sofort an den Anbieter. Bis die Installation
@@ -7179,6 +7281,47 @@ io.on("connection", socket => {
     }
     marktLog("software", `${p.name} ${wechsel ? "wechselt zu" : "installiert"} ${prod.name}`, { firmaId: p.id });
     ack?.({ ok: true, dauer });
+  }));
+  /* --- Im Online-Shop einer anderen Firma einkaufen ---
+   * Bezahlt wird über das installierte Shop-System: Der Käufer zahlt den
+   * Regalpreis, der Händler gibt davon die Gebühr an den Anbieter ab (wie
+   * bei Stadtkunden). Die Ware geht direkt ins Lager des Käufers. */
+  socket.on("shopKaufen", guard((p, { x, y, slot, qty }, ack) => {
+    const t = tileAt(x, y), bt = t?.btype ? BTYPES[t.btype] : null;
+    if (!t || !bt?.online) return ack?.({ error: "Kein Online-Shop" });
+    if (t.owner === p.id) return ack?.({ error: "Das ist dein eigener Shop" });
+    const haendler = G.players[t.owner];
+    const prod = swOffen(t) ? swVon(t.system.produktId) : null;
+    if (!haendler || !prod) return ack?.({ error: "Der Shop ist gerade geschlossen" });
+    if (!prod.portal && (G.swFaktor?.[prod.id] ?? 1) <= 0) return ack?.({ error: `${prod.name} ist gerade ausgefallen — keine Zahlung möglich` });
+    const sl = t.shop?.[slot];
+    if (!sl?.good || !(sl.price > 0)) return ack?.({ error: "Dieses Regal ist leer" });
+    let n = Math.floor(+qty);
+    if (!(n >= 1)) return ack?.({ error: "Menge ungültig" });
+    const vorrat = Math.floor(Math.min(haendler.inv[sl.good] || 0, sl.qty ?? Infinity));
+    if (vorrat < 1) return ack?.({ error: "Ausverkauft" });
+    n = Math.min(n, vorrat);
+    const summe = Math.round(n * sl.price * 100) / 100;
+    if (p.cash < summe) return ack?.({ error: `Zu wenig Geld — ${n}× kosten ${summe.toLocaleString("de-DE")} $` });
+    const gebuehr = summe * prod.gebuehr / 100;
+    /* Handelssteuer: Ohne sie wäre der Shop-Kauf zwischen Firmen steuerfrei,
+     * die Börse kostet den Verkäufer aber 20 % — der ganze Handel wanderte in
+     * die Shops, und der Stadtkasse fehlte das Geld für Projekte. Mit der
+     * halben Börsengebühr bleibt der Shop klar günstiger. */
+    const steuer = Math.round(summe * satzBoerse() * SW.HANDELSSTEUER * 100) / 100;
+    p.cash -= summe; p.inv[sl.good] = (p.inv[sl.good] || 0) + n; p.stats.ausgaben += summe;
+    haendler.inv[sl.good] -= n; haendler.cash += summe - gebuehr - steuer; addRevenue(haendler, summe); haendler.stats.ausgaben += gebuehr;
+    haendler.stats.steuern = (haendler.stats.steuern || 0) + steuer;
+    G.stadtkasse += steuer; G.boerseGebuehren = (G.boerseGebuehren || 0) + steuer;
+    swGebuehr(prod, gebuehr);
+    if (sl.qty != null) { sl.qty -= n; if (sl.qty <= 0.001) t.shop[slot] = null; }
+    if (t.vorrat) t.vorrat[slot] = Math.max(0, (t.vorrat[slot] || 0) - n);
+    (t.bestellungen ??= []).unshift({ id: G.tick + sl.good + p.id, g: sl.good, n, b: summe, t: G.tick, von: p.name });
+    if (t.bestellungen.length > 8) t.bestellungen.length = 8;
+    logTx(p, "Einkauf", `${n}× ${GOODS[sl.good].name} im Online-Shop von ${haendler.name} (${prod.name})`, -summe);
+    logTx(haendler, "Verkauf", `${n}× ${GOODS[sl.good].name} an ${p.name} über ${prod.name} (Gebühr ${gebuehr.toFixed(2)} $, Handelssteuer ${steuer.toFixed(2)} $)`, summe - gebuehr - steuer);
+    emitTo(haendler.id, "notice", { text: `🛒 ${p.name} kauft ${n}× ${GOODS[sl.good].name} in deinem Online-Shop (${summe.toLocaleString("de-DE")} $, bezahlt mit ${prod.name}).` });
+    ack?.({ ok: true, n, summe, gebuehr: Math.round(gebuehr * 100) / 100, steuer, steuerSatz: Math.round(satzBoerse() * SW.HANDELSSTEUER * 1000) / 10, system: prod.name });
   }));
   /* --- Werbemodul ein-/ausschalten (Abo je Minute an den Anbieter) --- */
   socket.on("systemWerbung", guard((p, { x, y, an }, ack) => {
@@ -7751,24 +7894,28 @@ function runTick() {
       /* Online-Marktplatz: ohne fertig installiertes System kein Verkauf.
        * Mit System läuft er so schnell, wie die Module und die Auslastung
        * des Anbieters es zulassen; je Verkauf geht die Gebühr an ihn. */
-      let swProd = null, swF = 1;
+      let swProd = null, swKap = 1;
       if (bt.online) {
         swProd = swOffen(t) ? swVon(t.system.produktId) : null;
         if (!swProd) continue;
-        swF = swTempo(swProd) * (swProd.portal ? 1 : (G.swFaktor?.[swProd.id] ?? 1));
-        if (!(swF > 0)) continue;
+        swKap = swProd.portal ? 1 : (G.swFaktor?.[swProd.id] ?? 1);
+        if (!(swKap > 0)) continue;
       }
       t.shop?.forEach((slot, i) => {
         if (!slot?.good || !(slot.price > 0)) return;
         /* Werbung hebt den Bezugspreis: derselbe Verkaufspreis wirkt dadurch
-         * günstiger und bremst das Tempo weniger. */
-        let q = Math.min(p.inv[slot.good], bt.retail.base * swF * retailFlow(slot.good) * shopSpeed(slot.good, slot.price, MM[slot.good].price * adBoost(p)));
+         * günstiger und bremst das Tempo weniger. Stufe 3 eines Branchenbaums
+         * wirkt genauso, aber nur auf die Waren dieser Branche. */
+        const swF = swProd ? swKap * swTempoFuer(swProd, slot.good) : 1;
+        const bezug = MM[slot.good].price * adBoost(p) * (swProd ? swPreisFuer(swProd, slot.good) : 1);
+        let q = Math.min(p.inv[slot.good], bt.retail.base * swF * retailFlow(slot.good) * shopSpeed(slot.good, slot.price, bezug));
         if (slot.qty != null) q = Math.min(q, slot.qty);   // begrenzte Verkaufsmenge
         if (q <= 0) return;
         p.inv[slot.good] -= q;
         const erloes = q * slot.price, gebuehr = swProd ? erloes * swProd.gebuehr / 100 : 0;
         p.cash += erloes - gebuehr; addRevenue(p, erloes);
         if (gebuehr) { p.stats.ausgaben += gebuehr; swGebuehr(swProd, gebuehr); }
+        if (bt.online) { const l = (t._lauf ??= {}); const e = (l[slot.good] ??= { n: 0, b: 0 }); e.n += q; e.b += erloes; }
         const r = salesRec(p, slot.good); r.botQty += q; r.botRev += q * slot.price;
         kartellUmsatzMerken(p, slot.good, q * slot.price);
         noteSold(slot.good, q);
@@ -7781,6 +7928,17 @@ function runTick() {
           }
         }
       });
+      /* Online-Shop: alle 5 s die Verkäufe an Stadtkunden als "Bestellung"
+       * festhalten — daraus speist sich der Live-Feed im Shop-Fenster. */
+      /* Vorrat je Regal öffentlich machen (Lager des Händlers, gedeckelt durch
+       * die Auftragsmenge), damit Käufer im Shop sehen, was es noch gibt. */
+      if (bt.online && G.tick % 5 === 0) t.vorrat = (t.shop || []).map(sl => sl?.good ? Math.floor(Math.min(p.inv[sl.good] || 0, sl.qty ?? Infinity)) : 0);
+      if (bt.online && t._lauf && G.tick % 5 === 0) {
+        for (const [g, e] of Object.entries(t._lauf)) if (e.n >= 0.5)
+          (t.bestellungen ??= []).unshift({ id: G.tick + g, g, n: Math.round(e.n), b: Math.round(e.b * 100) / 100, t: G.tick, von: "Stadtkunde" });
+        if (t.bestellungen?.length > 8) t.bestellungen.length = 8;
+        t._lauf = null;
+      }
       continue;
     }
     if (bt.proc) {   // Verarbeitung: Inputs anteilig verbrauchen, Output erzeugen
@@ -8172,9 +8330,9 @@ const RENNTAG_BOT_CFGS = [
 ];
 const BOT_CFGS = [
   { name: "AgrarGenossen",   industry: "agrar",     color: "#34d399",
-    plan: ["markt", "farm", "werbeagentur", "kontor"], needs: ["wasser", "strom"], rennstall: true },
+    plan: ["onlinemarkt", "farm", "werbeagentur"], needs: ["wasser", "strom"], rennstall: true },
   { name: "Grünhof & Söhne", industry: "agrar",     color: "#6fae4e",
-    plan: ["kontor", "plantage", "werbeagentur", "markt"], needs: ["wasser", "strom"] },
+    plan: ["onlinemarkt", "plantage", "werbeagentur"], needs: ["wasser", "strom"] },
 
   /* Zweites Stahlwerk gleich nach der Abdeckung. Über eine ganze Runde von
    * 78 Minuten gab es im Spiel nur EIN Stahlwerk, und Stahl war durchgehend
@@ -8185,12 +8343,12 @@ const BOT_CFGS = [
    * die Zutat mit der breitesten Abhängigkeit im Spiel, sie darf nicht an
    * einem einzigen Gebäude hängen. */
   { name: "Montan & Bau AG", industry: "rohstoff",  color: "#fbbf24",
-    plan: ["stahlwerk", "reifenwerk", "bauhandel", "werbeagentur", "kontor"], needs: ["strom", "oel", "wasser"] },
+    plan: ["stahlwerk", "reifenwerk", "onlinemarkt", "werbeagentur"], needs: ["strom", "oel", "wasser"] },
   { name: "Felswerk",        industry: "rohstoff",  color: "#f97316",
-    plan: ["stahlwerk", "kontor", "mine", "werbeagentur", "bauhandel"], needs: ["strom", "oel", "wasser"], rennstall: true },
+    plan: ["stahlwerk", "onlinemarkt", "mine", "werbeagentur"], needs: ["strom", "oel", "wasser"], rennstall: true },
 
   { name: "Stadtwerke",      industry: "versorger", color: "#38bdf8",
-    plan: ["kontor", "wasserwerk", "werbeagentur", "windpark"], needs: [],
+    plan: ["onlinemarkt", "wasserwerk", "werbeagentur", "windpark"], needs: [],
     /* Öl gehört hier zwingend dazu. Der eigentliche Ölförderer "Nordsee Öl"
      * ist der ZWEITE Versorger-Bot und läuft bei der Voreinstellung von einem
      * Bot je Branche gar nicht mit. Stadtwerke baut zwar über die
@@ -8207,21 +8365,21 @@ const BOT_CFGS = [
     plan: ["oelpumpe"], planLoop: true, maxGebaeude: 4, needs: [], alwaysSell: ["oel"] },
 
   { name: "ChipWerke",       industry: "tech",      color: "#a78bfa",
-    plan: ["bauhandel", "rennlabor", "siliziummine", "werbeagentur", "kontor"], needs: ["strom", "stahl", "oel"] },
+    plan: ["onlinemarkt", "rennlabor", "siliziummine", "werbeagentur"], needs: ["strom", "stahl", "oel"] },
   { name: "Volt & Silicon",  industry: "tech",      color: "#e879f9",
-    plan: ["kontor", "siliziummine", "werbeagentur", "autohaus"], needs: ["strom", "stahl"], rennstall: true },
+    plan: ["onlinemarkt", "siliziummine", "werbeagentur"], needs: ["strom", "stahl"], rennstall: true },
 
   /* Touristik: kauft Wasser und Strom zu und verkauft Übernachtungen über ein
    * eigenes Kontor. Bewusst nur einer — die Branche ist neu und soll den Markt
    * erst einmal nicht dominieren. */
   { name: "Küstenperle",     industry: "touristik", color: "#2dd4bf",
-    plan: ["campingplatz", "kontor", "strandhotel", "werbeagentur"], maxGebaeude: 4,
+    plan: ["campingplatz", "onlinemarkt", "strandhotel", "werbeagentur"], maxGebaeude: 4,
     needs: ["wasser", "strom"], alwaysSell: ["uebernachtung"], rennstall: true },
 
   /* Rüstung: baut erst die billige Munitionsfabrik, damit früh Geld reinkommt,
    * und kauft Stahl, Elektronik und Diesel für die teureren Stufen zu. */
   { name: "Stahlfaust",      industry: "ruestung",  color: "#f43f5e",
-    plan: ["kontor", "munitionsfabrik", "waffenhandel", "werbeagentur"], maxGebaeude: 5, rennstall: true,
+    plan: ["onlinemarkt", "munitionsfabrik", "werbeagentur"], maxGebaeude: 5, rennstall: true,
     /* Bewusst nur die Zutaten der ersten Stufen: Jede Ware in dieser Liste
      * bindet beim Einkauf bis zu 25 Stück Kapital. Mit Stahl (115 $) und
      * Elektronik (98 $) gleichzeitig war der Bot sofort klamm und kam über
@@ -8234,10 +8392,10 @@ const BOT_CFGS = [
    * das Stadtportal. */
   { name: "Byteforge",       industry: "software",  color: "#60a5fa",
     plan: ["rechenzentrum", "entwicklerstudio"], needs: ["strom", "elektronik"], vorrat: { strom: 150, elektronik: 5 },
-    sw: { name: "KassenKlick", einrichtung: 300, gebuehr: 1.5, abo: 15, module: ["werbung", "bewertungen", "lieferung"] } },
+    sw: { name: "KassenKlick", einrichtung: 300, gebuehr: 1.5, abo: 120, module: ["bewertungen", "lieferung"] } },
   { name: "Pixelwerk",       industry: "software",  color: "#f472b6",
     plan: ["entwicklerstudio", "rechenzentrum"], needs: ["strom", "elektronik"], vorrat: { strom: 150, elektronik: 5 },
-    sw: { name: "ShopStern", einrichtung: 600, gebuehr: 2.2, abo: 25, module: ["werbung", "lieferung", "bewertungen"] } },
+    sw: { name: "ShopStern", einrichtung: 600, gebuehr: 2.2, abo: 180, module: ["lieferung", "bewertungen"] } },
 ];
 let botsStarted = false;
 /* Vom ersten Spieler der Runde gewählt (siehe register): wie viele Bots je
@@ -8578,15 +8736,49 @@ async function spawnBot(cfg, lvl = BOT_LEVELS[BOT_LEVEL_DEFAULT]) {
         if (!meins) {
           await em("softwareEinstellen", { name: cfg.sw.name, farbe: cfg.color, einrichtung: cfg.sw.einrichtung, gebuehr: cfg.sw.gebuehr, werbeAbo: cfg.sw.abo });
         } else if (!meins.entwicklung && st.map.some(t2 => t2.owner === myId && t2.btype === "entwicklerstudio")) {
-          const naechstes = cfg.sw.module.find(m => !meins.module?.[m]);
-          if (meins.version < 1) await em("softwareEntwickeln", { module: { [cfg.sw.module[0]]: true } });
+          /* Schwerpunkt: die Branche mit den meisten Firmen, die noch kein
+           * anderes System bedient — so teilen sich zwei Software-Bots den
+           * Markt, statt um dieselben Kunden zu kämpfen. */
+          const fokusVon = s2 => (s2.branchen?.length ? s2.branchen : s2.entwicklung?.branchen || [])[0];
+          const waehle = (ohne = []) => {
+            const zahl = {};
+            for (const pl of Object.values(st.players)) {
+              const br = pl.industry;
+              if (!SW_BAEUME[br] || pl.id === myId) continue;
+              zahl[br] = (zahl[br] || 0) + 1;
+            }
+            /* Eine Branche, die ein anderes System schon als Schwerpunkt hat,
+             * zählt deutlich weniger — gemessen wählten sonst beide Bots Agrar. */
+            for (const s2 of st.software || []) {
+              if (s2.ownerId === myId || s2.portal) continue;
+              (s2.branchen?.length ? s2.branchen : s2.entwicklung?.branchen || []).forEach((br, i) => { if (zahl[br] != null) zahl[br] -= i === 0 ? 1.5 : 0.75; });
+            }
+            return Object.keys(SW_BAEUME).filter(br => !ohne.includes(br))
+              .sort((a2, b2) => (zahl[b2] || 0) - (zahl[a2] || 0))[0];
+          };
+          const eigene = meins.branchen?.length ? meins.branchen : [];
+          const fokus = eigene[0] || waehle();
+          const plan = [swModulId(fokus, 1), "werbung", swModulId(fokus, 2), swModulId(fokus, 3), ...cfg.sw.module];
+          let naechstes = plan.find(m => !meins.module?.[m]);
+          /* Zweite Branche erst, wenn die erste ausgebaut ist, ab v3 und mit
+           * Polster für die Lizenz — dann Stufe für Stufe weiter. */
+          if (!naechstes) {
+            const zweit = eigene[1] || waehle(eigene);
+            const k = [1, 2, 3].find(k2 => !meins.module?.[swModulId(zweit, k2)]);
+            const aus = swAusbau(eigene.indexOf(zweit) >= 0 ? eigene.indexOf(zweit) : eigene.length);
+            if (k && meins.version + 1 >= aus.abVersion && me.cash > aus.cash + 3000) naechstes = swModulId(zweit, k);
+          }
+          if (meins.version < 1) await em("softwareEntwickeln", { module: { [swModulId(fokus, 1)]: true } });
           else if (naechstes && me.cash > 2500) await em("softwareEntwickeln", { module: { [naechstes]: true } });
         }
         if (meins?.version >= 1 && Date.now() - swPreisZeit > 180_000) {
           swPreisZeit = Date.now();
           const fremdeMitKunden = (st.software || []).some(s2 => s2.ownerId !== myId && !s2.portal && s2.kunden > 0);
           let geb = meins.gebuehr;
-          if (meins.kunden === 0 && fremdeMitKunden) geb = Math.max(1, geb - 0.25);
+          /* Untergrenze 1,5 %: Im Messlauf drückte Byteforge seine Gebühr auf
+           * 1 % und kam nie über 6.000 $ Vermögen — zu wenig für Strom und
+           * Rechenzentren. Kunden gewinnt man über den Branchenbaum. */
+          if (meins.kunden === 0 && fremdeMitKunden) geb = Math.max(1.5, geb - 0.25);
           else if (meins.plaetze > 0 && meins.kunden >= meins.plaetze) geb = Math.min(3.5, geb + 0.25);
           if (geb !== meins.gebuehr) await em("softwareEinstellen", { gebuehr: geb });
         }
@@ -8610,20 +8802,26 @@ async function spawnBot(cfg, lvl = BOT_LEVELS[BOT_LEVEL_DEFAULT]) {
         const jetzt = angebote.find(s2 => s2.id === t2.system?.produktId);
         const hatPlatz = s2 => s2.portal || s2.plaetze == null || s2.kunden < s2.plaetze || s2.id === jetzt?.id;
         const leistbar = s2 => s2.id === jetzt?.id || s2.einrichtung <= Math.max(0, me.cash - 800);
+        /* Bewertet wird aus Sicht der eigenen Branche: Ein Agrar-Bot zieht ein
+         * System mit Agrar-Baum vor, auch wenn ein anderes mehr Module hat. */
+        const wertVon = s2 => s2?.wertJe?.[cfg.industry] ?? s2?.wert ?? -1;
         const beste = angebote.filter(s2 => hatPlatz(s2) && leistbar(s2) && (s2.portal || s2.ruf >= 50))
-          .sort((a2, b2) => b2.wert - a2.wert)[0];
+          .sort((a2, b2) => wertVon(b2) - wertVon(a2))[0];
         if (!t2.system) {
           if (beste) { const r = await em("installSystem", { x: t2.x, y: t2.y, produktId: beste.id }); if (r?.ok) swWechsel[key] = Date.now(); }
           continue;
         }
         if (t2.system.bis > st.tick) continue;   // Installation läuft noch
-        if (beste && beste.id !== jetzt?.id && (!jetzt || beste.wert > jetzt.wert * 1.05)
+        if (beste && beste.id !== jetzt?.id && (!jetzt || wertVon(beste) > wertVon(jetzt) * 1.05)
             && Date.now() - (swWechsel[key] || 0) > 180_000) {
           const r = await em("installSystem", { x: t2.x, y: t2.y, produktId: beste.id });
           if (r?.ok) { swWechsel[key] = Date.now(); continue; }
         }
         if (jetzt?.module?.werbung) {
-          const soll = me.cash > 4000 ? true : me.cash < 1500 ? false : !!t2.system.werbung;
+          /* Werbung nur mit dickem Polster: ein Abo kostet jetzt so viel wie
+           * früher eine Dauerkampagne (rund 30 Minuten Abo als Reserve). */
+          const abo = jetzt.werbeAbo || 0;
+          const soll = me.cash > abo * 30 ? true : me.cash < abo * 10 ? false : !!t2.system.werbung;
           if (soll !== !!t2.system.werbung) await em("systemWerbung", { x: t2.x, y: t2.y, an: soll });
         }
       }
@@ -8749,10 +8947,14 @@ async function spawnBot(cfg, lvl = BOT_LEVELS[BOT_LEVEL_DEFAULT]) {
        * Bot früh einen Online-Marktplatz — direkt nach seinen ersten beiden
        * Produktionsgebäuden und zusätzlich zur Baugrenze, damit dafür keine
        * Produktion wegfällt. */
+      /* Der Online-Marktplatz ist der einzige Laden: ohne ihn kein Verkauf an
+       * die Stadt. Deshalb steht er immer direkt nach den ersten beiden
+       * Produktionsgebäuden — zusätzlich zur Baugrenze. Ein zweiter (aus dem
+       * Plan, früher Kontor oder Fachhandel) kommt später für mehr Regale. */
       let omBonus = 0;
-      if (st.mode === "sandbox" && !cfg.planLoop && cfg.industry !== "software") {   // Software-Bots haben nichts zu verkaufen
-        gesamtplan = gesamtplan.filter(b => b !== "werbeagentur");
-        if (!gesamtplan.includes("onlinemarkt")) { gesamtplan.splice(Math.min(2, gesamtplan.length), 0, "onlinemarkt"); omBonus = 1; }
+      if (st.mode === "sandbox") gesamtplan = gesamtplan.filter(b => b !== "werbeagentur");
+      if (!cfg.planLoop && cfg.industry !== "software" && st.mode !== "renntag" && st.mode !== "kartell") {   // Software-Bots haben nichts zu verkaufen
+        gesamtplan.splice(Math.min(2, gesamtplan.length), 0, "onlinemarkt"); omBonus = 1;
       }
       const built = st.map.filter(t => t.owner === myId && t.btype).length;
       /* planLoop: der Bot arbeitet seinen Plan nicht einmal ab, sondern beginnt

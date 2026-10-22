@@ -967,3 +967,142 @@ html[data-theme="papier"] .faStufe[data-stufe=normal].on,html[data-theme="papier
 }
 html[data-theme="papier"] .swTab,html[data-theme="papier"] .swModul,html[data-theme="papier"] .swDev,html[data-theme="papier"] .tmSwStatus{border-radius:0;border-color:#1f1a14;background:#fffdf7}
 html[data-theme="papier"] .swModul.an{background:rgba(156,59,31,.08)}
+
+/* ================================================================
+ * Online-Shop-Fenster: wie eine echte Shop-Website im Browser. Bewusst hell,
+ * unabhängig vom Spielthema — es soll sich anfühlen wie eine andere Seite,
+ * die man gerade aufgerufen hat. --sys ist die Farbe des Shop-Systems.
+ * ================================================================ */
+#shopFenster{position:fixed;inset:0;z-index:240;display:grid;place-items:center;padding:16px;background:rgba(3,6,12,.62);backdrop-filter:blur(3px)}
+#shopFenster[hidden]{display:none}
+.sfBrowser{position:relative;width:min(920px,100%);max-height:min(720px,calc(100vh - 32px));display:flex;flex-direction:column;overflow:hidden;
+  background:#f6f7fb;color:#18202e;border-radius:14px;box-shadow:0 30px 80px rgba(0,0,0,.55);font-family:var(--font);animation:sfAuf .28s cubic-bezier(.2,.9,.3,1.2)}
+@keyframes sfAuf{from{opacity:0;transform:translateY(14px) scale(.97)}}
+.sfLeiste{display:flex;align-items:center;gap:10px;padding:9px 12px;background:#e5e8ef;border-bottom:1px solid #d4d8e2}
+.sfPunkte{display:flex;gap:6px}.sfPunkte i{width:11px;height:11px;border-radius:50%;background:#f87171}.sfPunkte i:nth-child(2){background:#fbbf24}.sfPunkte i:nth-child(3){background:#34d399}
+.sfUrl{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;background:#fff;border:1px solid #d4d8e2;border-radius:8px;padding:5px 10px;font:500 12.5px var(--mono);color:#4b5563}
+.sfZu{width:28px;height:28px;border-radius:8px;border:1px solid #cfd4de;background:#fff;color:#374151;cursor:pointer}
+.sfKopf{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;padding:16px 20px;background:var(--sys);color:#fff}
+.sfMarke{display:flex;align-items:center;gap:12px;min-width:0}
+.sfMarke b{display:block;font-size:20px;font-weight:800;letter-spacing:.01em}
+.sfMarke small{display:block;font-size:12.5px;opacity:.85}
+.sfLogo{width:42px;height:42px;border-radius:11px;display:grid;place-items:center;font:800 20px var(--font);color:#fff;border:2px solid rgba(255,255,255,.7)}
+.sfBadge{font-size:12.5px;padding:6px 11px;border-radius:999px;background:rgba(255,255,255,.18);border:1px solid rgba(255,255,255,.35);white-space:nowrap}
+.sfHinweis{padding:9px 20px;font-size:12.5px;background:#eef2ff;color:#3730a3;border-bottom:1px solid #dfe3f5}
+.sfInhalt{display:grid;grid-template-columns:minmax(0,1fr) 250px;gap:16px;padding:16px 20px 20px;overflow:auto;min-height:0}
+.sfGrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(178px,1fr));gap:12px;align-content:start}
+.sfProdukt{position:relative;display:flex;flex-direction:column;gap:6px;padding:12px;background:#fff;border:1px solid #e3e6ee;border-radius:12px;box-shadow:0 1px 2px rgba(16,24,40,.05);transition:transform .15s,box-shadow .15s}
+.sfProdukt:hover{transform:translateY(-2px);box-shadow:0 8px 20px rgba(16,24,40,.1)}
+.sfBand{position:absolute;top:10px;left:10px;font:700 10.5px var(--font);padding:2px 7px;border-radius:6px;background:var(--sys);color:#fff}
+.sfBild{height:92px;border-radius:9px;display:grid;place-items:center;background:color-mix(in srgb,var(--sys) 12%,#fff)}
+.sfBild span{font-size:46px;line-height:1;filter:drop-shadow(0 4px 6px rgba(0,0,0,.15))}
+.sfProdukt h5{margin:2px 0 0;font-size:15px;font-weight:700;color:#111827}
+.sfSterne{font-size:12px;color:#f59e0b;letter-spacing:1px}.sfSterne em{font:500 11.5px var(--mono);font-style:normal;color:#6b7280;margin-left:5px;letter-spacing:0}
+.sfPreis b{font:700 19px var(--mono);color:#111827}.sfPreis span{display:block;font-size:11px;color:#6b7280}
+.sfInfo{font-size:11.5px;color:#4b5563}
+.sfKauf{display:flex;flex-direction:column;gap:7px;margin-top:auto}
+.sfMenge{display:grid;grid-template-columns:30px minmax(0,1fr) 30px;border:1px solid #d4d8e2;border-radius:8px;overflow:hidden}
+.sfMenge button{border:0;background:#f3f4f6;color:#111827;font-size:16px;cursor:pointer}
+.sfMenge input{border:0;text-align:center;font:600 14px var(--mono);color:#111827;background:#fff;min-width:0;height:32px}
+.sfKaufen{border:0;border-radius:9px;padding:9px 10px;background:var(--sys);color:#fff;font:700 13px var(--font);cursor:pointer}
+.sfKaufen:disabled{opacity:.45;cursor:default}
+.sfKaufen:not(:disabled):hover{filter:brightness(1.08)}
+.sfEigen{margin-top:auto;font-size:12px;color:#6b7280;text-align:center;padding:8px;border:1px dashed #cfd4de;border-radius:8px}
+.sfLeer{grid-column:1/-1;padding:30px;text-align:center;color:#6b7280}
+.sfFeed{background:#fff;border:1px solid #e3e6ee;border-radius:12px;padding:12px;align-self:start}
+.sfFeed h4{display:flex;align-items:center;gap:7px;margin:0 0 8px;font-size:13px;color:#111827}
+.sfLive{width:8px;height:8px;border-radius:50%;background:#ef4444;box-shadow:0 0 0 0 rgba(239,68,68,.6);animation:sfLive 1.6s infinite}
+@keyframes sfLive{70%{box-shadow:0 0 0 7px rgba(239,68,68,0)}100%{box-shadow:0 0 0 0 rgba(239,68,68,0)}}
+.sfFeed ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+.sfFeed li{display:grid;grid-template-columns:28px minmax(0,1fr) auto;gap:8px;align-items:center;padding:7px 8px;border-radius:9px;background:#f8fafc;font-size:12px}
+.sfFeed li.neu{animation:sfNeu .7s ease-out}
+@keyframes sfNeu{from{opacity:0;transform:translateX(18px);background:#dcfce7}to{background:#f8fafc}}
+.sfFeedIcon{font-size:20px;text-align:center}
+.sfFeed li b{display:block;color:#111827}.sfFeed li small{display:block;color:#6b7280;font-size:11px}
+.sfFeedBetrag{display:flex;align-items:center;gap:5px;font:600 12px var(--mono);color:#166534}
+.sfFeedBetrag i{width:16px;height:16px;border-radius:4px;display:grid;place-items:center;color:#fff;font:700 9px var(--font);font-style:normal}
+.sfLeerFeed{display:block!important;color:#6b7280;background:none!important}
+/* Kasse */
+.sfKasse{position:absolute;inset:0;display:grid;place-items:center;background:rgba(246,247,251,.94);backdrop-filter:blur(2px);padding:16px}
+.sfKasse[hidden]{display:none}
+.sfKasseBox{width:min(460px,100%);display:flex;flex-direction:column;gap:14px;animation:sfAuf .25s ease-out}
+.sfKasseKopf{display:flex;justify-content:space-between;align-items:baseline}
+.sfKasseKopf b{font-size:18px}.sfKasseKopf span{font:600 14px var(--mono);color:#374151}
+.sfBuehne{position:relative;height:210px}
+.sfTerminal{position:absolute;right:0;bottom:0;width:170px;height:200px;border-radius:22px;background:#1f2937;box-shadow:inset 0 0 0 3px #374151,0 14px 30px rgba(0,0,0,.25);display:flex;flex-direction:column;align-items:center;padding:16px 14px}
+.sfDisplay{width:100%;height:78px;border-radius:10px;background:#0f172a;display:flex;flex-direction:column;justify-content:center;align-items:center;gap:4px;color:#e2e8f0;transition:background .3s}
+.sfBetrag{font:700 18px var(--mono)}
+.sfStatus{font-size:11.5px;color:#94a3b8}
+.sfWellen{position:relative;width:60px;height:60px;margin-top:22px}
+.sfWellen i{position:absolute;inset:0;border:2px solid #64748b;border-radius:50%;opacity:.5}
+.sfWellen i:nth-child(2){inset:10px}.sfWellen i:nth-child(3){inset:20px;background:#64748b}
+.sfKarte{position:absolute;left:0;top:40px;width:220px;aspect-ratio:1.586;border-radius:13px;padding:14px 16px;display:flex;flex-direction:column;justify-content:space-between;color:#fff;
+  background:linear-gradient(135deg,var(--sys),color-mix(in srgb,var(--sys) 55%,#000));box-shadow:0 14px 28px rgba(0,0,0,.28);overflow:hidden;
+  transform:translateX(-30px) rotate(-6deg);transition:transform .8s cubic-bezier(.3,.9,.3,1)}
+.sfKarte::after{content:"";position:absolute;right:-40%;top:-50%;width:90%;height:150%;border-radius:50%;background:rgba(255,255,255,.1)}
+.sfKarteOben{display:flex;justify-content:space-between;align-items:center;position:relative}
+.sfKarteOben b{font:800 17px var(--font);letter-spacing:.02em}
+.sfChip{width:32px;height:24px;border-radius:5px;background:linear-gradient(135deg,#f1d27a,#c79a2e)}
+.sfKarteNr{font:500 14px var(--mono);letter-spacing:.12em;position:relative}
+.sfKarteUnten{display:flex;justify-content:space-between;font:500 10.5px var(--mono);text-transform:uppercase;position:relative;opacity:.9}
+.auflegen .sfKarte{transform:translate(150px,-26px) rotate(-14deg) scale(.82)}
+.funkt .sfWellen i{animation:sfWelle 1s infinite;border-color:var(--sys)}
+.funkt .sfWellen i:nth-child(2){animation-delay:.15s}.funkt .sfWellen i:nth-child(3){animation-delay:.3s;background:var(--sys)}
+@keyframes sfWelle{50%{transform:scale(1.18);opacity:1}}
+.ok .sfDisplay{background:#166534}.ok .sfStatus{color:#bbf7d0}
+.ok .sfKarte{transform:translate(-10px,-6px) rotate(-4deg) scale(.86)}
+.fehler .sfDisplay{background:#991b1b}.fehler .sfStatus{color:#fecaca}
+.fehler .sfTerminal{animation:sfWackeln .4s}
+@keyframes sfWackeln{25%{transform:translateX(-6px)}75%{transform:translateX(6px)}}
+.sfBeleg{display:flex;flex-direction:column;gap:10px;background:#fff;border:1px solid #e3e6ee;border-radius:12px;padding:14px 16px;animation:sfAuf .3s ease-out}
+.sfBeleg[hidden]{display:none}
+.sfErgebnis{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.sfErgebnis svg{width:34px;height:34px;flex:none;fill:none;stroke-width:4;stroke-linecap:round;stroke-linejoin:round}
+.ok .sfErgebnis svg{stroke:#16a34a}.fehler .sfErgebnis svg{stroke:#dc2626}
+.sfErgebnis svg circle{stroke-dasharray:151;stroke-dashoffset:151;animation:sfZeichnen .6s forwards}
+.sfErgebnis svg path{stroke-dasharray:40;stroke-dashoffset:40;animation:sfZeichnen .4s .45s forwards}
+@keyframes sfZeichnen{to{stroke-dashoffset:0}}
+.sfErgebnis b{font-size:16px}.sfErgebnis span{flex-basis:100%;font-size:13px;color:#6b7280}
+.sfBon{margin:0;display:flex;flex-direction:column;gap:4px;border-top:1px dashed #cfd4de;padding-top:8px}
+.sfBon div{display:flex;justify-content:space-between;gap:10px;font-size:13px}
+.sfBon dt{color:#374151}.sfBon dd{margin:0;font:600 13px var(--mono)}
+.sfBon .klein{font-size:11.5px;color:#6b7280}.sfBon .klein dd{font-size:11.5px;font-weight:500}
+.sfBonFuss{font-size:12.5px;color:#166534}
+.sfWeiter{align-self:flex-start;border:0;border-radius:9px;padding:9px 14px;background:#111827;color:#fff;font:700 13px var(--font);cursor:pointer}
+@media(max-width:700px){
+  .sfInhalt{grid-template-columns:1fr}
+  .sfGrid{grid-template-columns:repeat(auto-fill,minmax(150px,1fr))}
+  .sfBuehne{height:190px}.sfKarte{width:180px}.sfTerminal{width:140px;height:180px}
+  .auflegen .sfKarte{transform:translate(100px,-20px) rotate(-14deg) scale(.8)}
+}
+@media(prefers-reduced-motion:reduce){
+  .sfBrowser,.sfFeed li.neu,.sfKasseBox,.sfBeleg{animation:none}
+  .sfKarte{transition:none}.funkt .sfWellen i,.sfLive{animation:none}
+}
+.sfProdukt.leer{opacity:.6}
+.sfBand.grau{background:#6b7280}
+.sfKarteNr{white-space:nowrap;font-size:12.5px;letter-spacing:.08em}
+/* Skill-Tree je Branche */
+.swBaeume{display:flex;flex-direction:column;gap:8px;margin-bottom:12px}
+.swBaum{border:1px solid var(--line);border-radius:12px;padding:8px 10px}
+.swBaum.eigen{border-color:var(--accent);background:var(--akzent-flaeche)}
+.swBaum.fern{opacity:.7}
+.swBaumKopf{display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:6px}
+.swBaumKopf b{font-size:13px}
+.swBaumKopf span{font:500 10.5px var(--mono);color:var(--dim);text-align:right}
+.swStufen{display:flex;align-items:stretch;gap:0}
+.swStufen.allg{gap:8px;margin-bottom:4px}
+.swLinie{flex:0 0 14px;align-self:center;height:2px;background:var(--line);font-style:normal}
+.swLinie.an{background:var(--up)}
+.swKnoten{flex:1 1 0;min-width:0;display:flex;flex-direction:column;gap:2px;text-align:left;padding:7px 9px;border-radius:9px;border:1px solid var(--line);background:var(--panel2);color:var(--text);cursor:pointer;font:inherit}
+.swKnoten b{font-size:12px;line-height:1.25}
+.swKnoten span{font-size:10.5px;color:var(--dim);line-height:1.3}
+.swKnoten em{font:500 10px var(--mono);font-style:normal;color:var(--dim);min-height:12px}
+.swKnoten.an{border-color:var(--accent);background:var(--akzent-flaeche)}
+.swKnoten.drin{border-color:var(--up)}
+.swKnoten.drin em{color:var(--up)}
+.swKnoten.zu{opacity:.55;cursor:not-allowed}
+.swChip.baum{border-color:var(--accent);color:var(--accent)}
+@media(max-width:560px){ .swStufen{flex-direction:column}.swLinie{flex-basis:8px;width:2px;height:8px;align-self:center} }
+html[data-theme="papier"] .swBaum,html[data-theme="papier"] .swKnoten{border-radius:0;border-color:#1f1a14;background:#fffdf7}
+html[data-theme="papier"] .swBaum.eigen,html[data-theme="papier"] .swKnoten.an{background:rgba(156,59,31,.08)}

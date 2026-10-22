@@ -5031,7 +5031,7 @@ function clickTile(e) {
       }).join("");
     }
     const lvl = t.level || 1;
-    const canLevel = !!(bt.out || bt.proc || bt.racing || bt.studio || bt.rz);
+    const canLevel = !!(bt.out || bt.proc || bt.racing || bt.studio || bt.rz || bt.online);
     const lvlMult = 1 + 0.3 * (lvl - 1);
     let upgradeHtml = "";
     if (canLevel && mine) {
@@ -5040,7 +5040,7 @@ function clickTile(e) {
       } else {
         const ec = Math.ceil(bt.cost / 2500 * lvl), cc = Math.round(bt.cost * 0.35 * lvl);
         const afford = me.inv.elektronik >= ec && me.cash >= cc;
-        const nutzen = bt.racing ? `${lvl + 1} Stellplätze statt ${lvl}` : bt.rz ? `${(lvl + 1) * bt.rz.plaetze} Kunden statt ${lvl * bt.rz.plaetze}` : bt.studio ? "+30 % Entwicklungspunkte" : "+30 % Ausstoß";
+        const nutzen = bt.racing ? `${lvl + 1} Stellplätze statt ${lvl}` : bt.online ? `${(t.shop || []).length + 1} Regale statt ${(t.shop || []).length}` : bt.rz ? `${(lvl + 1) * bt.rz.plaetze} Kunden statt ${lvl * bt.rz.plaetze}` : bt.studio ? "+30 % Entwicklungspunkte" : "+30 % Ausstoß";
         const fehlt = [me.inv.elektronik < ec ? `${ec - (me.inv.elektronik || 0)} Elektronik` : "",
                        me.cash < cc ? fmt(cc - me.cash) : ""].filter(Boolean).join(" + ");
         upgradeHtml = `<button class="tmHaupt" id="upgrade" ${afford ? "" : "disabled"}>
@@ -5098,29 +5098,34 @@ function clickTile(e) {
     const swListe = store.get().state.software || [];
     const swTick = store.get().state.tick;
     const swName = id => swListe.find(x => x.id === id);
-    const swChips = x => Object.entries(x.module || {}).filter(([, an]) => an)
+    const swChips = x => Object.entries(x.module || {}).filter(([m, an]) => an && !m.includes(":"))
       .map(([m]) => store.get().state.swModule?.[m]?.name || m).join(", ") || "keine Extras";
     if (bt.online) {
       const sys = t.system, akt = sys ? swName(sys.produktId) : null;
       const rest = sys ? sys.bis - swTick : 0;
+      const offen = akt && rest <= 0;
+      const shopKnopf = offen ? `<button class="tmHaupt" id="shopAuf"><span>🛒 Online-Shop öffnen</span><small>${mine ? "So sehen deine Kunden den Shop" : `Einkaufen, bezahlt mit ${akt.name}`}</small></button>` : "";
       if (!mine) {
-        swHtml = `<div class="tmHinweis">${akt ? `Läuft mit <b>${akt.name}</b> von ${akt.anbieter}.` : "Noch kein Shop-System installiert."}</div>`;
+        swHtml = shopKnopf + `<div class="tmHinweis">${akt ? `Läuft mit <b>${akt.name}</b> von ${akt.anbieter}.` : "Noch kein Shop-System installiert — der Shop ist geschlossen."}</div>`;
       } else {
         const status = !sys ? `<div class="tmSwStatus zu">Kein System — der Marktplatz verkauft noch nichts.</div>`
           : rest > 0 ? `<div class="tmSwStatus warn">${akt?.name ?? "System"} wird installiert · noch ${rest}s</div>`
           : `<div class="tmSwStatus an">${akt?.name ?? "System"} v${akt?.version ?? "?"} läuft${akt?.faktor < 1 ? ` · <b>überlastet (${Math.round(akt.faktor * 100)} %)</b>` : ""}</div>`;
         const werbung = akt?.module?.werbung && rest <= 0
           ? `<button class="opt" id="swWerbung" data-an="${sys.werbung ? 0 : 1}">${sys.werbung ? "Werbemodul ausschalten" : "Werbemodul einschalten"}
-              <small>${fmt(akt.werbeAbo)}/min · Läden bis +${Math.round((store.get().state.swCfg?.werbeBoost || .2) * 100)} % über Ø-Kurs</small></button>` : "";
-        const optionen = swListe.filter(x => x.version >= 1).sort((a, b) => b.wert - a.wert).map(x => {
+              <small>${fmt(akt.werbeAbo)}/min je Marktplatz · bis +${Math.round((store.get().state.swCfg?.werbeBoost || .2) * 100)} % über Ø-Kurs ohne Tempoverlust</small></button>` : "";
+        const meineBranche = store.get().state.players[myId]?.industry;
+        const wertFuer = x => x.wertJe?.[meineBranche] ?? x.wert;
+        const baumTxt = x => (x.branchen || []).map(br => `${store.get().state.swBaeume?.[br]?.name || br} ${"●".repeat(x.stufen?.[br] || 0)}${"○".repeat(3 - (x.stufen?.[br] || 0))}`).join(" · ");
+        const optionen = swListe.filter(x => x.version >= 1).sort((a, b) => wertFuer(b) - wertFuer(a)).map(x => {
           const voll = !x.portal && x.plaetze != null && x.kunden >= x.plaetze && x.id !== sys?.produktId;
           const aus = !x.portal && x.plaetze === 0;
           const jetzt = x.id === sys?.produktId;
           return `<button class="opt tmSwOpt${jetzt ? " jetzt" : ""}" data-sys="${x.id}" ${jetzt || voll || me.cash < x.einrichtung ? "disabled" : ""}>
             <span><i style="background:${x.farbe}"></i>${x.name} v${x.version}<em>${x.anbieter}</em></span>
-            <small>${x.einrichtung ? fmt(x.einrichtung) + " einmalig" : "keine Einrichtung"} · ${String(x.gebuehr).replace(".", ",")} % je Verkauf · ${swChips(x)}${x.portal ? "" : ` · Ruf ${x.ruf}`}${aus ? " · <b>fällt gerade aus</b>" : voll ? " · <b>voll</b>" : jetzt ? " · <b>aktiv</b>" : ""}</small></button>`;
+            <small>${x.einrichtung ? fmt(x.einrichtung) + " einmalig" : "keine Einrichtung"} · ${String(x.gebuehr).replace(".", ",")} % je Verkauf · ${swChips(x)}${baumTxt(x) ? ` · <b>${baumTxt(x)}</b>` : ""}${x.portal ? "" : ` · Ruf ${x.ruf}`}${aus ? " · <b>fällt gerade aus</b>" : voll ? " · <b>voll</b>" : jetzt ? " · <b>aktiv</b>" : ""}</small></button>`;
         }).join("");
-        swHtml = status + werbung + `<div class="tmHinweis" style="margin:8px 2px 6px">${sys ? "Wechseln" : "Installieren"} (dauert ${store.get().state.swCfg?.install ?? 45} s, Stadtportal ${store.get().state.swCfg?.portalInstall ?? 90} s):</div>`
+        swHtml = status + shopKnopf + werbung + `<div class="tmHinweis" style="margin:8px 2px 6px">${sys ? "Wechseln" : "Installieren"} (dauert ${store.get().state.swCfg?.install ?? 45} s, Stadtportal ${store.get().state.swCfg?.portalInstall ?? 90} s):</div>`
           + optionen + `<button class="tmKlein" id="swPanel" style="margin-top:4px">Alle Systeme vergleichen</button>`;
       }
     }
@@ -5197,6 +5202,7 @@ function clickTile(e) {
       act("systemWerbung", { x: t.x, y: t.y, an: ev.currentTarget.dataset.an === "1" }); tm.style.display = "none";
     });
     tm.querySelector("#swPanel")?.addEventListener("click", () => { tm.style.display = "none"; openPanel("software"); });
+    tm.querySelector("#shopAuf")?.addEventListener("click", () => { tm.style.display = "none"; shopOeffnen(t.x, t.y); });
     tm.querySelector("#upgrade")?.addEventListener("click", () => { act("upgradeBuilding", { x: t.x, y: t.y }); tm.style.display = "none"; });
     tm.querySelectorAll("[data-slot]").forEach(b => b.addEventListener("click", () => {
       const i = +b.dataset.slot;
@@ -5240,7 +5246,9 @@ function clickTile(e) {
     && !(b.familie && (!kartellModus || b.familie !== meineFamilie))
     && !(b.casino && !kartellModus)
     /* Regel 2: im Sandbox-Modus kommt Werbung aus dem Werbemodul der Shop-Systeme */
-    && !(b.ad && store.get().state?.mode === "sandbox") && (
+    && !(b.ad && store.get().state?.mode === "sandbox")
+    /* Verkauft wird nur noch über den Online-Marktplatz */
+    && !(b.retail && !b.online) && (
     store.get().state?.mode === "renntag"
       ? rolleErlaubt.includes(bid)
       /* Kartellmodus: Familien bauen ALLES — Bezirkskontrolle zählt Gebäude,
@@ -5544,56 +5552,98 @@ document.getElementById("p-bank").addEventListener("click", e => {
  * neue Funktionen über eine neue Version. Eingaben leben in swEntwurf, damit
  * das sekündliche Neuzeichnen sie nicht verwirft. */
 const swEntwurf = {};
+const SW_BAEUME_NAME = (state, br) => state.swBaeume?.[br] ? `für ${state.swBaeume[br].name}` : "allgemein";
 const swModulWahl = new Set();
 function softwareRendern(state, me, myId) {
   const liste = state.software || [];
   const MOD = state.swModule || {}, cfg = state.swCfg || {};
   const eigene = liste.find(x => x.ownerId === myId && !x.portal);
   const binSoftware = (state.players?.[myId]?.industries || [state.players?.[myId]?.industry]).includes("software");
-  const fertig = liste.filter(x => x.version >= 1).sort((a, b) => b.wert - a.wert);
+  const meineBr = state.players?.[myId]?.industry;
+  const wertFuer = x => x.wertJe?.[meineBr] ?? x.wert;
+  const fertig = liste.filter(x => x.version >= 1).sort((a, b) => wertFuer(b) - wertFuer(a));
   const portal = liste.find(x => x.portal);
-  const chips = x => Object.entries(x.module || {}).filter(([, an]) => an).map(([m]) => `<span class="swChip">${MOD[m]?.name || m}</span>`).join("") || `<span class="swChip leer">keine Extras</span>`;
+  const chips = x => Object.entries(x.module || {}).filter(([m, an]) => an && !m.includes(":")).map(([m]) => `<span class="swChip">${MOD[m]?.name || m}</span>`).join("") || `<span class="swChip leer">keine Extras</span>`;
   const proz = v => String(v).replace(".", ",") + " %";
   const tabelle = `<div class="sec">Shop-Systeme der Stadt</div>
     <div class="swTab">
       <div class="swKopf"><span>System</span><span>Gebühr</span><span>Einrichtung</span><span>Kunden</span><span>Wert</span></div>
       ${fertig.map((x, i) => `<div class="swZeile${x.ownerId === myId ? " meins" : ""}">
-        <span class="swName"><i style="background:${x.farbe}"></i><span><b>${x.name} <em>v${x.version}</em></b><small>${x.anbieter}${x.portal ? " · Notlösung" : ` · Ruf ${x.ruf}`}</small><span class="swChips">${chips(x)}</span></span></span>
+        <span class="swName"><i style="background:${x.farbe}"></i><span><b>${x.name} <em>v${x.version}</em></b><small>${x.anbieter}${x.portal ? " · Notlösung" : ` · Ruf ${x.ruf}`}</small><span class="swChips">${chips(x)}${(x.branchen || []).map(br => `<span class="swChip baum">${state.swBaeume?.[br]?.name || br} ${"●".repeat(x.stufen?.[br] || 0)}${"○".repeat(3 - (x.stufen?.[br] || 0))}</span>`).join("")}</span></span></span>
         <span class="mono">${proz(x.gebuehr)}</span>
         <span class="mono">${x.einrichtung ? fmt(x.einrichtung) : "—"}</span>
         <span class="mono">${x.portal ? x.kunden : `${x.kunden}/${x.plaetze ?? 0}`}${!x.portal && x.plaetze === 0 ? ` <b class="swWarn">aus</b>` : x.faktor < 1 ? ` <b class="swWarn">überlastet</b>` : ""}</span>
-        <span class="mono">${portal?.wert ? `${x.wert >= portal.wert ? "+" : ""}${Math.round((x.wert / portal.wert - 1) * 100)} %` : "—"}${i === 0 && fertig.length > 1 ? ` <b class="swBest">beste Wahl</b>` : ""}</span>
+        <span class="mono">${portal?.wert ? `${wertFuer(x) >= wertFuer(portal) ? "+" : ""}${Math.round((wertFuer(x) / wertFuer(portal) - 1) * 100)} %` : "—"}${i === 0 && fertig.length > 1 ? ` <b class="swBest">beste Wahl</b>` : ""}</span>
       </div>`).join("")}
     </div>
-    <div class="note" style="margin-top:6px">„Wert“ vergleicht mit dem Stadtportal: Tempo der Module × (1 − Gebühr), Werbemodul, Ruf und Einrichtung. Genau so entscheiden auch die Bots — sie prüfen jede neue Software und wechseln ab 5 % Vorsprung.</div>`;
+    <div class="note" style="margin-top:6px">„Wert“ ist ${SW_BAEUME_NAME(state, meineBr)} gerechnet und mit dem Stadtportal verglichen: Tempo der Module für deine Waren × (1 − Gebühr), Preisspielraum, Werbemodul, Ruf und Einrichtung. Genau so entscheiden auch die Bots — jeder aus Sicht seiner Branche — und wechseln ab 5 % Vorsprung.</div>`;
   let bau = "";
   if (binSoftware) {
     const e = { name: eigene?.name ?? "", farbe: eigene?.farbe ?? (state.players?.[myId]?.color || "#60a5fa"),
-      einrichtung: eigene?.einrichtung ?? 400, gebuehr: eigene?.gebuehr ?? 2, werbeAbo: eigene?.werbeAbo ?? 20, ...swEntwurf };
+      einrichtung: eigene?.einrichtung ?? 400, gebuehr: eigene?.gebuehr ?? 2, werbeAbo: eigene?.werbeAbo ?? 150, ...swEntwurf };
     const felder = `<div class="swForm">
         <label class="breit"><span>Name</span><input id="swName" maxlength="16" value="${escapeHtml(rohText(e.name))}" placeholder="z. B. KassenKlick"></label>
         <label><span>Farbe</span><input id="swFarbe" type="color" value="${e.farbe}"></label>
         <label><span>Einrichtung $</span><input id="swEinr" type="number" min="0" max="${cfg.einrMax ?? 1500}" step="50" value="${e.einrichtung}"></label>
         <label><span>Gebühr %</span><input id="swGeb" type="number" min="${cfg.gebMin ?? .5}" max="${cfg.gebMax ?? 4}" step="0.1" value="${e.gebuehr}"></label>
-        <label><span>Werbe-Abo $/min</span><input id="swAbo" type="number" min="0" max="${cfg.aboMax ?? 100}" step="5" value="${e.werbeAbo}"></label>
+        <label><span>Werbe-Abo $/min je Marktplatz</span><input id="swAbo" type="number" min="${cfg.aboMin ?? 60}" max="${cfg.aboMax ?? 400}" step="10" value="${e.werbeAbo}"></label>
         <button class="buyb breit" id="swSpeichern">${eigene ? "Preise und Aussehen übernehmen" : "Shop-System anlegen"}</button>
       </div>`;
     let entw = "";
     if (eigene) {
       const dev = eigene.entwicklung;
-      const kosten = (eigene.version >= 1 ? (cfg.versionEp ?? 60) : (MOD.basis?.ep ?? 150))
-        + [...swModulWahl].filter(m => !eigene.module?.[m]).reduce((a, m) => a + (MOD[m]?.ep || 0), 0);
+      const BAUM = state.swBaeume || {}, STUFE = state.swStufe || [], AUS = state.swAusbau || [];
+      const version = (eigene.version || 0) + 1;
+      const besitzt = m => !!eigene.module?.[m];
+      const gewaehlt = m => swModulWahl.has(m);
+      const eigeneBr = eigene.branchen || [];
+      /* Dieselbe Rechnung wie auf dem Server: Basis, allgemeine Module,
+       * Baumstufen mit dem Faktor ihrer Branche, Lizenz für eine neue Branche. */
+      const neueBr = [...new Set([...swModulWahl].filter(m => m.includes(":")).map(m => m.split(":")[0]).filter(br => !eigeneBr.includes(br)))];
+      const brIndex = br => eigeneBr.includes(br) ? eigeneBr.indexOf(br) : eigeneBr.length;
+      let epSumme = eigene.version >= 1 ? (cfg.versionEp ?? 60) : (MOD.basis?.ep ?? 150), lizenz = 0;
+      for (const m of swModulWahl) {
+        if (besitzt(m)) continue;
+        if (MOD[m]) { epSumme += MOD[m].ep; continue; }
+        const [br, k] = m.split(":");
+        epSumme += Math.round((STUFE[k - 1]?.ep || 0) * (AUS[brIndex(br)]?.epFaktor || 1));
+      }
+      if (neueBr.length) lizenz = AUS[eigeneBr.length]?.cash || 0;
+      const knoten = (m, titel, text, frei, sperre) => {
+        const drin = besitzt(m), an = drin || gewaehlt(m);
+        return `<button type="button" class="swKnoten${drin ? " drin" : an ? " an" : ""}${!drin && !frei ? " zu" : ""}" data-swmod="${m}" ${drin || (!frei && !an) ? "disabled" : ""} title="${!drin && !frei ? sperre : ""}">
+          <b>${titel}</b><span>${text}</span><em>${drin ? "✓ drin" : !frei ? `🔒 ${sperre}` : ""}</em></button>`;
+      };
+      const allgemein = ["werbung", "bewertungen", "lieferung"].map(m => knoten(m, MOD[m]?.name,
+        m === "werbung" ? `bis +${Math.round((cfg.werbeBoost || .2) * 100)} % Preis, Abo an dich · ${MOD[m]?.ep} EP` : `+${Math.round((MOD[m]?.tempo || 0) * 100)} % Tempo, alle Waren · ${MOD[m]?.ep} EP`, true, "")).join("");
+      const reihen = Object.keys(BAUM).sort((x, y) => (eigeneBr.includes(x) ? eigeneBr.indexOf(x) : 9) - (eigeneBr.includes(y) ? eigeneBr.indexOf(y) : 9)).map(br => {
+        const idx = brIndex(br), aus = AUS[idx] || {}, istEigen = eigeneBr.includes(br);
+        const andereNeu = neueBr.some(x => x !== br);
+        const zuFrueh = !istEigen && version < (aus.abVersion || 1);
+        const etikett = istEigen ? (idx === 0 ? "Schwerpunkt" : `${idx + 1}. Branche`)
+          : idx === 0 ? "frei wählbar" : `${idx + 1}. Branche · ab v${aus.abVersion} · ${aus.epFaktor}× EP · ${fmt(aus.cash)}`;
+        const stufen = [1, 2, 3].map(k => {
+          const m = `${br}:${k}`, st = STUFE[k - 1] || {};
+          const vorher = k === 1 || besitzt(`${br}:${k - 1}`) || gewaehlt(`${br}:${k - 1}`);
+          const frei = vorher && !zuFrueh && !(andereNeu && !istEigen);
+          const sperre = zuFrueh ? `ab v${aus.abVersion}` : !vorher ? `erst Stufe ${k - 1}` : "nur eine neue Branche je Version";
+          const ep = Math.round((st.ep || 0) * (aus.epFaktor || 1));
+          return (k > 1 ? `<i class="swLinie${besitzt(m) ? " an" : ""}"></i>` : "") +
+            knoten(m, BAUM[br].module[k - 1], `${st.tempo ? `+${Math.round(st.tempo * 100)} % Tempo` : `+${Math.round((st.preis || 0) * 100)} % Preis`} · ${ep} EP`, frei, sperre);
+        }).join("");
+        return `<div class="swBaum${istEigen ? " eigen" : ""}${zuFrueh ? " fern" : ""}"><div class="swBaumKopf"><b>${BAUM[br].name}</b><span>${etikett}</span></div><div class="swStufen">${stufen}</div></div>`;
+      }).join("");
+      const nichtsNeu = eigene.version >= 1 && ![...swModulWahl].some(m => !besitzt(m));
       entw = dev
         ? `<div class="swDev"><div class="swDevKopf"><span>Version ${dev.version} in Arbeit</span><b class="mono">${dev.ep} / ${dev.ziel} EP</b></div>
             <div class="swBalken"><i style="width:${Math.min(100, dev.ep / dev.ziel * 100).toFixed(1)}%"></i></div>
-            <div class="note" style="margin:4px 0 0">Neu: ${Object.keys(dev.module).filter(m => dev.module[m] && !eigene.module?.[m]).map(m => MOD[m]?.name).join(", ") || "Grundsystem"}</div></div>`
-        : `<div class="swModule">${["werbung", "bewertungen", "lieferung"].map(m => {
-            const drin = !!eigene.module?.[m], an = drin || swModulWahl.has(m);
-            const wirkung = m === "werbung" ? `Kunden-Läden bis +${Math.round((cfg.werbeBoost || .2) * 100)} % über Ø-Kurs, Abo an dich` : `Marktplätze verkaufen +${Math.round((MOD[m]?.tempo || 0) * 100)} % schneller`;
-            return `<button type="button" class="swModul${an ? " an" : ""}${drin ? " drin" : ""}" data-swmod="${m}" ${drin ? "disabled" : ""}>
-              <b>${MOD[m]?.name}</b><span>${wirkung}</span><em>${drin ? "schon drin" : `${MOD[m]?.ep} EP`}</em></button>`; }).join("")}</div>
-           <button class="tmHaupt" id="swEntwickeln" ${eigene.version >= 1 && ![...swModulWahl].some(m => !eigene.module?.[m]) ? "disabled" : ""}>
-             <span>Version ${eigene.version + 1} entwickeln</span><small>${kosten} EP · Vorrat ${me.swEp || 0} EP · ein Studio schafft 1 EP/s</small></button>`;
+            <div class="note" style="margin:4px 0 0">Neu: ${Object.keys(dev.module).filter(m => dev.module[m] && !besitzt(m)).map(m => MOD[m]?.name || BAUM[m.split(":")[0]]?.module[+m.split(":")[1] - 1] || m).join(", ") || "Grundsystem"}</div></div>`
+        : `<div class="sec" style="margin-top:6px">Allgemein · wirkt auf alle Waren</div><div class="swStufen allg">${allgemein}</div>
+           <div class="sec" style="margin-top:12px">Skill-Tree je Branche · wirkt nur auf Waren dieser Branche</div>
+           <div class="note" style="margin:0 0 8px">Die erste Branche ist dein Schwerpunkt. Jede weitere geht erst ab einer höheren Version und kostet mehr EP und eine Lizenz — Spezialisieren lohnt sich, alles können wird teuer.</div>
+           <div class="swBaeume">${reihen}</div>
+           <button class="tmHaupt" id="swEntwickeln" ${nichtsNeu ? "disabled" : ""}>
+             <span>Version ${version} entwickeln</span><small>${epSumme} EP${lizenz ? ` · Lizenz ${fmt(lizenz)}` : ""} · Vorrat ${me.swEp || 0} EP · ein Studio schafft 1 EP/s</small></button>`;
     }
     bau = `<div class="sec" style="margin-top:16px">Dein Shop-System</div>
       ${eigene ? `<div class="swZahlen">
@@ -5612,7 +5662,15 @@ document.getElementById("p-software").addEventListener("input", e => {
 });
 document.getElementById("p-software").addEventListener("click", e => {
   const m = e.target.closest("[data-swmod]");
-  if (m) { swModulWahl.has(m.dataset.swmod) ? swModulWahl.delete(m.dataset.swmod) : swModulWahl.add(m.dataset.swmod); SFX.spiel("klick"); render(store.get()); return; }
+  if (m) {
+    const id = m.dataset.swmod;
+    if (swModulWahl.has(id)) {
+      swModulWahl.delete(id);
+      const [br, k] = id.split(":");
+      if (k) for (let k2 = +k + 1; k2 <= 3; k2++) swModulWahl.delete(`${br}:${k2}`);
+    } else swModulWahl.add(id);
+    SFX.spiel("klick"); render(store.get()); return;
+  }
   if (e.target.closest("#swSpeichern")) {
     const v = id => document.getElementById(id)?.value;
     socket.emit("softwareEinstellen", { name: v("swName"), farbe: v("swFarbe"), einrichtung: v("swEinr"), gebuehr: v("swGeb"), werbeAbo: v("swAbo") }, r => {
@@ -5630,6 +5688,192 @@ document.getElementById("p-software").addEventListener("click", e => {
     });
   }
 });
+
+/* ---------- Online-Shop-Fenster ----------
+ * Das Schaufenster eines Online-Marktplatzes, wie ein Browserfenster: oben die
+ * Adresse des Shop-Systems, die Produkte aus den Regalen mit Lager und Preis,
+ * rechts die Bestellungen der letzten Sekunden. Fremde Spieler kaufen hier
+ * ein; bezahlt wird mit einer Karte im Design des installierten Systems. */
+const WAREN_ICON = { strom: "⚡", wasser: "💧", oel: "🛢️", obst: "🍎", erze: "⛏️", kannabis: "🌿", honig: "🍯", silizium: "🔷",
+  saft: "🧃", stahl: "🔩", medizin: "💊", gebaeck: "🥐", diesel: "⛽", uebernachtung: "🛏️", ziegel: "🧱", beton: "🏗️",
+  elektronik: "🔌", munition: "🎯", rennreifen: "🛞", rennsoftware: "💾" };
+const SHOP = { offen: false, x: 0, y: 0, kasse: null, menge: {}, gesehen: new Set() };
+const shopSlug = s => rohText(s).toLowerCase().replace(/ä/g, "ae").replace(/ö/g, "oe").replace(/ü/g, "ue").replace(/ß/g, "ss").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+function shopOeffnen(x, y) {
+  Object.assign(SHOP, { offen: true, x, y, kasse: null, menge: {}, gesehen: new Set(), sig: {} });
+  const el = document.getElementById("shopFenster");
+  el.hidden = false;
+  /* Gerüst einmal bauen; danach tauscht shopZeichnen nur die Teile aus, die
+   * sich geändert haben. Würde jedes Spiel-Update das ganze Fenster neu
+   * setzen, begänne die Einblendung immer wieder von vorn, und Klicks
+   * gingen zwischen Drücken und Loslassen verloren. */
+  el.innerHTML = `<div class="sfBrowser" role="dialog" aria-label="Online-Shop">
+    <div class="sfLeiste"><span class="sfPunkte"><i></i><i></i><i></i></span>
+      <span class="sfUrl"></span><button type="button" class="sfZu" data-sfzu aria-label="Schließen">✕</button></div>
+    <header class="sfKopf"></header>
+    <div class="sfHinweis" hidden></div>
+    <div class="sfInhalt"><div class="sfGrid"></div>
+      <aside class="sfFeed"><h4><span class="sfLive"></span>Bestellungen</h4><ul></ul></aside></div>
+    <div class="sfKasse" hidden></div>
+  </div>`;
+  SFX.spiel("klick");
+  shopZeichnen(true);
+}
+function shopSchliessen() {
+  SHOP.offen = false; SHOP.kasse = null;
+  const el = document.getElementById("shopFenster");
+  el.hidden = true; el.innerHTML = "";
+}
+function shopDaten() {
+  const { state, me, myId } = store.get();
+  const t = state.map.find(k => k.x === SHOP.x && k.y === SHOP.y);
+  if (!t || t.btype !== "onlinemarkt") return null;
+  const sys = (state.software || []).find(x => x.id === t.system?.produktId);
+  return { state, me, myId, t, sys, owner: state.players[t.owner], meins: t.owner === myId, offen: !!sys && state.tick >= (t.system?.bis || 0) };
+}
+/* Sternwertung je Produkt: nur mit Modul "Kundenbewertungen", aus Ware und
+ * Kachel abgeleitet, damit sie stabil bleibt. */
+const shopSterne = (g, t) => 3.9 + ((g.length * 7 + t.x * 3 + t.y * 5) % 11) / 10;
+/* Teil nur austauschen, wenn sich sein Inhalt geändert hat */
+const shopSetze = (sel, html, key) => {
+  if (SHOP.sig[key] === html) return;
+  SHOP.sig[key] = html;
+  const el = document.querySelector("#shopFenster " + sel); if (el) el.innerHTML = html;
+};
+function shopZeichnen(neu = false) {
+  const d = shopDaten();
+  if (!d) return shopSchliessen();
+  const { state, me, t, sys, owner, meins, offen } = d;
+  const fenster = document.getElementById("shopFenster");
+  const farbe = sys?.farbe || "#64748b", avg = state.avg || {};
+  fenster.querySelector(".sfBrowser").style.setProperty("--sys", farbe);
+  const regale = (t.shop || []).map((sl, i) => ({ sl, i })).filter(({ sl }) => sl?.good && sl.price > 0);
+  shopSetze(".sfUrl", `🔒 ${shopSlug(sys?.name || "shop")}.cs/${shopSlug(owner?.name || "firma")}`, "url");
+  shopSetze(".sfKopf", `<div class="sfMarke"><span class="sfLogo" style="background:${owner?.color || farbe}">${(rohText(owner?.name || "?")).slice(0, 1)}</span>
+      <div><b>${owner?.name || "—"}</b><small>Online-Shop · ${regale.length} Produkt${regale.length === 1 ? "" : "e"}${sys?.module?.lieferung ? " · Lieferung sofort" : ""}</small></div></div>
+    <span class="sfBadge">${offen ? `💳 Bezahlt mit <b>${sys.name}</b> v${sys.version}` : "Shop geschlossen"}</span>`, "kopf");
+  const hinweis = fenster.querySelector(".sfHinweis");
+  hinweis.hidden = !meins;
+  shopSetze(".sfHinweis", "Vorschau: So sehen andere Spieler deinen Shop. Stadtkunden kaufen hier automatisch, Mitspieler können direkt bestellen.", "hinweis");
+  const werbung = !!t.system?.werbung && sys?.module?.werbung;
+  const karten = regale.map(({ sl, i }) => {
+    const vorrat = meins ? Math.floor(Math.min(me.inv[sl.good] || 0, sl.qty ?? Infinity)) : (t.vorrat?.[i] ?? null);
+    const rabatt = avg[sl.good] ? Math.round((1 - sl.price / avg[sl.good]) * 100) : 0;
+    const n = Math.max(1, Math.min(SHOP.menge[i] || 10, vorrat || 1));
+    const sterne = sys?.module?.bewertungen ? shopSterne(sl.good, t) : null;
+    const leer = vorrat != null && vorrat < 1;
+    return `<article class="sfProdukt${leer ? " leer" : ""}">
+      ${leer ? `<span class="sfBand grau">Ausverkauft</span>` : werbung && rabatt > 0 ? `<span class="sfBand">−${rabatt} % unter Ø</span>` : werbung ? `<span class="sfBand">Empfohlen</span>` : ""}
+      <div class="sfBild"><span>${WAREN_ICON[sl.good] || "📦"}</span></div>
+      <h5>${gname(sl.good)}</h5>
+      ${sterne ? `<div class="sfSterne" title="${sterne.toFixed(1)} von 5">${"★".repeat(Math.round(sterne))}${"☆".repeat(5 - Math.round(sterne))}<em>${sterne.toFixed(1).replace(".", ",")}</em></div>` : ""}
+      <div class="sfPreis"><b>${fp(sl.price)}</b><span>je Stück · Ø ${fp(avg[sl.good] || 0)}</span></div>
+      <div class="sfInfo">${sys?.module?.lieferung ? "🚚 Sofort im Lager" : "📦 Abholung im Lager"} · ${vorrat == null ? "—" : leer ? "nichts mehr da" : `${vorrat} auf Lager`}</div>
+      ${meins ? `<div class="sfEigen">Dein Angebot</div>` : `<div class="sfKauf">
+        <div class="sfMenge"><button type="button" data-sfm="${i}" data-d="-1" aria-label="weniger">−</button><input type="number" min="1" max="${vorrat || 1}" step="1" value="${n}" data-sfn="${i}" aria-label="Menge"><button type="button" data-sfm="${i}" data-d="1" aria-label="mehr">+</button></div>
+        <button type="button" class="sfKaufen" data-sfkauf="${i}" ${offen && !leer ? "" : "disabled"}>Kaufen · ${fmt(n * sl.price)}</button></div>`}
+    </article>`; }).join("");
+  shopSetze(".sfGrid", karten || `<div class="sfLeer">Gerade keine Ware im Regal.</div>`, "grid");
+  /* Feed: neu aufbauen nur bei neuen Bestellungen — die Zeitangaben werden
+   * an Ort und Stelle aktualisiert. Sonst entstünden jede Sekunde neue
+   * Elemente, und die Einflug-Animation liefe ständig von vorn. */
+  const bestellungen = t.bestellungen || [];
+  const vorTxt = b => { const vor = Math.max(0, state.tick - b.t); return vor < 5 ? "gerade eben" : vor < 60 ? `vor ${vor} s` : `vor ${Math.floor(vor / 60)} min`; };
+  const feedSig = bestellungen.map(b => b.id).join("|") + farbe;
+  if (SHOP.sig.feed !== feedSig) {
+    SHOP.sig.feed = feedSig;
+    const ul = document.querySelector("#shopFenster .sfFeed ul");
+    ul.innerHTML = bestellungen.map(b => `<li data-bid="${b.id}"><span class="sfFeedIcon">${WAREN_ICON[b.g] || "📦"}</span>
+      <span><b>${b.n}× ${gname(b.g)}</b><small><span>${b.von}</span> · <span class="sfVor">${vorTxt(b)}</span></small></span>
+      <span class="sfFeedBetrag">${fmt(b.b)}<i style="background:${farbe}">${sys?.name ? rohText(sys.name).slice(0, 1) : "$"}</i></span></li>`).join("")
+      || `<li class="sfLeerFeed">Noch keine Bestellung — sie erscheinen hier live.</li>`;
+    ul.querySelectorAll("li[data-bid]").forEach(li => {
+      if (!SHOP.gesehen.has(li.dataset.bid)) { SHOP.gesehen.add(li.dataset.bid); if (!neu) li.classList.add("neu"); }
+    });
+  } else {
+    const spans = document.querySelectorAll("#shopFenster .sfFeed .sfVor");
+    bestellungen.forEach((b, i) => { if (spans[i]) spans[i].textContent = vorTxt(b); });
+  }
+}
+/* Bezahlvorgang: Karte im Design des Systems fährt ins Terminal, Kontaktlos-
+ * Wellen, dann die Antwort des Servers — Haken oder Kreuz, und ein Beleg. */
+function shopBezahlen(slot) {
+  const d = shopDaten(); if (!d) return;
+  const { t, sys, me, owner, state, myId } = d;
+  const sl = t.shop?.[slot]; if (!sl) return;
+  const feld = document.querySelector(`#shopFenster [data-sfn="${slot}"]`);
+  const n = Math.max(1, Math.floor(+feld?.value || SHOP.menge[slot] || 10));
+  const summe = n * sl.price;
+  const farbe = sys?.farbe || "#64748b";
+  const ich = state.players[myId];
+  const kasse = document.querySelector("#shopFenster .sfKasse");
+  SHOP.kasse = { slot, n };
+  kasse.hidden = false;
+  kasse.innerHTML = `<div class="sfKasseBox" style="--sys:${farbe}">
+    <div class="sfKasseKopf"><b>Kasse</b><span>${n}× ${gname(sl.good)} · ${fmt(summe)}</span></div>
+    <div class="sfBuehne">
+      <div class="sfKarte">
+        <div class="sfKarteOben"><b>${sys?.name || "Karte"}</b><span class="sfChip"></span></div>
+        <div class="sfKarteNr">•••• •••• •••• ${String(4000 + (rohText(ich?.name || "").length * 137) % 6000).padStart(4, "0")}</div>
+        <div class="sfKarteUnten"><span>${ich?.name || ""}</span><span>${String((state.tick % 12) + 1).padStart(2, "0")}/29</span></div>
+      </div>
+      <div class="sfTerminal"><div class="sfDisplay"><span class="sfBetrag">${fmt(summe)}</span><span class="sfStatus">Karte auflegen</span></div>
+        <div class="sfWellen"><i></i><i></i><i></i></div></div>
+    </div>
+    <div class="sfBeleg" hidden></div>
+  </div>`;
+  const box = kasse.firstElementChild, status = kasse.querySelector(".sfStatus");
+  SFX.spiel("klick");
+  requestAnimationFrame(() => box.classList.add("auflegen"));
+  setTimeout(() => { box.classList.add("funkt"); status.textContent = "Zahlung wird geprüft …"; }, 900);
+  setTimeout(() => {
+    socket.emit("shopKaufen", { x: t.x, y: t.y, slot, qty: n }, r => {
+      const beleg = kasse.querySelector(".sfBeleg");
+      box.classList.remove("funkt");
+      if (r?.error) {
+        box.classList.add("fehler"); status.textContent = "Abgelehnt";
+        beleg.hidden = false;
+        beleg.innerHTML = `<div class="sfErgebnis"><svg viewBox="0 0 52 52"><circle cx="26" cy="26" r="24"/><path d="M17 17l18 18M35 17L17 35"/></svg><b>Zahlung abgelehnt</b><span>${r.error}</span></div>
+          <button type="button" class="sfWeiter" data-sfweiter>Zurück zum Shop</button>`;
+        SFX.spiel("hinweis");
+        return;
+      }
+      box.classList.add("ok"); status.textContent = "Bezahlt ✓";
+      SFX.spiel("geld");
+      beleg.hidden = false;
+      beleg.innerHTML = `<div class="sfErgebnis"><svg viewBox="0 0 52 52"><circle cx="26" cy="26" r="24"/><path d="M15 27l7 7 15-16"/></svg><b>Zahlung erfolgreich</b></div>
+        <dl class="sfBon">
+          <div><dt>${r.n}× ${gname(sl.good)} à ${fp(sl.price)}</dt><dd>${fmt(r.summe)}</dd></div>
+          <div><dt>Händler</dt><dd>${owner?.name || ""}</dd></div>
+          <div><dt>Zahlungsdienst</dt><dd>${r.system}</dd></div>
+          <div class="klein"><dt>Gebühr ${String(sys?.gebuehr ?? "").replace(".", ",")} % an ${r.system} (zahlt der Händler)</dt><dd>${fp(r.gebuehr)}</dd></div>
+          <div class="klein"><dt>Handelssteuer ${String(r.steuerSatz ?? "").replace(".", ",")} % an die Stadt (zahlt der Händler)</dt><dd>${fp(r.steuer || 0)}</dd></div>
+        </dl>
+        <div class="sfBonFuss">${r.n}× ${gname(sl.good)} liegen jetzt in deinem Lager.</div>
+        <button type="button" class="sfWeiter" data-sfweiter>Weiter einkaufen</button>`;
+    });
+  }, 1900);
+}
+document.getElementById("shopFenster").addEventListener("click", e => {
+  if (e.target.closest("[data-sfzu]") || e.target.id === "shopFenster") return shopSchliessen();
+  const m = e.target.closest("[data-sfm]");
+  if (m) { const i = +m.dataset.sfm; SHOP.menge[i] = Math.max(1, (SHOP.menge[i] || 10) + (+m.dataset.d) * ((SHOP.menge[i] || 10) >= 20 ? 5 : 1)); return shopZeichnen(); }
+  if (e.target.closest(".sfKasse") && !e.target.closest(".sfKasseBox")) return;
+  const k = e.target.closest("[data-sfkauf]");
+  if (k) return shopBezahlen(+k.dataset.sfkauf);
+  if (e.target.closest("[data-sfweiter]")) {
+    SHOP.kasse = null; SHOP.sig = {};
+    const k2 = document.querySelector("#shopFenster .sfKasse"); k2.hidden = true; k2.innerHTML = "";
+    shopZeichnen();
+  }
+});
+document.getElementById("shopFenster").addEventListener("input", e => {
+  const n = e.target.closest("[data-sfn]");
+  if (n) { SHOP.menge[+n.dataset.sfn] = Math.max(1, Math.floor(+n.value) || 1);
+    const b = document.querySelector(`[data-sfkauf="${n.dataset.sfn}"]`); const d = shopDaten(); const sl = d?.t.shop?.[+n.dataset.sfn];
+    if (b && sl) b.textContent = `Kaufen · ${fmt(SHOP.menge[+n.dataset.sfn] * sl.price)}`; }
+});
+document.addEventListener("keydown", e => { if (e.key === "Escape" && SHOP.offen) shopSchliessen(); });
 
 function finanzamtRendern(state, me, myId) {
   const F = state.finanzamt, el = document.getElementById("finanzamtbody");
@@ -5944,8 +6188,8 @@ const TUT_IND = {
   agrar: [
     { t: "Baue eine Farm", build: "farm",
       p: `Klicke auf eine freie <em>grüne Agrar-Kachel</em> und wähle <b>Farm</b> ($1.200 + 3 Ziegel). Sie produziert <b>Obst</b> — dein Brot-und-Butter-Gut.` },
-    { t: "Baue einen Marktstand", build: "markt",
-      p: `Baue auf einer <em>blauen Zentrums-Kachel</em> einen <b>Marktstand</b> ($1.000 + 3 Ziegel). Klicke ihn danach an und lege <b>Ware, Menge und deinen Stückpreis</b> fest — er verkauft von allein.` },
+    { t: "Baue einen Online-Marktplatz", build: "onlinemarkt",
+      p: `Baue auf einer <em>blauen Zentrums-Kachel</em> einen <b>Online-Marktplatz</b> ($3.000 + 8 Ziegel) — der einzige Weg, an die Stadt zu verkaufen. Klicke ihn an, installiere ein <b>Shop-System</b> (notfalls das Stadtportal) und lege <b>Ware, Menge und Stückpreis</b> fest — dann verkauft er von allein.` },
     { t: "Baue eine Plantage", build: "plantage",
       p: `Jetzt eine <b>Plantage</b> ($2.200 + 6 Ziegel) auf einer Agrar-Kachel: <b>Kannabis</b> ist langsam, aber wertvoll (Ø ~$45). Später veredelst du mit Saftpresse und Pharma-Labor.` },
     { t: "Dein Handelsbedarf",
@@ -5957,13 +6201,13 @@ const TUT_IND = {
     { t: "Baue eine Ziegelei", build: "ziegelei",
       p: `Schalte eine weitere Industrie-Kachel frei und baue die <b>Ziegelei</b> ($1.500 + 4 Ziegel): Sie macht aus <em>Erzen + Wasser</em> → <b>Ziegel</b>. Und Ziegel braucht <b>jeder Spieler für jedes Gebäude</b> — du sitzt an der Quelle des gesamten Stadtwachstums.` },
     { t: "Dein Handelsbedarf",
-      p: `Kaufe <em>Wasser, Strom + Öl</em> von den <b>Grundversorgern</b> über die Börse (Minen laufen mit Strom + Öl auf +150 %). Verkaufe Ziegel &amp; Erze über einen <b>Baustoffhandel</b> ($2.800) zu deinem Preis. Fernziele: <b>Stahlwerk</b> (Erze + Öl → Stahl, Ø ~$80) und <b>Betonwerk</b> (→ Beton für alle großen Gebäude).` },
+      p: `Kaufe <em>Wasser, Strom + Öl</em> von den <b>Grundversorgern</b> über die Börse (Minen laufen mit Strom + Öl auf +150 %). Verkaufe Ziegel &amp; Erze über deinen <b>Online-Marktplatz</b> zu deinem Preis. Fernziele: <b>Stahlwerk</b> (Erze + Öl → Stahl, Ø ~$80) und <b>Betonwerk</b> (→ Beton für alle großen Gebäude).` },
   ],
   versorger: [
     { t: "Baue einen Brunnen", build: "brunnen",
       p: `Starte günstig: <b>Brunnen</b> ($800 + 2 Ziegel) auf einer <em>grünen Agrar-Kachel</em> — produziert <b>Wasser</b>, das Agrar- und Bauspieler ständig brauchen.` },
-    { t: "Baue ein Handelskontor", build: "kontor",
-      p: `Im <em>blauen Zentrum</em>: <b>Handelskontor</b> ($3.500 + 9 Ziegel) mit 2 Verkaufsslots für alles — hier verkaufst du Wasser, Strom &amp; Öl zu <b>deinem Preis</b>.` },
+    { t: "Baue einen Online-Marktplatz", build: "onlinemarkt",
+      p: `Im <em>blauen Zentrum</em>: <b>Online-Marktplatz</b> ($3.000 + 8 Ziegel) mit 3 Regalen für alles — jede Ausbaustufe bringt ein Regal dazu. Mit installiertem Shop-System verkaufst du Wasser, Strom &amp; Öl zu <b>deinem Preis</b> an die Stadt.` },
     { t: "Dein Ausbau-Pfad",
       p: `Sobald Kapital da ist: Industrie-Kachel freischalten ($2.000) und <b>E-Werk</b> ($2.000) bauen — <em>Strom braucht jede andere Industrie</em>. Danach Wasserwerk und an der Küste ($12.000) die <b>Ölpumpe</b>. Du bist das Rückgrat der Stadt: Alle Boosts laufen über deine Waren.` },
   ],
@@ -5973,7 +6217,7 @@ const TUT_IND = {
     { t: "Baue eine Chipfabrik", build: "chipfabrik",
       p: `Schalte eine weitere Industrie-Kachel frei und baue die <b>Chipfabrik</b> ($3.200 + 8 Ziegel): Sie macht aus <em>Silizium + Strom</em> → <b>Elektronik</b>. Damit können <b>alle Spieler jeder Industrie</b> ihre Produktionsgebäude auflevel — jede Stufe +30 % Ausstoß, bis Stufe 5. Du lieferst den Rohstoff für das Wachstum der ganzen Stadt.` },
     { t: "Dein Handelsbedarf",
-      p: `Kaufe <em>Strom</em> von den <b>Grundversorgern</b> über die Börse (Minen laufen damit auf +150 %). Verkaufe Elektronik &amp; Silizium über einen <b>Baustoffhandel</b> ($2.800) zu deinem Preis. Elektronik wird nicht zum Bauen gebraucht, sondern zum <b>Auflevel</b> bestehender Gebäude — je größer die Stadt wird, desto mehr wird nachgefragt.` },
+      p: `Kaufe <em>Strom</em> von den <b>Grundversorgern</b> über die Börse (Minen laufen damit auf +150 %). Verkaufe Elektronik &amp; Silizium über deinen <b>Online-Marktplatz</b> zu deinem Preis. Elektronik wird nicht zum Bauen gebraucht, sondern zum <b>Auflevel</b> bestehender Gebäude — je größer die Stadt wird, desto mehr wird nachgefragt.` },
   ],
   touristik: [
     { t: "Baue einen Campingplatz", build: "campingplatz",
@@ -5981,7 +6225,7 @@ const TUT_IND = {
     { t: "Schalte die Küste frei & baue ein Strandhotel", build: "strandhotel",
       p: `Das <b>Strandhotel</b> ($2.400 + 6 Ziegel) ist das eigentliche Geschäft: Es macht aus <em>Wasser + Strom</em> deutlich mehr <b>Übernachtungen</b> als der Campingplatz. Achtung, es ist hungrig — 150 Wasser und 75 Strom pro Minute. Ohne Nachschub steht es still.` },
     { t: "Dein Handelsbedarf",
-      p: `Du bist der <b>größte Kunde der Grundversorger</b>: Kaufe <em>Wasser und Strom</em> laufend an der Börse — beides liegt dort meist im Überfluss, weil es sonst kaum jemand abnimmt. Verkaufe deine Übernachtungen über ein <b>Handelskontor</b> ($3.500). Eine <b>Werbeagentur</b> lohnt sich für dich besonders: Sie hebt den Preis, den die Stadt in deinen eigenen Läden akzeptiert.` },
+      p: `Du bist der <b>größte Kunde der Grundversorger</b>: Kaufe <em>Wasser und Strom</em> laufend an der Börse — beides liegt dort meist im Überfluss, weil es sonst kaum jemand abnimmt. Verkaufe deine Übernachtungen über einen <b>Online-Marktplatz</b>. Ein Shop-System mit <b>Touristik-Baum</b> (z. B. Online-Buchung) verkauft deine Übernachtungen schneller; das <b>Werbemodul</b> hebt den Preis, den die Stadt akzeptiert.` },
   ],
   software: [
     { t: "Baue ein Entwicklerstudio", build: "entwicklerstudio",
@@ -5994,8 +6238,8 @@ const TUT_IND = {
   ruestung: [
     { t: "Schalte Industrie frei & baue eine Munitionsfabrik", build: "munitionsfabrik",
       p: `Klicke eine gesperrte Kachel in der <em>braunen Industrie-Zone</em>, schalte sie frei und baue die <b>Munitionsfabrik</b> ($1.400 + 4 Ziegel). Sie macht aus <em>Erze + Öl</em> <b>Munition</b> — billig im Bau, damit früh Geld hereinkommt.` },
-    { t: "Baue einen Waffenhandel", build: "waffenhandel",
-      p: `Pistolen und Panzer lassen sich <b>nicht</b> am Handelskontor verkaufen — dafür brauchst du den <b>Waffenhandel</b> ($5.200) im Zentrum. Zwei Verkaufsslots, du setzt den Preis selbst.` },
+    { t: "Baue einen Online-Marktplatz", build: "onlinemarkt",
+      p: `Munition, Pistolen und Panzer verkaufst du über deinen <b>Online-Marktplatz</b> ($3.000) im Zentrum — mit einem Shop-System darauf. Am besten eins mit <b>Rüstungs-Baum</b> (Lizenz-Prüfung, Behörden-Portal): Es verkauft deine Waffen schneller als ein Allrounder.` },
     { t: "Dein Handelsbedarf",
       p: `Ab der <b>Waffenschmiede</b> ($4.000) hängst du an anderen: Sie braucht <em>Stahl</em> von der Bauindustrie und <em>Elektronik</em> von der Technologie. Das <b>Panzerwerk</b> ($8.000) kommt noch mit <em>Diesel</em> von den Versorgern dazu — drei fremde Branchen für ein Produkt. Dafür spielt der Panzer preislich in der Liga der Fahrzeuge. Kaufe die Vorprodukte früh, bevor andere sie wegkaufen.` },
   ],
@@ -6045,14 +6289,18 @@ const TUT_SPIEL = [
   { t: "Schritt 1 — Baue eine Farm", build: "farm",
     p: `Klicke auf eine freie <em>grüne Agrar-Kachel</em> und wähle <b>Farm</b> ($1.200 + 3 Ziegel).<br><br>Sie produziert von allein <b>Obst</b>, Sekunde für Sekunde. Achte oben links auf dein Bargeld — Bauen kostet sofort, verdient wird erst später.` },
 
-  { t: "Schritt 2 — Baue einen Marktstand", build: "markt",
-    p: `Obst im Lager bringt noch kein Geld. Du brauchst einen Laden.<br><br>Baue im <em>blauen Zentrum</em> einen <b>Marktstand</b> ($1.000 + 3 Ziegel). Läden darf jede Branche bauen — nur Produktionsgebäude sind an deine Branche gebunden.` },
+  { t: "Schritt 2 — Baue einen Online-Marktplatz", build: "onlinemarkt",
+    p: `Obst im Lager bringt noch kein Geld. Du brauchst einen Laden — und den gibt es nur noch online.<br><br>Baue im <em>blauen Zentrum</em> einen <b>Online-Marktplatz</b> ($3.000 + 8 Ziegel). Den darf jede Branche bauen — nur Produktionsgebäude sind an deine Branche gebunden.` },
 
-  { t: "Schritt 3 — Stelle dein Obst zum Verkauf",
-    warte: (st, me, id) => st.map.some(t => t.owner === id && t.btype === "markt" && (t.shop || []).some(sl => sl && sl.good)),
-    p: `Klicke deinen <b>Marktstand</b> an und belege einen Verkaufsslot mit <b>Obst</b>.<br><br>Den <b>Preis bestimmst du selbst</b>. Und Achtung, das ist die Stelle, an der sich die meisten verrechnen: Billiger ist nicht besser. Das Verkaufstempo ist gedeckelt — unter etwa <b>70 % des Ø-Kurses</b> wirst du nicht mehr schneller, verschenkst aber Geld bei jedem Stück.` },
+  { t: "Schritt 3 — Installiere ein Shop-System",
+    warte: (st, me, id) => st.map.some(t => t.owner === id && t.btype === "onlinemarkt" && t.system),
+    p: `Ein Online-Marktplatz verkauft erst mit einem <b>Shop-System</b>. Klicke ihn an und wähle eins: von einer Software-Firma (günstiger, schneller) oder das <b>Stadtportal</b> (kostet 5 % je Verkauf, ist aber immer da).<br><br>Tipp: Ein System mit <b>Agrar-Baum</b> verkauft dein Obst schneller als ein Allrounder.` },
 
-  { t: "Schritt 4 — Kaufe Wasser und Strom",
+  { t: "Schritt 4 — Stelle dein Obst zum Verkauf",
+    warte: (st, me, id) => st.map.some(t => t.owner === id && t.btype === "onlinemarkt" && (t.shop || []).some(sl => sl && sl.good)),
+    p: `Klicke deinen <b>Online-Marktplatz</b> an und belege ein Regal mit <b>Obst</b>.<br><br>Den <b>Preis bestimmst du selbst</b>. Und Achtung, das ist die Stelle, an der sich die meisten verrechnen: Billiger ist nicht besser. Das Verkaufstempo ist gedeckelt — unter etwa <b>70 % des Ø-Kurses</b> wirst du nicht mehr schneller, verschenkst aber Geld bei jedem Stück.` },
+
+  { t: "Schritt 5 — Kaufe Wasser und Strom",
     /* Zwei Fallen umgangen, beide im Test aufgetreten:
      * 1. Nicht am Lagerbestand messen — der Boost verbraucht Wasser und Strom
      *    laufend, im Test stand Wasser Sekunden nach dem Kauf wieder auf null.
@@ -6068,11 +6316,11 @@ const TUT_SPIEL = [
     },
     p: `Öffne die <b>Börse</b> unten und besorge dir <b>Wasser</b> und <b>Strom</b> — entweder direkt aus einem Angebot oder über eine eigene Kauforder, falls gerade nichts im Buch steht.<br><br>Liegen beide im Lager, läuft deine Farm mit bis zu <b>+150 % Tempo</b> — sie werden dabei verbraucht. Das ist der größte Hebel im frühen Spiel und kostet fast nichts.` },
 
-  { t: "Schritt 5 — Stelle eine eigene Order ein",
+  { t: "Schritt 6 — Stelle eine eigene Order ein",
     warte: (st, me, id) => st.orders.some(o => o.playerId === id),
     p: `Bisher hast du aus dem Buch gekauft. Jetzt umgekehrt: Stelle an der Börse eine <b>eigene Order</b> ein — verkaufe Obst oder suche eine Ware, die du brauchst.<br><br>Deine Order bleibt stehen, bis jemand sie bedient. Ware und Geld liegen so lange treuhänderisch fest, niemand kann dich hängen lassen.` },
 
-  { t: "Schritt 6 — Bring dein Vermögen auf 16.000 $",
+  { t: "Schritt 7 — Bring dein Vermögen auf 16.000 $",
     /* Deutlich über dem Startkapital von 9.500 $. Mit 12.000 war das Ziel im
      * Test schon nach dem ersten Verkauf erreicht (13.199 $), ohne dass man
      * dafür etwas verstanden haben musste. */
@@ -6106,7 +6354,7 @@ const TUT_EINSTEIGER = [
 
   { t: "Schritt 2 — Bau einen Laden",
     warte: (st, me, id) => st.map.some(t => t.owner === id && istLaden(t)),
-    p: `Ware im Lager ist noch kein Geld. Du brauchst einen <b>Laden</b> — Marktstand, Bäckerei, Handelskontor, was dir zusagt.<br><br>Läden darf <b>jede</b> Branche bauen. Nur Produktionsgebäude sind an deine Branche gebunden.` },
+    p: `Ware im Lager ist noch kein Geld. Du brauchst einen <b>Online-Marktplatz</b> mit Shop-System — das ist der einzige Laden der Stadt.<br><br>Den darf <b>jede</b> Branche bauen. Nur Produktionsgebäude sind an deine Branche gebunden.` },
 
   { t: "Schritt 3 — Leg eine Ware in den Verkauf",
     warte: (st, me, id) => st.map.some(t => t.owner === id && (t.shop || []).some(sl => sl && sl.good)),
@@ -8349,6 +8597,10 @@ function render({ state, me, myId, chat, room }) {
       : `<div class="meta" style="margin-top:10px">Die erste Ausgabe erscheint nach zwei Minuten Spielzeit.</div>`;
   }
 
+  /* Online-Shop-Fenster live halten (Lager, Bestellungen) — außer während
+   * der Bezahlanimation und solange eine Menge eingetippt wird. */
+  if (SHOP.offen && !SHOP.kasse && !(document.activeElement && document.getElementById("shopFenster").contains(document.activeElement) && document.activeElement.tagName === "INPUT")) shopZeichnen();
+
   /* Software: Systemvergleich für alle, Baukasten für Software-Firmen */
   if (document.getElementById("p-software").classList.contains("open") &&
       !typingIn(document.getElementById("p-software"))) softwareRendern(state, me, myId);
@@ -8705,7 +8957,7 @@ function render({ state, me, myId, chat, room }) {
       ["touristik", "Touristik", ["campingplatz","strandhotel"]],
       ["ruestung", "Rüstung", ["munitionsfabrik","waffenschmiede","panzerwerk"]],
       ["software", "Software & Digitales", ["entwicklerstudio","rechenzentrum"]],
-      ["laden", "Läden (jede Branche)", ["markt","bauhandel","kontor","laden","autohaus","waffenhandel","onlinemarkt", ...(state.mode === "sandbox" ? [] : ["werbeagentur"])]],
+      ["laden", "Verkauf (jede Branche)", ["onlinemarkt", ...(state.mode === "sandbox" ? [] : ["werbeagentur"])]],
       ["renn", "Motorsport", ["rennstall"]],
     ];
     const gruppe = ([id, titel, ids]) => {
@@ -8992,13 +9244,12 @@ const TUT_BUCH = [
       billiger heißt schneller — bis zum doppelten Tempo. Du entscheidest zwischen
       Marge und Umschlag.</div>
       <ul>
-        <li><b>Marktstand</b> — Agrarwaren</li>
-        <li><b>Baustoffhandel</b> — Baumaterial</li>
-        <li><b>Handelskontor</b> — fast alles, zwei Slots</li>
-        <li><b>Autohaus</b> — nur Fahrzeuge</li>
+        <li>Der einzige Laden ist der <b>Online-Marktplatz</b>: 3 Regale für alle Waren, jede Ausbaustufe bringt eins dazu.</li>
+        <li>Er verkauft erst mit einem <b>Shop-System</b> — von einer Software-Firma oder das Stadtportal (5 % je Verkauf).</li>
+        <li>Systeme mit dem <b>Baum deiner Branche</b> verkaufen deine Waren schneller.</li>
       </ul>
-      <div class="merk">Achte beim Bauen darauf, was der Laden überhaupt führt — ein
-      Marktstand nützt dir nichts, wenn du Strom verkaufen willst.</div>`,
+      <div class="merk">Mitspieler können in deinem Online-Shop direkt einkaufen. Dafür
+      fällt die halbe Börsengebühr als Handelssteuer an — immer noch günstiger als die Börse.</div>`,
     en: { t: "Your own shops", lead: "Selling to the city", html: `
       <p>Shops sell continuously to the city's population — no other player has to buy.
       You build a shop, click it and set per sales slot:
@@ -9007,13 +9258,12 @@ const TUT_BUCH = [
       At the average rate you sell at full speed. Dearer means slower, cheaper means
       faster — up to double the pace. You decide between margin and turnover.</div>
       <ul>
-        <li><b>Market stall</b> — farm goods</li>
-        <li><b>Builders merchant</b> — building material</li>
-        <li><b>Trading house</b> — almost everything, two slots</li>
-        <li><b>Car dealership</b> — vehicles only</li>
+        <li>The only shop is the <b>online marketplace</b>: 3 shelves for every good, each upgrade adds one.</li>
+        <li>It only sells with a <b>shop system</b> installed — from a software company or the city portal (5 % per sale).</li>
+        <li>Systems with your <b>industry's tree</b> sell your goods faster.</li>
       </ul>
-      <div class="merk">When building, check what the shop actually carries — a market
-      stall is no use if you want to sell power.</div>` } },
+      <div class="merk">Other players can buy directly in your online shop. Half the exchange
+      fee applies as trade tax — still cheaper than the exchange.</div>` } },
 
   { t: "Börse", lead: "Handel unter Spielern",
     html: `
@@ -9132,6 +9382,9 @@ const TUT_BUCH = [
     html: `
       <p>Normalerweise gilt: Wer teurer verkauft, verkauft langsamer. Die Werbeagentur
       hebelt genau das aus.</p>
+      <div class="merk">Im Sandbox-Modus gibt es keine Werbeagentur mehr: Werbung kommt dort aus dem
+      <b>Werbemodul</b> eines Shop-Systems — ein Abo je Online-Marktplatz und Minute, das an die
+      Software-Firma geht. Die Wirkung ist dieselbe wie eine volle Kampagne (+20 %).</div>
       <div class="kasten"><div class="t">Reichweite</div>
       Du buchst eine Kampagne und baust <b>Reichweite</b> auf. Solange sie hoch ist,
       akzeptiert die Kundschaft in <b>deinen eigenen Läden</b> einen höheren Preis, ohne
