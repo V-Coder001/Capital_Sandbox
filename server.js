@@ -6808,43 +6808,51 @@ io.on("connection", socket => {
     ack?.({ ok: true });
   }));
 
-  socket.on("buyShares", guard((p, { listingId }, ack) => {
+  /* Teilkauf: `count` ist optional — ohne Angabe wird das ganze Angebot gekauft
+   * (Rückwärtskompatibilität, die Bots nutzen das). Ein Teil kostet den
+   * anteiligen Preis; was übrig bleibt, bleibt als Angebot an der Börse. */
+  socket.on("buyShares", guard((p, { listingId, count }, ack) => {
     const l = G.shareListings.find(l => l.id === listingId);
     if (!l) return ack?.({ error: "Angebot nicht mehr verfügbar" });
     const sellerId = l.sellerId ?? l.companyId;
     if (sellerId === p.id) return ack?.({ error: "Das ist dein eigenes Angebot" });
     if (l.toId && l.toId !== p.id) return ack?.({ error: "Dieses Angebot ist an jemand anderen gerichtet" });
-    if (p.cash < l.price) return ack?.({ error: "Zu wenig Kapital" });
+    const n = count == null ? l.count : Math.floor(+count);
+    if (!(n >= 1 && n <= l.count)) return ack?.({ error: `1–${l.count} Aktien aus diesem Angebot` });
+    const preis = n === l.count ? l.price : Math.max(1, Math.round(l.price * n / l.count));
+    if (p.cash < preis) return ack?.({ error: "Zu wenig Kapital" });
     const company = G.players[l.companyId];
     if (!company) { G.shareListings.splice(G.shareListings.indexOf(l), 1); return ack?.({ error: "Firma existiert nicht mehr" }); }
     const seller = G.players[sellerId];
-    p.cash -= l.price;
-    merkeEinstand(p, company, l.count, l.price);   // vor dem Erhöhen: braucht den alten Stand
-    company.equity[p.id] = (company.equity[p.id] || 0) + l.count;
-    G.shareListings.splice(G.shareListings.indexOf(l), 1);
-    logTx(p, "Aktien", `${l.count} Aktien von ${company.name} gekauft`, -l.price);
-    kursWirkung(company, l.count, sellerId === FA_ID ? -1 : +1);   // jemand kauft: Kurs zieht an — verkauft das Finanzamt, gibt er nach
-    marktLog("kauf", `${p.name} kauft ${l.count} Aktien von ${company.name}`, { firmaId: company.id, aktien: l.count, preis: Math.round(l.price) });
-    p.stats.anteileGekauft += l.count;
+    /* Angebot aufteilen: der Rest bleibt mit seinem anteiligen Preis stehen */
+    if (n === l.count) G.shareListings.splice(G.shareListings.indexOf(l), 1);
+    else { l.count -= n; l.price -= preis; }
+    p.cash -= preis;
+    merkeEinstand(p, company, n, preis);   // vor dem Erhöhen: braucht den alten Stand
+    company.equity[p.id] = (company.equity[p.id] || 0) + n;
+    logTx(p, "Aktien", `${n} Aktien von ${company.name} gekauft`, -preis);
+    kursWirkung(company, n, sellerId === FA_ID ? -1 : +1);   // jemand kauft: Kurs zieht an — verkauft das Finanzamt, gibt er nach
+    marktLog("kauf", `${p.name} kauft ${n} Aktien von ${company.name}`, { firmaId: company.id, aktien: n, preis: Math.round(preis) });
+    p.stats.anteileGekauft += n;
     questProg(p, "shares");
     if (sellerId === l.companyId) {
       /* Emission: die Firma gibt eigene Anteile aus, das Geld ist frisches
        * Firmenkapital. Es zählt NICHT als Umsatz — sonst würde eine Firma sich
        * über den Verkauf eigener Anteile selbst hochbewerten. */
-      company.cash += l.price;
-      company.stats.kapitalNetto = (company.stats.kapitalNetto || 0) + l.price;   // kein Ertrag — für F herausrechnen
-      logTx(company, "Aktien", `${l.count} eigene Aktien an ${p.name} ausgegeben`, l.price);
+      company.cash += preis;
+      company.stats.kapitalNetto = (company.stats.kapitalNetto || 0) + preis;   // kein Ertrag — für F herausrechnen
+      logTx(company, "Aktien", `${n} eigene Aktien an ${p.name} ausgegeben`, preis);
     } else if (istInstitution(sellerId)) {
-      institutionErhaelt(sellerId, l.price);   // Finanzamt → Stadtkasse, Fonds → Fondskasse
-      marktLog(sellerId === FA_ID ? "fa-verkauf" : "etf-verkauf", `${institutionName(sellerId)} verkauft ${l.count} Aktien von ${company.name} an ${p.name}`, { firmaId: company.id, aktien: l.count, preis: Math.round(l.price) });
+      institutionErhaelt(sellerId, preis);   // Finanzamt → Stadtkasse, Fonds → Fondskasse
+      marktLog(sellerId === FA_ID ? "fa-verkauf" : "etf-verkauf", `${institutionName(sellerId)} verkauft ${n} Aktien von ${company.name} an ${p.name}`, { firmaId: company.id, aktien: n, preis: Math.round(preis) });
     } else if (seller) {
       /* Weiterverkauf: der Erlös geht an den Aktionär — hier entsteht der
        * Kursgewinn oder -verlust aus dem Anteilshandel. */
-      seller.cash += l.price;
-      logTx(seller, "Aktien", `${l.count} Aktien von ${company.name} an ${p.name} verkauft`, l.price);
-      emitTo(sellerId, "notice", { text: `${p.name} hat deine ${l.count} Aktien von ${company.name} für ${Math.round(l.price)} $ gekauft.` });
+      seller.cash += preis;
+      logTx(seller, "Aktien", `${n} Aktien von ${company.name} an ${p.name} verkauft`, preis);
+      emitTo(sellerId, "notice", { text: `${p.name} hat deine ${n} Aktien von ${company.name} für ${Math.round(preis)} $ gekauft.` });
     }
-    io.emit("notice", { text: `${p.name} kauft ${l.count} Aktien von ${company.name} für ${Math.round(l.price)} $` });
+    io.emit("notice", { text: `${p.name} kauft ${n} Aktien von ${company.name} für ${Math.round(preis)} $` });
     ack?.({ ok: true });
   }));
 
