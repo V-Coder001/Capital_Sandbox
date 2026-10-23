@@ -5600,6 +5600,39 @@ function swDesignHtml(state, eigene) {
     <div class="swDesign">${reihen}${texte}${vorschau}
       <button class="buyb" id="swDesignSpeichern" ${geaendert ? "" : "disabled"}>${geaendert ? "Design übernehmen" : "Design ist aktuell"}</button></div>`;
 }
+const boerseEntwurf = {};
+/* Börsen-App: drittes Produkt einer Software-Firma (Vermittler). Lizenznehmer
+ * bekommen fiktive Bewohner die an der Börse handeln — frisches Geld im Markt. */
+function boerseAppHtml(state, me, eigene) {
+  const cfg = state.boerseAppCfg || {}, STUFEN = cfg.stufen || [];
+  const ba = (state.boerseApp || []).find(x => x.ownerId === eigene.ownerId);
+  const kopf = `<div class="sec" style="margin-top:16px">Börsen-App · dein drittes Produkt</div>`;
+  if ((eigene.version || 0) < (cfg.abSystem || 2))
+    return kopf + `<div class="note">Ab Shop-System v${cfg.abSystem || 2} kannst du eine Börsen-App entwickeln. Firmen kaufen eine Lizenz und erhalten virtuelle Bewohner, die an der Börse handeln. Du verdienst eine Provision an jedem Trade — passives Einkommen.</div>`;
+  const e = { name: ba?.name ?? "", preis: ba?.preis ?? 900, ...boerseEntwurf };
+  const stufeText = st => `${st.bewohner} Bewohner · ${String(st.provision).replace(".", ",")} % Provision`;
+  const laeden = ba?.laeden || state.map.filter(t => t.owner === eigene.ownerId && t.btype === "onlinemarkt").map(t => ({ x: t.x, y: t.y, offen: false }));
+  const offen = laeden.filter(l => l.offen);
+  const naechste = STUFEN[(ba?.version || 0)];
+  const dev = ba?.entwicklung;
+  return kopf + `<div class="note" style="margin:0 0 8px">Firmen kaufen eine Lizenz in <b>deinem eigenen Online-Shop</b>. Ihre virtuellen Bewohner handeln an der Börse und bringen frisches Geld in den Markt. Du verdienst eine Provision an jedem Trade.</div>
+    ${ba ? `<div class="swZahlen">
+      <div><b>${ba.version >= 1 ? "v" + ba.version : "—"}</b><span>Version</span></div>
+      <div><b>${ba.verkauft}</b><span>Lizenzen verkauft</span></div>
+      <div><b>${fmt(ba.preis)}</b><span>Lizenzpreis</span></div>
+      <div><b style="color:var(--up)">${fmt(ba.einnahmen10 || 0)}</b><span>Einnahmen 10 min</span></div></div>` : ""}
+    ${ba?.version >= 1 && !offen.length ? `<div class="mpWarn">⚠ ${laeden.length ? "Dein Online-Marktplatz ist noch nicht offen — installiere ein Shop-System (z. B. dein eigenes)." : "Du hast keinen eigenen Online-Marktplatz. Ohne ihn kann niemand deine Börsen-App kaufen — bau einen im Zentrum und installiere dein System."}</div>` : ""}
+    <div class="swForm">
+      <label class="breit"><span>Name</span><input id="baName" maxlength="20" value="${escapeHtml(rohText(e.name))}" placeholder="z. B. TradeBot Pro"></label>
+      <label><span>Lizenzpreis $</span><input id="baPreis" type="number" min="${cfg.preisMin ?? 100}" max="${cfg.preisMax ?? 6000}" step="50" value="${e.preis}"></label>
+      <button class="buyb" id="baSpeichern">${ba ? "Übernehmen" : "Börsen-App anlegen"}</button>
+    </div>
+    ${ba ? (dev ? `<div class="swDev"><div class="swDevKopf"><span>${escapeHtml(rohText(ba.name))} v${dev.version} in Arbeit</span><b class="mono">${dev.ep} / ${dev.ziel} EP</b></div>
+        <div class="swBalken"><i style="width:${Math.min(100, dev.ep / dev.ziel * 100).toFixed(1)}%"></i></div>
+        <div class="note" style="margin:4px 0 0">Neu: ${stufeText(STUFEN[dev.version - 1])}${eigene.entwicklung ? " · wartet, bis das Shop-System fertig ist" : ""}</div></div>`
+      : naechste ? `<button class="tmHaupt" id="baEntwickeln"><span>${escapeHtml(rohText(ba.name))} v${(ba.version || 0) + 1} entwickeln</span><small>${naechste.ep} EP · ${stufeText(naechste)}${eigene.entwicklung ? " · startet nach dem Shop-System" : ""}</small></button>`
+      : `<div class="note">Voll ausgebaut: ${stufeText(STUFEN[STUFEN.length - 1])}.</div>`) : ""}`;
+}
 const paintEntwurf = {};
 /* Malprogramm: das zweite Produkt einer Software-Firma, verkauft als Lizenz
  * im eigenen Online-Shop. */
@@ -5733,7 +5766,7 @@ function softwareRendern(state, me, myId) {
           <div><b style="color:var(--up)">${fmt(eigene.einnahmen10 || 0)}</b><span>Einnahmen 10 min</span></div>
         </div>
         <div class="note" style="margin:-4px 0 10px">Markenwert <b>${fmt(eigene.markenwert || 0)}</b> — zählt zum Firmenwert und Aktienkurs (Einnahmen der letzten 10 min × ${cfg.markenwert ?? 2}).</div>` : `<div class="note">Lege Name und Preise fest, dann entwickelst du Version 1 im Entwicklerstudio.</div>`}
-      ${felder}${eigene ? swDesignHtml(state, eigene) : ""}${entw}${eigene ? paintHtml(state, me, eigene) : ""}`;
+      ${felder}${eigene ? swDesignHtml(state, eigene) : ""}${entw}${eigene ? paintHtml(state, me, eigene) : ""}${eigene ? boerseAppHtml(state, me, eigene) : ""}`;
     if (eigene) sfSchriftenLaden();
   }
   /* Nur neu setzen, wenn sich etwas geändert hat — sonst liefen Holo- und
@@ -5746,6 +5779,8 @@ document.getElementById("p-software").addEventListener("input", e => {
   if (map[e.target.id]) swEntwurf[map[e.target.id]] = e.target.value;
   if (e.target.id === "mpName") paintEntwurf.name = e.target.value;
   if (e.target.id === "mpPreis") paintEntwurf.preis = e.target.value;
+  if (e.target.id === "baName") boerseEntwurf.name = e.target.value;
+  if (e.target.id === "baPreis") boerseEntwurf.preis = e.target.value;
   const dmap = { swdSlogan: "slogan", swdBanner: "banner", swdAkzent: "akzent" };
   if (dmap[e.target.id]) {
     swDesignEntwurf[dmap[e.target.id]] = e.target.value;
@@ -5768,6 +5803,19 @@ document.getElementById("p-software").addEventListener("click", e => {
   }
   if (e.target.closest("#mpEntwickeln")) {
     socket.emit("paintEntwickeln", {}, r => { if (r?.error) return toast(r.error, true); toast(`Entwicklung gestartet: ${r.ep} EP`); render(store.get()); });
+    return;
+  }
+  /* --- Börsen-App --- */
+  if (e.target.closest("#baSpeichern")) {
+    socket.emit("boerseEinstellen", { name: document.getElementById("baName")?.value, preis: document.getElementById("baPreis")?.value }, r => {
+      if (r?.error) return toast(r.error, true);
+      for (const k of Object.keys(boerseEntwurf)) delete boerseEntwurf[k];
+      toast("Börsen-App gespeichert"); render(store.get());
+    });
+    return;
+  }
+  if (e.target.closest("#baEntwickeln")) {
+    socket.emit("boerseEntwickeln", {}, r => { if (r?.error) return toast(r.error, true); toast(`Entwicklung gestartet: ${r.ep} EP`); render(store.get()); });
     return;
   }
   if (e.target.closest("#mpMalen")) return malOeffnen();
@@ -5944,7 +5992,20 @@ function shopZeichnen(neu = false) {
         : hat ? `<div class="sfKauf"><button type="button" class="sfKaufen" data-sfmalen>🎨 Logo malen</button></div>`
         : `<div class="sfKauf"><button type="button" class="sfKaufen" data-sflizenz ${offen ? "" : "disabled"}>Lizenz kaufen · ${fmt(mp.preis)}</button></div>`}
     </article>`; })() : "";
-  shopSetze(".sfGrid", (lizenzKarte + karten) || `<div class="sfLeer">Gerade keine Ware im Regal.</div>`, "grid");
+  /* Börsen-App der Software-Firma: Lizenz als eigenes Produkt im Shop */
+  const ba = (state.boerseApp || []).find(x => x.ownerId === t.owner && x.version >= 1);
+  const baKarte = ba ? (() => {
+    const hat = me.boerseLizenz === ba.id, bst = ba.stufe || {};
+    return `<article class="sfProdukt sfLizenz"><span class="sfBand">Software</span>
+      <div class="sfBild"><span>📈</span></div>
+      <h5>${ba.name} <small>v${ba.version}</small></h5>
+      <div class="sfPreis"><b>${fmt(ba.preis)}</b><span>Lizenz · Updates gratis</span></div>
+      <div class="sfInfo">📊 Börsen-App · ${bst.bewohner} Bewohner handeln für dich · ${String(bst.provision).replace(".", ",")} % Provision</div>
+      ${meins ? `<div class="sfEigen">Dein Programm · ${ba.verkauft} verkauft</div>`
+        : hat ? `<div class="sfKauf"><button type="button" class="sfKaufen" disabled>Lizenz aktiv ✓</button></div>`
+        : `<div class="sfKauf"><button type="button" class="sfKaufen" data-sfboerselizenz ${offen ? "" : "disabled"}>Lizenz kaufen · ${fmt(ba.preis)}</button></div>`}
+    </article>`; })() : "";
+  shopSetze(".sfGrid", (baKarte + lizenzKarte + karten) || `<div class="sfLeer">Gerade keine Ware im Regal.</div>`, "grid");
   /* Feed: neu aufbauen nur bei neuen Bestellungen — die Zeitangaben werden
    * an Ort und Stelle aktualisiert. Sonst entstünden jede Sekunde neue
    * Elemente, und die Einflug-Animation liefe ständig von vorn. */
@@ -5954,8 +6015,8 @@ function shopZeichnen(neu = false) {
   if (SHOP.sig.feed !== feedSig) {
     SHOP.sig.feed = feedSig;
     const ul = document.querySelector("#shopFenster .sfFeed ul");
-    ul.innerHTML = bestellungen.map(b => `<li data-bid="${b.id}"><span class="sfFeedIcon">${b.g === "lizenz" ? "🎨" : WAREN_ICON[b.g] || "📦"}</span>
-      <span><b>${b.g === "lizenz" ? `Lizenz ${b.name || ""}` : `${b.n}× ${gname(b.g)}`}</b><small><span>${b.von}</span> · <span class="sfVor">${vorTxt(b)}</span></small></span>
+    ul.innerHTML = bestellungen.map(b => `<li data-bid="${b.id}"><span class="sfFeedIcon">${b.g === "lizenz" ? "🎨" : b.g === "boerse-lizenz" ? "📈" : WAREN_ICON[b.g] || "📦"}</span>
+      <span><b>${b.g === "lizenz" || b.g === "boerse-lizenz" ? `Lizenz ${b.name || ""}` : `${b.n}× ${gname(b.g)}`}</b><small><span>${b.von}</span> · <span class="sfVor">${vorTxt(b)}</span></small></span>
       <span class="sfFeedBetrag">${fmt(b.b)}<i style="background:${farbe}">${sys?.name ? rohText(sys.name).slice(0, 1) : "$"}</i></span></li>`).join("")
       || `<li class="sfLeerFeed">Noch keine Bestellung — sie erscheinen hier live.</li>`;
     ul.querySelectorAll("li[data-bid]").forEach(li => {
@@ -5972,13 +6033,16 @@ function shopBezahlen(slot) {
   const d = shopDaten(); if (!d) return;
   const { t, sys, me, owner, state, myId } = d;
   const lizenz = slot === "lizenz";
+  const boerseLiz = slot === "boerseLizenz";
   const mp = lizenz ? (state.paint || []).find(x => x.ownerId === t.owner && x.version >= 1) : null;
+  const ba = boerseLiz ? (state.boerseApp || []).find(x => x.ownerId === t.owner && x.version >= 1) : null;
   if (lizenz && !mp) return;
-  const sl = lizenz ? { good: "lizenz", price: mp.preis } : t.shop?.[slot]; if (!sl) return;
-  const feld = lizenz ? null : document.querySelector(`#shopFenster [data-sfn="${slot}"]`);
-  const n = lizenz ? 1 : Math.max(1, Math.floor(+feld?.value || SHOP.menge[slot] || 10));
+  if (boerseLiz && !ba) return;
+  const sl = (lizenz || boerseLiz) ? { good: boerseLiz ? "boerse-lizenz" : "lizenz", price: (mp || ba).preis } : t.shop?.[slot]; if (!sl) return;
+  const feld = (lizenz || boerseLiz) ? null : document.querySelector(`#shopFenster [data-sfn="${slot}"]`);
+  const n = (lizenz || boerseLiz) ? 1 : Math.max(1, Math.floor(+feld?.value || SHOP.menge[slot] || 10));
   const summe = n * sl.price;
-  const artikel = lizenz ? `Lizenz ${mp.name} v${mp.version}` : `${n}× ${gname(sl.good)}`;
+  const artikel = lizenz ? `Lizenz ${mp.name} v${mp.version}` : boerseLiz ? `Lizenz ${ba.name} v${ba.version}` : `${n}× ${gname(sl.good)}`;
   const farbe = sys?.farbe || "#64748b";
   const ich = state.players[myId];
   const kasse = document.querySelector("#shopFenster .sfKasse");
@@ -6002,7 +6066,8 @@ function shopBezahlen(slot) {
   requestAnimationFrame(() => box.classList.add("auflegen"));
   setTimeout(() => { box.classList.add("funkt"); status.textContent = "Zahlung wird geprüft …"; }, 900);
   setTimeout(() => {
-    socket.emit(lizenz ? "lizenzKaufen" : "shopKaufen", lizenz ? { x: t.x, y: t.y } : { x: t.x, y: t.y, slot, qty: n }, r => {
+    const cmd = lizenz ? "lizenzKaufen" : boerseLiz ? "boerseLizenzKaufen" : "shopKaufen";
+    socket.emit(cmd, (lizenz || boerseLiz) ? { x: t.x, y: t.y } : { x: t.x, y: t.y, slot, qty: n }, r => {
       const beleg = kasse.querySelector(".sfBeleg");
       box.classList.remove("funkt");
       if (r?.error) {
@@ -6046,6 +6111,7 @@ document.getElementById("shopFenster").addEventListener("click", e => {
   const k = e.target.closest("[data-sfkauf]");
   if (k) return shopBezahlen(+k.dataset.sfkauf);
   if (e.target.closest("[data-sflizenz]:not(:disabled)")) return shopBezahlen("lizenz");
+  if (e.target.closest("[data-sfboerselizenz]:not(:disabled)")) return shopBezahlen("boerseLizenz");
   if (e.target.closest("[data-sfmalen]")) { shopSchliessen(); return malOeffnen(); }
   if (e.target.closest("[data-sfweiter]")) {
     SHOP.kasse = null; SHOP.sig = {};

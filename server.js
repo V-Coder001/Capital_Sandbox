@@ -3535,6 +3535,114 @@ function paintVeroeffentlichen(x, p) {
   for (const k of Object.values(G.players)) if (k.paintLizenz === x.id && k.id !== p.id)
     emitTo(k.id, "notice", { text: `Gratis-Update: ${x.name} v${x.version} — jetzt ${st.groesse}×${st.groesse} Pixel${st.werkzeuge.includes("fuellen") ? ", Füllen" : ""}${st.werkzeuge.includes("spiegeln") ? ", Spiegeln" : ""}.` });
 }
+/* ---- Börsen-App (Börsen-Terminal) ----
+ * Drittes Produkt einer Software-Firma. Typ: Vermittler. Sie entwickelt es im
+ * Studio (ab Shop-System v2) und verkauft Lizenzen über ihren Online-Shop.
+ * Wer eine Lizenz kauft, bekommt fiktive Bewohner, die am Aktienmarkt handeln
+ * und so frisches Geld in den Markt spülen. Die Software-Firma verdient eine
+ * Provision an jedem Bewohner-Trade — passives Einkommen. */
+const BOERSE_APP = {
+  AB_SYSTEM: 2,
+  STUFEN: [
+    { ep: 200, bewohner: 5,  provision: 0.3 },   // v1: 5 Bewohner, 0.3 % Provision
+    { ep: 260, bewohner: 10, provision: 0.4 },   // v2: 10 Bewohner, 0.4 %
+    { ep: 340, bewohner: 20, provision: 0.5 },   // v3: 20 Bewohner, 0.5 %
+  ],
+  PREIS_MIN: 100, PREIS_MAX: 6000, PREIS_START: 900,
+  BEWOHNER_BUDGET: 2000,         // jeder Bewohner startet mit 2 000 $ (frisches Geld)
+  BEWOHNER_TRADE_INTERVALL: 30,  // alle 30 Ticks (≈ 30 s) handelt ein Bewohner
+  BEWOHNER_TRADE_MAX: 0.05,      // max 5 % des Bewohner-Budgets pro Trade
+};
+const boerseVon = id => G.boerseApp?.[id] || null;
+const boerseEigenes = p => Object.values(G.boerseApp || {}).find(x => x.ownerId === p.id) || null;
+/* Welche Stufe hat die Börsen-App? Eigenes Programm oder Lizenz. */
+function boerseStufeVon(p) {
+  const eigen = boerseEigenes(p);
+  const lz = p.boerseLizenz ? boerseVon(p.boerseLizenz) : null;
+  const v = Math.max(eigen?.version || 0, lz?.version || 0, lz ? 0 : (p.boerseLizenzStufe || 0));
+  return v >= 1 ? { version: v, ...BOERSE_APP.STUFEN[Math.min(v, BOERSE_APP.STUFEN.length) - 1],
+    programm: (eigen?.version >= v ? eigen : lz)?.name || p.boerseLizenzName || "Börsen-Terminal" } : null;
+}
+function boersePublic() {
+  return Object.values(G.boerseApp || {}).map(x => {
+    const owner = G.players[x.ownerId];
+    const laeden = G.map.filter(t => t.owner === x.ownerId && t.btype === "onlinemarkt").map(t => ({ x: t.x, y: t.y, offen: swOffen(t) }));
+    return { id: x.id, ownerId: x.ownerId, anbieter: owner?.name ?? "—", name: x.name, farbe: owner?.color || "#64748b", version: x.version || 0, preis: x.preis,
+      verkauft: x.verkauft || 0, einnahmen10: Math.round((x.eb || []).reduce((a, b) => a + b, 0)), laeden,
+      stufe: x.version >= 1 ? BOERSE_APP.STUFEN[x.version - 1] : null,
+      entwicklung: x.entwicklung ? { version: x.entwicklung.version, ep: Math.floor(x.entwicklung.ep), ziel: x.entwicklung.ziel } : null };
+  });
+}
+function boerseVeroeffentlichen(x, p) {
+  x.version = x.entwicklung.version; x.entwicklung = null;
+  const st = BOERSE_APP.STUFEN[x.version - 1];
+  marktLog("software", `${p.name} veröffentlicht ${x.name} v${x.version} (${st.bewohner} Bewohner, ${st.provision} % Provision)`, { firmaId: p.id });
+  io.emit("notice", { text: `Neue Börsen-App: ${x.name} v${x.version} von ${p.name} — Lizenz ${x.preis.toLocaleString("de-DE")} $ in ihrem Online-Shop.` });
+  // bestehende Lizenznehmer bekommen das Update gratis
+  for (const k of Object.values(G.players)) if (k.boerseLizenz === x.id && k.id !== p.id)
+    emitTo(k.id, "notice", { text: `Gratis-Update: ${x.name} v${x.version} — jetzt ${st.bewohner} Bewohner, ${st.provision} % Provision.` });
+}
+/* Bewohner-Tick: fiktive Bewohner handeln an der Börse, frisches Geld fließt ein. */
+function boerseAppTick() {
+  if (G.tick % BOERSE_APP.BEWOHNER_TRADE_INTERVALL !== 0) return;
+  for (const ba of Object.values(G.boerseApp || {})) {
+    if (!(ba.version >= 1)) continue;
+    const owner = G.players[ba.ownerId];
+    if (!owner) continue;
+    const st = BOERSE_APP.STUFEN[Math.min(ba.version, BOERSE_APP.STUFEN.length) - 1];
+    // Lizenznehmer: jeder aktive Spieler mit Lizenz dieser App bekommt Bewohner-Trades
+    const nutzer = Object.values(G.players).filter(k =>
+      (k.id === ba.ownerId && ba.version >= 1) ||
+      (k.boerseLizenz === ba.id));
+    for (const k of nutzer) {
+      const anz = st.bewohner;
+      ba.bewohnerPool = ba.bewohnerPool || {};
+      ba.bewohnerPool[k.id] = ba.bewohnerPool[k.id] || { budget: BOERSE_APP.BEWOHNER_BUDGET * anz, inv: {} };
+      const pool = ba.bewohnerPool[k.id];
+      // ein paar Bewohner handeln pro Tick
+      const trades = Math.min(3, Math.ceil(anz / 5));
+      for (let i = 0; i < trades; i++) {
+        // zufällige Aktie wählen (Firmen mit Kurs)
+        const firmen = Object.values(G.players).filter(f => f.id !== STADTNETZ_ID && (f.aktien ?? AKTIEN) > 0);
+        if (!firmen.length) continue;
+        const zielFirma = firmen[Math.floor(Math.random() * firmen.length)];
+        const good = "aktie_" + zielFirma.id;
+        const kurs = kursVon(zielFirma.id) || 10;
+        const maxBetrag = pool.budget * BOERSE_APP.BEWOHNER_TRADE_MAX;
+        // kaufen oder verkaufen?
+        const hatAktien = pool.inv[good] || 0;
+        const kaufen = hatAktien <= 0 || Math.random() > 0.4;   // Tendenz zum Kaufen (frisches Geld)
+        if (kaufen && pool.budget >= kurs) {
+          const qty = Math.max(1, Math.min(5, Math.floor(maxBetrag / kurs)));
+          const kosten = qty * kurs;
+          if (kosten > pool.budget) continue;
+          pool.budget -= kosten;
+          pool.inv[good] = (pool.inv[good] || 0) + qty;
+          // Provision an den App-Besitzer
+          const prov = Math.round(kosten * st.provision / 100 * 100) / 100;
+          if (prov > 0 && owner) { owner.cash += prov; addRevenue(owner, prov); (ba.eb ??= [0])[0] += prov; }
+          // Kurs-Effekt (kleiner Impact)
+          kursWirkung(zielFirma.id, qty, 1);   // Kauf → Kurs steigt
+          io.emit("trade", { good: good.replace("aktie_", ""), qty, price: kurs, buyer: "Bewohner", seller: undefined, bewohner: true });
+        } else if (hatAktien > 0) {
+          const qty = Math.max(1, Math.min(hatAktien, 3));
+          pool.inv[good] -= qty;
+          const erloes = qty * kurs;
+          pool.budget += erloes;
+          const prov = Math.round(erloes * st.provision / 100 * 100) / 100;
+          if (prov > 0 && owner) { owner.cash += prov; addRevenue(owner, prov); (ba.eb ??= [0])[0] += prov; }
+          kursWirkung(zielFirma.id, qty, -1);   // Verkauf → Kurs sinkt
+          io.emit("trade", { good: good.replace("aktie_", ""), qty, price: kurs, buyer: undefined, seller: "Bewohner", bewohner: true });
+        }
+      }
+    }
+  }
+  // EB-Rotation (jede Minute)
+  if (G.tick % 60 === 0) for (const x of Object.values(G.boerseApp || {})) {
+    if (!G.players[x.ownerId]) { delete G.boerseApp[x.id]; continue; }
+    (x.eb ??= [0]).unshift(0); if (x.eb.length > 10) x.eb.length = 10;
+  }
+}
 /* Wunsch gegen die freigeschaltete Version prüfen; Gesperrtes bleibt beim alten Wert. */
 function swDesignPruefen(wunsch = {}, alt = SW_DESIGN_START, version = 1) {
   const d = { ...SW_DESIGN_START, ...alt };
@@ -4962,6 +5070,7 @@ function snapshot() {
     tick: G.tick, winner: G.winner, winGoal: WIN_NW, report: G.report || null,
     etf: etfPublic(),
     software: softwarePublic(), swModule: SW_MODULE, swBaeume: SW_BAEUME, swStufe: SW_STUFE, swBaumEffekt: SW_BAUM_EFFEKT, swAusbau: [0, 1, 2, 3].map(swAusbau), paint: paintPublic(), paintCfg: { stufen: PAINT.STUFEN, abSystem: PAINT.AB_SYSTEM, preisMin: PAINT.PREIS_MIN, preisMax: PAINT.PREIS_MAX, palette: PAINT.PALETTE },
+    boerseApp: boersePublic(), boerseAppCfg: { stufen: BOERSE_APP.STUFEN, abSystem: BOERSE_APP.AB_SYSTEM, preisMin: BOERSE_APP.PREIS_MIN, preisMax: BOERSE_APP.PREIS_MAX },
     logoV: Object.fromEntries(Object.values(G.players).filter(p => p.logo).map(p => [p.id, p.logo.v])), swDesign: SW_DESIGN, swDesignAb: SW_DESIGN_AB, swCfg: { install: SW.INSTALL, portalInstall: SW.PORTAL_INSTALL, versionEp: SW.VERSION_EP, werbeBoost: SW.WERBE_BOOST, gebMin: SW.GEB_MIN, gebMax: SW.GEB_MAX, einrMax: SW.EINR_MAX, aboMin: SW.ABO_MIN, aboMax: SW.ABO_MAX, handelssteuer: Math.round(satzBoerse() * SW.HANDELSSTEUER * 1000) / 10, markenwert: SW.MARKENWERT },
     marktLog: (G.marktLog || []).slice(0, 20), marktCfg: { aktien: AKTIEN, tag: MARKT.TAG, beta: MARKT.BETA, bauDauer: MARKT.BAU_DAUER, afaDauer: MARKT.AFA_DAUER },
     /* Countdown bis zum naechsten Renntag — ohne ihn sieht man erst bei der
@@ -5178,6 +5287,7 @@ function privateState(p) {
     portfolio, revenue: Math.round(p.revenue), ausschuettung: p.ausschuettung,
     swEp: Math.floor(p.swEp || 0),
     paintStufe: paintStufeVon(p), paintLizenz: p.paintLizenz || null,
+    boerseStufe: boerseStufeVon(p), boerseLizenz: p.boerseLizenz || null,
     etf: Object.entries(p.etf || {}).map(([br, n]) => ({ branche: br, name: INDUSTRIES[br]?.name ?? br, anteile: Math.round(n * 100) / 100,
       wert: Math.round(n * (etfPreis(br) || 0)), buchwert: Math.round(n * (etfPreis(br, true) || 0)), einstand: Math.round(p.etfEinstand?.[br] || 0) })),
     marketValue: Math.round(companyValue(p)), rev10: Math.round(rev10(p)), ...marktPublic(p),
@@ -7505,6 +7615,64 @@ io.on("connection", socket => {
     const liste = Array.isArray(ids) ? ids.slice(0, 40) : [];
     ack(Object.fromEntries(liste.map(pid => [pid, G.players[pid]?.logo || null])));
   });
+  /* --- Börsen-App: Name und Lizenzpreis --- */
+  socket.on("boerseEinstellen", guard((p, d = {}, ack) => {
+    if (!istSoftwareFirma(p)) return ack?.({ error: "Nur Software-Firmen entwickeln Börsen-Apps" });
+    const sys = swEigenes(p);
+    if (!(sys?.version >= BOERSE_APP.AB_SYSTEM)) return ack?.({ error: `Erst ab Shop-System v${BOERSE_APP.AB_SYSTEM}` });
+    let x = boerseEigenes(p);
+    const name = sicherText(String(d.name ?? x?.name ?? "").trim().slice(0, 20));
+    if (name.length < 3) return ack?.({ error: "Name: mindestens 3 Zeichen" });
+    if (Object.values(G.boerseApp || {}).some(o => o !== x && o.name.toLowerCase() === name.toLowerCase())) return ack?.({ error: "Diesen Namen gibt es schon" });
+    const preis = Math.round(Math.min(BOERSE_APP.PREIS_MAX, Math.max(BOERSE_APP.PREIS_MIN, +d.preis || x?.preis || BOERSE_APP.PREIS_START)) / 10) * 10;
+    if (!x) { x = { id: "ba_" + id(), ownerId: p.id, name, version: 0, preis, verkauft: 0, eb: [0], entwicklung: null, bewohnerPool: {} }; (G.boerseApp ??= {})[x.id] = x; }
+    x.name = name; x.preis = preis;
+    ack?.({ ok: true, id: x.id });
+  }));
+  socket.on("boerseEntwickeln", guard((p, _d, ack) => {
+    const x = istSoftwareFirma(p) && boerseEigenes(p);
+    if (!x) return ack?.({ error: "Lege zuerst Name und Preis der Börsen-App fest" });
+    if (x.entwicklung) return ack?.({ error: `v${x.entwicklung.version} ist schon in Arbeit` });
+    if ((x.version || 0) >= BOERSE_APP.STUFEN.length) return ack?.({ error: "Deine Börsen-App ist voll ausgebaut" });
+    if (!G.map.some(t => t.owner === p.id && BTYPES[t.btype]?.studio)) return ack?.({ error: "Dafür brauchst du ein Entwicklerstudio" });
+    const version = (x.version || 0) + 1, ep = BOERSE_APP.STUFEN[version - 1].ep;
+    const vorrat = Math.min(ep, p.swEp || 0);
+    p.swEp = (p.swEp || 0) - vorrat;
+    x.entwicklung = { version, ziel: ep, ep: vorrat };
+    marktLog("software", `${p.name} entwickelt die Börsen-App ${x.name} v${version}`, { firmaId: p.id });
+    if (x.entwicklung.ep >= ep) boerseVeroeffentlichen(x, p);
+    ack?.({ ok: true, ep });
+  }));
+  /* --- Börsen-App-Lizenz im Online-Shop kaufen ---
+   * Wie beim Malprogramm: Gebühr an Shop-System, halbe Börsengebühr als Steuer. */
+  socket.on("boerseLizenzKaufen", guard((p, { x: tx, y: ty } = {}, ack) => {
+    const t = tileAt(tx, ty);
+    if (!t || t.btype !== "onlinemarkt" || !t.owner) return ack?.({ error: "Kein Online-Shop" });
+    const haendler = G.players[t.owner], ba = haendler && boerseEigenes(haendler);
+    if (!ba || !(ba.version >= 1)) return ack?.({ error: "Dieser Shop verkauft keine Börsen-App" });
+    if (t.owner === p.id) return ack?.({ error: "Dein eigenes Programm hast du schon" });
+    if (!swOffen(t)) return ack?.({ error: "Der Shop ist gerade geschlossen" });
+    const sys = swVon(t.system.produktId);
+    if (!sys || (!sys.portal && !((G.swFaktor?.[sys.id] ?? 1) > 0))) return ack?.({ error: "Das Bezahlsystem des Shops ist ausgefallen" });
+    if (p.boerseLizenz === ba.id) return ack?.({ error: "Du hast diese Lizenz schon — Updates kommen automatisch" });
+    if (p.cash < ba.preis) return ack?.({ error: `Zu wenig Geld (${ba.preis.toLocaleString("de-DE")} $)` });
+    const summe = ba.preis;
+    const gebuehr = sys.ownerId === haendler.id ? 0 : Math.round(summe * (sys.gebuehr || 0)) / 100;
+    const steuer = Math.round(summe * satzBoerse() * SW.HANDELSSTEUER * 100) / 100;
+    p.cash -= summe; p.stats.ausgaben += summe;
+    haendler.cash += summe - gebuehr - steuer; addRevenue(haendler, summe);
+    if (gebuehr) { haendler.stats.ausgaben += gebuehr; swGebuehr(sys, gebuehr); }
+    finanzamtEinnahme(steuer); haendler.stats.steuern = (haendler.stats.steuern || 0) + steuer;
+    ba.verkauft = (ba.verkauft || 0) + 1; (ba.eb ??= [0])[0] += summe - gebuehr - steuer;
+    Object.assign(p, { boerseLizenz: ba.id, boerseLizenzStufe: ba.version, boerseLizenzName: ba.name });
+    (t.bestellungen ??= []).unshift({ id: G.tick + "ba" + p.id, g: "boerse-lizenz", n: 1, b: summe, t: G.tick, von: p.name, name: ba.name });
+    if (t.bestellungen.length > 8) t.bestellungen.length = 8;
+    logTx(p, "Software", `Lizenz ${ba.name} von ${haendler.name}`, -summe);
+    logTx(haendler, "Software", `Lizenz ${ba.name} an ${p.name}`, summe - gebuehr - steuer);
+    marktLog("software", `${p.name} kauft eine Lizenz für ${ba.name}`, { firmaId: haendler.id, betrag: summe });
+    emitTo(haendler.id, "notice", { text: `${p.name} hat eine Lizenz für ${ba.name} gekauft (+${Math.round(summe - gebuehr - steuer).toLocaleString("de-DE")} $).` });
+    ack?.({ ok: true, summe, gebuehr, steuer, steuerSatz: Math.round(satzBoerse() * SW.HANDELSSTEUER * 1000) / 10, system: sys.name, programm: ba.name, version: ba.version });
+  }));
   /* --- Software: Website-Design des Shop-Systems --- */
   socket.on("softwareDesign", guard((p, d = {}, ack) => {
     const prod = istSoftwareFirma(p) && swEigenes(p);
@@ -7691,6 +7859,9 @@ io.on("connection", socket => {
     /* Malprogramm samt Lizenz geht mit; das eigene Logo bleibt. */
     if (!paintEigenes(p)) for (const x of Object.values(G.paint || {})) if (x.ownerId === targetId) x.ownerId = p.id;
     if (!p.paintLizenz && target.paintLizenz) Object.assign(p, { paintLizenz: target.paintLizenz, paintLizenzStufe: target.paintLizenzStufe, paintLizenzName: target.paintLizenzName });
+    if (!p.boerseLizenz && target.boerseLizenz) Object.assign(p, { boerseLizenz: target.boerseLizenz, boerseLizenzStufe: target.boerseLizenzStufe, boerseLizenzName: target.boerseLizenzName });
+    /* Börsen-App: Eigentum übertragen */
+    if (!boerseEigenes(p)) for (const x of Object.values(G.boerseApp || {})) if (x.ownerId === targetId) x.ownerId = p.id;
     if (!p.logo && target.logo) p.logo = { ...target.logo, v: (target.logo.v || 0) + 1 };
     p.swEp = (p.swEp || 0) + (target.swEp || 0);
     /* Falls die aufgelöste Firma selbst Anteile an DRITTEN Firmen hielt, gehen
@@ -8182,6 +8353,7 @@ function runTick() {
    * Vorphase verfehlt, läuft jede Produktion nur mit halber Kraft. */
   const SPERR = (MODE === "plan" && G.plan?.stromsperre) ? 0.5 : 1;
   swTick();   // Software: Auslastung, Ruf, Werbe-Abos — vor dem Verkauf
+  boerseAppTick();   // Börsen-App: Bewohner handeln an der Börse
   stadtnetzTick();
   /* Produktion: Enabler-Rohstoffe im Lager boosten (und werden verbraucht) */
   for (const t of G.map) {
