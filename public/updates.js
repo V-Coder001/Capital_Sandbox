@@ -5,6 +5,40 @@
  * `art`: "neu" (neue Funktion), "besser" (Verbesserung), "fix" (Fehler behoben). */
 window.UPDATES = [
   {
+    id: "2026-10-23b", datum: "2026-10-23",
+    titel: { de: "Steuerungssoftware für Produktionsgebäude", en: "Control software for production buildings" },
+    punkte: [
+      { art: "neu", de: "Shop-Systeme laufen jetzt auch auf Produktionsgebäuden: Ernteplaner, Förderleitstand, Netzleitstelle, Fertigungsstraße, Buchungssystem und Feuerleitsystem bringen bis zu 10–15 % mehr Ausstoß bzw. 12 % weniger Rohstoffe. Die Wirkung hängt am Branchenbaum des Systems.",
+        en: "Shop systems now also run production buildings: harvest planner, mining control, grid control, production line, booking system and fire control give up to 10–15 % more output or 12 % fewer inputs. The effect depends on the system's industry tree." },
+      { art: "neu", de: "Software-Firmen legen ein Steuerungs-Abo je Gebäude und Minute fest. Gesteuerte Gebäude belegen Plätze im Rechenzentrum — fällt es aus, fehlt der Bonus bei allen Kunden.",
+        en: "Software companies set a control subscription per building per minute. Controlled buildings take data-centre slots — if it fails, all customers lose the bonus." },
+      { art: "besser", de: "Bots rechnen je Gebäude nach, ob sich die Steuerung lohnt, und Software-Bots passen ihr Abo an die Auslastung an.",
+        en: "Bots work out per building whether control software pays off, and software bots adjust their subscription to demand." },
+      { art: "neu", de: "Leitstand: Jedes gesteuerte Gebäude hat eine eigene Steuerungs-Oberfläche mit Live-Anzeigen (Ausstoß, Bonus, Lager, Rohstoff-Reichweite) und Alarm. Ab v2 Turbo (+30 % Ausstoß für 60 s), ab v3 Nachkauf mit einem Klick, ab v4 Auto-Turbo.",
+        en: "Control room: every controlled building has its own interface with live gauges (output, bonus, stock, input range) and alarms. From v2 turbo (+30 % output for 60 s), from v3 one-click restocking, from v4 auto-turbo." },
+      { art: "neu", de: "Software-Firmen gestalten ihren Leitstand wie die Shop-Website: Thema, Anzeigen (Balken, Zeiger, Ziffern, Ringe), Schrift, Effekte, Titel, Laufschrift und Leuchtfarbe — mit jeder Version mehr.",
+        en: "Software companies design their control room like the shop website: theme, gauges (bars, needles, digits, rings), font, effects, title, ticker and glow colour — more with every version." },
+      { art: "neu", de: "Werbenetz: Jede Firma kann bei einer Software-Firma Anzeigen buchen (3, 5 oder 10 Minuten). Sie laufen in allen Shops und Leitständen mit diesem System und bringen je Kunde des Systems 1,2 % mehr Preisspielraum (bis 12 % je Anzeige, 25 % insgesamt). Ein Werbeplatz je Version, höchstens drei.",
+        en: "Ad network: any company can book ads with a software company (3, 5 or 10 minutes). They run in every shop and control room using that system and give 1.2 % more pricing room per customer of the system (up to 12 % per ad, 25 % in total). One ad slot per version, three at most." },
+    ]
+  },
+  {
+    id: "2026-10-23a", datum: "2026-10-23",
+    titel: { de: "Bürgerdepot: Schwung für die Börse", en: "Citizens' depot: momentum for the exchange" },
+    punkte: [
+      { art: "neu", de: "Bürgerdepot: Die Stadtbewohner sparen. Je 1 $ Einkauf in den Online-Shops legen sie 40 ct zurück und kaufen damit jeden Markttag Branchenfonds und Aktien — bevorzugt unterbewertete Firmen mit guter Dividende. Bei Panik oder Überbewertung verkaufen sie. Das Depot wächst höchstens bis 30 % des Börsenwerts.",
+        en: "Citizens' depot: city residents save. For every $1 spent in online shops they put aside 40 ¢ and buy sector funds and shares every market day — preferring undervalued companies with good dividends. They sell in a panic or when prices run too high. The depot grows to at most 30 % of total market value." },
+      { art: "neu", de: "Fonds schütten aus: 80 % der Dividenden ihrer Aktien gehen alle 10 Minuten an die Anteilseigner. Ein Fonds hält jetzt bis zu 35 Aktien je Firma.",
+        en: "Funds pay out: 80 % of the dividends on their shares go to unit holders every 10 minutes. A fund may now hold up to 35 shares per company." },
+      { art: "besser", de: "Börsen-App neu: Über sie legen die Sparer an. Ohne App kommt nur die Hälfte ihrer Ersparnisse über die Stadtsparkasse an die Börse. Anbieter bekommen 1–1,5 % Provision, Lizenznehmer erhöhen die Reichweite und bekommen die Hälfte der Provision, die über sie läuft.",
+        en: "Stock app reworked: savers invest through it. Without an app only half their savings reach the exchange via the city savings bank. Providers earn 1–1.5 % commission; licensees extend the reach and get half the commission that flows through them." },
+      { art: "fix", de: "Die Bewohner der alten Börsen-App haben nie gehandelt (Kurs war intern ungültig).",
+        en: "Residents of the old stock app never traded (the price was internally invalid)." },
+      { art: "besser", de: "Bots legen Geld über ihrer Rücklage regelmäßig in Fonds an, nehmen Kaufanfragen von Fonds und Bürgerdepot zum fairen Kurs an und geben ab und zu kleine Aktienpakete aus.",
+        en: "Bots regularly invest money above their reserve in funds, accept purchase requests from funds and the citizens' depot at a fair price and occasionally issue small share packages." },
+    ]
+  },
+  {
     id: "2026-10-22d", datum: "2026-10-22",
     titel: { de: "Strom, Shop-Design & Malprogramm", en: "Power, shop design & paint program" },
     punkte: [
