@@ -5,6 +5,22 @@
  * `art`: "neu" (neue Funktion), "besser" (Verbesserung), "fix" (Fehler behoben). */
 window.UPDATES = [
   {
+    id: "2026-10-23a", datum: "2026-10-23",
+    titel: { de: "Bürgerdepot: Schwung für die Börse", en: "Citizens' depot: momentum for the exchange" },
+    punkte: [
+      { art: "neu", de: "Bürgerdepot: Die Stadtbewohner sparen. Je 1 $ Einkauf in den Online-Shops legen sie 40 ct zurück und kaufen damit jeden Markttag Branchenfonds und Aktien — bevorzugt unterbewertete Firmen mit guter Dividende. Bei Panik oder Überbewertung verkaufen sie. Das Depot wächst höchstens bis 30 % des Börsenwerts.",
+        en: "Citizens' depot: city residents save. For every $1 spent in online shops they put aside 40 ¢ and buy sector funds and shares every market day — preferring undervalued companies with good dividends. They sell in a panic or when prices run too high. The depot grows to at most 30 % of total market value." },
+      { art: "neu", de: "Fonds schütten aus: 80 % der Dividenden ihrer Aktien gehen alle 10 Minuten an die Anteilseigner. Ein Fonds hält jetzt bis zu 35 Aktien je Firma.",
+        en: "Funds pay out: 80 % of the dividends on their shares go to unit holders every 10 minutes. A fund may now hold up to 35 shares per company." },
+      { art: "besser", de: "Börsen-App neu: Über sie legen die Sparer an. Ohne App kommt nur die Hälfte ihrer Ersparnisse über die Stadtsparkasse an die Börse. Anbieter bekommen 1–1,5 % Provision, Lizenznehmer erhöhen die Reichweite und bekommen die Hälfte der Provision, die über sie läuft.",
+        en: "Stock app reworked: savers invest through it. Without an app only half their savings reach the exchange via the city savings bank. Providers earn 1–1.5 % commission; licensees extend the reach and get half the commission that flows through them." },
+      { art: "fix", de: "Die Bewohner der alten Börsen-App haben nie gehandelt (Kurs war intern ungültig).",
+        en: "Residents of the old stock app never traded (the price was internally invalid)." },
+      { art: "besser", de: "Bots legen Geld über ihrer Rücklage regelmäßig in Fonds an, nehmen Kaufanfragen von Fonds und Bürgerdepot zum fairen Kurs an und geben ab und zu kleine Aktienpakete aus.",
+        en: "Bots regularly invest money above their reserve in funds, accept purchase requests from funds and the citizens' depot at a fair price and occasionally issue small share packages." },
+    ]
+  },
+  {
     id: "2026-10-22d", datum: "2026-10-22",
     titel: { de: "Strom, Shop-Design & Malprogramm", en: "Power, shop design & paint program" },
     punkte: [

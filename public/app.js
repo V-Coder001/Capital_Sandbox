@@ -5600,27 +5600,46 @@ function swDesignHtml(state, eigene) {
     <div class="swDesign">${reihen}${texte}${vorschau}
       <button class="buyb" id="swDesignSpeichern" ${geaendert ? "" : "disabled"}>${geaendert ? "Design übernehmen" : "Design ist aktuell"}</button></div>`;
 }
+/* Bürgerdepot: die Sparer der Stadt als Anleger (siehe depotTag im Server) */
+function depotKarte(d) {
+  if (!d) return "";
+  const voll = d.deckel > 0 ? Math.min(100, d.wert / d.deckel * 100) : 0;
+  const posten = [...(d.fonds || []).map(f => `${f.name}-Fonds ${fmt(f.wert)}`), ...(d.aktien || []).map(a => `${a.aktien} ${a.firma}`)];
+  return `<div class="sec bTafelKopf"><span>Bürgerdepot</span><span class="meta">die Sparer der Stadt</span></div>
+    <div class="bond depotKarte"><div style="min-width:0;flex:1">
+      <div class="swZahlen">
+        <div><b>${fmt(d.wert)}</b><span>Depotwert</span></div>
+        <div><b>${fmt(d.kasse)}</b><span>noch anzulegen</span></div>
+        <div><b>${d.appAnteil} %</b><span>über Börsen-Apps</span></div>
+        <div><b>${d.konsumBoost ? "+" + String(d.konsumBoost).replace(".", ",") + " %" : "—"}</b><span>Konsum in Shops</span></div></div>
+      <div class="swBalken" title="Obergrenze ${fmt(d.deckel)}"><i style="width:${voll.toFixed(1)}%"></i></div>
+      <div class="meta" style="padding-top:4px">Je 1 $ Einkauf in den Online-Shops sparen die Bewohner ${Math.round(d.sparquote * 100)} ct. Ohne Börsen-App kommt nur ${Math.round(d.sparkasseAnteil * 100)} % davon über die Stadtsparkasse an die Börse. Angelegt wird einmal je Markttag — überwiegend in Fonds, der Rest in günstige Aktien mit guter Dividende. Bei Panik oder Überbewertung verkauft das Depot. Höchstens bis ${fmt(d.deckel)} (Balken).</div>
+      ${posten.length ? `<div class="meta" style="padding-top:4px">Hält: ${posten.join(" · ")}</div>` : ""}
+    </div>${(d.verlauf || []).length > 1 ? sparklineVon(d.verlauf, 52, 16) : ""}</div>`;
+}
 const boerseEntwurf = {};
-/* Börsen-App: drittes Produkt einer Software-Firma (Vermittler). Lizenznehmer
- * bekommen fiktive Bewohner die an der Börse handeln — frisches Geld im Markt. */
+/* Börsen-App: drittes Produkt einer Software-Firma (Vermittler). Über die
+ * Apps legen die Sparer der Stadt an (Bürgerdepot); jeder Lizenznehmer bringt
+ * die App unter seine Kunden und erhöht die Reichweite. */
 function boerseAppHtml(state, me, eigene) {
   const cfg = state.boerseAppCfg || {}, STUFEN = cfg.stufen || [];
   const ba = (state.boerseApp || []).find(x => x.ownerId === eigene.ownerId);
   const kopf = `<div class="sec" style="margin-top:16px">Börsen-App · dein drittes Produkt</div>`;
   if ((eigene.version || 0) < (cfg.abSystem || 2))
-    return kopf + `<div class="note">Ab Shop-System v${cfg.abSystem || 2} kannst du eine Börsen-App entwickeln. Firmen kaufen eine Lizenz und erhalten virtuelle Bewohner, die an der Börse handeln. Du verdienst eine Provision an jedem Trade — passives Einkommen.</div>`;
+    return kopf + `<div class="note">Ab Shop-System v${cfg.abSystem || 2} kannst du eine Börsen-App entwickeln. Über Börsen-Apps legen die Sparer der Stadt ihr Geld an — ohne App kommt nur die Hälfte über die Stadtsparkasse an die Börse. Du verdienst Provision auf alles, was über deine App läuft.</div>`;
   const e = { name: ba?.name ?? "", preis: ba?.preis ?? 900, ...boerseEntwurf };
-  const stufeText = st => `${st.bewohner} Bewohner · ${String(st.provision).replace(".", ",")} % Provision`;
+  const stufeText = st => `${st.bewohner} Bewohner je Nutzer · ${String(st.provision).replace(".", ",")} % Provision`;
   const laeden = ba?.laeden || state.map.filter(t => t.owner === eigene.ownerId && t.btype === "onlinemarkt").map(t => ({ x: t.x, y: t.y, offen: false }));
   const offen = laeden.filter(l => l.offen);
   const naechste = STUFEN[(ba?.version || 0)];
   const dev = ba?.entwicklung;
-  return kopf + `<div class="note" style="margin:0 0 8px">Firmen kaufen eine Lizenz in <b>deinem eigenen Online-Shop</b>. Ihre virtuellen Bewohner handeln an der Börse und bringen frisches Geld in den Markt. Du verdienst eine Provision an jedem Trade.</div>
+  return kopf + `<div class="note" style="margin:0 0 8px">Die Sparer der Stadt legen ihr Geld über Börsen-Apps an. Je mehr Bewohner deine App erreicht, desto mehr läuft über dich — und du bekommst Provision darauf. Firmen kaufen eine Lizenz in <b>deinem eigenen Online-Shop</b> und bringen die App unter ihre Kunden: Das erhöht deine Reichweite, und sie bekommen die Hälfte der Provision, die über sie kommt.</div>
     ${ba ? `<div class="swZahlen">
       <div><b>${ba.version >= 1 ? "v" + ba.version : "—"}</b><span>Version</span></div>
       <div><b>${ba.verkauft}</b><span>Lizenzen verkauft</span></div>
-      <div><b>${fmt(ba.preis)}</b><span>Lizenzpreis</span></div>
-      <div><b style="color:var(--up)">${fmt(ba.einnahmen10 || 0)}</b><span>Einnahmen 10 min</span></div></div>` : ""}
+      <div><b>${ba.reichweite || 0}</b><span>Reichweite (Bewohner)</span></div>
+      <div><b style="color:var(--up)">${fmt(ba.einnahmen10 || 0)}</b><span>Provision 10 min</span></div></div>
+      ${state.depot ? `<div class="note" style="margin:4px 0 8px">${state.depot.appAnteil} % der Sparer handeln über Börsen-Apps · Lizenzpreis ${fmt(ba.preis)}</div>` : ""}` : ""}
     ${ba?.version >= 1 && !offen.length ? `<div class="mpWarn">⚠ ${laeden.length ? "Dein Online-Marktplatz ist noch nicht offen — installiere ein Shop-System (z. B. dein eigenes)." : "Du hast keinen eigenen Online-Marktplatz. Ohne ihn kann niemand deine Börsen-App kaufen — bau einen im Zentrum und installiere dein System."}</div>` : ""}
     <div class="swForm">
       <label class="breit"><span>Name</span><input id="baName" maxlength="20" value="${escapeHtml(rohText(e.name))}" placeholder="z. B. TradeBot Pro"></label>
@@ -5629,8 +5648,8 @@ function boerseAppHtml(state, me, eigene) {
     </div>
     ${ba ? (dev ? `<div class="swDev"><div class="swDevKopf"><span>${escapeHtml(rohText(ba.name))} v${dev.version} in Arbeit</span><b class="mono">${dev.ep} / ${dev.ziel} EP</b></div>
         <div class="swBalken"><i style="width:${Math.min(100, dev.ep / dev.ziel * 100).toFixed(1)}%"></i></div>
-        <div class="note" style="margin:4px 0 0">Neu: ${stufeText(STUFEN[dev.version - 1])}${eigene.entwicklung ? " · wartet, bis das Shop-System fertig ist" : ""}</div></div>`
-      : naechste ? `<button class="tmHaupt" id="baEntwickeln"><span>${escapeHtml(rohText(ba.name))} v${(ba.version || 0) + 1} entwickeln</span><small>${naechste.ep} EP · ${stufeText(naechste)}${eigene.entwicklung ? " · startet nach dem Shop-System" : ""}</small></button>`
+        <div class="note" style="margin:4px 0 0">Neu: ${stufeText(STUFEN[dev.version - 1])}${eigene.entwicklung ? " · teilt sich das Studio mit dem Shop-System" : ""}</div></div>`
+      : naechste ? `<button class="tmHaupt" id="baEntwickeln"><span>${escapeHtml(rohText(ba.name))} v${(ba.version || 0) + 1} entwickeln</span><small>${naechste.ep} EP · ${stufeText(naechste)}${eigene.entwicklung ? " · teilt sich das Studio mit dem Shop-System" : ""}</small></button>`
       : `<div class="note">Voll ausgebaut: ${stufeText(STUFEN[STUFEN.length - 1])}.</div>`) : ""}`;
 }
 const paintEntwurf = {};
@@ -6000,7 +6019,7 @@ function shopZeichnen(neu = false) {
       <div class="sfBild"><span>📈</span></div>
       <h5>${ba.name} <small>v${ba.version}</small></h5>
       <div class="sfPreis"><b>${fmt(ba.preis)}</b><span>Lizenz · Updates gratis</span></div>
-      <div class="sfInfo">📊 Börsen-App · ${bst.bewohner} Bewohner handeln für dich · ${String(bst.provision).replace(".", ",")} % Provision</div>
+      <div class="sfInfo">📊 Börsen-App · bring sie unter ${bst.bewohner} deiner Kunden · du bekommst die Hälfte der Provision auf ihre Anlagen</div>
       ${meins ? `<div class="sfEigen">Dein Programm · ${ba.verkauft} verkauft</div>`
         : hat ? `<div class="sfKauf"><button type="button" class="sfKaufen" disabled>Lizenz aktiv ✓</button></div>`
         : `<div class="sfKauf"><button type="button" class="sfKaufen" data-sfboerselizenz ${offen ? "" : "disabled"}>Lizenz kaufen · ${fmt(ba.preis)}</button></div>`}
@@ -9169,14 +9188,15 @@ function render({ state, me, myId, chat, room }) {
         const meins = (me.etf || []).find(x => x.branche === e.branche);
         return `<div class="bond etfrow">
           <div style="min-width:0;flex:1"><b>${e.name}-Fonds</b>
-            <div class="meta">Fondswert ${fmt(e.wert || 0)} · davon flüssig ${fmt(e.kasse || 0)}${(e.aktien || []).length ? ` · hält ${e.aktien.map(a => `${a.aktien} ${a.firma}`).join(", ")}` : " · noch keine Aktien"}${meins ? ` · <b style="color:var(--accent)">du: ${fmt(meins.wert)}</b>` : ""}</div></div>
+            <div class="meta">Fondswert ${fmt(e.wert || 0)} · davon flüssig ${fmt(e.kasse || 0)}${e.ausschuettung ? ` · <span style="color:var(--up)">zuletzt ${fmt(e.ausschuettung)} ausgeschüttet</span>` : ""}${(e.aktien || []).length ? ` · hält ${e.aktien.map(a => `${a.aktien} ${a.firma}`).join(", ")}` : " · noch keine Aktien"}${meins ? ` · <b style="color:var(--accent)">du: ${fmt(meins.wert)}</b>` : ""}</div></div>
           <span style="display:flex;align-items:center;gap:8px">
             ${h.length > 1 ? sparklineVon(h, 52, 16) : ""}
             <span class="fpreis">${(e.preis || 0).toFixed(1)}${seit == null ? "" : ` <em class="${seit >= 0 ? "plus" : "minus"}" style="font-size:11px">${seit >= 0 ? "+" : ""}${seit.toFixed(1)} %</em>`}</span>
             <input type="number" class="etfBetrag" data-etf-betrag="${e.branche}" min="100" step="100" placeholder="$" style="width:84px">
             <button class="buyb" data-etf-kauf="${e.branche}">Kaufen</button>
           </span></div>`; }).join("") +
-      `<div class="meta" style="padding-top:4px">Jede Branche hat einen Fonds. Dein Geld kauft echte Aktien der Firmen dieser Branche (gewichtet nach Wert F) — das hebt ihre Kurse. Anteilspreis = Fondswert ÷ Anteile, Start 100. Auszahlen kann der Fonds nur aus seiner Kasse; ist sie knapp, bietet er Aktien an. 1 % Gebühr je Kauf und Verkauf.</div>` : "";
+      `<div class="meta" style="padding-top:4px">Jede Branche hat einen Fonds. Dein Geld kauft echte Aktien der Firmen dieser Branche (gewichtet nach Wert F) — das hebt ihre Kurse. Anteilspreis = Fondswert ÷ Anteile, Start 100. Auszahlen kann der Fonds nur aus seiner Kasse; ist sie knapp, bietet er Aktien an. ${Math.round((store.get().meta?.fondsAusschuettung ?? 0.8) * 100)} % der Dividenden seiner Aktien schüttet er alle 10 Minuten an die Anteilseigner aus. 1 % Gebühr je Kauf und Verkauf.</div>` : "";
+    document.getElementById("depotboard").innerHTML = depotKarte(state.depot);
     /* Marktgeschehen: Käufe, Verkäufe, Ausschüttungen, Bauten, Flauten, Panik */
     const mlog = (state.marktLog || []).slice(0, 8);
     document.getElementById("marktlog").innerHTML = mlog.length
@@ -9734,6 +9754,42 @@ const TUT_BUCH = [
       pay more than the actual market price.</p>
       <p>The ticker at the top shows <b>real trades only</b>. If a price rises there,
       somebody genuinely paid that much.</p>` } },
+
+  { t: "Bürgerdepot &amp; Fonds", lead: "Wer an der Aktienbörse kauft",
+    html: `
+      <p>Die Bewohner der Stadt <b>sparen</b>: Für jeden Dollar, den sie in den
+      Online-Shops ausgeben, legen sie 40 Cent zurück. Dieses Geld kauft einmal je
+      Markttag Aktien — das ist frisches Geld für die Börse.</p>
+      <ul>
+        <li>Rund 70 % gehen in <b>Branchenfonds</b>, der Rest in einzelne Aktien aus dem
+        Orderbuch. Bevorzugt werden unterbewertete Firmen mit guter Dividende.</li>
+        <li>Bei einer <b>Panik</b> oder wenn Kurse deutlich über dem Wert liegen,
+        verkauft das Depot einen Teil.</li>
+        <li>Ohne <b>Börsen-App</b> kommt nur die Hälfte der Ersparnisse über die
+        Stadtsparkasse an die Börse. Mit Apps der Software-Firmen kommt alles an — gegen
+        Provision.</li>
+      </ul>
+      <div class="kasten"><div class="t">Fonds schütten aus</div>
+      Ein Branchenfonds hält echte Aktien. 80 % der Dividenden, die er dafür bekommt,
+      reicht er alle 10 Minuten an seine Anteilseigner weiter.</div>
+      <div class="merk">Wer Dividende zahlt, zieht die Sparer an — das stützt den Kurs.</div>`,
+    en: { t: "Citizens' depot &amp; funds", lead: "Who buys on the stock exchange", html: `
+      <p>The city's residents <b>save</b>: for every dollar they spend in online shops
+      they put aside 40 cents. Once per market day this money buys shares — fresh
+      money for the exchange.</p>
+      <ul>
+        <li>About 70 % goes into <b>sector funds</b>, the rest into single shares from the
+        order book, preferring undervalued companies with good dividends.</li>
+        <li>In a <b>panic</b> or when prices run well above value, the depot sells part
+        of its holdings.</li>
+        <li>Without a <b>stock app</b> only half the savings reach the exchange via the
+        city savings bank. With apps from software companies all of it does — for a
+        commission.</li>
+      </ul>
+      <div class="kasten"><div class="t">Funds pay out</div>
+      A sector fund holds real shares. 80 % of the dividends it receives go to its unit
+      holders every 10 minutes.</div>
+      <div class="merk">Paying dividends attracts the savers — that supports the price.</div>` } },
 
   { t: "Preise &amp; Ankerkurs", lead: "Warum dein Angebot den Kurs bewegt",
     html: `

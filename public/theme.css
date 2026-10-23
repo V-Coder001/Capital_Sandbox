@@ -894,6 +894,9 @@ html[data-theme="papier"] .faStufe[data-stufe=normal].on,html[data-theme="papier
 #marktlog .mlog.panik{color:var(--down,#fb7185);font-weight:600}
 #marktlog .mlog.flaute{color:#f59e0b}
 #marktlog .mlog.ausschuettung{color:var(--up,#34d399)}
+#marktlog .mlog.depot-kauf{color:var(--accent,#60a5fa)}
+.depotKarte{align-items:flex-start;gap:10px}
+.depotKarte .swBalken{margin-top:6px}
 .bkz small{font-size:.65em;opacity:.6;font-weight:500}
 .fAktie{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin:4px 0}
 .fAktie div{border:1px solid var(--line,rgba(255,255,255,.1));border-radius:8px;padding:6px 8px;display:flex;flex-direction:column}
