@@ -5147,6 +5147,33 @@ function clickTile(e) {
         : meins ? `${meins.name} v${meins.version} · ${swChips(meins)}` : "Noch kein Shop-System angelegt");
       swHtml = `<div class="tmHinweis">${zeilen.join("<br>")}</div>` + (mine ? `<button class="tmHaupt" id="swPanel"><span>Software-Baukasten öffnen</span><small>Name, Preise, neue Versionen</small></button>` : "");
     }
+    /* Steuerungssoftware auf Produktionsgebäuden: Systeme mit einem Baum für
+     * die Branche dieses Gebäudes, Wirkung je nach Stufe, Abo je Minute. */
+    let steuerHtml = "";
+    const stCfg = store.get().state.steuerung || {}, stDef = stCfg[bt.industry];
+    if (mine && stDef && (bt.proc || bt.out) && !bt.retail && !bt.studio && !bt.rz) {
+      const stufeAnteil = store.get().state.steuerStufe || [0, .5, .8, 1];
+      const tick = store.get().state.tick;
+      const art = stDef.art === "in" && bt.proc ? "weniger Rohstoffe" : "mehr Ausstoß";
+      const wirkung = x => Math.round(stDef.wert * stufeAnteil[x.stufen?.[bt.industry] || 0] * 100);
+      const akt = t.steuerung ? swListe.find(x => x.id === t.steuerung.produktId) : null;
+      const rest = t.steuerung ? Math.max(0, t.steuerung.bis - tick) : 0;
+      const status = !akt ? `<div class="tmSwStatus zu">Keine Steuerung — ${stDef.name}-Software bringt bis zu ${Math.round(stDef.wert * 100)} % ${art}.</div>`
+        : rest > 0 ? `<div class="tmSwStatus warn">${akt.name} wird installiert · noch ${rest}s</div>`
+        : `<div class="tmSwStatus an">${stDef.name} von ${akt.name}: <b>${Math.round(wirkung(akt) * Math.min(1, akt.faktor ?? 1))} % ${art}</b>${akt.faktor < 1 ? ` · überlastet (${Math.round(akt.faktor * 100)} %)` : ""}</div>`;
+      const optionen = swListe.filter(x => !x.portal && x.version >= 1 && (x.stufen?.[bt.industry] || 0) >= 1).sort((a, b) => wirkung(b) - wirkung(a) || a.steuerAbo - b.steuerAbo).map(x => {
+        const jetzt = x.id === t.steuerung?.produktId, voll = x.plaetze != null && x.kunden >= x.plaetze && !jetzt;
+        const abo = x.ownerId === myId ? 0 : x.steuerAbo;
+        return `<button class="opt tmSwOpt${jetzt ? " jetzt" : ""}" data-steuer="${x.id}" ${jetzt || voll || me.cash < abo ? "disabled" : ""}>
+          <span><i style="background:${x.farbe}"></i>${x.name} v${x.version}<em>${x.anbieter}</em></span>
+          <small>${wirkung(x)} % ${art} · ${abo ? fmt(abo) + "/min" : "eigenes System, kein Abo"}${voll ? " · <b>voll</b>" : jetzt ? " · <b>aktiv</b>" : ""}</small></button>`;
+      }).join("");
+      steuerHtml = status + (optionen
+        ? `<div class="tmHinweis" style="margin:8px 2px 6px">${akt ? "Wechseln" : "Installieren"} (dauert ${store.get().state.swCfg?.install ?? 45} s, keine Einrichtung):</div>` + optionen
+        : `<div class="tmHinweis">Noch kein Shop-System hat einen Baum für ${store.get().state.swBaeume?.[bt.industry]?.name ?? "diese Branche"}.</div>`)
+        + (akt ? `<button class="tmHaupt" id="leitAuf" style="margin-top:6px"><span>🎛 Leitstand öffnen</span><small>Anzeigen${akt.version >= (store.get().state.leitFunktion?.turbo ?? 2) ? ", Turbo" : ""}${akt.version >= (store.get().state.leitFunktion?.nachkauf ?? 3) ? ", Nachkauf" : ""} — im Design von ${akt.anbieter}</small></button>`
+          + `<button class="tmKlein" id="steuerAus" style="margin-top:4px">Steuerung abschalten</button>` : "");
+    }
     /* Übersichtliche Gebäudekarte: Kopf (Bild, Name, Stufe, Besitzer, Status),
      * zwei bis drei Kennzahlen, EIN Hauptknopf, kleine Nebenknöpfe. Die
      * Erklärtexte stehen eingeklappt unter „Mehr erfahren". */
@@ -5165,7 +5192,7 @@ function clickTile(e) {
     if (bt.racing) kennzahlen.push(["Garage", `${(t.autos || []).length}/${lvl}`, "Stellplätze"]);
     if (bt.studio) kennzahlen.push(["Entwickelt", `${(bt.studio.ep * lvlMult).toFixed(2)} EP/s`, "Entwicklungspunkte"],
       ["Verbraucht", Object.entries(bt.studio.in).map(([g, n]) => `${(n * lvlMult).toFixed(2)} ${gname(g)}`).join(" + "), "pro Sekunde"]);
-    if (bt.rz) kennzahlen.push(["Plätze", `${bt.rz.plaetze * lvl}`, "Online-Marktplätze"], ["Verbraucht", `${(bt.rz.in.strom * lvlMult).toFixed(2)} ${gname("strom")}`, "pro Sekunde"]);
+    if (bt.rz) kennzahlen.push(["Plätze", `${bt.rz.plaetze * lvl}`, "Marktplätze + Steuerungen"], ["Verbraucht", `${(bt.rz.in.strom * lvlMult).toFixed(2)} ${gname("strom")}`, "pro Sekunde"]);
     const mehr = [];
     if (bt.out && lvl > 1) mehr.push(`Basisrate ${bt.rate}/s × ${lvlMult.toFixed(1)} durch Stufe ${lvl}.`);
     if (bt.boosts) mehr.push(`<b>Boost:</b> ${bt.boosts.map(r => gname(r)).join(" + ")} im Lager bringen je +75 % Tempo und werden dabei verbraucht.`);
@@ -5192,6 +5219,7 @@ function clickTile(e) {
       </div>
       ${kennzahlen.length ? `<div class="tmZahlen">${kennzahlen.map(([k, v, u]) => `<div><span>${k}</span><b class="${String(v).length > 10 ? "lang" : ""}">${v}</b><small>${u}</small></div>`).join("")}</div>` : ""}
       ${swHtml ? `<div class="tmAbschnitt">${bt.online ? "Shop-System" : "Software"}</div>${swHtml}` : ""}
+      ${steuerHtml ? `<div class="tmAbschnitt">Steuerungssoftware</div>${steuerHtml}` : ""}
       ${shopHtml ? `<div class="tmAbschnitt">Regale</div>${shopHtml}` : ""}
       ${stallHtml ? `<div class="tmAbschnitt">Garage</div>${stallHtml}` : ""}
       ${adHtml ? `<div class="tmAbschnitt">Werbung</div>${adHtml}` : ""}
@@ -5207,6 +5235,11 @@ function clickTile(e) {
     tm.querySelectorAll("[data-sys]").forEach(b => b.addEventListener("click", () => {
       act("installSystem", { x: t.x, y: t.y, produktId: b.dataset.sys }); tm.style.display = "none";
     }));
+    tm.querySelectorAll("[data-steuer]").forEach(b => b.addEventListener("click", () => {
+      act("installSteuerung", { x: t.x, y: t.y, produktId: b.dataset.steuer }); tm.style.display = "none";
+    }));
+    tm.querySelector("#steuerAus")?.addEventListener("click", () => { act("entferneSteuerung", { x: t.x, y: t.y }); tm.style.display = "none"; });
+    tm.querySelector("#leitAuf")?.addEventListener("click", () => { tm.style.display = "none"; leitOeffnen(t.x, t.y); });
     tm.querySelector("#swWerbung")?.addEventListener("click", ev => {
       act("systemWerbung", { x: t.x, y: t.y, an: ev.currentTarget.dataset.an === "1" }); tm.style.display = "none";
     });
@@ -5704,7 +5737,7 @@ function softwareRendern(state, me, myId) {
         <span class="swName"><i style="background:${x.farbe}"></i><span><b>${x.name} <em>v${x.version}</em></b><small>${x.anbieter}${x.portal ? " · Notlösung" : ` · Ruf ${x.ruf}`}</small><span class="swChips">${chips(x)}${(x.branchen || []).map(br => `<span class="swChip baum">${state.swBaeume?.[br]?.name || br} ${"●".repeat(x.stufen?.[br] || 0)}${"○".repeat(3 - (x.stufen?.[br] || 0))}</span>`).join("")}</span></span></span>
         <span class="mono">${proz(x.gebuehr)}</span>
         <span class="mono">${x.einrichtung ? fmt(x.einrichtung) : "—"}</span>
-        <span class="mono">${x.portal ? x.kunden : `${x.kunden}/${x.plaetze ?? 0}`}${!x.portal && x.plaetze === 0 ? ` <b class="swWarn">aus</b>` : x.faktor < 1 ? ` <b class="swWarn">überlastet</b>` : ""}</span>
+        <span class="mono">${x.portal ? x.kunden : `${x.kunden}/${x.plaetze ?? 0}`}${x.steuerKunden ? `<small title="davon Produktionsgebäude mit Steuerung (${fmt(x.steuerAbo)}/min)">⚙ ${x.steuerKunden}</small>` : ""}${!x.portal && x.plaetze === 0 ? ` <b class="swWarn">aus</b>` : x.faktor < 1 ? ` <b class="swWarn">überlastet</b>` : ""}</span>
         <span class="mono">${portal?.wert ? `${wertFuer(x) >= wertFuer(portal) ? "+" : ""}${Math.round((wertFuer(x) / wertFuer(portal) - 1) * 100)} %` : "—"}${i === 0 && fertig.length > 1 ? ` <b class="swBest">beste Wahl</b>` : ""}</span>
       </div>`).join("")}
     </div>
@@ -5712,13 +5745,15 @@ function softwareRendern(state, me, myId) {
   let bau = "";
   if (binSoftware) {
     const e = { name: eigene?.name ?? "", farbe: eigene?.farbe ?? (state.players?.[myId]?.color || "#60a5fa"),
-      einrichtung: eigene?.einrichtung ?? 400, gebuehr: eigene?.gebuehr ?? 2, werbeAbo: eigene?.werbeAbo ?? 150, ...swEntwurf };
+      einrichtung: eigene?.einrichtung ?? 400, gebuehr: eigene?.gebuehr ?? 2, werbeAbo: eigene?.werbeAbo ?? 150, steuerAbo: eigene?.steuerAbo ?? (state.steuerAboCfg?.START ?? 40), anzeigenPreis: eigene?.anzeigenPreis ?? 80, ...swEntwurf };
     const felder = `<div class="swForm">
         <label class="breit"><span>Name</span><input id="swName" maxlength="16" value="${escapeHtml(rohText(e.name))}" placeholder="z. B. KassenKlick"></label>
         <label><span>Farbe</span><input id="swFarbe" type="color" value="${e.farbe}"></label>
         <label><span>Einrichtung $</span><input id="swEinr" type="number" min="0" max="${cfg.einrMax ?? 1500}" step="50" value="${e.einrichtung}"></label>
         <label><span>Gebühr %</span><input id="swGeb" type="number" min="${cfg.gebMin ?? .5}" max="${cfg.gebMax ?? 4}" step="0.1" value="${e.gebuehr}"></label>
         <label><span>Werbe-Abo $/min je Marktplatz</span><input id="swAbo" type="number" min="${cfg.aboMin ?? 60}" max="${cfg.aboMax ?? 400}" step="10" value="${e.werbeAbo}"></label>
+        <label><span>Anzeigen $/min je Werbeplatz</span><input id="swAnzPreis" type="number" min="${state.anzeigeCfg?.preisMin ?? 20}" max="${state.anzeigeCfg?.preisMax ?? 500}" step="10" value="${e.anzeigenPreis}"></label>
+        <label><span>Steuerungs-Abo $/min je Gebäude</span><input id="swSteuerAbo" type="number" min="${state.steuerAboCfg?.MIN ?? 10}" max="${state.steuerAboCfg?.MAX ?? 300}" step="5" value="${e.steuerAbo}"></label>
         <button class="buyb breit" id="swSpeichern">${eigene ? "Preise und Aussehen übernehmen" : "Shop-System anlegen"}</button>
       </div>`;
     let entw = "";
@@ -5785,21 +5820,35 @@ function softwareRendern(state, me, myId) {
           <div><b style="color:var(--up)">${fmt(eigene.einnahmen10 || 0)}</b><span>Einnahmen 10 min</span></div>
         </div>
         <div class="note" style="margin:-4px 0 10px">Markenwert <b>${fmt(eigene.markenwert || 0)}</b> — zählt zum Firmenwert und Aktienkurs (Einnahmen der letzten 10 min × ${cfg.markenwert ?? 2}).</div>` : `<div class="note">Lege Name und Preise fest, dann entwickelst du Version 1 im Entwicklerstudio.</div>`}
-      ${felder}${eigene ? swDesignHtml(state, eigene) : ""}${entw}${eigene ? paintHtml(state, me, eigene) : ""}${eigene ? boerseAppHtml(state, me, eigene) : ""}`;
+      ${felder}${eigene ? swDesignHtml(state, eigene) : ""}${eigene ? leitDesignHtml(state, eigene) : ""}${entw}${eigene ? paintHtml(state, me, eigene) : ""}${eigene ? boerseAppHtml(state, me, eigene) : ""}`;
     if (eigene) sfSchriftenLaden();
   }
   /* Nur neu setzen, wenn sich etwas geändert hat — sonst liefen Holo- und
    * Glanz-Animation der Vorschau jede Sekunde von vorn. */
-  const body = document.getElementById("softwarebody"), html = tabelle + bau;
+  const body = document.getElementById("softwarebody"), html = tabelle + werbenetzHtml(state, myId, binSoftware) + bau;
   if (body._sig !== html) { body._sig = html; body.innerHTML = html; }
 }
 document.getElementById("p-software").addEventListener("input", e => {
-  const map = { swName: "name", swFarbe: "farbe", swEinr: "einrichtung", swGeb: "gebuehr", swAbo: "werbeAbo" };
+  const map = { swName: "name", swFarbe: "farbe", swEinr: "einrichtung", swGeb: "gebuehr", swAbo: "werbeAbo", swSteuerAbo: "steuerAbo", swAnzPreis: "anzeigenPreis" };
   if (map[e.target.id]) swEntwurf[map[e.target.id]] = e.target.value;
   if (e.target.id === "mpName") paintEntwurf.name = e.target.value;
   if (e.target.id === "mpPreis") paintEntwurf.preis = e.target.value;
   if (e.target.id === "baName") boerseEntwurf.name = e.target.value;
   if (e.target.id === "baPreis") boerseEntwurf.preis = e.target.value;
+  if (e.target.id === "anzText") anzEntwurf.text = e.target.value;
+  const lmap = { ldTitel: "titel", ldMeldung: "meldung", ldAkzent: "akzent" };
+  if (lmap[e.target.id]) {
+    leitEntwurf[lmap[e.target.id]] = e.target.value;
+    const mini = document.querySelector("#p-software .lgMini");
+    if (mini && e.target.id === "ldAkzent") mini.style.setProperty("--akz", e.target.value);
+    if (mini && e.target.id === "ldTitel") { const b = mini.querySelector("[data-ldtitel]"); if (b) b.textContent = e.target.value || b.textContent; }
+    if (mini && e.target.id === "ldMeldung") {
+      let tk = mini.querySelector(".lgTicker");
+      if (!tk) { tk = document.createElement("div"); tk.className = "lgTicker"; tk.innerHTML = "<span data-ldmeldung></span>"; mini.querySelector(".lgKopf").after(tk); }
+      tk.querySelector("span").textContent = e.target.value; tk.hidden = !e.target.value;
+    }
+    const knopf = document.getElementById("leitDesignSpeichern"); if (knopf) { knopf.disabled = false; knopf.textContent = "Leitstand übernehmen"; }
+  }
   const dmap = { swdSlogan: "slogan", swdBanner: "banner", swdAkzent: "akzent" };
   if (dmap[e.target.id]) {
     swDesignEntwurf[dmap[e.target.id]] = e.target.value;
@@ -5840,6 +5889,24 @@ document.getElementById("p-software").addEventListener("click", e => {
   if (e.target.closest("#mpMalen")) return malOeffnen();
   const sa = e.target.closest("[data-shopauf]");
   if (sa) { const [x, y] = sa.dataset.shopauf.split(",").map(Number); return shopOeffnen(x, y); }
+  const ab = e.target.closest("[data-anzbuch]");
+  if (ab) {
+    socket.emit("anzeigeBuchen", { produktId: ab.dataset.anzbuch, minuten: +ab.dataset.min, text: document.getElementById("anzText")?.value }, r => {
+      if (r?.error) return toast(r.error, true);
+      toast(`Anzeige gebucht (${fmt(r.preis)}) — +${r.wirkung} % Preisspielraum in deinen Shops`); SFX.spiel("kasse"); render(store.get());
+    });
+    return;
+  }
+  const ld = e.target.closest("[data-leitdes]");
+  if (ld && !ld.disabled) { leitEntwurf[ld.dataset.leitdes] = ld.dataset.wert; SFX.spiel("klick"); render(store.get()); return; }
+  if (e.target.closest("#leitDesignSpeichern")) {
+    socket.emit("leitDesign", { ...leitEntwurf }, r => {
+      if (r?.error) return toast(r.error, true);
+      for (const k of Object.keys(leitEntwurf)) delete leitEntwurf[k];
+      toast("Leitstand übernommen — alle Kunden mit deiner Steuerung sehen ihn jetzt so"); render(store.get());
+    });
+    return;
+  }
   const dz = e.target.closest("[data-swdes]");
   if (dz && !dz.disabled) { swDesignEntwurf[dz.dataset.swdes] = dz.dataset.wert; SFX.spiel("klick"); render(store.get()); return; }
   if (e.target.closest("#swDesignSpeichern")) {
@@ -5862,7 +5929,7 @@ document.getElementById("p-software").addEventListener("click", e => {
   }
   if (e.target.closest("#swSpeichern")) {
     const v = id => document.getElementById(id)?.value;
-    socket.emit("softwareEinstellen", { name: v("swName"), farbe: v("swFarbe"), einrichtung: v("swEinr"), gebuehr: v("swGeb"), werbeAbo: v("swAbo") }, r => {
+    socket.emit("softwareEinstellen", { name: v("swName"), farbe: v("swFarbe"), einrichtung: v("swEinr"), gebuehr: v("swGeb"), werbeAbo: v("swAbo"), steuerAbo: v("swSteuerAbo"), anzeigenPreis: v("swAnzPreis") }, r => {
       if (r?.error) return toast(r.error, true);
       for (const k of Object.keys(swEntwurf)) delete swEntwurf[k];
       toast("Shop-System gespeichert"); render(store.get());
@@ -5929,6 +5996,7 @@ function shopOeffnen(x, y) {
       <span class="sfUrl"></span><button type="button" class="sfZu" data-sfzu aria-label="Schließen">✕</button></div>
     <header class="sfKopf"></header>
     <div class="sfBanner" hidden></div>
+    <div class="sfAnzeigen" hidden></div>
     <div class="sfHinweis" hidden></div>
     <div class="sfInhalt"><div class="sfGrid"></div>
       <aside class="sfFeed"><h4><span class="sfLive"></span>Bestellungen</h4><ul></ul></aside></div>
@@ -5976,6 +6044,10 @@ function shopZeichnen(neu = false) {
   const banner = fenster.querySelector(".sfBanner");
   banner.hidden = !(offen && dsg.banner);
   shopSetze(".sfBanner", dsg.banner ? `<b>✦</b><span>${dsg.banner}</span>` : "", "banner");
+  /* Werbenetz: Anzeigen anderer Firmen, gebucht bei diesem System */
+  const anz = sys && !sys.portal ? (state.anzeigen || []).filter(a => a.produktId === sys.id) : [];
+  fenster.querySelector(".sfAnzeigen").hidden = !(offen && anz.length);
+  shopSetze(".sfAnzeigen", anz.map(a => `<span class="sfAnz"><small>Anzeige</small>${logoHtml(a.firmaId, "sfAnzLogo", a.farbe)}<b>${escapeHtml(rohText(a.firma))}</b> ${escapeHtml(rohText(a.text))}</span>`).join(""), "anz");
   shopSetze(".sfFuss", sys ? `${sys.portal ? `<span class="sfFussLogo">🏛</span>` : logoHtml(sys.ownerId, "sfFussLogo", sys.farbe)}<span>Diese Website läuft mit <b>${sys.name}</b>${sys.portal ? " — dem Notportal der Stadt" : ` v${sys.version} · entwickelt von <b>${sys.anbieter}</b>`}</span>` : "", "fuss" + (sys && !sys.portal ? (logoBild(sys.ownerId) || "").length : 0));
   const hinweis = fenster.querySelector(".sfHinweis");
   hinweis.hidden = !meins;
@@ -6145,6 +6217,219 @@ document.getElementById("shopFenster").addEventListener("input", e => {
     if (b && sl) b.textContent = `Kaufen · ${fmt(SHOP.menge[+n.dataset.sfn] * sl.price)}`; }
 });
 document.addEventListener("keydown", e => { if (e.key === "Escape" && SHOP.offen) shopSchliessen(); });
+
+/* ---------- Leitstand: Oberfläche der Steuerungssoftware ----------
+ * Jedes gesteuerte Gebäude hat einen Leitstand im Design der Software-Firma
+ * (Thema, Anzeigen, Schrift, Effekt, Titel, Laufschrift). Funktionen je nach
+ * Version: Live-Anzeigen und Alarm, Turbo, Nachkauf, Auto-Turbo.
+ * Das Gerüst wird nur neu gebaut, wenn sich Aufbau oder Design ändern; die
+ * Werte wandern sonst über data-lw / --f an Ort und Stelle — so gehen Klicks
+ * zwischen zwei Updates nicht verloren. */
+const LEIT = { offen: false, x: 0, y: 0, sig: "" };
+const leitEntwurf = {};
+/* Eine Anzeige in vier Bauarten; die Füllung steuert allein --f (0…1) */
+function leitAnzeige(art, key, titel, f, text, unter = "") {
+  const inner = art === "zeiger"
+    ? `<svg viewBox="0 0 100 56" class="lgZeiger" aria-hidden="true"><path d="M8 50 A42 42 0 0 1 92 50" class="lgSpur"/><path d="M8 50 A42 42 0 0 1 92 50" class="lgFill" pathLength="100"/><line x1="50" y1="50" x2="50" y2="14" class="lgNadel"/><circle cx="50" cy="50" r="4" class="lgNabe"/></svg>`
+    : art === "ringe"
+    ? `<svg viewBox="0 0 60 60" class="lgRing" aria-hidden="true"><circle cx="30" cy="30" r="24" class="lgSpur"/><circle cx="30" cy="30" r="24" class="lgFill" pathLength="100"/></svg>`
+    : art === "ziffern" ? `<div class="lgSegment"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>`
+    : `<div class="lgBalken"><i></i></div>`;
+  return `<div class="lgAnz" data-lf="${key}" style="--f:${Math.max(0, Math.min(1, f || 0)).toFixed(3)}">
+    <span class="lgTitel">${titel}</span>${inner}<b class="lgWert" data-lw="${key}">${text}</b><small data-lw="${key}_u">${unter}</small></div>`;
+}
+/* Daten eines gesteuerten Gebäudes für den Leitstand (aus dem Spielstand) */
+function leitDaten(state, me, t) {
+  const bt = BTYPES()[t.btype], sys = (state.software || []).find(x => x.id === t.steuerung?.produktId);
+  if (!bt || !sys) return null;
+  const def = state.steuerung?.[bt.industry] || {}, T = state.turbo || { DAUER: 60, PAUSE: 120, OUT: .3, IN: .5 }, FN = state.leitFunktion || {};
+  const stufe = sys.stufen?.[bt.industry] || 0, faktor = Math.min(1, sys.faktor ?? 1);
+  const w = (def.wert || 0) * (state.steuerStufe || [0, .5, .8, 1])[stufe] * faktor;
+  const tick = state.tick, offen = tick >= (t.steuerung.bis || 0);
+  const turboAn = offen && sys.version >= FN.turbo && (t.steuerung.turboBis || 0) > tick && faktor > 0;
+  const lvl = 1 + 0.3 * ((t.level || 1) - 1);
+  const inArt = def.art === "in" && !!bt.proc;
+  const plus = (inArt ? 0 : w) + (turboAn ? T.OUT : 0);
+  const sparen = (1 - (inArt ? w : 0)) * (turboAn ? 1 + T.IN : 1);
+  const out = bt.proc ? bt.proc.out : bt.out;
+  const rate = (bt.proc ? bt.proc.rate : bt.rate) * lvl * (offen ? 1 + plus : 1) * 60;
+  const roh = bt.proc ? Object.entries(bt.proc.in).map(([g, n]) => ({ g, je: n * lvl * (offen ? sparen : 1) }))
+    : [{ g: "strom", je: bt.rate * lvl * T.IN, nurTurbo: true }];
+  return { bt, sys, def, T, FN, stufe, w, offen, turboAn, inArt, out, rate, roh, lvl, tick,
+    rest: Math.max(0, (t.steuerung.bis || 0) - tick), turboRest: Math.max(0, (t.steuerung.turboBis || 0) - tick),
+    pauseRest: Math.max(0, (t.steuerung.pauseBis || 0) - tick), lager: me?.inv?.[out] || 0, inv: me?.inv || {} };
+}
+const leitZeit = sek => sek >= 3600 ? "> 60 min" : `${Math.floor(sek / 60)}:${String(Math.floor(sek % 60)).padStart(2, "0")} min`;
+/* Gerüst und Werte. vorschau: Musterdaten fürs Design-Panel. */
+function leitstandHtml(d, design, kopf, vorschau = false) {
+  const g = design || {}, art = g.anzeige || "balken", v = d.sys.version || 0;
+  const titel = g.titel || `${d.sys.name} Leitstand`;
+  const anzeigen = [
+    leitAnzeige(art, "rate", "Ausstoß", (d.rate / 60) / ((d.bt.proc ? d.bt.proc.rate : d.bt.rate) * d.lvl * (1 + (d.def.wert || 0) + d.T.OUT)), `${(d.rate).toFixed(1)}/min`, gname(d.out)),
+    leitAnzeige(art, "bonus", d.inArt ? "Ersparnis" : "Bonus", (d.def.wert ? (d.inArt ? d.w : d.w + (d.turboAn ? d.T.OUT : 0)) / ((d.def.wert || 0) + d.T.OUT) : 0),
+      `${d.offen ? "+" + Math.round((d.inArt ? d.w : d.w + (d.turboAn ? d.T.OUT : 0)) * 100) : 0} %`, d.inArt ? "weniger Rohstoffe" : d.def.name || ""),
+    leitAnzeige(art, "lager", "Lager", Math.min(1, d.lager / Math.max(1, d.rate * 10)), `${Math.floor(d.lager)}`, gname(d.out)),
+  ].join("");
+  const roh = d.roh.map(r => {
+    const sek = r.je > 0 ? (d.inv[r.g] || 0) / r.je : Infinity;
+    return `<div class="lgRoh" data-lf="roh_${r.g}" style="--f:${Math.min(1, sek / 300).toFixed(3)}"><span>${WAREN_ICON[r.g] || "📦"} ${gname(r.g)}${r.nurTurbo ? " <em>(Turbo)</em>" : ""}</span>
+      <div class="lgBalken"><i></i></div><b data-lw="roh_${r.g}">${Number.isFinite(sek) ? leitZeit(sek) : "—"}</b></div>`;
+  }).join("");
+  const turboFrei = v >= (d.FN.turbo || 2), autoFrei = v >= (d.FN.autoTurbo || 4), kaufFrei = v >= (d.FN.nachkauf || 3);
+  const turbo = `<div class="lgTurbo" data-lf="turbo" style="--f:${vorschau && d.turboAn ? .7 : 0}">
+      <button type="button" class="lgKnopf lgTurboKnopf" data-leit="turbo" ${turboFrei && !vorschau ? "" : "disabled"}>🚀 <span data-lw="turbo">${!turboFrei ? `Turbo ab v${d.FN.turbo}` : vorschau ? `Turbo läuft · ${d.turboRest} s` : "Turbo"}</span></button>
+      <div class="lgBalken"><i></i></div>
+      <small>+${Math.round(d.T.OUT * 100)} % Ausstoß für ${d.T.DAUER} s · +${Math.round(d.T.IN * 100)} % ${d.bt.proc ? "Rohstoffe" : "Strom"} · ${d.T.PAUSE} s Pause</small></div>
+    <div class="lgReihe">
+      <button type="button" class="lgKnopf" data-leit="auto" ${autoFrei && !vorschau ? "" : "disabled"}><span data-lw="auto">${autoFrei ? "Auto-Turbo" : `Auto-Turbo ab v${d.FN.autoTurbo}`}</span></button>
+      ${d.bt.proc ? `<button type="button" class="lgKnopf" data-leit="nachkauf" ${kaufFrei && !vorschau ? "" : "disabled"}>${kaufFrei ? "🛒 Rohstoffe für 3 min nachkaufen" : `Nachkauf ab v${d.FN.nachkauf}`}</button>` : ""}
+    </div>`;
+  /* Laufschrift: Meldung der Software-Firma, dazu die Anzeigen aus ihrem Werbenetz */
+  const anz = vorschau ? [] : (store.get().state.anzeigen || []).filter(a => a.produktId === d.sys.id);
+  const lauf = [g.meldung ? escapeHtml(rohText(g.meldung)) : "", ...anz.map(a => `📣 Anzeige · <b>${escapeHtml(rohText(a.firma))}</b>: ${escapeHtml(rohText(a.text))}`)].filter(Boolean);
+  const meldung = lauf.length ? `<div class="lgTicker"><span data-ldmeldung>${lauf.join("   ✦   ")}</span></div>` : "";
+  return `<div class="lgKopf">${logoHtml(d.sys.ownerId, "lgLogo", d.sys.farbe)}
+      <div class="lgName"><b data-ldtitel>${escapeHtml(rohText(titel))}</b><small>${kopf}</small></div>
+      <span class="lgStatus" data-lw="status" data-zustand="an">${vorschau ? (d.turboAn ? "Turbo" : "Online") : ""}</span>${vorschau ? "" : `<button type="button" class="lgZu" data-leitzu aria-label="Schließen">✕</button>`}</div>
+    ${meldung}
+    <div class="lgAnzeigen">${anzeigen}</div>
+    <div class="lgAbschnitt">Rohstoff-Reichweite</div><div class="lgRohListe">${roh}</div>
+    <div class="lgAbschnitt">Steuerung</div>${turbo}
+    <div class="lgFuss"><span data-lw="mehr">${vorschau ? `Mehr produziert: +128 ${gname(d.out)} · 3× Turbo` : ""}</span><span>${escapeHtml(rohText(d.sys.name))} v${v} · von ${escapeHtml(rohText(d.sys.anbieter))}</span></div>`;
+}
+/* Werte, die sich jede Sekunde ändern */
+function leitWerte(el, d, t) {
+  const setze = (k, txt) => el.querySelectorAll(`[data-lw="${k}"]`).forEach(x => { if (x.textContent !== txt) x.textContent = txt; });
+  const fuell = (k, f) => { const x = el.querySelector(`[data-lf="${k}"]`); if (x) x.style.setProperty("--f", Math.max(0, Math.min(1, f)).toFixed(3)); };
+  const maxPlus = (d.def.wert || 0) + d.T.OUT;
+  const plusJetzt = d.offen ? (d.inArt ? d.w : d.w + (d.turboAn ? d.T.OUT : 0)) : 0;
+  fuell("rate", (d.rate / 60) / ((d.bt.proc ? d.bt.proc.rate : d.bt.rate) * d.lvl * (1 + maxPlus))); setze("rate", `${d.rate.toFixed(1)}/min`);
+  fuell("bonus", maxPlus ? plusJetzt / maxPlus : 0); setze("bonus", `+${Math.round(plusJetzt * 100)} %`);
+  fuell("lager", d.lager / Math.max(1, d.rate * 10)); setze("lager", `${Math.floor(d.lager)}`);
+  for (const r of d.roh) {
+    const sek = r.je > 0 ? (d.inv[r.g] || 0) / r.je : Infinity;
+    fuell("roh_" + r.g, sek / 300); setze("roh_" + r.g, (d.inv[r.g] || 0) < 0.5 ? "leer" : Number.isFinite(sek) ? leitZeit(sek) : "—");
+  }
+  const turboFrei = d.sys.version >= (d.FN.turbo || 2);
+  fuell("turbo", d.turboAn ? d.turboRest / d.T.DAUER : d.pauseRest ? 1 - d.pauseRest / d.T.PAUSE : turboFrei ? 1 : 0);
+  setze("turbo", !turboFrei ? `Turbo ab v${d.FN.turbo}` : d.turboAn ? `Turbo läuft · ${d.turboRest} s` : d.pauseRest ? `Kühlt ab · ${d.pauseRest} s` : "Turbo zünden");
+  setze("auto", d.sys.version >= (d.FN.autoTurbo || 4) ? (t.steuerung.auto ? "Auto-Turbo: an" : "Auto-Turbo: aus") : `Auto-Turbo ab v${d.FN.autoTurbo}`);
+  const knopf = el.querySelector('[data-leit="turbo"]');
+  if (knopf) knopf.disabled = !turboFrei || !d.offen || d.turboAn || d.pauseRest > 0;
+  el.querySelector('[data-leit="auto"]')?.classList.toggle("an", !!t.steuerung.auto);
+  el.classList.toggle("turboAn", d.turboAn);
+  setze("status", !d.offen ? `Installation · ${d.rest} s` : (d.sys.faktor ?? 1) <= 0 ? "Ausfall — Rechenzentrum aus" : (d.sys.faktor ?? 1) < 1 ? `Überlastet (${Math.round(d.sys.faktor * 100)} %)` : d.turboAn ? "Turbo" : "Online");
+  el.querySelector(".lgStatus")?.setAttribute("data-zustand", !d.offen ? "warn" : (d.sys.faktor ?? 1) < 1 ? "warn" : "an");
+  const st = t.steuerung;
+  setze("mehr", d.inArt ? `Gespart seit Installation: ${fmt(st.gespart || 0)}${st.mehr ? ` · +${Math.round(st.mehr)} ${gname(d.out)} im Turbo` : ""}` : `Mehr produziert: +${Math.round(st.mehr || 0)} ${gname(d.out)}${st.turbos ? ` · ${st.turbos}× Turbo` : ""}`);
+}
+const leitDesignAttr = (g, farbe) => {
+  const d = g || {};
+  return ["thema", "anzeige", "schrift", "effekt"].map(k => `data-${k}="${d[k] || ""}"`).join(" ") + ` style="--sys:${farbe || "#64748b"};${d.akzent ? `--akz:${d.akzent}` : ""}"`;
+};
+function leitOeffnen(x, y) {
+  Object.assign(LEIT, { offen: true, x, y, sig: "" });
+  document.getElementById("leitFenster").hidden = false;
+  sfSchriftenLaden(); SFX.spiel("klick");
+  leitZeichnen();
+}
+function leitSchliessen() {
+  LEIT.offen = false;
+  const el = document.getElementById("leitFenster"); el.hidden = true; el.innerHTML = "";
+}
+function leitZeichnen() {
+  const { state, me, myId } = store.get();
+  const t = state.map.find(k => k.x === LEIT.x && k.y === LEIT.y);
+  if (!t || t.owner !== myId || !t.steuerung) return leitSchliessen();
+  const d = leitDaten(state, me, t); if (!d) return leitSchliessen();
+  const fenster = document.getElementById("leitFenster");
+  const design = d.sys.leitDesign || {};
+  const sig = JSON.stringify([design, d.sys.version, d.sys.id, t.btype, t.level, d.roh.map(r => r.g), !!d.offen,
+    (state.anzeigen || []).filter(a => a.produktId === d.sys.id).map(a => a.id + a.text)]);
+  if (sig !== LEIT.sig) {
+    LEIT.sig = sig;
+    fenster.innerHTML = `<div class="leitstand" role="dialog" aria-label="Leitstand" ${leitDesignAttr(design, d.sys.farbe)}>${leitstandHtml(d, design, `${bname(t.btype)} · ${escapeHtml(rohText(state.players[myId]?.name || ""))}`)}</div>`;
+  }
+  leitWerte(fenster.querySelector(".leitstand"), d, t);
+}
+document.getElementById("leitFenster").addEventListener("click", e => {
+  if (e.target.closest("[data-leitzu]") || e.target.id === "leitFenster") return leitSchliessen();
+  const k = e.target.closest("[data-leit]"); if (!k || k.disabled) return;
+  const { state, me } = store.get();
+  const t = state.map.find(q => q.x === LEIT.x && q.y === LEIT.y); if (!t?.steuerung) return;
+  if (k.dataset.leit === "turbo") { SFX.spiel("klick"); return act("steuerTurbo", { x: t.x, y: t.y }); }
+  if (k.dataset.leit === "auto") return act("steuerAuto", { x: t.x, y: t.y, an: !t.steuerung.auto });
+  if (k.dataset.leit === "nachkauf") {
+    /* Fehlende Rohstoffe für 3 Minuten als Kaufgebote knapp über dem Ø-Kurs */
+    const d = leitDaten(state, me, t); if (!d) return;
+    let n = 0;
+    for (const r of d.roh) {
+      const fehlt = Math.ceil(r.je * 180 - (me.inv[r.g] || 0));
+      if (fehlt < 1) continue;
+      act("placeOrder", { side: "buy", good: r.g, qty: fehlt, price: Math.round((state.avg?.[r.g] || 1) * 1.05 * 100) / 100 }); n++;
+    }
+    toast(n ? `Leitstand: ${n} Kaufgebot${n > 1 ? "e" : ""} an der Börse eingestellt` : "Die Rohstoffe reichen schon für 3 Minuten");
+  }
+});
+document.addEventListener("keydown", e => { if (e.key === "Escape" && LEIT.offen) leitSchliessen(); });
+/* Werbenetz: Anzeigen bei Software-Firmen buchen. Reichweite = Kunden des
+ * Systems (Online-Marktplätze + gesteuerte Gebäude). */
+const anzEntwurf = { text: "" };
+function werbenetzHtml(state, myId, binSoftware) {
+  const cfg = state.anzeigeCfg; if (!cfg) return "";
+  const systeme = (state.software || []).filter(x => !x.portal && x.version >= 1).sort((a, b) => b.anzeigeWirkung - a.anzeigeWirkung);
+  const alle = state.anzeigen || [];
+  const meine = alle.filter(a => a.firmaId === myId);
+  const meinSys = binSoftware ? systeme.find(x => x.ownerId === myId) : null;
+  const beiMir = meinSys ? alle.filter(a => a.produktId === meinSys.id) : [];
+  const zeile = x => {
+    const eigen = x.ownerId === myId, laeuft = meine.find(a => a.produktId === x.id);
+    const voll = !laeuft && x.anzeigenFrei <= 0;
+    return `<div class="anzZeile">
+      <span class="swName"><i style="background:${x.farbe}"></i><span><b>${escapeHtml(rohText(x.name))} <em>v${x.version}</em></b><small>${escapeHtml(rohText(x.anbieter))} · ${x.kunden} Kunden · ${x.anzeigenPlaetze - x.anzeigenFrei}/${x.anzeigenPlaetze} Plätze belegt</small></span></span>
+      <span class="mono">+${String(x.anzeigeWirkung).replace(".", ",")} %<small>Preisspielraum</small></span>
+      <span class="mono">${fmt(x.anzeigenPreis)}<small>je Minute</small></span>
+      <span class="anzKnoepfe">${eigen ? `<small class="meta">dein System</small>` : voll ? `<small class="meta">voll</small>`
+        : (cfg.dauer || [3, 5, 10]).map(m => `<button type="button" class="mini" data-anzbuch="${x.id}" data-min="${m}">${m} min · ${fmt(x.anzeigenPreis * m)}</button>`).join("")}</span>
+    </div>`;
+  };
+  return `<div class="sec" style="margin-top:16px">Werbenetz · Anzeigen bei Software-Firmen</div>
+    <div class="note" style="margin:0 0 8px">Deine Anzeige läuft in allen Online-Shops und Leitständen mit diesem System. Je Kunde des Systems bekommst du ${String(Math.round(1.2 * 10) / 10).replace(".", ",")} % mehr Preisspielraum in deinen eigenen Shops (höchstens ${Math.round(cfg.maxJe * 100)} % je Anzeige, ${Math.round(cfg.max * 100)} % insgesamt). Bezahlt wird vorab; das Geld geht an die Software-Firma.</div>
+    ${meine.length ? `<div class="anzMeine">${meine.map(a => `<span class="anzChip">📣 ${escapeHtml(rohText(a.text))} <em>${(systeme.find(x => x.id === a.produktId)?.name) ?? ""} · noch ${Math.ceil(a.rest / 60)} min</em></span>`).join("")}</div>` : ""}
+    <label class="anzText"><span>Anzeigentext</span><input id="anzText" maxlength="${cfg.text}" value="${escapeHtml(rohText(anzEntwurf.text))}" placeholder="z. B. Frisches Obst — heute 10 % günstiger"></label>
+    <div class="anzTab">${systeme.length ? systeme.map(zeile).join("") : `<div class="meta">Noch hat keine Software-Firma ein System veröffentlicht.</div>`}</div>
+    ${meinSys ? `<div class="note" style="margin-top:6px">In deinem System laufen ${beiMir.length} von ${meinSys.anzeigenPlaetze} Anzeigen${beiMir.length ? ": " + beiMir.map(a => `${escapeHtml(rohText(a.firma))} (${Math.ceil(a.rest / 60)} min)`).join(", ") : ""}. Jede neue Version bringt einen Werbeplatz mehr (höchstens 3).</div>` : ""}`;
+}
+/* Baukasten im Software-Panel: Leitstand-Design mit Vorschau an einer Chipfabrik */
+function leitDesignHtml(state, eigene) {
+  const OPT = state.leitDesign || {}, AB = state.leitDesignAb || {};
+  const v = Math.max(1, eigene.version || 0);
+  const g = { ...(eigene.leitDesign || {}), ...leitEntwurf };
+  const farbe = swEntwurf.farbe || eigene.farbe;
+  const titel = { thema: "Thema", anzeige: "Anzeigen", schrift: "Schrift", effekt: "Effekt" };
+  const reihen = Object.entries(titel).map(([k, tt]) => `<div class="swDesignReihe"><span>${tt}</span><div class="swDesignWahl">
+    ${Object.entries(OPT[k] || {}).map(([id, o]) => `<button type="button" data-leitdes="${k}" data-wert="${id}" class="${g[k] === id ? "an" : ""}" ${o.ab > v ? "disabled" : ""}>${o.name}${o.ab > v ? `<em>🔒 v${o.ab}</em>` : ""}</button>`).join("")}
+  </div></div>`).join("");
+  const zu = k => v < (AB[k] || 1);
+  const texte = `<div class="swDesignTexte">
+    <label>Titel${zu("titel") ? ` 🔒 v${AB.titel}` : ""}<input id="ldTitel" maxlength="24" value="${escapeHtml(rohText(g.titel || ""))}" placeholder="${escapeHtml(rohText(eigene.name))} Leitstand" ${zu("titel") ? "disabled" : ""}></label>
+    <label>Laufschrift${zu("meldung") ? ` 🔒 v${AB.meldung}` : ""}<input id="ldMeldung" maxlength="70" value="${escapeHtml(rohText(g.meldung || ""))}" placeholder="z. B. Support rund um die Uhr" ${zu("meldung") ? "disabled" : ""}></label>
+    <label>Leuchtfarbe${zu("akzent") ? ` 🔒 v${AB.akzent}` : ""}<input id="ldAkzent" type="color" value="${g.akzent || farbe || "#60a5fa"}" ${zu("akzent") ? "disabled" : ""}></label>
+  </div>`;
+  /* Musterdaten: Chipfabrik mit Technologie-Steuerung, Turbo gerade aktiv */
+  const bt = BTYPES().chipfabrik || { proc: { in: { silizium: .7, strom: .5 }, out: "elektronik", rate: .5 }, industry: "tech" };
+  const def = state.steuerung?.tech || { name: "Fertigungsstraße", art: "out", wert: .12 };
+  const T = state.turbo || { DAUER: 60, PAUSE: 120, OUT: .3, IN: .5 };
+  const d = { bt, sys: { ...eigene, version: v, faktor: 1 }, def, T, FN: state.leitFunktion || {}, stufe: 3, w: def.wert, offen: true, turboAn: v >= (state.leitFunktion?.turbo || 2),
+    inArt: false, out: bt.proc.out, rate: bt.proc.rate * 60 * (1 + def.wert + T.OUT), lvl: 1, tick: 0, rest: 0, turboRest: 42, pauseRest: 0, lager: 64,
+    roh: Object.entries(bt.proc.in).map(([gg, n]) => ({ gg, g: gg, je: n * (1 + T.IN) })), inv: { silizium: 160, strom: 40 } };
+  const vorschau = `<div class="leitstand lgMini${d.turboAn ? " turboAn" : ""}" ${leitDesignAttr(g, farbe)}>${leitstandHtml(d, g, "Chipfabrik · Musterkunde", true)}</div>`;
+  const geaendert = Object.keys(leitEntwurf).length > 0;
+  return `<div class="sec" style="margin-top:16px">Leitstand-Design · so sieht die Steuerung bei deinen Kunden aus</div>
+    <div class="note" style="margin:0 0 8px">Jeder Kunde öffnet den Leitstand auf seinen gesteuerten Gebäuden. Neue Versionen schalten Themen, Anzeigen und Effekte frei — und Funktionen: Turbo ab v${state.leitFunktion?.turbo ?? 2}, Nachkauf ab v${state.leitFunktion?.nachkauf ?? 3}, Auto-Turbo ab v${state.leitFunktion?.autoTurbo ?? 4}.</div>
+    <div class="swDesign">${reihen}${texte}${vorschau}
+      <button class="buyb" id="leitDesignSpeichern" ${geaendert ? "" : "disabled"}>${geaendert ? "Leitstand übernehmen" : "Leitstand ist aktuell"}</button></div>`;
+}
 
 /* ---------- Firmenlogos (gemalt mit einem Malprogramm) ----------
  * Der Server schickt nur Versionsnummern (state.logoV); fehlende oder neuere
@@ -9051,6 +9336,7 @@ function render({ state, me, myId, chat, room }) {
 
   /* Online-Shop-Fenster live halten (Lager, Bestellungen) — außer während
    * der Bezahlanimation und solange eine Menge eingetippt wird. */
+  if (LEIT.offen) leitZeichnen();
   if (SHOP.offen && !SHOP.kasse && !(document.activeElement && document.getElementById("shopFenster").contains(document.activeElement) && document.activeElement.tagName === "INPUT")) shopZeichnen();
 
   /* Software: Systemvergleich für alle, Baukasten für Software-Firmen */
@@ -9790,6 +10076,34 @@ const TUT_BUCH = [
       A sector fund holds real shares. 80 % of the dividends it receives go to its unit
       holders every 10 minutes.</div>
       <div class="merk">Paying dividends attracts the savers — that supports the price.</div>` } },
+
+  { t: "Steuerungssoftware", lead: "Software für Produktionsgebäude",
+    html: `
+      <p>Das System einer Software-Firma läuft nicht nur im Online-Marktplatz, sondern
+      auch auf <b>Produktionsgebäuden</b>: Farm, Mine, E-Werk, Chipfabrik, Hotel …</p>
+      <ul>
+        <li>Jede Branche hat ihre eigene Steuerung, z. B. Ernteplaner (Agrar, mehr Ernte)
+        oder Förderleitstand (Rohstoff &amp; Bau, weniger Rohstoffe je Stück).</li>
+        <li>Die Wirkung kommt aus dem <b>Branchenbaum</b> des Systems: Stufe 1 bringt die
+        Hälfte, Stufe 2 80 %, Stufe 3 die volle Wirkung. Ohne Baum keine Steuerung.</li>
+        <li>Jedes gesteuerte Gebäude belegt einen Platz im <b>Rechenzentrum</b> des
+        Anbieters und kostet ein Abo je Minute. Fällt das Rechenzentrum aus, fehlt der
+        Bonus bei allen Kunden.</li>
+      </ul>
+      <div class="merk">Lohnt sich vor allem bei teuren Waren: Chipfabrik, Autowerk, Stahlwerk.</div>`,
+    en: { t: "Control software", lead: "Software for production buildings", html: `
+      <p>A software company's system does not only run your online marketplace but also
+      <b>production buildings</b>: farm, mine, power plant, chip factory, hotel …</p>
+      <ul>
+        <li>Every industry has its own control software, e.g. harvest planner (farming,
+        more output) or mining control (raw materials, fewer inputs per unit).</li>
+        <li>The effect comes from the system's <b>industry tree</b>: level 1 gives half,
+        level 2 80 %, level 3 the full effect. No tree, no control software.</li>
+        <li>Every controlled building takes a slot in the provider's <b>data centre</b> and
+        costs a subscription per minute. If the data centre fails, all customers lose the
+        bonus.</li>
+      </ul>
+      <div class="merk">Pays off most for valuable goods: chip factory, car plant, steel mill.</div>` } },
 
   { t: "Preise &amp; Ankerkurs", lead: "Warum dein Angebot den Kurs bewegt",
     html: `

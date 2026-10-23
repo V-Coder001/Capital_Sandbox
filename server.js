@@ -2262,7 +2262,7 @@ const adCap = n => n <= 0 ? 0 : Math.min(0.40, 0.20 + 0.10 * (n - 1));
 /* Sandbox: Werbung kommt aus dem Werbemodul eines Shop-Systems (siehe
  * swTick), die Werbeagentur gibt es dort nicht mehr. Andere Modi wie bisher. */
 const adBoost = p => MODE === "sandbox"
-  ? 1 + (G.werbeAktiv?.has(p.id) ? SW.WERBE_BOOST : 0)
+  ? 1 + (G.werbeAktiv?.has(p.id) ? SW.WERBE_BOOST : 0) + anzeigenBoost(p)   // Werbemodul + gebuchte Anzeigen im Werbenetz
   : 1 + adCap(adAgenturen(p)) * Math.min(100, p.adReach || 0) / 100;
 const PRODUCTS = Object.keys(GOODS);   // was Städte in Großaufträgen nachfragen — mittlerweile alle Waren
 
@@ -2893,6 +2893,7 @@ const G = {
   wettLetzte: [],        // Ergebnis der letzten Runde je Firma
   wettReserve: 20000,    // Bankreserve für die Kurswetten (WETT_RESERVE)
   markt: {}, marktLog: [], panikTag: null, panikErledigt: false,   // Aktienkurse (siehe marktTag)
+  anzeigen: [],          // Werbenetz: {id, produktId, firmaId, text, bis}
   fonds: {}, etfHist: {}, faEtf: {}, software: {}, paint: {}, swFaktor: {},   // Branchenfonds (ETFs), Fondsanteile des Finanzamts
   stadtkasse: 20000, steuerStufe: 2, boerseGebuehren: 0,         // Finanzamt: Anteil der Steuern für Großauftrags-Prämien und Stadtprojekte
   steuernGesamt: 0,
@@ -3654,6 +3655,9 @@ function boerseMessung() {
     kursZuF: Math.round(sp.reduce((a, p) => a + kursVon(p) * AKTIEN / fundament(p), 0) / Math.max(1, sp.length) * 100) / 100,
     geld: r(sp.reduce((a, p) => a + p.cash, 0) + G.stadtkasse + G.wettReserve + fonds.reduce((a, f) => a + f.cash, 0) + (G.depot?.cash || 0)),
     angebote: G.shareListings.length, anfragen: G.shareBids.length,
+    steuerungen: G.map.filter(t => t.steuerung).length,
+    swEinnahmen10: r(Object.values(G.software || {}).reduce((a, x) => a + (x.eb || []).reduce((b, c) => b + c, 0), 0)),
+    apps: Object.values(G.boerseApp || {}).map(x => `${x.name} v${x.version || 0}`).join(", "),
   }));
 }
 /* Zähler für die Messung (BOERSE_LOG=1) */
@@ -3735,6 +3739,89 @@ const SW_BAUM_EFFEKT = {
   ruestung:  [{ tempo: 0.05 }, { tempo: 0.10 }, { preis: 0.14 }],   // Sicherheit hat seinen Preis
 };
 const swEffekt = (br, k) => (br && SW_BAUM_EFFEKT[br]?.[k - 1]) || {};
+/* ---- Steuerungssoftware für Produktionsgebäude ----
+ * Bisher hing Software nur am Online-Marktplatz; für die Produktion selbst
+ * spielte sie keine Rolle. Jetzt kann jede Firma das System einer
+ * Software-Firma auch auf ihren Betrieben laufen lassen: Farm, Mine, E-Werk,
+ * Chipfabrik, Hotel, Waffenschmiede … Es belegt dort einen Platz im
+ * Rechenzentrum wie ein Online-Marktplatz und kostet ein Abo je Gebäude und
+ * Minute. Die Wirkung kommt aus dem Branchenbaum des Systems: ohne Baum der
+ * Branche keine Steuerung, mit Stufe 1/2/3 die halbe, 80 % bzw. volle Wirkung.
+ * Fällt das Rechenzentrum aus, fehlt der Bonus bei allen Kunden zugleich.
+ *   out: mehr Ausstoß    in: weniger Rohstoffe je Stück (bei Betrieben ohne
+ *   Rohstoffe wirkt "in" als gleich großer Mehr-Ausstoß) */
+const STEUERUNG = {
+  agrar:     { name: "Ernteplaner",       art: "out", wert: 0.15 },
+  rohstoff:  { name: "Förderleitstand",   art: "in",  wert: 0.12 },
+  versorger: { name: "Netzleitstelle",    art: "out", wert: 0.12 },
+  tech:      { name: "Fertigungsstraße",  art: "out", wert: 0.12 },
+  touristik: { name: "Buchungssystem",    art: "out", wert: 0.15 },
+  ruestung:  { name: "Feuerleitsystem",   art: "out", wert: 0.10 },
+};
+const STEUER_STUFE = [0, 0.5, 0.8, 1];    // Anteil der Wirkung je Stufe des Branchenbaums
+const STEUER_ABO = { MIN: 10, MAX: 300, START: 40 };
+/* ---- Leitstand: die Oberfläche der Steuerungssoftware ----
+ * Wie die Shop-Website gestaltet jede Software-Firma auch den Leitstand, den
+ * ihre Kunden auf jedem gesteuerten Gebäude öffnen: Thema, Anzeigen, Schrift,
+ * Effekt, Titel und eine Laufschrift. Jede Version schaltet mehr frei — man
+ * sieht jedem Leitstand an, von wem die Steuerung ist.
+ * Daneben hat der Leitstand Funktionen, die jeder Kunde nutzt:
+ *   v1 Live-Anzeigen und Rohstoff-Alarm
+ *   v2 Turbo: 60 s lang +30 % Ausstoß, dafür +50 % Rohstoffe (bei Förder-
+ *      betrieben Strom), danach 120 s Pause
+ *   v3 Nachkauf: fehlende Rohstoffe für 3 Minuten mit einem Klick an der Börse
+ *   v4 Auto-Turbo: zündet von selbst, sobald er bereit ist und Rohstoffe reichen */
+const LEIT_DESIGN = {
+  thema:   { klar: { name: "Klar", ab: 1 }, nacht: { name: "Nachtschicht", ab: 1 }, industrie: { name: "Industrie", ab: 2 },
+             terminal: { name: "Terminal", ab: 3 }, neon: { name: "Neon", ab: 4 } },
+  anzeige: { balken: { name: "Balken", ab: 1 }, zeiger: { name: "Zeiger", ab: 2 }, ziffern: { name: "Ziffern", ab: 3 }, ringe: { name: "Ringe", ab: 4 } },
+  schrift: { technik: { name: "Technik", ab: 1 }, modern: { name: "Modern", ab: 1 }, mono: { name: "Monospace", ab: 2 }, retro: { name: "Retro-Pixel", ab: 5 } },
+  effekt:  { aus: { name: "Keiner", ab: 1 }, scan: { name: "Scanlinien", ab: 3 }, funken: { name: "Funken beim Turbo", ab: 4 }, puls: { name: "Pulsierende Anzeigen", ab: 5 } },
+};
+const LEIT_DESIGN_AB = { titel: 1, meldung: 2, akzent: 2 };
+const LEIT_DESIGN_START = { thema: "klar", anzeige: "balken", schrift: "technik", effekt: "aus", titel: "", meldung: "", akzent: null };
+const LEIT_FUNKTION = { anzeigen: 1, alarm: 1, turbo: 2, nachkauf: 3, autoTurbo: 4 };
+const TURBO = { DAUER: 60, PAUSE: 120, OUT: 0.30, IN: 0.5 };
+/* ---- Werbenetz der Software-Firmen ----
+ * Jede Firma kann bei einer Software-Firma eine Anzeige buchen. Sie läuft in
+ * allen Online-Shops (Anzeigenleiste) und Leitständen (Laufschrift), die mit
+ * diesem System arbeiten. Die Reichweite ist die Zahl seiner Kunden: Je
+ * Kunde bringt die Anzeige JE_KUNDE mehr Preisspielraum in den eigenen
+ * Shops (wie das Werbemodul), höchstens MAX_JE je Anzeige und MAX insgesamt.
+ * Plätze: einer je Version des Systems, höchstens drei. Bezahlt wird vorab
+ * für die ganze Laufzeit; das Geld geht an die Software-Firma. */
+const ANZEIGE = { PREIS_MIN: 20, PREIS_MAX: 500, PREIS_START: 80, DAUER: [3, 5, 10], JE_KUNDE: 0.012, MAX_JE: 0.12, MAX: 0.25, TEXT: 40, PLAETZE_MAX: 3 };
+const anzeigenPlaetze = prod => prod && !prod.portal ? Math.min(ANZEIGE.PLAETZE_MAX, prod.version || 0) : 0;
+const anzeigenVon = prod => (G.anzeigen || []).filter(a => a.produktId === prod.id && a.bis > G.tick);
+/* Preisspielraum je Firma aus allen laufenden Anzeigen — einmal je Tick in
+ * swTick gerechnet, weil adBoost bei jedem Regalverkauf gefragt wird. */
+function anzeigenBoostRechnen() {
+  const b = {};
+  for (const a of G.anzeigen || []) {
+    const prod = (G.software || {})[a.produktId];
+    if (a.bis <= G.tick || !prod || !((G.swFaktor?.[prod.id] ?? 1) > 0)) continue;
+    b[a.firmaId] = Math.min(ANZEIGE.MAX, (b[a.firmaId] || 0) + Math.min(ANZEIGE.MAX_JE, ANZEIGE.JE_KUNDE * swKunden(prod)));
+  }
+  G.anzBoost = b;
+}
+const anzeigenBoost = p => G.anzBoost?.[p.id] || 0;
+function anzeigenPublic() {
+  return (G.anzeigen || []).filter(a => a.bis > G.tick).map(a => {
+    const f = G.players[a.firmaId];
+    return { id: a.id, produktId: a.produktId, firmaId: a.firmaId, firma: f?.name ?? "—", farbe: f?.color || "#64748b", text: a.text, rest: a.bis - G.tick };
+  });
+}
+function leitDesignPruefen(wunsch = {}, alt = LEIT_DESIGN_START, version = 1) {
+  const d = { ...LEIT_DESIGN_START, ...alt };
+  for (const [k, optionen] of Object.entries(LEIT_DESIGN)) {
+    const w = wunsch[k];
+    if (w != null && optionen[w] && optionen[w].ab <= version) d[k] = w;
+  }
+  if (wunsch.titel != null && version >= LEIT_DESIGN_AB.titel) d.titel = sicherText(String(wunsch.titel).trim().slice(0, 24));
+  if (wunsch.meldung != null && version >= LEIT_DESIGN_AB.meldung) d.meldung = sicherText(String(wunsch.meldung).trim().slice(0, 70));
+  if (wunsch.akzent !== undefined && version >= LEIT_DESIGN_AB.akzent) d.akzent = wunsch.akzent ? sichereFarbe(wunsch.akzent) : null;
+  return d;
+}
 /* ---- Website-Design je Shop-System ----
  * Jede Software-Firma gestaltet die Website, auf der ihre Kunden verkaufen:
  * Schrift, Farben, Kopfzeile, Produktkarten, Bezahlkarte, Slogan und Banner.
@@ -3957,12 +4044,29 @@ const swMarkenwert = p => {
   const summe = (prod?.eb || []).reduce((a, b) => a + b, 0) + (mp?.eb || []).reduce((a, b) => a + b, 0);
   return summe * SW.MARKENWERT;
 };
-const swKunden = prod => G.map.filter(t => t.system?.produktId === prod.id).length;
+const swKunden = prod => G.map.filter(t => t.system?.produktId === prod.id || t.steuerung?.produktId === prod.id).length;
+const steuerKunden = prod => G.map.filter(t => t.steuerung?.produktId === prod.id).length;
 const swPlaetze = prod => prod.portal ? Infinity : G.map
   .filter(t => t.owner === prod.ownerId && BTYPES[t.btype]?.rz && t.rzAktiv && !imBau(t))
   .reduce((a, t) => a + BTYPES[t.btype].rz.plaetze * (t.level || 1), 0);
 const swTempo = prod => swTempoBranche(prod, null);   // nur die allgemeinen Module
 const swOffen = t => !!(t.system && G.tick >= t.system.bis);
+/* Steuerungssoftware: Darf auf diesem Gebäude laufen? (Produktion einer
+ * der sechs Warenbranchen, kein Laden, kein Studio, kein Rechenzentrum) */
+const steuerFaehig = bt => !!(bt && STEUERUNG[bt.industry] && (bt.proc || bt.out) && !bt.retail && !bt.studio && !bt.rz);
+const steuerOffen = t => !!(t.steuerung && G.tick >= t.steuerung.bis);
+/* Bonus eines Gebäudes: { out, in } als Anteil, 0 ohne laufende Steuerung */
+function steuerBonus(t, bt) {
+  if (!steuerOffen(t)) return null;
+  const prod = (G.software || {})[t.steuerung.produktId], def = STEUERUNG[bt.industry];
+  if (!prod || !def) return null;
+  const stufe = swStufeVon(prod, bt.industry), faktor = G.swFaktor?.[prod.id] ?? 1;
+  const w = def.wert * STEUER_STUFE[stufe] * faktor;
+  if (!(w > 0)) return null;
+  /* Turbo (ab v2): mehr Ausstoß gegen mehr Einsatz — läuft nur mit Rechenzentrum */
+  const turbo = prod.version >= LEIT_FUNKTION.turbo && t.steuerung.turboBis > G.tick && faktor > 0;
+  return def.art === "in" && bt.proc ? { out: 0, in: w, turbo } : { out: w, in: 0, turbo };
+}
 /* Gebühr an den Anbieter (oder die Stadt). Zählt bei ihm als Umsatz. */
 function swGebuehr(prod, betrag) {
   if (!(betrag > 0)) return;
@@ -3984,6 +4088,10 @@ function swTick() {
       for (const t of G.map) if (t.system?.produktId === prod.id) {
         t.system = { produktId: STADTPORTAL, bis: G.tick, werbung: false };
         if (t.owner) emitTo(t.owner, "notice", { text: `${prod.name} gibt es nicht mehr — dein Online-Marktplatz läuft jetzt über das Stadtportal.` });
+      }
+      for (const t of G.map) if (t.steuerung?.produktId === prod.id) {
+        t.steuerung = undefined;
+        if (t.owner) emitTo(t.owner, "notice", { text: `${prod.name} gibt es nicht mehr — die Steuerung deiner ${BTYPES[t.btype]?.name ?? "Anlage"} ist abgeschaltet.` });
       }
       delete G.software[prod.id];
       continue;
@@ -4012,6 +4120,39 @@ function swTick() {
   if (G.tick % 60 === 0) for (const x of Object.values(G.paint || {})) {
     if (!G.players[x.ownerId]) { delete G.paint[x.id]; continue; }   // Lizenzen bleiben gültig (Stufe gemerkt)
     (x.eb ??= [0]).unshift(0); if (x.eb.length > 10) x.eb.length = 10;
+  }
+  /* Werbenetz: abgelaufene Anzeigen und solche ohne Anbieter entfernen */
+  if (G.anzeigen?.length) G.anzeigen = G.anzeigen.filter(a => a.bis > G.tick && G.software?.[a.produktId] && G.players[a.firmaId]);
+  anzeigenBoostRechnen();
+  /* Auto-Turbo (ab v4): zündet, sobald er bereit ist und die Rohstoffe für
+   * zehn Sekunden Turbo im Lager liegen. */
+  for (const t of G.map) {
+    const s2 = t.steuerung;
+    /* Zähler für den Leitstand: intern je Tick, nach außen alle 10 s gerundet —
+     * sonst schickte jedes gesteuerte Gebäude jede Sekunde ein Kachel-Update. */
+    if (s2 && G.tick % 10 === 0) { s2.mehr = Math.round(t._mehr || 0); s2.gespart = Math.round(t._gespart || 0); }
+    if (!s2?.auto || !t.owner || !steuerOffen(t) || s2.turboBis > G.tick || (s2.pauseBis || 0) > G.tick) continue;
+    const prod = (G.software || {})[s2.produktId], p = G.players[t.owner], bt = BTYPES[t.btype];
+    if (!prod || !p || !bt || prod.version < LEIT_FUNKTION.autoTurbo || !((G.swFaktor?.[prod.id] ?? 1) > 0)) continue;
+    const lvl = levelMult(t.level);
+    const reicht = bt.proc ? Object.entries(bt.proc.in).every(([g, n]) => (p.inv[g] || 0) >= n * lvl * (1 + TURBO.IN) * 10)
+      : (p.inv.strom || 0) >= bt.rate * lvl * TURBO.IN * 10;
+    if (reicht) { s2.turboBis = G.tick + TURBO.DAUER; s2.pauseBis = s2.turboBis + TURBO.PAUSE; s2.turbos = (s2.turbos || 0) + 1; }
+  }
+  /* Steuerungssoftware: Abo je Gebäude und Minute an den Anbieter. Reicht
+   * das Geld nicht, wird die Steuerung abgeschaltet. */
+  if (G.tick % 60 === 0) for (const t of G.map) {
+    if (!t.steuerung || !t.owner) continue;
+    const prod = (G.software || {})[t.steuerung.produktId], kunde = G.players[t.owner];
+    if (!prod || !kunde || prod.ownerId === kunde.id) continue;   // eigenes System: kein Abo
+    const abo = prod.steuerAbo ?? STEUER_ABO.START;
+    if (kunde.cash < abo) {
+      t.steuerung = undefined;
+      emitTo(kunde.id, "notice", { text: `Steuerung ${prod.name} abgeschaltet — zu wenig Geld für das Abo (${abo} $/min).` });
+      continue;
+    }
+    kunde.cash -= abo; kunde.stats.ausgaben += abo;
+    swGebuehr(prod, abo);
   }
   /* Werbung: Wer sie im System eingeschaltet hat, zahlt das Abo je Minute
    * und je Marktplatz an den Anbieter. */
@@ -4054,6 +4195,11 @@ function softwarePublic() {
     const owner = s.ownerId ? G.players[s.ownerId] : null;
     const pub = { faktorSchnitt: s.portal ? 1 : Math.round((s.faktorEma ?? 1) * 100) / 100, id: s.id, ownerId: s.ownerId, anbieter: owner?.name ?? "Stadt", name: s.name, farbe: s.farbe, version: s.version || 0,
       module: s.module || {}, einrichtung: s.einrichtung, gebuehr: s.gebuehr, werbeAbo: s.werbeAbo || 0,
+      steuerAbo: s.portal ? null : (s.steuerAbo ?? STEUER_ABO.START), steuerKunden: s.portal ? 0 : steuerKunden(s),
+      leitDesign: s.portal ? null : (s.leitDesign || LEIT_DESIGN_START),
+      anzeigenPreis: s.portal ? null : (s.anzeigenPreis ?? ANZEIGE.PREIS_START), anzeigenPlaetze: anzeigenPlaetze(s),
+      anzeigenFrei: s.portal ? 0 : Math.max(0, anzeigenPlaetze(s) - anzeigenVon(s).length),
+      anzeigeWirkung: s.portal ? 0 : Math.round(Math.min(ANZEIGE.MAX_JE, ANZEIGE.JE_KUNDE * kunden) * 1000) / 10,
       design: s.portal ? { ...SW_DESIGN_START, kopf: "minimal", schrift: "klassisch" } : (s.design || SW_DESIGN_START),
       kunden, plaetze: Number.isFinite(plaetze) ? plaetze : null, faktor: Math.round((G.swFaktor?.[s.id] ?? 1) * 100) / 100,
       ruf: Math.round(s.ruf ?? SW.RUF_START), portal: !!s.portal, tempo: Math.round(swTempo(s) * 100) / 100,
@@ -4893,7 +5039,7 @@ function seizeAndAuction(debtor, bond) {
     return;
   }
   const btype = target.btype;
-  target.owner = null; target.btype = null; target.lien = false;
+  target.owner = null; target.btype = null; target.lien = false; target.steuerung = undefined;
   /* Ein gepfändeter Rennstall wird MIT seinen Fahrzeugen versteigert — sie
    * bleiben auf der Kachel liegen und wechseln mit ihr den Besitzer. Der Wert
    * des Inhalts steht am Los, sonst bietet niemand (Mensch wie Bot) auf das,
@@ -5338,6 +5484,9 @@ function snapshot() {
     tick: G.tick, winner: G.winner, winGoal: WIN_NW, report: G.report || null,
     etf: etfPublic(), depot: depotPublic(),
     software: softwarePublic(), swModule: SW_MODULE, swBaeume: SW_BAEUME, swStufe: SW_STUFE, swBaumEffekt: SW_BAUM_EFFEKT, swAusbau: [0, 1, 2, 3].map(swAusbau), paint: paintPublic(), paintCfg: { stufen: PAINT.STUFEN, abSystem: PAINT.AB_SYSTEM, preisMin: PAINT.PREIS_MIN, preisMax: PAINT.PREIS_MAX, palette: PAINT.PALETTE },
+    steuerung: STEUERUNG, steuerStufe: STEUER_STUFE, steuerAboCfg: STEUER_ABO,
+    leitDesign: LEIT_DESIGN, leitDesignAb: LEIT_DESIGN_AB, leitFunktion: LEIT_FUNKTION, turbo: TURBO,
+    anzeigen: anzeigenPublic(), anzeigeCfg: { preisMin: ANZEIGE.PREIS_MIN, preisMax: ANZEIGE.PREIS_MAX, dauer: ANZEIGE.DAUER, text: ANZEIGE.TEXT, maxJe: ANZEIGE.MAX_JE, max: ANZEIGE.MAX },
     boerseApp: boersePublic(), boerseAppCfg: { stufen: BOERSE_APP.STUFEN, abSystem: BOERSE_APP.AB_SYSTEM, preisMin: BOERSE_APP.PREIS_MIN, preisMax: BOERSE_APP.PREIS_MAX },
     logoV: Object.fromEntries(Object.values(G.players).filter(p => p.logo).map(p => [p.id, p.logo.v])), swDesign: SW_DESIGN, swDesignAb: SW_DESIGN_AB, swCfg: { install: SW.INSTALL, portalInstall: SW.PORTAL_INSTALL, versionEp: SW.VERSION_EP, werbeBoost: SW.WERBE_BOOST, gebMin: SW.GEB_MIN, gebMax: SW.GEB_MAX, einrMax: SW.EINR_MAX, aboMin: SW.ABO_MIN, aboMax: SW.ABO_MAX, handelssteuer: Math.round(satzBoerse() * SW.HANDELSSTEUER * 1000) / 10, markenwert: SW.MARKENWERT },
     marktLog: (G.marktLog || []).slice(0, 20), marktCfg: { aktien: AKTIEN, tag: MARKT.TAG, beta: MARKT.BETA, bauDauer: MARKT.BAU_DAUER, afaDauer: MARKT.AFA_DAUER },
@@ -5592,7 +5741,7 @@ function dropContract(c) {
  * Nach dem ersten Snapshot reist die Karte nur noch als Differenz über diese
  * Liste. Der Vergleich läuft über JSON, verschachtelte Arrays sind also
  * abgedeckt (derselbe Grund, aus dem `shop` hier steht). */
-const DYNAMIC_TILE_KEYS = ["locked", "owner", "btype", "lien", "shop", "paused", "level", "autos", "sperre", "denkmal", "denkmalName", "bauBis", "system", "rzAktiv", "bestellungen", "vorrat"];
+const DYNAMIC_TILE_KEYS = ["locked", "owner", "btype", "lien", "shop", "paused", "level", "autos", "sperre", "denkmal", "denkmalName", "bauBis", "system", "steuerung", "rzAktiv", "bestellungen", "vorrat"];
 /* undefined wird zu null normalisiert, damit auch "Feld gelöscht" (z. B. der
  * Abriss räumt t.shop weg) beim Empfänger sicher ankommt. */
 /* Fahrzeuge gehen MIT ihren gerechneten Werten über die Leitung. Sie hier
@@ -7361,7 +7510,7 @@ io.on("connection", socket => {
     p.cash += BTYPES[t.btype].cost * 0.5;
     logTx(p, "Bau", `Abriss ${BTYPES[t.btype].name}`, BTYPES[t.btype].cost * 0.5);
     p.stats.abgerissen++;
-    t.owner = null; t.btype = null; t.shop = undefined; t.anlagewert = undefined; t.bauBis = undefined; t.system = undefined; t.rzAktiv = undefined; t.bestellungen = undefined; t.vorrat = undefined;
+    t.owner = null; t.btype = null; t.shop = undefined; t.anlagewert = undefined; t.bauBis = undefined; t.system = undefined; t.steuerung = undefined; t.rzAktiv = undefined; t.bestellungen = undefined; t.vorrat = undefined;
     ack?.({ ok: true });
   }));
 
@@ -7772,7 +7921,7 @@ io.on("connection", socket => {
     G.nextDividendIn = DIVIDEND_INTERVAL;
     G.wettrunde = { nr: 1, phase: "annahme", rest: WETT_ANNAHME, start: {} }; G.wetten = []; G.wettLetzte = []; G.wettReserve = WETT_RESERVE;
     G.markt = {}; G.marktLog = []; G.panikTag = null; G.panikErledigt = false; G.fonds = {}; G.etfHist = {}; G.faEtf = {}; G.software = {}; G.paint = {}; G.swFaktor = {}; G.werbeAktiv = new Set();
-    G.boerseApp = {}; G.depot = depotLeer(); G.bstat = {};
+    G.boerseApp = {}; G.depot = depotLeer(); G.bstat = {}; G.anzeigen = [];
     G.stadtkasse = STADT_GRUNDSTOCK; G.steuerStufe = 2; G.boerseGebuehren = 0; G.steuernGesamt = 0; G.stadtprojekt = null; G.projektPause = 120; G.stadtprojekteFertig = [];
     for (const pl of Object.values(G.players)) { pl.steuerStand = undefined; pl.steuerSchuld = 0; pl.steuerLetzter = null; }
     for (const pl of Object.values(G.players)) { pl.wettOffen = 0; pl.wettLog = []; }
@@ -7803,7 +7952,7 @@ io.on("connection", socket => {
       return ack?.({ error: "Diesen Namen gibt es schon" });
     const zahl = (v, min, max, alt) => { const n = +v; return Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : alt; };
     if (!prod) {
-      prod = { id: "sw_" + id(), ownerId: p.id, name, farbe: p.color, version: 0, module: {}, branchen: [], einrichtung: 400, gebuehr: 2, werbeAbo: SW.ABO_START,
+      prod = { id: "sw_" + id(), ownerId: p.id, name, farbe: p.color, version: 0, module: {}, branchen: [], einrichtung: 400, gebuehr: 2, werbeAbo: SW.ABO_START, steuerAbo: STEUER_ABO.START,
                ruf: SW.RUF_START, einnahmen: 0, eb: [0], entwicklung: null };
       G.software[prod.id] = prod;
     }
@@ -7812,6 +7961,8 @@ io.on("connection", socket => {
     prod.einrichtung = Math.round(zahl(d.einrichtung, 0, SW.EINR_MAX, prod.einrichtung));
     prod.gebuehr = Math.round(zahl(d.gebuehr, SW.GEB_MIN, SW.GEB_MAX, prod.gebuehr) * 10) / 10;
     prod.werbeAbo = Math.round(zahl(d.werbeAbo, SW.ABO_MIN, SW.ABO_MAX, prod.werbeAbo));
+    prod.steuerAbo = Math.round(zahl(d.steuerAbo, STEUER_ABO.MIN, STEUER_ABO.MAX, prod.steuerAbo ?? STEUER_ABO.START));
+    prod.anzeigenPreis = Math.round(zahl(d.anzeigenPreis, ANZEIGE.PREIS_MIN, ANZEIGE.PREIS_MAX, prod.anzeigenPreis ?? ANZEIGE.PREIS_START));
     ack?.({ ok: true, id: prod.id });
   }));
   /* --- Malprogramm: Name und Lizenzpreis --- */
@@ -8072,6 +8223,94 @@ io.on("connection", socket => {
     if (an && p.cash < (prod.werbeAbo || 0)) return ack?.({ error: `Das Abo kostet ${prod.werbeAbo} $ je Minute` });
     for (const o of G.map) if (o.owner === p.id && o.system?.produktId === prod.id) o.system.werbung = !!an;
     ack?.({ ok: true });
+  }));
+
+  /* --- Steuerungssoftware auf einem eigenen Produktionsgebäude ---
+   * Keine Einrichtungsgebühr, nur das Abo je Minute. Läuft nach SW.INSTALL
+   * Sekunden. Wechseln geht jederzeit, ohne Produktionsausfall nur nicht. */
+  socket.on("installSteuerung", guard((p, { x, y, produktId }, ack) => {
+    const t = tileAt(x, y), bt = t?.btype ? BTYPES[t.btype] : null;
+    if (!t || t.owner !== p.id || !bt) return ack?.({ error: "Kein eigenes Gebäude" });
+    if (!steuerFaehig(bt)) return ack?.({ error: "Auf diesem Gebäude läuft keine Steuerungssoftware" });
+    const prod = (G.software || {})[produktId];
+    if (!prod || !(prod.version >= 1)) return ack?.({ error: "Dieses System gibt es (noch) nicht" });
+    if (!(swStufeVon(prod, bt.industry) >= 1)) return ack?.({ error: `${prod.name} hat keinen Baum für ${SW_BAEUME[bt.industry]?.name ?? "diese Branche"} — ohne ihn keine Steuerung` });
+    if (t.steuerung?.produktId === prod.id) return ack?.({ error: "Diese Steuerung läuft hier schon" });
+    if (swKunden(prod) >= swPlaetze(prod))
+      return ack?.({ error: `Das Rechenzentrum von ${G.players[prod.ownerId]?.name ?? "dem Anbieter"} ist voll — später nochmal oder ein anderes System` });
+    const abo = prod.ownerId === p.id ? 0 : (prod.steuerAbo ?? STEUER_ABO.START);
+    if (p.cash < abo) return ack?.({ error: `Das Abo kostet ${abo} $ je Minute` });
+    const wechsel = !!t.steuerung;
+    t.steuerung = { produktId: prod.id, bis: G.tick + SW.INSTALL };
+    t._mehr = 0; t._gespart = 0;
+    logTx(p, "Software", `Steuerung ${prod.name} auf ${bt.name} ${wechsel ? "gewechselt" : "installiert"}`, 0);
+    if (prod.ownerId !== p.id) emitTo(prod.ownerId, "notice", { text: `${p.name} steuert ${bt.name} mit ${prod.name} (+${abo} $/min).` });
+    marktLog("software", `${p.name} steuert ${bt.name} mit ${prod.name}`, { firmaId: p.id });
+    ack?.({ ok: true, dauer: SW.INSTALL });
+  }));
+  socket.on("entferneSteuerung", guard((p, { x, y }, ack) => {
+    const t = tileAt(x, y);
+    if (!t || t.owner !== p.id || !t.steuerung) return ack?.({ error: "Hier läuft keine Steuerung" });
+    t.steuerung = undefined;
+    ack?.({ ok: true });
+  }));
+  /* --- Leitstand: Turbo zünden (ab v2) und Auto-Turbo (ab v4) --- */
+  const leitProdukt = (p, x, y, ab) => {
+    const t = tileAt(x, y);
+    if (!t || t.owner !== p.id || !steuerOffen(t)) return { error: "Hier läuft keine Steuerung" };
+    const prod = (G.software || {})[t.steuerung.produktId];
+    if (!prod) return { error: "Das System gibt es nicht mehr" };
+    if (!(prod.version >= ab)) return { error: `Das kann ${prod.name} erst ab Version ${ab}` };
+    if (!((G.swFaktor?.[prod.id] ?? 1) > 0)) return { error: `${prod.name} ist gerade ausgefallen` };
+    return { t, prod };
+  };
+  socket.on("steuerTurbo", guard((p, { x, y } = {}, ack) => {
+    const r = leitProdukt(p, x, y, LEIT_FUNKTION.turbo); if (r.error) return ack?.(r);
+    const s2 = r.t.steuerung;
+    if (s2.turboBis > G.tick) return ack?.({ error: "Der Turbo läuft schon" });
+    if ((s2.pauseBis || 0) > G.tick) return ack?.({ error: `Turbo kühlt ab — noch ${s2.pauseBis - G.tick} s` });
+    s2.turboBis = G.tick + TURBO.DAUER; s2.pauseBis = s2.turboBis + TURBO.PAUSE; s2.turbos = (s2.turbos || 0) + 1;
+    ack?.({ ok: true, bis: s2.turboBis });
+  }));
+  socket.on("steuerAuto", guard((p, { x, y, an } = {}, ack) => {
+    const r = leitProdukt(p, x, y, LEIT_FUNKTION.autoTurbo); if (r.error) return ack?.(r);
+    r.t.steuerung.auto = !!an;
+    ack?.({ ok: true });
+  }));
+  /* --- Werbenetz: Anzeige bei einer Software-Firma buchen ---
+   * Vorab für die ganze Laufzeit bezahlt; läuft sofort in allen Shops und
+   * Leitständen mit diesem System. Eine Firma hat je System höchstens eine
+   * laufende Anzeige; nachbuchen verlängert sie. */
+  socket.on("anzeigeBuchen", guard((p, { produktId, text, minuten } = {}, ack) => {
+    if (MODE !== "sandbox") return ack?.({ error: "Das Werbenetz der Software-Firmen gibt es nur im Sandbox-Modus" });
+    const prod = (G.software || {})[produktId];
+    if (!prod || !(prod.version >= 1)) return ack?.({ error: "Dieses System gibt es (noch) nicht" });
+    if (prod.ownerId === p.id) return ack?.({ error: "In deinem eigenen System wirbst du kostenlos über das Werbemodul" });
+    minuten = Math.floor(+minuten);
+    if (!ANZEIGE.DAUER.includes(minuten)) return ack?.({ error: `Laufzeit: ${ANZEIGE.DAUER.join(", ")} Minuten` });
+    const t = sicherText(String(text ?? "").trim().slice(0, ANZEIGE.TEXT)) || `${p.name} — jetzt bestellen!`;
+    const preis = (prod.anzeigenPreis ?? ANZEIGE.PREIS_START) * minuten;
+    if (p.cash < preis) return ack?.({ error: `${minuten} Minuten kosten ${preis.toLocaleString("de-DE")} $` });
+    G.anzeigen ??= [];
+    const laufend = G.anzeigen.find(a => a.produktId === prod.id && a.firmaId === p.id && a.bis > G.tick);
+    if (!laufend && anzeigenVon(prod).length >= anzeigenPlaetze(prod))
+      return ack?.({ error: `Alle ${anzeigenPlaetze(prod)} Werbeplätze bei ${prod.name} sind belegt — später nochmal` });
+    p.cash -= preis; p.stats.ausgaben += preis; p.stats.werbung = (p.stats.werbung || 0) + preis;
+    swGebuehr(prod, preis);
+    if (laufend) { laufend.bis += minuten * 60; laufend.text = t; }
+    else G.anzeigen.push({ id: id(), produktId: prod.id, firmaId: p.id, text: t, bis: G.tick + minuten * 60 });
+    logTx(p, "Werbung", `Anzeige bei ${prod.name} (${minuten} min)`, -preis);
+    emitTo(prod.ownerId, "notice", { text: `📣 ${p.name} bucht ${minuten} min Werbung in ${prod.name} (+${preis.toLocaleString("de-DE")} $).` });
+    marktLog("software", `${p.name} wirbt ${minuten} min über ${prod.name}`, { firmaId: p.id, betrag: preis });
+    ack?.({ ok: true, preis, wirkung: Math.round(Math.min(ANZEIGE.MAX_JE, ANZEIGE.JE_KUNDE * swKunden(prod)) * 100) });
+  }));
+  /* --- Software: Design des Leitstands --- */
+  socket.on("leitDesign", guard((p, d = {}, ack) => {
+    const prod = istSoftwareFirma(p) && swEigenes(p);
+    if (!prod) return ack?.({ error: "Lege zuerst dein Shop-System an" });
+    const vorher = JSON.stringify(prod.leitDesign || LEIT_DESIGN_START);
+    prod.leitDesign = leitDesignPruefen(d, prod.leitDesign, Math.max(1, prod.version || 0));
+    ack?.({ ok: true, design: prod.leitDesign, geaendert: JSON.stringify(prod.leitDesign) !== vorher });
   }));
 
   socket.on("bookAd", guard((p, { paket }, ack) => {
@@ -8696,12 +8935,27 @@ function runTick() {
     if (bt.proc) {   // Verarbeitung: Inputs anteilig verbrauchen, Output erzeugen
       if (t.paused) continue;
       const lvl = levelMult(t.level);   // Elektronik-Upgrade: mehr Input rein, mehr Output raus
+      const sb = steuerBonus(t, bt);   // Steuerungssoftware: weniger Rohstoffe oder mehr Ausstoß, im Turbo beides mehr
+      const sparen = (1 - (sb?.in || 0)) * (sb?.turbo ? 1 + TURBO.IN : 1);
       let frac = 1;
-      for (const [g, need] of Object.entries(bt.proc.in)) frac = Math.min(frac, (p.inv[g] || 0) / (need * lvl));
+      for (const [g, need] of Object.entries(bt.proc.in)) frac = Math.min(frac, (p.inv[g] || 0) / (need * lvl * sparen));
+      /* Rohstoff-Alarm des Leitstands: höchstens alle zwei Minuten */
+      if (sb && frac < 1 && G.tick - (t._alarm ?? -999) >= 120) {
+        t._alarm = G.tick;
+        const fehlt = Object.keys(bt.proc.in).filter(g => (p.inv[g] || 0) < bt.proc.in[g] * lvl * sparen).map(g => GOODS[g]?.name ?? g).join(", ");
+        emitTo(p.id, "notice", { text: `⚠ Leitstand ${bt.name}: ${fehlt} ${frac > 0 ? "reicht nicht — Produktion gedrosselt" : "fehlt — Produktion steht"}.` });
+      }
       if (frac > 0) {
         frac *= SPERR;   // Stromabschaltung drosselt Verbrauch und Ausstoß gleichermaßen
-        for (const [g, need] of Object.entries(bt.proc.in)) p.inv[g] -= need * lvl * frac;
-        const menge = bt.proc.rate * lvl * frac;
+        for (const [g, need] of Object.entries(bt.proc.in)) p.inv[g] -= need * lvl * frac * sparen;
+        const plus = (sb?.out || 0) + (sb?.turbo ? TURBO.OUT : 0);
+        const menge = bt.proc.rate * lvl * frac * (1 + plus);
+        if (sb) {
+          t._mehr = (t._mehr || 0) + bt.proc.rate * lvl * frac * plus;
+          /* gesparte Rohstoffe als Wert, damit der Leitstand "in"-Steuerungen zeigen kann */
+          if (sb.in) t._gespart = (t._gespart || 0)
+            + Object.entries(bt.proc.in).reduce((a, [g, need]) => a + need * lvl * frac * sb.in * (sb.turbo ? 1 + TURBO.IN : 1) * MM[g].price, 0);
+        }
         p.inv[bt.proc.out] += menge;
         p.stats.produziert[bt.proc.out] = (p.stats.produziert[bt.proc.out] || 0) + menge;
       }
@@ -8722,7 +8976,15 @@ function runTick() {
       const bedarf = bt.rate * stufe * 0.5;
       if ((p.inv[r] || 0) >= bedarf) { p.inv[r] -= bedarf; mult += BOOST_MULT; }
     }
-    const menge = bt.rate * mult * stufe * SPERR;   // Elektronik-Upgrade: +30 %/Stufe
+    /* Steuerungssoftware obendrauf; der Turbo braucht bei Förderbetrieben Strom */
+    const sb = steuerBonus(t, bt);
+    let plus = sb?.out || 0;
+    if (sb?.turbo) {
+      const bedarf = bt.rate * stufe * TURBO.IN;
+      if ((p.inv.strom || 0) >= bedarf) { p.inv.strom -= bedarf; plus += TURBO.OUT; }
+    }
+    const menge = bt.rate * mult * stufe * SPERR * (1 + plus);   // Elektronik-Upgrade: +30 %/Stufe
+    if (sb) t._mehr = (t._mehr || 0) + bt.rate * mult * stufe * SPERR * plus;
     p.inv[bt.out] += menge;
     p.stats.produziert[bt.out] = (p.stats.produziert[bt.out] || 0) + menge;
   }
@@ -9144,10 +9406,12 @@ const BOT_CFGS = [
    * das Stadtportal. */
   { name: "Byteforge",       industry: "software",  color: "#60a5fa",
     plan: ["rechenzentrum", "entwicklerstudio"], needs: ["strom", "elektronik"], vorrat: { strom: 150, elektronik: 5 },
-    sw: { name: "KassenKlick", paint: "PixelPinsel", paintPreis: 800, boerse: "TradeBot", boersePreis: 1000, einrichtung: 300, gebuehr: 3, abo: 120, module: ["bewertungen", "lieferung"] } },
+    sw: { name: "KassenKlick", paint: "PixelPinsel", paintPreis: 800, boerse: "TradeBot", boersePreis: 1000, steuerAbo: 30, anzeigenPreis: 60,
+          leit: { thema: "industrie", anzeige: "ziffern", schrift: "mono", effekt: "scan", titel: "KassenKlick Control", meldung: "Läuft wie geschmiert — Byteforge-Support rund um die Uhr", akzent: "#fbbf24" }, einrichtung: 300, gebuehr: 3, abo: 120, module: ["bewertungen", "lieferung"] } },
   { name: "Pixelwerk",       industry: "software",  color: "#f472b6",
     plan: ["entwicklerstudio", "rechenzentrum"], needs: ["strom", "elektronik"], vorrat: { strom: 150, elektronik: 5 },
-    sw: { name: "ShopStern", paint: "MalMeister", paintPreis: 1200, boerse: "Aktienfuchs", boersePreis: 1500, einrichtung: 600, gebuehr: 4, abo: 180, module: ["lieferung", "bewertungen"] } },
+    sw: { name: "ShopStern", paint: "MalMeister", paintPreis: 1200, boerse: "Aktienfuchs", boersePreis: 1500, steuerAbo: 50, anzeigenPreis: 100,
+          leit: { thema: "neon", anzeige: "ringe", schrift: "modern", effekt: "funken", titel: "ShopStern Cockpit", meldung: "Pixelwerk ✦ mehr Ausstoß, weniger Sorgen", akzent: "#a78bfa" }, einrichtung: 600, gebuehr: 4, abo: 180, module: ["lieferung", "bewertungen"] } },
 ];
 let botsStarted = false;
 /* Vom ersten Spieler der Runde gewählt (siehe register): wie viele Bots je
@@ -9220,6 +9484,7 @@ async function spawnBot(cfg, lvl = BOT_LEVELS[BOT_LEVEL_DEFAULT]) {
   let me = null, st = null, myId = null, lastBuild = 0;
   let swPreisZeit = Date.now();   // Software-Anbieter: wann zuletzt die Gebühr überprüft wurde
   let botLogoGroesse = 0;            // Malprogramm: Größe des zuletzt gemalten Logos
+  let botLeitVersion = 0;            // Leitstand: mit welcher Systemversion das Design zuletzt gesendet wurde
   const swWechsel = {};           // Online-Marktplatz: wann zuletzt das System gewechselt wurde (je Kachel)
   s.on("me", m => { if (m.teil && me) { const { teil, ...f } = m; me = { ...me, ...f }; } else me = m; });
   /* Auch die Bots bekommen die Karte nur noch als Diff — sie lesen st.map aber
@@ -9487,7 +9752,7 @@ async function spawnBot(cfg, lvl = BOT_LEVELS[BOT_LEVEL_DEFAULT]) {
       if (cfg.sw && cfg.industry === "software") {
         const meins = (st.software || []).find(s2 => s2.ownerId === myId);
         if (!meins) {
-          await em("softwareEinstellen", { name: cfg.sw.name, farbe: cfg.color, einrichtung: cfg.sw.einrichtung, gebuehr: cfg.sw.gebuehr, werbeAbo: cfg.sw.abo });
+          await em("softwareEinstellen", { name: cfg.sw.name, farbe: cfg.color, einrichtung: cfg.sw.einrichtung, gebuehr: cfg.sw.gebuehr, werbeAbo: cfg.sw.abo, steuerAbo: cfg.sw.steuerAbo, anzeigenPreis: cfg.sw.anzeigenPreis });
         } else if (!meins.entwicklung && st.map.some(t2 => t2.owner === myId && t2.btype === "entwicklerstudio")) {
           /* Schwerpunkt: die Branche mit den meisten Firmen, die noch kein
            * anderes System bedient — so teilen sich zwei Software-Bots den
@@ -9533,7 +9798,24 @@ async function spawnBot(cfg, lvl = BOT_LEVELS[BOT_LEVEL_DEFAULT]) {
            * Rechenzentren. Kunden gewinnt man über den Branchenbaum. */
           if (meins.kunden === 0 && fremdeMitKunden) geb = Math.max(2.5, geb - 0.5);
           else if (meins.plaetze > 0 && meins.kunden >= meins.plaetze) geb = Math.min(6, geb + 0.5);
-          if (geb !== meins.gebuehr) await em("softwareEinstellen", { gebuehr: geb });
+          /* Steuerungs-Abo wie die Gebühr: voll ausgelastet → teurer, keine
+           * Steuerungskunden, während andere welche haben → billiger. */
+          let sa = meins.steuerAbo ?? STEUER_ABO.START;
+          const fremdeSteuern = (st.software || []).some(s2 => s2.ownerId !== myId && !s2.portal && s2.steuerKunden > 0);
+          if (meins.steuerKunden === 0 && fremdeSteuern) sa = Math.max(20, sa - 5);
+          else if (meins.plaetze > 0 && meins.kunden >= meins.plaetze) sa = Math.min(150, sa + 10);
+          /* Anzeigenpreis: alle Plätze belegt → teurer, nichts gebucht → billiger */
+          let ap = meins.anzeigenPreis ?? ANZEIGE.PREIS_START;
+          const gebucht = (st.anzeigen || []).filter(a => a.produktId === meins.id).length;
+          if (meins.anzeigenPlaetze > 0 && gebucht >= meins.anzeigenPlaetze) ap = Math.min(300, ap + 10);
+          else if (gebucht === 0) ap = Math.max(30, ap - 10);
+          if (geb !== meins.gebuehr || sa !== meins.steuerAbo || ap !== meins.anzeigenPreis) await em("softwareEinstellen", { gebuehr: geb, steuerAbo: sa, anzeigenPreis: ap });
+          /* Leitstand gestalten — der Server nimmt nur, was die Version schon
+           * kann; mit jeder neuen Version also nochmal schicken. */
+          if (cfg.sw.leit && botLeitVersion !== meins.version) {
+            const r = await em("leitDesign", cfg.sw.leit);
+            if (r?.ok) botLeitVersion = meins.version;
+          }
         }
         if (meins?.plaetze > 0 && meins.version >= 1 && meins.kunden >= meins.plaetze - 1 && me.cash > 4200
             && Date.now() - lastBuild > lvl.bauPause / 2
@@ -9563,6 +9845,17 @@ async function spawnBot(cfg, lvl = BOT_LEVELS[BOT_LEVEL_DEFAULT]) {
             else if (!ba.entwicklung && ba.version < BOERSE_APP.STUFEN.length && me.cash > 1500) await em("boerseEntwickeln", {});
           }
         }
+      }
+      /* --- Werbenetz: mit Polster ab und zu eine Anzeige bei dem System buchen,
+       * das je Dollar die meiste Wirkung bringt (Reichweite ÷ Preis). Nur wer
+       * selbst einen Online-Shop hat, profitiert davon. --- */
+      if (cfg.industry !== "software" && me.cash > 7000 && Math.random() < 0.15
+          && st.map.some(t2 => t2.owner === myId && t2.btype === "onlinemarkt")
+          && !(st.anzeigen || []).some(a => a.firmaId === myId)) {
+        const ang = (st.software || []).filter(s2 => !s2.portal && s2.version >= 1 && s2.ownerId !== myId && s2.anzeigenFrei > 0 && s2.anzeigeWirkung >= 3)
+          .sort((a2, b2) => b2.anzeigeWirkung / b2.anzeigenPreis - a2.anzeigeWirkung / a2.anzeigenPreis)[0];
+        if (ang && ang.anzeigenPreis * 5 <= me.cash * 0.1)
+          await em("anzeigeBuchen", { produktId: ang.id, minuten: 5, text: cfg.slogan || `${cfg.name} — beste Ware der Stadt` });
       }
       /* --- Börsen-App-Lizenz: bringt die App unter die eigenen Kunden und
        * dafür die Hälfte der Provision, die über sie läuft. Bots greifen zur
@@ -9626,6 +9919,49 @@ async function spawnBot(cfg, lvl = BOT_LEVELS[BOT_LEVEL_DEFAULT]) {
           const abo = jetzt.werbeAbo || 0;
           const soll = me.cash > abo * 30 ? true : me.cash < abo * 10 ? false : !!t2.system.werbung;
           if (soll !== !!t2.system.werbung) await em("systemWerbung", { x: t2.x, y: t2.y, an: soll });
+        }
+      }
+      /* --- Steuerungssoftware (Kunde): je Betrieb nachrechnen, ob sich das
+       * Abo lohnt — Mehr-Ausstoß bzw. gesparte Rohstoffe je Minute zum
+       * Ø-Kurs gegen das Abo. Installiert wird erst ab 1,5-fachem Wert, und
+       * höchstens eine Änderung je Durchlauf. Billige Rohstoffbetriebe lohnen
+       * sich oft nicht, Chipfabrik, Autowerk oder Stahlwerk fast immer. --- */
+      {
+        const kurs = g => st.avg?.[g] || BASEP[g] || 0;
+        const steuerWert = (b, lvl, prod) => {
+          const def = STEUERUNG[b.industry]; if (!def || !prod) return 0;
+          const w = def.wert * STEUER_STUFE[prod.stufen?.[b.industry] || 0] * Math.min(1, prod.faktorSchnitt ?? 1);
+          if (!(w > 0)) return 0;
+          if (def.art === "in" && b.proc) return Object.entries(b.proc.in).reduce((a, [g, n]) => a + n * 60 * lvl * kurs(g), 0) * w;
+          return (b.proc ? b.proc.rate * kurs(b.proc.out) : b.rate * kurs(b.out)) * 60 * lvl * w;
+        };
+        const systeme = (st.software || []).filter(s2 => !s2.portal && s2.version >= 1 && s2.ownerId !== myId && (s2.ruf ?? 80) >= 50);
+        for (const t2 of st.map) {
+          if (t2.owner !== myId || !t2.btype || t2.bauBis > st.tick) continue;
+          const b = BTYPES[t2.btype]; if (!steuerFaehig(b)) continue;
+          const lvl = levelMult(t2.level);
+          const jetzt = t2.steuerung ? (st.software || []).find(s2 => s2.id === t2.steuerung.produktId) : null;
+          if (jetzt && steuerWert(b, lvl, jetzt) < (jetzt.steuerAbo || 0)) { await em("entferneSteuerung", { x: t2.x, y: t2.y }); break; }
+          if (jetzt) continue;
+          const best = systeme.filter(s2 => s2.plaetze == null || s2.kunden < s2.plaetze)
+            .map(s2 => ({ s2, netto: steuerWert(b, lvl, s2) - (s2.steuerAbo || 0), abo: s2.steuerAbo || 0 }))
+            .filter(x => x.netto >= x.abo * 0.5 && me.cash > x.abo * 5 + 1000)
+            .sort((a2, b2) => b2.netto - a2.netto)[0];
+          if (best) { await em("installSteuerung", { x: t2.x, y: t2.y, produktId: best.s2.id }); break; }
+        }
+        /* Leitstand: ab v4 den Auto-Turbo einschalten, vorher von Hand zünden,
+         * wenn die Rohstoffe für den ganzen Turbo reichen. */
+        for (const t2 of st.map) {
+          const s3 = t2.steuerung;
+          if (t2.owner !== myId || !s3 || st.tick < s3.bis) continue;
+          const sys = (st.software || []).find(x => x.id === s3.produktId), b = BTYPES[t2.btype];
+          if (!sys || !b || sys.version < LEIT_FUNKTION.turbo || (sys.faktor ?? 1) <= 0) continue;
+          if (sys.version >= LEIT_FUNKTION.autoTurbo) { if (!s3.auto) { await em("steuerAuto", { x: t2.x, y: t2.y, an: true }); break; } continue; }
+          if ((s3.turboBis || 0) > st.tick || (s3.pauseBis || 0) > st.tick) continue;
+          const lvl = levelMult(t2.level);
+          const reicht = b.proc ? Object.entries(b.proc.in).every(([g, n]) => (me.inv[g] || 0) >= n * lvl * (1 + TURBO.IN) * TURBO.DAUER)
+            : (me.inv.strom || 0) >= b.rate * lvl * TURBO.IN * TURBO.DAUER;
+          if (reicht) { await em("steuerTurbo", { x: t2.x, y: t2.y }); break; }
         }
       }
       /* Shops konfigurieren: eigene Ware zum Ø-Kurs, unbegrenzt — je Regal eine
