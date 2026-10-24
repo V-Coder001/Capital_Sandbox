@@ -5,6 +5,40 @@
  * `art`: "neu" (neue Funktion), "besser" (Verbesserung), "fix" (Fehler behoben). */
 window.UPDATES = [
   {
+    id: "2026-10-24b", datum: "2026-10-24",
+    titel: { de: "Arbeitskräfte: Jedes Gebäude braucht Arbeiter", en: "Workforce: every building needs workers" },
+    punkte: [
+      { art: "neu", de: "Im Sandkasten braucht jedes Gebäude Arbeiter aus der Stadt — je teurer, desto mehr (eine Farm 5, ein Stahlwerk 24), jede Ausbaustufe 50 % mehr. Mit 3 von 5 Arbeitern läuft es zu 60 %, unter 25 % steht es still. Pausierte Gebäude geben ihre Leute frei.",
+        en: "In sandbox mode every building needs workers from the city — the pricier, the more (a farm 5, a steel mill 24), 50 % more per upgrade. With 3 of 5 workers it runs at 60 %, below 25 % it stops. Paused buildings release their staff." },
+      { art: "neu", de: "Löhne: Jede Firma wählt Spar-, Tarif- oder Spitzenlohn (4/6/9 $ je Arbeiter und Minute). Sind Arbeiter knapp, gehen sie zuerst zum besten Lohn. Eine Senkung greift erst nach 60 s Kündigungsfrist.",
+        en: "Wages: each company picks low, standard or top wage (4/6/9 $ per worker and minute). When workers are scarce they go to the best payer first. A cut only takes effect after a 60 s notice period." },
+      { art: "neu", de: "Vom Lohn gehen 15 % Lohnsteuer und 15 % Miete an die Stadt, 20 % sparen die Bewohner im Bürgerdepot. Arbeitslose bekommen Stütze aus der Stadtkasse.",
+        en: "Of each wage, 15 % wage tax and 15 % rent go to the city and residents save 20 % in the citizens' depot. The unemployed receive benefits from the city treasury." },
+      { art: "besser", de: "Die Stadt wächst mit der Wirtschaft: Neue Bewohner ziehen nur zu, wenn Stellen offen sind. Viele Arbeitslose senken die Zufriedenheit.",
+        en: "The city grows with the economy: new residents only move in when jobs are open. High unemployment lowers satisfaction." },
+      { art: "neu", de: "Belegschaft auf der Gebäudekarte, Löhne im Firma-Panel, Arbeitsmarkt in der Stadtübersicht. Endbildschirm und Bestenliste zeigen die Einwohner, dazu die Auszeichnung „Größter Arbeitgeber“.",
+        en: "Staff on the building card, wages in the company panel, labour market in the city overview. End screen and leaderboard show the population, plus the “Largest employer” award." },
+    ]
+  },
+  {
+    id: "2026-10-24a", datum: "2026-10-24",
+    titel: { de: "Die Stadt wächst: Einwohner und Wohnbau", en: "The city grows: residents and housing" },
+    punkte: [
+      { art: "neu", de: "Im Sandkasten hat die Stadt jetzt Einwohner. Sie wohnen im neuen Wohngebiet rund ums Zentrum, wo allein die Stadt baut: Siedlungshäuser, ab 800 Einwohnern Mietblöcke, ab 2.500 Wohntürme.",
+        en: "In sandbox mode the city now has residents. They live in the new residential ring around the centre, where only the city builds: houses, apartment blocks from 800 residents, towers from 2,500." },
+      { art: "neu", de: "Die Stadt baut aus der Stadtkasse, sobald weniger als 10 % der Wohnungen frei sind. Bewohner zahlen Miete an die Stadt — mehr Steuern und mehr Einwohner heißt schnelleres Wachstum.",
+        en: "The city builds from its treasury whenever fewer than 10 % of homes are free. Residents pay rent to the city — more taxes and more residents mean faster growth." },
+      { art: "neu", de: "Mehr Einwohner, mehr Kundschaft: Die Nachfrage in den Läden wächst mit der Einwohnerzahl (bis ×1,6).",
+        en: "More residents, more customers: shop demand grows with the population (up to ×1.6)." },
+      { art: "neu", de: "Zufriedenheit bestimmt, wie schnell Menschen zuziehen: Fehlen Strom, Wasser oder Lebensmittel im Handel, herrscht Steuernotstand, sinkt sie — fertige Stadtprojekte heben sie.",
+        en: "Satisfaction sets how fast people move in: missing power, water or food in shops or a tax emergency lowers it — finished city projects raise it." },
+      { art: "neu", de: "Einwohnerzahl in der Kopfleiste; ein Klick (oder auf das Wohngebiet) öffnet die Stadtübersicht im Finanzamt mit Verlauf, Wohnungen und Baustellen.",
+        en: "Population in the header; a click (or on the residential area) opens the city overview in the tax office with history, homes and construction." },
+      { art: "besser", de: "Bei Wohnungsnot hält das Finanzamt Geld für den Wohnbau zurück, statt alles in Fonds zu stecken. Wohnblöcke zählen zum Vermögen der Stadt.",
+        en: "During a housing shortage the tax office keeps money back for housing instead of putting it all into funds. Housing counts towards the city's assets." },
+    ]
+  },
+  {
     id: "2026-10-23b", datum: "2026-10-23",
     titel: { de: "Steuerungssoftware für Produktionsgebäude", en: "Control software for production buildings" },
     punkte: [

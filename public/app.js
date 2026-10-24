@@ -1549,7 +1549,10 @@ function zeigeAuswertung(state) {
   document.getElementById("winMein").innerHTML = ich ? `<div class="winMeinBox${ich.sieger ? " sieg" : ""}">
       <span class="winMeinPlatz">${ichIdx + 1}.</span>
       <div><b>${ich.sieger ? "Glückwunsch — du hast gewonnen!" : `Dein Platz: ${ichIdx + 1} von ${r.zeilen.length}`}</b>
-        <span class="meta">${fmt(ich.netWorth)} Nettovermögen · ${fmt(ich.umsatz)} Umsatz · ${ich.gebaeude} Gebäude</span></div></div>` : "";
+        <span class="meta">${fmt(ich.netWorth)} Nettovermögen · ${fmt(ich.umsatz)} Umsatz · ${ich.gebaeude} Gebäude${r.stadt ? ` · ${ich.arbeiter} Arbeiter` : ""}</span></div></div>` : "";
+  if (r.stadt) document.getElementById("winMein").innerHTML += `<div class="winStadt"><b>${r.stadt.einwohner.toLocaleString("de-DE")}</b>
+      <span>${t("Einwohner — die Stadt ist in dieser Runde von")} ${r.stadt.start} ${t("auf")} ${r.stadt.einwohner.toLocaleString("de-DE")} ${t("gewachsen")}
+      · ${r.stadt.bloecke.map((n, i) => n ? `${n}× ${t(r.stadt.stufen[i])}` : "").filter(Boolean).join(", ")}</span></div>`;
   /* Endstand: Balken relativ zum Sieger */
   const maxNw = Math.max(1, ...r.zeilen.map(z => z.netWorth));
   document.getElementById("wintable").innerHTML = r.zeilen.map((z, i) => `
@@ -1983,9 +1986,38 @@ const EN = {
   "Ab 20.000 $ gelten die normalen Sätze. Darunter steigen sie: bis 3.000 $ um 10 %, darunter um 25 % (Notstand). Die 20.000 $ Grundstock fasst die Stadt nie an — die Lage sinkt nur, wenn die Bank bei Kurswetten verliert. Geprüft wird jede Minute.":
     "From 20,000 $ the normal rates apply. Below that they rise: by 10 % down to 3,000 $, by 25 % below (emergency). The city never touches its 20,000 $ base fund — the situation only drops when the bank loses on stock bets. Checked every minute.",
   "Börsengebühr": "Exchange fee",
+  /* Stadtwachstum (2026-10-24) */
+  "Die Stadt": "The city", "baut Wohnungen aus der Stadtkasse, Bewohner ziehen zu": "builds housing from the city treasury, residents move in",
+  "Einwohner": "Residents", "Wohnungen": "Homes", "frei": "free", "Zufriedenheit": "Satisfaction",
+  "Wegzug letzte Minute": "moved out last minute", "Zuzug letzte Minute": "moved in last minute",
+  "Bewohner ziehen weg": "Residents are leaving", "bremst oder beschleunigt den Zuzug": "slows or speeds up new arrivals",
+  "Einwohnerverlauf": "Population history", "Einwohner im Verlauf der Runde": "Residents over the round",
+  "Siedlungshaus": "House", "Mietblock": "Apartment block", "Wohnturm": "Residential tower",
+  "Stadtbild": "Cityscape", "Versorgung": "Supply", "Steuerlage": "Tax situation",
+  "Noch kein Stadtprojekt fertig": "No city project finished yet", "Schonfrist zum Rundenstart": "Grace period at round start",
+  "Strom, Wasser und Lebensmittel zu kaufen": "Power, water and food for sale",
+  "Wohnbau": "Housing", "Baustelle läuft": "construction site active", "Baustellen laufen": "construction sites active",
+  "Wartet auf Geld": "Waiting for money", "Kasse bleibt über": "treasury stays above",
+  "Genug freie Wohnungen": "Enough free homes", "Kein Bauland mehr frei": "No building land left",
+  "Miete an die Stadt": "Rent to the city", "je Einwohner und Minute": "per resident and minute",
+  "Belegschaft": "Staff", "pausiert — Arbeiter frei": "paused — workers released", "steht still (unter 25 %)": "stopped (below 25 %)", "Leistung": "output",
+  "Zu wenig Arbeiter": "Not enough workers",
+  "Die Stadt hat gerade nicht genug Leute. Höhere Löhne (Firma-Panel) holen sie von anderen Firmen — oder warte, bis neue Bewohner zuziehen.": "The city is short of people right now. Higher wages (company panel) draw them from other companies — or wait for new residents.",
+  "Löhne": "Wages", "Arbeiter": "workers", "Sparlohn": "Low wage", "Tariflohn": "Standard wage", "Spitzenlohn": "Top wage", "je Arbeiter/min": "per worker/min",
+  "Lohnkosten": "Wage costs", "Insgesamt gezahlt": "Paid in total", "Senkung auf": "Cut to", "in": "in", "Kündigungsfrist": "notice period",
+  "Löhne nicht voll bezahlt — du bekommst zuletzt Arbeiter, bis du wieder zahlst.": "Wages not paid in full — you get workers last until you pay again.",
+  "Sind Arbeiter knapp, gehen sie zuerst zur Firma mit dem höchsten Lohn. Vom Lohn gehen 30 % als Steuer und Miete an die Stadt — damit baut sie Wohnungen.": "When workers are scarce they go to the company paying most. 30 % of wages go to the city as tax and rent — it builds housing with that.",
+  "Arbeitsmarkt": "Labour market", "der Einwohner arbeiten": "of residents work", "Beschäftigt / Stellen": "Employed / jobs", "beschäftigt": "employed", "Stellen offen": "jobs open",
+  "arbeitslos": "unemployed", "Stellen": "jobs", "Löhne aller Firmen": "Wages of all companies", "Lohnsteuer + Miete an die Stadt": "Wage tax + rent to the city", "der Löhne": "of wages",
+  "Stütze für Arbeitslose": "Benefits for the unemployed", "Arbeit": "Work",
+  "Einwohner — die Stadt ist in dieser Runde von": "residents — this round the city grew from", "auf": "to", "gewachsen": "",
+  "Nachfrage in den Läden": "Demand in shops", "wächst mit der Einwohnerzahl": "grows with the population", "Einw.": "res.",
   "der Verkäufer gibt sie vom Erlös ans Finanzamt ab": "the seller pays it from sale proceeds to the tax office",
 };
 const t = de => SPRACHE === "en" ? (EN[de] ?? de) : de;
+/* Gleiche Funktion unter anderem Namen — für Stellen, an denen eine Kachel-
+ * Variable `t` die Übersetzung verdeckt (Gebäudekarte). */
+const tUe = t;
 /* Feste Beschriftungen im Markup übersetzen. Sie stehen als deutscher Text
  * zwischen den Tags — genau die Form, die auch als Schlüssel dient. Ein Lauf
  * über die Textknoten spart es, 166 Stellen einzeln mit einem Attribut zu
@@ -2674,7 +2706,7 @@ async function oeffentlicheLaden() {
         <span class="hofplatz p${i + 1}">${i + 1}</span>
         <span class="hofname"><b>${e.name}</b>${e.sieger ? " 👑" : ""}
           <span class="meta">${modusName[e.modus] || e.modus} · ${e.datum}</span></span>
-        <span class="hofwert"><b>${fmt(e.nw)}</b><span class="meta">in ${e.minuten} min</span></span>
+        <span class="hofwert"><b>${fmt(e.nw)}</b><span class="meta">in ${e.minuten} min${e.einwohner ? ` · ${e.einwohner.toLocaleString("de-DE")} ${t("Einw.")}` : ""}</span></span>
       </div>`).join("");
   }
   function statusZeichnen() {
@@ -3223,6 +3255,86 @@ for (let i = 1; i <= 4; i++) {
   img.src = `assets/deko/hochhaus-${i}.png`;
 }
 const dekoSprite = t => DEKOSPR[(t.deko - 1) % 4] || null;
+
+/* ---- Wohnblöcke der Stadt (Sandkasten) ----
+ * Prozedural wie die Altstadt-Häuser im Kartellmodus: drei Stufen
+ * (Siedlungshaus, Mietblock, Wohnturm), vier Fassadenfarben, je eine Tag-
+ * und eine Nachtfassung mit erleuchteten Fenstern. In doppelter Auflösung
+ * gezeichnet, damit sie auf Retina-Displays nicht verschwimmen. */
+const WOHN_FARBEN = [["#dcc7a8", "#b9a283"], ["#cbd5da", "#a5b2b9"], ["#e3c4b5", "#c09f90"], ["#d0d9c0", "#aab79a"]];
+const WOHN_GEO = [null, { fw: 15, hh: 13, reihen: 1, spalten: 2 }, { fw: 21, hh: 32, reihen: 3, spalten: 3 }, { fw: 19, hh: 66, reihen: 7, spalten: 3 }];
+const WOHN_W = 56, WOHN_H = 100, WOHN_BX = 28, WOHN_BY = 96;
+function mkWohn(stufe, v, nacht) {
+  const geo = WOHN_GEO[stufe], S = 2, c = document.createElement("canvas");
+  c.width = WOHN_W * S; c.height = WOHN_H * S;
+  const g = c.getContext("2d"); g.scale(S, S);
+  const [hell, dunkel] = WOHN_FARBEN[v % WOHN_FARBEN.length], { fw, hh } = geo, bx = WOHN_BX, by = WOHN_BY;
+  const poly = (...p) => { g.beginPath(); g.moveTo(p[0], p[1]); for (let i = 2; i < p.length; i += 2) g.lineTo(p[i], p[i + 1]); g.closePath(); g.fill(); };
+  g.fillStyle = dunkel; poly(bx, by, bx - fw, by - fw / 2, bx - fw, by - fw / 2 - hh, bx, by - hh);
+  g.fillStyle = hell;   poly(bx, by, bx + fw, by - fw / 2, bx + fw, by - fw / 2 - hh, bx, by - hh);
+  if (stufe === 1) {                                   // Satteldach
+    const ry = by - hh - fw * .75;
+    g.fillStyle = "#a8674f"; poly(bx, by - hh, bx + fw, by - fw / 2 - hh, bx, ry);
+    g.fillStyle = "#8a5241"; poly(bx, by - hh, bx - fw, by - fw / 2 - hh, bx, ry);
+  } else {                                             // Flachdach mit Attika
+    g.fillStyle = "#8d949c"; poly(bx, by - hh, bx + fw, by - fw / 2 - hh, bx, by - fw - hh, bx - fw, by - fw / 2 - hh);
+    g.strokeStyle = "rgba(255,255,255,.35)"; g.lineWidth = .8; g.stroke();
+    if (stufe === 3) {                                 // Technikaufbau auf dem Turm
+      const k = 6, top = by - fw - hh + fw / 2;
+      g.fillStyle = "#6f767e"; poly(bx - k, top - k / 2 + 4, bx, top + 4, bx, top - 4, bx - k, top - k / 2 - 4);
+      g.fillStyle = "#9aa1a8"; poly(bx, top + 4, bx + k, top - k / 2 + 4, bx + k, top - k / 2 - 4, bx, top - 4);
+    }
+  }
+  /* Fenster: je Wand Spalten × Geschosse, nachts zufällig erleuchtet */
+  const fh = (hh - 4) / geo.reihen, wh = Math.min(5, fh * .55);
+  for (const seite of [1, -1]) for (let k = 0; k < geo.spalten; k++) for (let r = 0; r < geo.reihen; r++) {
+    if (stufe === 1 && seite < 0 && k === 0) continue;      // dort ist die Haustür
+    const u = (k + .5) / geo.spalten * fw, x = bx + seite * u, y = by - u / 2 - hh + 3 + r * fh;
+    const an = nacht && (v * 7 + stufe * 3 + k * 5 + r * 11 + (seite > 0 ? 1 : 0)) % 3 !== 0;
+    g.fillStyle = an ? "#ffd27a" : seite > 0 ? "#45505e" : "#353e4a";
+    g.fillRect(x - 1.3, y, 2.6, wh);
+    if (stufe === 2 && seite > 0) { g.fillStyle = "rgba(255,255,255,.45)"; g.fillRect(x - 2.2, y + wh + .6, 4.4, .8); }
+  }
+  if (stufe === 1) {
+    g.fillStyle = "#5a4636"; g.fillRect(bx - fw * .25 - 1.6, by - fw * .125 - 8, 3.2, 7);
+    if (nacht) { g.fillStyle = "rgba(255,210,120,.3)"; g.fillRect(bx - fw * .25 - 3, by - fw * .125 - 9, 6, 9); }
+  }
+  c.anker = by - fw / 2;
+  return c;
+}
+const WOHNSPR = {};
+const wohnSprite = (stufe, v, nacht) => WOHNSPR[stufe + ":" + v + ":" + nacht] ??= mkWohn(stufe, v, nacht);
+/* Wohnblock auf seine Kachel: fertig als Haus, im Bau mit Gerüst und Kran.
+ * Bei einem Ausbau bleibt das alte Haus stehen, bis der neue Block fertig ist. */
+function wohnMalen(t, sx, sy, st) {
+  const wb = t.wohnblock, v = (t.x * 7 + t.y * 13) % WOHN_FARBEN.length, nacht = LICHT < .5;
+  const bau = wb.bis && st.tick < wb.bis, zeige = bau ? (wb.alt || 0) : wb.stufe;
+  if (zeige) {
+    const img = wohnSprite(zeige, v, nacht), oy = sy + TH / 2 - img.anker;
+    schattenMalen(img, sx, sy + TH / 2 + 2, oy, WOHN_W, false, .35);
+    cx.drawImage(img, sx - WOHN_BX, oy, WOHN_W, WOHN_H);
+  }
+  if (!bau) return;
+  const { fw, hh } = WOHN_GEO[wb.stufe], fy = sy + TH / 2 + fw / 2;   // fy = vordere Ecke der Grundfläche
+  cx.save();
+  cx.strokeStyle = "rgba(251,191,36,.75)"; cx.lineWidth = 1; cx.setLineDash([3, 2]);
+  cx.beginPath();
+  for (const [x, y] of [[sx, fy], [sx + fw, fy - fw / 2], [sx - fw, fy - fw / 2]]) { cx.moveTo(x, y); cx.lineTo(x, y - hh); }
+  cx.moveTo(sx - fw, fy - fw / 2 - hh); cx.lineTo(sx, fy - hh); cx.lineTo(sx + fw, fy - fw / 2 - hh);
+  cx.moveTo(sx - fw, fy - fw / 2); cx.lineTo(sx, fy); cx.lineTo(sx + fw, fy - fw / 2);
+  cx.stroke(); cx.setLineDash([]);
+  /* Kran: Mast hinten rechts, Ausleger nach links, schwingender Haken */
+  const mx = sx + fw - 3, mfuss = fy - fw / 2 - 4, mtop = mfuss - hh - 22;
+  cx.strokeStyle = "#f59e0b"; cx.lineWidth = 1.6;
+  cx.beginPath(); cx.moveTo(mx, mfuss); cx.lineTo(mx, mtop); cx.moveTo(mx + 6, mtop + 2); cx.lineTo(mx - fw * 1.6, mtop + 2); cx.stroke();
+  const hx = mx - fw * (1 + .25 * Math.sin(performance.now() / 900 + t.x));
+  cx.lineWidth = .8; cx.strokeStyle = "rgba(255,255,255,.7)";
+  cx.beginPath(); cx.moveTo(hx, mtop + 2); cx.lineTo(hx, mtop + 18); cx.stroke();
+  cx.restore();
+  const dauer = st.stadt?.bauDauer || 60, anteil = Math.max(0, Math.min(1, 1 - (wb.bis - st.tick) / dauer));
+  cx.fillStyle = "rgba(7,11,16,.7)"; cx.fillRect(sx - 14, sy + TH - 3, 28, 4);
+  cx.fillStyle = "#fbbf24"; cx.fillRect(sx - 14, sy + TH - 3, 28 * anteil, 4);
+}
 /* Wie breit der Sockel eines Sprites ist — die breiteste sichtbare Zeile im
  * untersten Fuenftel. spriteGeo() misst die Gesamtbreite, und die taeuscht bei
  * einem Turm mit schmalem Fuss und ausladendem Aufbau: hochhaus-3 ist unten 37
@@ -4763,6 +4875,7 @@ function draw() {
         cx.drawImage(dimg, sx - gr / 2, standY(sy, dimg, gr), gr, gr);
       }
     }
+    if (t.wohnblock) wohnMalen(t, sx, sy, st);
     if (t.bank) {
       /* Bank: goldener Sockel, damit sie sich als städtisches Gebäude von den
        * Spielergebäuden abhebt, plus Beschriftung. */
@@ -4967,7 +5080,8 @@ function clickTile(e) {
   if (t?.schwarz && me) { openPanel("schwarz"); return; }
   if (t?.bank && me) { openPanel("bank"); return; }
   if (t?.news && me) { openPanel("news"); return; }
-  if ((t?.finanzamt || t?.denkmal) && me) { openPanel("finanzamt"); return; }
+  /* Wohngebiet: dort baut nur die Stadt — der Klick zeigt die Stadtübersicht im Finanzamt */
+  if ((t?.finanzamt || t?.denkmal || t?.wohnblock || (t?.zone === "wohnen" && !t.road)) && me) { openPanel("finanzamt"); return; }
   if (t?.gcasino && me) { gcasinoOeffnen(); return; }
   if (t?.wz && me) { wzOeffnen(t.wz); return; }
   if (t?.famhaus && me) { famOeffnen(t.famhaus); return; }
@@ -5193,12 +5307,20 @@ function clickTile(e) {
     if (bt.studio) kennzahlen.push(["Entwickelt", `${(bt.studio.ep * lvlMult).toFixed(2)} EP/s`, "Entwicklungspunkte"],
       ["Verbraucht", Object.entries(bt.studio.in).map(([g, n]) => `${(n * lvlMult).toFixed(2)} ${gname(g)}`).join(" + "), "pro Sekunde"]);
     if (bt.rz) kennzahlen.push(["Plätze", `${bt.rz.plaetze * lvl}`, "Marktplätze + Steuerungen"], ["Verbraucht", `${(bt.rz.in.strom * lvlMult).toFixed(2)} ${gname("strom")}`, "pro Sekunde"]);
+    /* Belegschaft (Sandkasten): mit 3 von 5 Arbeitern läuft das Gebäude zu 60 % */
+    const belegt = store.get().state.stadt && t.arbeiterSoll ? { ist: t.arbeiter ?? t.arbeiterSoll, soll: t.arbeiterSoll } : null;
+    if (belegt) {
+      const q = belegt.ist / belegt.soll;
+      kennzahlen.push([tUe("Belegschaft"), `${belegt.ist}/${belegt.soll}`, t.paused ? tUe("pausiert — Arbeiter frei") : q < .25 ? tUe("steht still (unter 25 %)") : `${Math.round(Math.min(1, q) * 100)} % ${tUe("Leistung")}`]);
+    }
     const mehr = [];
     if (bt.out && lvl > 1) mehr.push(`Basisrate ${bt.rate}/s × ${lvlMult.toFixed(1)} durch Stufe ${lvl}.`);
     if (bt.boosts) mehr.push(`<b>Boost:</b> ${bt.boosts.map(r => gname(r)).join(" + ")} im Lager bringen je +75 % Tempo und werden dabei verbraucht.`);
     if (bt.retail) mehr.push(`Dein Preis bestimmt das Tempo: Ø-Kurs = volle Rate, teurer = langsamer, billiger = schneller (max. ×2).`
       + ((me.ad?.boost || 1) > 1.001 ? ` <b style="color:var(--accent2)">Werbung aktiv: bis ${Math.round((me.ad.boost - 1) * 100)} % über Ø-Kurs ohne Tempoverlust.</b>` : ""));
     if (t.lien) mehr.push("Auf dem Gebäude liegt ein Pfandrecht — Abreißen ist gesperrt, bis die Anleihe bedient ist.");
+    if (belegt && belegt.ist < belegt.soll && mine && !t.paused)
+      mehr.push(`<b>${tUe("Zu wenig Arbeiter")}:</b> ${tUe("Die Stadt hat gerade nicht genug Leute. Höhere Löhne (Firma-Panel) holen sie von anderen Firmen — oder warte, bis neue Bewohner zuziehen.")}`);
     if (imBauNoch) mehr.push(`Anlage in Arbeit: Das Gebäude produziert erst nach der Bauzeit. Sein Wert zählt aber schon jetzt voll zum Firmenwert — Bauen senkt den Wert deiner Firma nicht.`);
     const nebenKnoepfe = [
       (bt.retail || bt.proc) && mine ? `<button class="tmKlein" id="pause">${t.paused ? "▶ Fortsetzen" : "❚❚ Pausieren"}</button>` : "",
@@ -6606,19 +6728,70 @@ function malEingabe(e) {
 }
 document.addEventListener("keydown", e => { if (e.key === "Escape" && MAL.offen) malSchliessen(); });
 
+/* Löhne (Sandkasten, Etappe 2): drei Stufen, höher gibt Vorrang bei knappen
+ * Arbeitern. Eine Senkung greift erst nach der Kündigungsfrist. */
+function lohnHtml(me, state) {
+  const L = me.lohn, S = state.stadt;
+  if (!L || !S) return "";
+  const stufen = Object.entries(S.loehne);
+  const kosten = L.arbeiter * S.loehne[L.stufe].lohn, rest = L.ab ? Math.max(0, L.ab - state.tick) : 0;
+  return `<div class="sec">${t("Löhne")} <span class="meta">· ${L.arbeiter} / ${L.soll} ${t("Arbeiter")}</span></div>
+    <div class="fLohn">${stufen.map(([k, v]) => `<button class="${k === L.stufe ? "on" : ""}${k === L.wunsch ? " bald" : ""}" data-lohn="${k}">
+      <b>${t(v.name)}</b><span>${v.lohn} $ ${t("je Arbeiter/min")}</span></button>`).join("")}</div>
+    <div class="kzrow"><span>${t("Lohnkosten")}</span><b>${fmt(kosten)}/min</b></div>
+    <div class="kzrow"><span>${t("Insgesamt gezahlt")}</span><b>${fmt(L.gesamt)}</b></div>
+    ${L.wunsch ? `<div class="meta">${t("Senkung auf")} ${t(S.loehne[L.wunsch].name)} ${t("in")} ${rest} s (${t("Kündigungsfrist")}).</div>` : ""}
+    ${L.verzug ? `<div class="meta stMinus">${t("Löhne nicht voll bezahlt — du bekommst zuletzt Arbeiter, bis du wieder zahlst.")}</div>` : ""}
+    <div class="meta" style="padding-bottom:8px">${t("Sind Arbeiter knapp, gehen sie zuerst zur Firma mit dem höchsten Lohn. Vom Lohn gehen 30 % als Steuer und Miete an die Stadt — damit baut sie Wohnungen.")}</div>`;
+}
+/* Stadtübersicht (nur Sandkasten): Einwohner, Wohnungen, Zufriedenheit und
+ * was die Stadt gerade baut. Steht oben im Finanzamt, weil die Stadtkasse den
+ * Wohnbau bezahlt. */
+function stadtHtml(S, F) {
+  if (!S) return "";
+  const vz = n => (n > 0 ? "+" : n < 0 ? "−" : "±") + Math.abs(Math.round(n * 100)) + " %";
+  const A = S.arbeit;
+  const bewegung = S.wegzug ? `−${S.wegzug} ${t("Wegzug letzte Minute")}` : `+${S.zuzug} ${t("Zuzug letzte Minute")}`;
+  const v = S.verlauf || [], emax = Math.max(...v.map(p => p.e), 1), emin = Math.min(...v.map(p => p.e), emax);
+  const spanne = Math.max(1, emax - emin), lin = v.length > 1
+    ? v.map((p, i) => `${(i / (v.length - 1) * 300).toFixed(1)},${(52 - (p.e - emin) / spanne * 44).toFixed(1)}`).join(" ") : "";
+  const status = S.baustellen ? `${S.baustellen} ${t(S.baustellen === 1 ? "Baustelle läuft" : "Baustellen laufen")}`
+    : S.wartetAufGeld ? `${t("Wartet auf Geld")}: ${fmt(S.wartetAufGeld)}`
+    : S.frei > 0 ? t("Genug freie Wohnungen") : t("Kein Bauland mehr frei");
+  return `
+    <div class="sec">${t("Die Stadt")} <span class="meta">· ${t("baut Wohnungen aus der Stadtkasse, Bewohner ziehen zu")}</span></div>
+    <div class="faKonten stKonten">
+      <div class="faKonto"><span>${t("Einwohner")}</span><b>${S.einwohner.toLocaleString("de-DE")}</b><em>${bewegung}</em></div>
+      <div class="faKonto"><span>${t("Wohnungen")}</span><b>${(S.kapazitaet - S.frei).toLocaleString("de-DE")} / ${S.kapazitaet.toLocaleString("de-DE")}</b><em>${S.frei} ${t("frei")} · ${S.bloecke.map((n, i) => n ? `${n}× ${t(S.stufen[i].name)}` : "").filter(Boolean).join(", ")}</em>
+        <div class="faBalken"><i style="width:${Math.min(100, (S.kapazitaet - S.frei) / Math.max(1, S.kapazitaet) * 100).toFixed(1)}%"></i></div></div>
+      <div class="faKonto"><span>${t("Zufriedenheit")}</span><b>×${S.zufr.toFixed(2).replace(".", ",")}</b><em>${S.zufr < 0.7 ? t("Bewohner ziehen weg") : t("bremst oder beschleunigt den Zuzug")}</em></div>
+    </div>
+    ${lin ? `<svg class="stVerlauf" viewBox="0 0 300 56" preserveAspectRatio="none" aria-label="${t("Einwohnerverlauf")}"><polyline points="${lin}" fill="none" stroke="var(--accent)" stroke-width="2" vector-effect="non-scaling-stroke"/></svg>
+      <div class="meta stAchse"><span>${emin.toLocaleString("de-DE")}</span><span>${t("Einwohner im Verlauf der Runde")}</span><span>${emax.toLocaleString("de-DE")}</span></div>` : ""}
+    <div class="stTeile">${(S.teile || []).map(x => `<div class="kzrow"><span>${t(x.name)} <span class="meta">· ${t(x.text)}</span></span><b class="${x.wirkung < 0 ? "stMinus" : x.wirkung > 0 ? "stPlus" : "meta"}">${vz(x.wirkung)}</b></div>`).join("")}</div>
+    <div class="kzrow"><span>${t("Wohnbau")} <span class="meta">· ${t("Kasse bleibt über")} ${fmt(S.kasseMin)}</span></span><b class="meta">${status}</b></div>
+    <div class="sec">${t("Arbeitsmarkt")} <span class="meta">· ${Math.round(S.quote * 100)} % ${t("der Einwohner arbeiten")}</span></div>
+    <div class="stArbeit"><div class="stArbeitBalken" title="${t("Beschäftigt / Stellen")}"><i style="width:${Math.min(100, A.beschaeftigt / Math.max(1, A.bedarf, A.faehig) * 100).toFixed(1)}%"></i>${A.bedarf > A.faehig ? `<em style="left:${(A.faehig / A.bedarf * 100).toFixed(1)}%"></em>` : ""}</div>
+      <div class="meta stAchse"><span>${A.beschaeftigt.toLocaleString("de-DE")} ${t("beschäftigt")}</span><span>${A.offen ? `${A.offen} ${t("Stellen offen")}` : `${A.arbeitslos} ${t("arbeitslos")}`}</span><span>${A.bedarf.toLocaleString("de-DE")} ${t("Stellen")}</span></div></div>
+    <div class="kzrow"><span>${t("Löhne aller Firmen")}</span><b>${fmt(A.lohnsumme)}/min</b></div>
+    <div class="kzrow"><span>${t("Lohnsteuer + Miete an die Stadt")} <span class="meta">· ${Math.round((S.anteile.steuer + S.anteile.miete) * 100)} % ${t("der Löhne")}</span></span><b>${fmt(A.lohnsteuer + A.miete)}/min</b></div>
+    ${A.stuetze ? `<div class="kzrow"><span>${t("Stütze für Arbeitslose")}</span><b class="stMinus">−${fmt(A.stuetze)}/min</b></div>` : ""}
+    <div class="kzrow"><span>${t("Nachfrage in den Läden")} <span class="meta">· ${t("wächst mit der Einwohnerzahl")}</span></span><b>×${String(S.nachfrage).replace(".", ",")}</b></div>
+    ${(S.log || []).length ? `<div class="stLog">${S.log.slice(0, 4).map(l => `<div class="meta">Min ${Math.floor(l.tick / 60)} · ${l.text}</div>`).join("")}</div>` : ""}`;
+}
 function finanzamtRendern(state, me, myId) {
   const F = state.finanzamt, el = document.getElementById("finanzamtbody");
   if (!F?.aktiv) { el.innerHTML = `<div class="meta">In diesem Modus gibt es kein Finanzamt.</div>`; return; }
   /* Perf: Nur rendern wenn sich was ändert (Stadtkasse, Finanzamt-Sätze, etc.) */
   const PP = state.stadtprojekt;
-  const sig = JSON.stringify([F, me.steuer, PP, PP ? Object.keys(PP.needs).map(g => Math.floor(me.inv[g] || 0)) : 0, SPRACHE]);
+  const sig = JSON.stringify([F, state.stadt, me.steuer, PP, PP ? Object.keys(PP.needs).map(g => Math.floor(me.inv[g] || 0)) : 0, SPRACHE]);
   if (finanzamtRendern.lastSig === sig) return;
   finanzamtRendern.lastSig = sig;
   const uhr = s => `${Math.floor(s / 60)}:${String(Math.max(0, s) % 60).padStart(2, "0")}`;
   const st = me.steuer || {};
   const P = state.stadtprojekt;
   const pct = n => Math.min(100, n.have / n.req * 100);
-  el.innerHTML = `
+  el.innerHTML = `${stadtHtml(state.stadt, F)}
     <div class="faKonten">
       <div class="faKonto"><span>Stadtkasse</span><b>${fmt(F.stadtkasse)}</b><em>${P ? "Projekt läuft" : F.stadtkasse >= F.schwelle ? "Projekt kommt gleich" : `Stadtprojekt ab ${fmt(F.schwelle)}`}</em>
         <div class="faBalken"><i style="width:${Math.min(100, F.stadtkasse / F.schwelle * 100).toFixed(1)}%"></i></div></div>
@@ -6661,6 +6834,7 @@ function finanzamtRendern(state, me, myId) {
     ${F.fertig.length ? `<div class="sec">Gebaute Stadtprojekte</div>${F.fertig.map(f => `<div class="kzrow"><span>${f.name}</span><b class="meta">${f.lieferanten.join(", ")}</b></div>`).join("")}` : ""}
     <div class="meta" style="padding-top:10px">Insgesamt eingenommen: ${fmt(F.gesamt)} — alle Firmen zahlen, auch die Bots.</div>`;
 }
+document.getElementById("einw").addEventListener("click", () => openPanel("finanzamt"));
 document.getElementById("finanzamtbody").addEventListener("click", e => {
   const b = e.target.closest("[data-sp]");
   if (!b) return;
@@ -9088,6 +9262,9 @@ function render({ state, me, myId, chat, room }) {
     /INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName);
   const my = state.players[myId];
   document.getElementById("cash").textContent = fmt(me.cash);
+  { const eb = document.getElementById("einw"), S = state.stadt;
+    eb.hidden = !S;
+    if (S) eb.textContent = `${S.einwohner.toLocaleString("de-DE")} ${t("Einw.")}`; }
   document.getElementById("lvl").textContent = me.lvl;
   document.getElementById("xpfill").style.width = (me.xp / (me.lvl*100) * 100) + "%";
   if (my) { document.getElementById("nwv").textContent = fmt(my.netWorth);
@@ -9620,6 +9797,7 @@ function render({ state, me, myId, chat, room }) {
         <div><span>Zinserträge</span><b class="plus">${geld(me.fin?.zinsErtrag || 0)}</b></div>
         <div><span>Zinsausgaben</span><b class="${me.fin?.zinsAufwand ? "minus" : ""}">${me.fin?.zinsAufwand ? "− " : ""}${geld(me.fin?.zinsAufwand || 0)}</b></div>
       </div>
+      ${lohnHtml(me, state)}
       <div class="sec">Deine Aktie</div>
       <div class="fAktie">
         <div><span>Kurs</span><b>${fk(me.kurs ?? 0)}</b></div>
@@ -10703,6 +10881,8 @@ const kap = k => (SPRACHE === "en" && k.en) ? { ...k, ...k.en } : k;
 
 /* Ausschüttung im Firmen-Panel festlegen */
 document.getElementById("firmabody").addEventListener("click", e => {
+  const lb = e.target.closest("[data-lohn]");
+  if (lb) return act("lohnStufe", { stufe: lb.dataset.lohn });
   if (e.target.closest("[data-malen]")) return malOeffnen();
   const sa = e.target.closest("[data-shopauf]");
   if (sa) { const [x, y] = sa.dataset.shopauf.split(",").map(Number); return shopOeffnen(x, y); }

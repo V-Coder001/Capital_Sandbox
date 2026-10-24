@@ -1141,3 +1141,27 @@ td:first-child{font-family:var(--font)}
   .tbInhalt .kasten{padding:11px 12px}
   .tbCard{height:94vh}
 }
+
+/* Stadtwachstum: Einwohner in der Kopfleiste, Stadtübersicht im Finanzamt */
+#einw{background:none;border:1px solid var(--line);border-radius:7px;color:var(--dim);height:24px;cursor:pointer;padding:0 8px;font:600 11px/1 var(--font);white-space:nowrap}
+#einw:hover{color:var(--text)}
+.faKonten.stKonten{grid-template-columns:repeat(3,minmax(0,1fr))}
+.stVerlauf{display:block;width:100%;height:56px;margin:10px 0 2px;border-bottom:1px solid var(--line)}
+.stAchse{display:flex;justify-content:space-between;margin-bottom:8px}
+.stTeile{margin:6px 0}
+.stPlus{color:#4ade80}.stMinus{color:#f87171}
+.stLog{margin-top:6px;padding-top:6px;border-top:1px dashed var(--line)}
+@media (max-width:640px){.faKonten.stKonten{grid-template-columns:1fr}}
+
+/* Etappe 2: Löhne im Firma-Panel, Arbeitsmarkt in der Stadtübersicht, Stadt im Endbildschirm */
+.fLohn{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;margin:6px 0 8px}
+.fLohn button{background:none;border:1px solid var(--line);border-radius:8px;padding:8px 6px;cursor:pointer;color:var(--dim);text-align:left;font:inherit}
+.fLohn button b{display:block;color:var(--text);font-size:12px}
+.fLohn button span{font-size:11px}
+.fLohn button.on{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
+.fLohn button.bald{border-style:dashed}
+.stArbeitBalken{position:relative;height:8px;border-radius:4px;background:var(--line);margin:8px 0 4px;overflow:hidden}
+.stArbeitBalken i{position:absolute;left:0;top:0;bottom:0;background:var(--accent)}
+.stArbeitBalken em{position:absolute;top:-2px;bottom:-2px;width:2px;background:#f87171}
+.winStadt{display:flex;gap:10px;align-items:baseline;margin-top:8px;padding:8px 12px;border:1px solid var(--line);border-radius:10px}
+.winStadt b{font-size:20px;color:var(--accent)}
