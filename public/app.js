@@ -2020,7 +2020,27 @@ const EN = {
   "Stadt & Arbeit": "City & work", "Wohnblöcke der Stadt": "City housing", "Stufe": "Level", "Plätze": "Homes", "Kosten": "Cost", "ab Einwohnern": "from residents",
   "Rund 1 Arbeiter je 250 $ Baukosten (2 bis 30), +50 % je Ausbaustufe. Leistung = Besetzung, unter 25 % Stillstand. Labor, Studio und Chipfabrik: die Hälfte Fachkräfte. Steuerungssoftware: −25 %.": "About 1 worker per $250 building cost (2 to 30), +50 % per upgrade. Output = staffing, below 25 % it stops. Lab, studio and chip factory: half skilled workers. Control software: −25 %.",
   "30 % der Löhne gehen als Lohnsteuer und Miete an die Stadt, 20 % ins Bürgerdepot.": "30 % of wages go to the city as wage tax and rent, 20 % into the citizens' depot.",
-  "höchstens": "at most", "Schulden": "debt",
+  "höchstens": "at most", "Schulden": "debt", "Bürger-Apps und Jobbörse": "Citizen apps and job board",
+  "Bürger-App: bis 75 % der Einwohner zahlen ein Abo je Minute, 150 Nutzer je Rechenzentrums-Stufe des Anbieters. Jobbörse: Vorrang wie +0,3 bis +0,7 Lohnstufen gegen eine Gebühr je Arbeiter, 3 Abos je Rechenzentrums-Stufe.": "Citizen app: up to 75 % of residents pay a subscription per minute, 150 users per data-centre level of the provider. Job board: priority like +0.3 to +0.7 wage levels for a fee per worker, 3 subscriptions per data-centre level.",
+  "Markt": "Market", "Mein System": "My system", "Entwicklung": "Development", "Design": "Design", "Produkte": "Products",
+  "Shop-System": "Shop system", "Bürger-App": "Citizen app", "Bürger-Apps": "Citizen apps", "Jobbörse": "Job board", "Jobbörsen": "Job boards", "Börsen-App": "Stock app", "Malprogramm": "Paint program",
+  "fehlt": "missing", "Nutzer": "users", "Abos": "subscriptions", "verkauft": "sold", "EP-Vorrat": "EP stock", "ein Studio: 1 EP/s": "one studio: 1 EP/s",
+  "Software für die Einwohner": "software for residents", "Software gegen Arbeitermangel": "software against labour shortage", "Ab Shop-System v": "From shop system v",
+  "bis": "up to", "der Einwohner nutzen Apps": "of residents use apps", "Qualität": "quality",
+  "Einwohner zahlen ein Abo je Minute. Sie wählen nach Qualität und Preis. Je Rechenzentrums-Stufe bedienst du": "Residents pay a subscription per minute and choose by quality and price. Each data-centre level serves",
+  "Version": "Version", "Nutzer / Kapazität": "users / capacity", "würden sie nutzen": "would use it", "Einnahmen 10 min": "income 10 min",
+  "Nutzer finden keinen Platz — ein weiteres Rechenzentrum oder ein Ausbau hilft.": "users find no room — another data centre or an upgrade helps.",
+  "Name": "Name", "Abo $ je Nutzer und Minute": "Subscription $ per user and minute", "Übernehmen": "Apply", "Bürger-App anlegen": "Create citizen app",
+  "in Arbeit": "in progress", "entwickeln": "develop", "Voll ausgebaut": "Fully developed", "Vorrang wie": "priority like", "Lohnstufen": "wage levels",
+  "Firmen abonnieren sie und bekommen bei knappen Arbeitern Vorrang. Sie zahlen dir eine Gebühr je beschäftigtem Arbeiter und Minute. Für dich selbst wirkt sie kostenlos. Je Rechenzentrums-Stufe": "Companies subscribe and get priority when workers are scarce. They pay you a fee per employed worker and minute. For you it works for free. Per data-centre level",
+  "Abos / Plätze": "subscriptions / slots", "Vorrang": "priority", "Gebühr $ je Arbeiter und Minute": "Fee $ per worker and minute", "Jobbörse anlegen": "Create job board",
+  "Bürger-Apps der Stadt": "Citizen apps in the city", "von": "of", "Einwohnern nutzen eine": "residents use one",
+  "Noch keine Bürger-App fertig — Software-Firmen entwickeln sie im Reiter „Produkte“.": "No citizen app yet — software companies develop them in the “Products” tab.",
+  "Vorrang bei knappen Arbeitern": "priority when workers are scarce", "deine": "yours", "Kündigen": "Cancel", "Abonnieren": "Subscribe", "Noch keine Jobbörse fertig.": "No job board yet.",
+  "eigene": "own", "Vorrang ohne höheren Lohn": "priority without higher wages", "kein Abo": "no subscription", "kündigen": "cancel",
+  "ab der Hälfte der Einwohner: Digitale Stadt +5 %": "from half the residents: digital city +5 %", "Digitale Stadt": "Digital city",
+  "Bürger-App gespeichert": "Citizen app saved", "Jobbörse gespeichert": "Job board saved", "Entwicklung gestartet": "Development started",
+  "Erst brauchst du ein eigenes Shop-System — lege es im Reiter „Mein System“ an.": "First you need your own shop system — create it in the “My system” tab.",
   "Nachfrage in den Läden": "Demand in shops", "wächst mit der Einwohnerzahl": "grows with the population", "Einw.": "res.",
   "der Verkäufer gibt sie vom Erlös ans Finanzamt ab": "the seller pays it from sale proceeds to the tax office",
 };
@@ -5874,6 +5894,92 @@ function paintHtml(state, me, eigene) {
       : `<div class="note">Voll ausgebaut: ${stufeText(STUFEN[STUFEN.length - 1])}.</div>`) : ""}
     ${mp?.version >= 1 ? `<div class="mpZeile"><button class="mini" id="mpMalen">🎨 Eigenes Logo malen</button>${offen[0] ? `<button class="mini" data-shopauf="${offen[0].x},${offen[0].y}">🛒 Deinen Shop ansehen</button>` : ""}</div>` : ""}`;
 }
+/* ---- Software-Panel: Reiter, Überblick, Bürger-App und Jobbörse (Etappe 5) ---- */
+let SW_REITER = (() => { try { return localStorage.getItem("cs_swReiter") || "markt"; } catch { return "markt"; } })();
+const appEntwurf = {}, jobEntwurf = {};
+/* Einnahmen aller eigenen Produkte auf einen Blick, über den Reitern */
+function swUeberblick(state, me, myId, eigene) {
+  const eig = arr => (arr || []).find(x => x.ownerId === myId);
+  const app = eig(state.buergerApp), job = eig(state.jobboerse), ba = eig(state.boerseApp), mp = eig(state.paint);
+  const kachel = (name, x, wert) => `<div title="${name}"><span>${name}</span><b>${x ? (x.version >= 1 ? "v" + x.version : "in Arbeit") : "—"}</b><small>${x ? wert : t("fehlt")}</small></div>`;
+  return `<div class="swUeberblick">
+    ${kachel(t("Shop-System"), eigene, `${fmt(eigene?.einnahmen10 || 0)} / 10 min`)}
+    ${state.stadt ? kachel(t("Bürger-App"), app, `${app?.nutzer || 0} ${t("Nutzer")} · ${fmt(app?.einnahmen10 || 0)}`) : ""}
+    ${state.stadt ? kachel(t("Jobbörse"), job, `${job?.abonnenten || 0} ${t("Abos")} · ${fmt(job?.einnahmen10 || 0)}`) : ""}
+    ${kachel(t("Börsen-App"), ba, fmt(ba?.einnahmen10 || 0))}
+    ${kachel(t("Malprogramm"), mp, `${mp?.verkauft ?? 0} ${t("verkauft")}`)}
+    <div><span>${t("EP-Vorrat")}</span><b>${me.swEp || 0}</b><small>${t("ein Studio: 1 EP/s")}</small></div>
+  </div>`;
+}
+/* Eigene Bürger-App anlegen, bepreisen, entwickeln */
+function buergerAppHtml(state, me, eigene) {
+  const cfg = state.buergerAppCfg, app = (state.buergerApp || []).find(x => x.ownerId === eigene.ownerId);
+  if (!state.stadt || !cfg) return "";
+  const kopf = `<div class="sec">${t("Bürger-App")} · ${t("Software für die Einwohner")}</div>`;
+  if ((eigene.version || 0) < cfg.AB_SYSTEM) return kopf + `<div class="note">${t("Ab Shop-System v")}${cfg.AB_SYSTEM}.</div>`;
+  const e = { name: app?.name ?? "", preis: app?.preis ?? cfg.PREIS_START, ...appEntwurf };
+  const st = v => cfg.STUFEN[v - 1], text = s2 => `${t("bis")} ${Math.round(s2.quote * 100)} % ${t("der Einwohner nutzen Apps")} · ${t("Qualität")} ×${String(s2.quali).replace(".", ",")}`;
+  const dev = app?.entwicklung, naechste = st((app?.version || 0) + 1);
+  return kopf + `<div class="note" style="margin:0 0 8px">${t("Einwohner zahlen ein Abo je Minute. Sie wählen nach Qualität und Preis. Je Rechenzentrums-Stufe bedienst du")} ${cfg.NUTZER_JE_STUFE} ${t("Nutzer")}.</div>
+    ${app ? `<div class="swZahlen">
+      <div><b>${app.version >= 1 ? "v" + app.version : "—"}</b><span>${t("Version")}</span></div>
+      <div><b>${app.nutzer} / ${app.kapazitaet}</b><span>${t("Nutzer / Kapazität")}</span></div>
+      <div><b>${app.wunsch}</b><span>${t("würden sie nutzen")}</span></div>
+      <div><b style="color:var(--up)">${fmt(app.einnahmen10)}</b><span>${t("Einnahmen 10 min")}</span></div></div>
+      ${app.version >= 1 && app.wunsch > app.kapazitaet ? `<div class="mpWarn">⚠ ${app.wunsch - app.kapazitaet} ${t("Nutzer finden keinen Platz — ein weiteres Rechenzentrum oder ein Ausbau hilft.")}</div>` : ""}` : ""}
+    <div class="swForm">
+      <label class="breit"><span>${t("Name")}</span><input id="appName" maxlength="20" value="${escapeHtml(rohText(e.name))}" placeholder="z. B. StadtChat"></label>
+      <label><span>${t("Abo $ je Nutzer und Minute")}</span><input id="appPreis" type="number" min="${cfg.PREIS_MIN}" max="${cfg.PREIS_MAX}" step="0.01" value="${e.preis}"></label>
+      <button class="buyb" id="appSpeichern">${app ? t("Übernehmen") : t("Bürger-App anlegen")}</button>
+    </div>
+    ${app ? (dev ? `<div class="swDev"><div class="swDevKopf"><span>${escapeHtml(rohText(app.name))} v${dev.version} ${t("in Arbeit")}</span><b class="mono">${dev.ep} / ${dev.ziel} EP</b></div>
+        <div class="swBalken"><i style="width:${Math.min(100, dev.ep / dev.ziel * 100).toFixed(1)}%"></i></div></div>`
+      : naechste ? `<button class="tmHaupt" id="appEntwickeln"><span>${escapeHtml(rohText(app.name))} v${(app.version || 0) + 1} ${t("entwickeln")}</span><small>${naechste.ep} EP · ${text(naechste)}</small></button>`
+      : `<div class="note">${t("Voll ausgebaut")}: ${text(st(cfg.STUFEN.length))}.</div>`) : ""}`;
+}
+/* Eigene Jobbörse anlegen, bepreisen, entwickeln */
+function jobboerseHtml(state, me, eigene) {
+  const cfg = state.jobboerseCfg, job = (state.jobboerse || []).find(x => x.ownerId === eigene.ownerId);
+  if (!state.stadt || !cfg) return "";
+  const kopf = `<div class="sec" style="margin-top:16px">${t("Jobbörse")} · ${t("Software gegen Arbeitermangel")}</div>`;
+  if ((eigene.version || 0) < cfg.AB_SYSTEM) return kopf + `<div class="note">${t("Ab Shop-System v")}${cfg.AB_SYSTEM}.</div>`;
+  const e = { name: job?.name ?? "", gebuehr: job?.gebuehr ?? cfg.GEB_START, ...jobEntwurf };
+  const text = s2 => `${t("Vorrang wie")} +${String(s2.vorrang).replace(".", ",")} ${t("Lohnstufen")}`;
+  const dev = job?.entwicklung, naechste = cfg.STUFEN[(job?.version || 0)];
+  return kopf + `<div class="note" style="margin:0 0 8px">${t("Firmen abonnieren sie und bekommen bei knappen Arbeitern Vorrang. Sie zahlen dir eine Gebühr je beschäftigtem Arbeiter und Minute. Für dich selbst wirkt sie kostenlos. Je Rechenzentrums-Stufe")} ${cfg.ABOS_JE_STUFE} ${t("Abos")}.</div>
+    ${job ? `<div class="swZahlen">
+      <div><b>${job.version >= 1 ? "v" + job.version : "—"}</b><span>${t("Version")}</span></div>
+      <div><b>${job.abonnenten} / ${job.plaetze}</b><span>${t("Abos / Plätze")}</span></div>
+      <div><b>+${String(job.vorrang).replace(".", ",")}</b><span>${t("Vorrang")}</span></div>
+      <div><b style="color:var(--up)">${fmt(job.einnahmen10)}</b><span>${t("Einnahmen 10 min")}</span></div></div>` : ""}
+    <div class="swForm">
+      <label class="breit"><span>${t("Name")}</span><input id="jobName" maxlength="20" value="${escapeHtml(rohText(e.name))}" placeholder="z. B. StadtJobs"></label>
+      <label><span>${t("Gebühr $ je Arbeiter und Minute")}</span><input id="jobGeb" type="number" min="${cfg.GEB_MIN}" max="${cfg.GEB_MAX}" step="0.05" value="${e.gebuehr}"></label>
+      <button class="buyb" id="jobSpeichern">${job ? t("Übernehmen") : t("Jobbörse anlegen")}</button>
+    </div>
+    ${job ? (dev ? `<div class="swDev"><div class="swDevKopf"><span>${escapeHtml(rohText(job.name))} v${dev.version} ${t("in Arbeit")}</span><b class="mono">${dev.ep} / ${dev.ziel} EP</b></div>
+        <div class="swBalken"><i style="width:${Math.min(100, dev.ep / dev.ziel * 100).toFixed(1)}%"></i></div></div>`
+      : naechste ? `<button class="tmHaupt" id="jobEntwickeln"><span>${escapeHtml(rohText(job.name))} v${(job.version || 0) + 1} ${t("entwickeln")}</span><small>${naechste.ep} EP · ${text(naechste)}</small></button>`
+      : `<div class="note">${t("Voll ausgebaut")}: ${text(cfg.STUFEN[cfg.STUFEN.length - 1])}.</div>`) : ""}`;
+}
+/* Markt-Reiter: alle Bürger-Apps und Jobbörsen der Stadt, Jobbörse abonnieren */
+function stadtSoftwareMarktHtml(state, me, myId) {
+  if (!state.stadt) return "";
+  const apps = (state.buergerApp || []).filter(a => a.version >= 1), jobs = (state.jobboerse || []).filter(j => j.version >= 1);
+  const abo = me.lohn?.jobAbo;
+  return `<div class="sec" style="margin-top:16px">${t("Bürger-Apps der Stadt")} <span class="meta">· ${state.stadt.appNutzer || 0} ${t("von")} ${state.stadt.einwohner} ${t("Einwohnern nutzen eine")}</span></div>
+    ${apps.length ? `<div class="swListe">${apps.sort((a, b) => b.nutzer - a.nutzer).map(a => `<div class="swListeZeile${a.ownerId === myId ? " meins" : ""}">
+      <span class="swName"><i style="background:${a.farbe}"></i><span><b>${a.name} <em>v${a.version}</em></b><small>${a.anbieter}</small></span></span>
+      <span class="mono">${fp(a.preis)}/min</span><span class="mono">${a.nutzer} ${t("Nutzer")}</span></div>`).join("")}</div>`
+      : `<div class="note">${t("Noch keine Bürger-App fertig — Software-Firmen entwickeln sie im Reiter „Produkte“.")}</div>`}
+    <div class="sec" style="margin-top:16px">${t("Jobbörsen")} <span class="meta">· ${t("Vorrang bei knappen Arbeitern")}</span></div>
+    ${jobs.length ? `<div class="swListe">${jobs.map(j => `<div class="swListeZeile${j.ownerId === myId ? " meins" : ""}">
+      <span class="swName"><i style="background:${j.farbe}"></i><span><b>${j.name} <em>v${j.version}</em></b><small>${j.anbieter} · ${j.abonnenten}/${j.plaetze} ${t("Abos")}</small></span></span>
+      <span class="mono">+${String(j.vorrang).replace(".", ",")}</span><span class="mono">${fp(j.gebuehr)}/${t("Arbeiter")}</span>
+      ${j.ownerId === myId ? `<span class="meta">${t("deine")}</span>` : abo === j.id ? `<button class="mini" data-jobabo="">${t("Kündigen")}</button>`
+        : `<button class="mini" data-jobabo="${j.id}" ${j.abonnenten >= j.plaetze ? "disabled" : ""}>${t("Abonnieren")}</button>`}</div>`).join("")}</div>`
+      : `<div class="note">${t("Noch keine Jobbörse fertig.")}</div>`}`;
+}
 function softwareRendern(state, me, myId) {
   const liste = state.software || [];
   const MOD = state.swModule || {}, cfg = state.swCfg || {};
@@ -5897,7 +6003,7 @@ function softwareRendern(state, me, myId) {
       </div>`).join("")}
     </div>
     <div class="note" style="margin-top:6px">„Wert“ ist ${SW_BAEUME_NAME(state, meineBr)} gerechnet und mit dem Stadtportal verglichen: Tempo der Module für deine Waren × (1 − Gebühr), Preisspielraum, Werbemodul, Ruf und Einrichtung. Genau so entscheiden auch die Bots — jeder aus Sicht seiner Branche — und wechseln ab 5 % Vorsprung.</div>`;
-  let bau = "";
+  let bau = null;
   if (binSoftware) {
     const e = { name: eigene?.name ?? "", farbe: eigene?.farbe ?? (state.players?.[myId]?.color || "#60a5fa"),
       einrichtung: eigene?.einrichtung ?? 400, gebuehr: eigene?.gebuehr ?? 2, werbeAbo: eigene?.werbeAbo ?? 150, steuerAbo: eigene?.steuerAbo ?? (state.steuerAboCfg?.START ?? 40), anzeigenPreis: eigene?.anzeigenPreis ?? 80, ...swEntwurf };
@@ -5967,20 +6073,36 @@ function softwareRendern(state, me, myId) {
            <button class="tmHaupt" id="swEntwickeln" ${nichtsNeu ? "disabled" : ""}>
              <span>Version ${version} entwickeln</span><small>${epSumme} EP${lizenz ? ` · Lizenz ${fmt(lizenz)}` : ""} · Vorrat ${me.swEp || 0} EP · ein Studio schafft 1 EP/s</small></button>`;
     }
-    bau = `<div class="sec" style="margin-top:16px">Dein Shop-System</div>
+    const kennzahlen = `<div class="sec">Dein Shop-System</div>
       ${eigene ? `<div class="swZahlen">
           <div><b>${eigene.version >= 1 ? "v" + eigene.version : "—"}</b><span>Version</span></div>
           <div><b>${eigene.kunden}/${eigene.plaetze ?? 0}</b><span>Kunden / Plätze</span></div>
           <div><b>${eigene.ruf}</b><span>Ruf</span></div>
           <div><b style="color:var(--up)">${fmt(eigene.einnahmen10 || 0)}</b><span>Einnahmen 10 min</span></div>
         </div>
-        <div class="note" style="margin:-4px 0 10px">Markenwert <b>${fmt(eigene.markenwert || 0)}</b> — zählt zum Firmenwert und Aktienkurs (Einnahmen der letzten 10 min × ${cfg.markenwert ?? 2}).</div>` : `<div class="note">Lege Name und Preise fest, dann entwickelst du Version 1 im Entwicklerstudio.</div>`}
-      ${felder}${eigene ? swDesignHtml(state, eigene) : ""}${eigene ? leitDesignHtml(state, eigene) : ""}${entw}${eigene ? paintHtml(state, me, eigene) : ""}${eigene ? boerseAppHtml(state, me, eigene) : ""}`;
-    if (eigene) sfSchriftenLaden();
+        <div class="note" style="margin:-4px 0 10px">Markenwert <b>${fmt(eigene.markenwert || 0)}</b> — zählt zum Firmenwert und Aktienkurs (Einnahmen der letzten 10 min × ${cfg.markenwert ?? 2}).</div>` : `<div class="note">Lege Name und Preise fest, dann entwickelst du Version 1 im Entwicklerstudio.</div>`}`;
+    const hinweisErst = `<div class="note">Erst brauchst du ein eigenes Shop-System — lege es im Reiter „Mein System“ an.</div>`;
+    bau = {
+      system: kennzahlen + felder,
+      entwicklung: eigene ? entw : hinweisErst,
+      design: eigene ? swDesignHtml(state, eigene) + leitDesignHtml(state, eigene) : hinweisErst,
+      produkte: eigene ? buergerAppHtml(state, me, eigene) + jobboerseHtml(state, me, eigene) + boerseAppHtml(state, me, eigene) + paintHtml(state, me, eigene) : hinweisErst,
+    };
+    if (eigene && SW_REITER === "design") sfSchriftenLaden();
   }
   /* Nur neu setzen, wenn sich etwas geändert hat — sonst liefen Holo- und
    * Glanz-Animation der Vorschau jede Sekunde von vorn. */
-  const body = document.getElementById("softwarebody"), html = tabelle + werbenetzHtml(state, myId, binSoftware) + bau;
+  /* Reiter: Markt für alle; für Software-Firmen zusätzlich die eigenen Werkzeuge.
+   * Vorher stand alles untereinander auf einer sehr langen Seite. */
+  const reiter = [["markt", "Markt"], ...(bau ? [["system", "Mein System"], ["entwicklung", "Entwicklung"], ["design", "Design"], ["produkte", "Produkte"]] : [])];
+  if (!reiter.some(([k]) => k === SW_REITER)) SW_REITER = "markt";
+  const leiste = reiter.length > 1 ? `<div class="swReiterLeiste" role="tablist">${reiter.map(([k, n]) =>
+    `<button type="button" role="tab" class="${k === SW_REITER ? "on" : ""}" data-swreiter="${k}" aria-selected="${k === SW_REITER}">${t(n)}${k === "entwicklung" && eigene?.entwicklung ? " ●" : ""}</button>`).join("")}</div>` : "";
+  const ueberblick = bau ? swUeberblick(state, me, myId, eigene) : "";
+  const inhalt = SW_REITER === "markt"
+    ? tabelle + stadtSoftwareMarktHtml(state, me, myId) + werbenetzHtml(state, myId, binSoftware)
+    : bau[SW_REITER];
+  const body = document.getElementById("softwarebody"), html = ueberblick + leiste + `<div class="swReiterInhalt">${inhalt}</div>`;
   if (body._sig !== html) { body._sig = html; body.innerHTML = html; }
 }
 document.getElementById("p-software").addEventListener("input", e => {
@@ -6016,6 +6138,20 @@ document.getElementById("p-software").addEventListener("input", e => {
   }
 });
 document.getElementById("p-software").addEventListener("click", e => {
+  const rt = e.target.closest("[data-swreiter]");
+  if (rt) { SW_REITER = rt.dataset.swreiter; try { localStorage.setItem("cs_swReiter", SW_REITER); } catch {} const S = store.get(); softwareRendern(S.state, S.me, S.myId); return; }
+  const ja = e.target.closest("[data-jobabo]");
+  if (ja) return act("jobAbo", { id: ja.dataset.jobabo || null });
+  for (const [knopf, ev, felder, entwurf, ok] of [
+    ["#appSpeichern", "appEinstellen", () => ({ name: document.getElementById("appName")?.value, preis: +document.getElementById("appPreis")?.value }), appEntwurf, "Bürger-App gespeichert"],
+    ["#jobSpeichern", "jobEinstellen", () => ({ name: document.getElementById("jobName")?.value, gebuehr: +document.getElementById("jobGeb")?.value }), jobEntwurf, "Jobbörse gespeichert"]])
+    if (e.target.closest(knopf)) return socket.emit(ev, felder(), r => {
+      if (r?.error) return toast(r.error, true);
+      for (const k of Object.keys(entwurf)) delete entwurf[k];
+      toast(t(ok)); render(store.get());
+    });
+  for (const [knopf, ev] of [["#appEntwickeln", "appEntwickeln"], ["#jobEntwickeln", "jobEntwickeln"]])
+    if (e.target.closest(knopf)) return socket.emit(ev, {}, r => { if (r?.error) return toast(r.error, true); toast(`${t("Entwicklung gestartet")}: ${r.ep} EP`); render(store.get()); });
   if (e.target.closest("#mpSpeichern")) {
     socket.emit("paintEinstellen", { name: document.getElementById("mpName")?.value, preis: document.getElementById("mpPreis")?.value }, r => {
       if (r?.error) return toast(r.error, true);
@@ -6763,6 +6899,16 @@ document.addEventListener("keydown", e => { if (e.key === "Escape" && MAL.offen)
 
 /* Löhne (Sandkasten, Etappe 2): drei Stufen, höher gibt Vorrang bei knappen
  * Arbeitern. Eine Senkung greift erst nach der Kündigungsfrist. */
+/* Jobbörse im Firma-Panel: eigenes Abo und die Angebote der Stadt */
+function jobAboHtml(me, state) {
+  const jobs = (state.jobboerse || []).filter(j => j.version >= 1 && j.ownerId !== store.get().myId);
+  const abo = jobs.find(j => j.id === me.lohn?.jobAbo);
+  if (me.lohn?.vorrang && !abo) return `<div class="kzrow"><span>${t("Jobbörse")}</span><b>${t("eigene")} · +${String(me.lohn.vorrang).replace(".", ",")} ${t("Vorrang")}</b></div>`;
+  if (!jobs.length) return "";
+  return `<div class="kzrow"><span>${t("Jobbörse")} <span class="meta">· ${t("Vorrang ohne höheren Lohn")}</span></span><b>${abo ? `${abo.name} · +${String(me.lohn.vorrang).replace(".", ",")}` : t("kein Abo")}</b></div>
+    <div class="fJobs">${jobs.map(j => `<button class="${abo?.id === j.id ? "on" : ""}" data-jobabo="${abo?.id === j.id ? "" : j.id}" ${abo?.id !== j.id && j.abonnenten >= j.plaetze ? "disabled" : ""}>
+      <b>${j.name} v${j.version}</b><span>+${String(j.vorrang).replace(".", ",")} · ${fp(j.gebuehr)}/${t("Arbeiter")}${abo?.id === j.id ? ` · ${t("kündigen")}` : ""}</span></button>`).join("")}</div>`;
+}
 function lohnHtml(me, state) {
   const L = me.lohn, S = state.stadt;
   if (!L || !S) return "";
@@ -6772,6 +6918,7 @@ function lohnHtml(me, state) {
     <div class="fLohn">${stufen.map(([k, v]) => `<button class="${k === L.stufe ? "on" : ""}${k === L.wunsch ? " bald" : ""}" data-lohn="${k}">
       <b>${t(v.name)}</b><span>${v.lohn} $ ${t("je Arbeiter/min")}</span></button>`).join("")}</div>
     <div class="kzrow"><span>${t("Lohnkosten")}</span><b>${fmt(kosten)}/min</b></div>
+    ${jobAboHtml(me, state)}
     <div class="kzrow"><span>${t("Insgesamt gezahlt")}</span><b>${fmt(L.gesamt)}</b></div>
     ${L.wunsch ? `<div class="meta">${t("Senkung auf")} ${t(S.loehne[L.wunsch].name)} ${t("in")} ${rest} s (${t("Kündigungsfrist")}).</div>` : ""}
     ${L.verzug ? `<div class="meta stMinus">${t("Löhne nicht voll bezahlt — du bekommst zuletzt Arbeiter, bis du wieder zahlst.")}</div>` : ""}
@@ -6781,7 +6928,7 @@ function lohnHtml(me, state) {
 function stadtLexikon() {
   const S = store.get().state?.stadt;
   if (!S) return "";
-  return `<details class="lexGruppe" data-lex="lex-stadt" ${LEX_OFFEN.has("lex-stadt") ? "open" : ""}><summary>${t("Stadt & Arbeit")}<span>4</span></summary>
+  return `<details class="lexGruppe" data-lex="lex-stadt" ${LEX_OFFEN.has("lex-stadt") ? "open" : ""}><summary>${t("Stadt & Arbeit")}<span>5</span></summary>
     <div class="sec">${t("Wohnblöcke der Stadt")}</div>
     <table><tr><th>${t("Stufe")}</th><th>${t("Plätze")}</th><th>${t("Kosten")}</th><th>${t("ab Einwohnern")}</th></tr>
     ${S.stufen.map(x => `<tr><td>${t(x.name)}</td><td>${x.plaetze}</td><td>${fmt(x.kosten)}</td><td>${x.ab || "—"}</td></tr>`).join("")}</table>
@@ -6790,6 +6937,8 @@ function stadtLexikon() {
     <div class="sec">${t("Löhne")}</div>
     <table>${Object.values(S.loehne).map(l => `<tr><td>${t(l.name)}</td><td style="text-align:right">${l.lohn} $ ${t("je Arbeiter/min")}</td></tr>`).join("")}</table>
     <p class="meta">${t("30 % der Löhne gehen als Lohnsteuer und Miete an die Stadt, 20 % ins Bürgerdepot.")}</p>
+    <div class="sec">${t("Bürger-Apps und Jobbörse")}</div>
+    <p class="meta">${t("Bürger-App: bis 75 % der Einwohner zahlen ein Abo je Minute, 150 Nutzer je Rechenzentrums-Stufe des Anbieters. Jobbörse: Vorrang wie +0,3 bis +0,7 Lohnstufen gegen eine Gebühr je Arbeiter, 3 Abos je Rechenzentrums-Stufe.")}</p>
     <div class="sec">${t("Stadtanleihen")}</div>
     <p class="meta">${fmt(S.anleihe.betrag)} · ${String(S.anleihe.zins * 100).replace(".", ",")} %/min · ${S.anleihe.laufzeit / 60} min · ${t("höchstens")} ${fmt(S.anleihe.max)} ${t("Schulden")}</p>
   </details>`;
@@ -6841,6 +6990,7 @@ function stadtHtml(S, F, me = {}) {
     <div class="kzrow"><span>${t("Löhne aller Firmen")}</span><b>${fmt(A.lohnsumme)}/min</b></div>
     <div class="kzrow"><span>${t("Lohnsteuer + Miete an die Stadt")} <span class="meta">· ${Math.round((S.anteile.steuer + S.anteile.miete) * 100)} % ${t("der Löhne")}</span></span><b>${fmt(A.lohnsteuer + A.miete)}/min</b></div>
     ${A.stuetze ? `<div class="kzrow"><span>${t("Stütze für Arbeitslose")}</span><b class="stMinus">−${fmt(A.stuetze)}/min</b></div>` : ""}
+    ${S.appNutzer ? `<div class="kzrow"><span>${t("Bürger-Apps")} <span class="meta">· ${t("ab der Hälfte der Einwohner: Digitale Stadt +5 %")}</span></span><b>${S.appNutzer} ${t("Nutzer")}</b></div>` : ""}
     ${S.fach ? `<div class="kzrow"><span>${t("Fachkräfte")} <span class="meta">· ${Math.round(S.fach.quote * 100)} % ${t("der Arbeitenden, mehr durch die Stadtbibliothek")}</span></span><b>${S.fach.besetzt} / ${S.fach.bedarf} ${t("Stellen")}</b></div>` : ""}
     ${S.schulden ? `<div class="kzrow"><span>${t("Stadtanleihen")} <span class="meta">· ${t("gezeichnet, an der Stadtbank")}</span></span><b class="stMinus">${fmt(S.schulden)}</b></div>` : ""}
     ${wohnAuftraegeHtml(S, me)}
@@ -10469,6 +10619,10 @@ const TUT_BUCH = [
       <p>Neue Bewohner ziehen nur zu, wenn es <b>freie Stellen</b> und freie Wohnungen gibt — und wenn
       Strom, Wasser und Lebensmittel zu kaufen sind. Fehlt der Stadt Geld, gibt sie
       <b>Stadtanleihen</b> aus, die du an der Stadtbank zeichnen kannst.</p>
+      <div class="kasten"><div class="t">Software für die Stadt</div>
+      Software-Firmen entwickeln <b>Bürger-Apps</b> (die Einwohner zahlen ein Abo je Minute) und
+      <b>Jobbörsen</b>. Eine Jobbörse abonnierst du im Firma-Panel: Sie gibt dir bei knappen
+      Arbeitern Vorrang, günstiger als ein höherer Lohn.</div>
       <div class="merk">Mehr Einwohner heißt mehr Kundschaft: Die Nachfrage in den Läden wächst mit
       der Stadt, bis ×1,6.</div>`,
     en: { t: "The city grows", lead: "Residents, workers and wages", html: `
@@ -10489,6 +10643,10 @@ const TUT_BUCH = [
       <p>New residents only move in when there are <b>open jobs</b> and free homes — and when power,
       water and food are for sale. If the city runs short of money it issues <b>city bonds</b>
       you can buy at the city bank.</p>
+      <div class="kasten"><div class="t">Software for the city</div>
+      Software companies develop <b>citizen apps</b> (residents pay a subscription per minute) and
+      <b>job boards</b>. You subscribe to a job board in the company panel: it gives you priority when
+      workers are scarce, cheaper than higher wages.</div>
       <div class="merk">More residents means more customers: shop demand grows with the city, up to ×1.6.</div>` } },
 
   { t: "Werbeagentur", lead: "Höhere Preise ohne Tempoverlust",
@@ -11004,6 +11162,8 @@ const kap = k => (SPRACHE === "en" && k.en) ? { ...k, ...k.en } : k;
 document.getElementById("firmabody").addEventListener("click", e => {
   const lb = e.target.closest("[data-lohn]");
   if (lb) return act("lohnStufe", { stufe: lb.dataset.lohn });
+  const jb = e.target.closest("[data-jobabo]");
+  if (jb) return act("jobAbo", { id: jb.dataset.jobabo || null });
   if (e.target.closest("[data-malen]")) return malOeffnen();
   const sa = e.target.closest("[data-shopauf]");
   if (sa) { const [x, y] = sa.dataset.shopauf.split(",").map(Number); return shopOeffnen(x, y); }
