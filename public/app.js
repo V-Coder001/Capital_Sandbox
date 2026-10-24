@@ -1549,7 +1549,10 @@ function zeigeAuswertung(state) {
   document.getElementById("winMein").innerHTML = ich ? `<div class="winMeinBox${ich.sieger ? " sieg" : ""}">
       <span class="winMeinPlatz">${ichIdx + 1}.</span>
       <div><b>${ich.sieger ? "Glückwunsch — du hast gewonnen!" : `Dein Platz: ${ichIdx + 1} von ${r.zeilen.length}`}</b>
-        <span class="meta">${fmt(ich.netWorth)} Nettovermögen · ${fmt(ich.umsatz)} Umsatz · ${ich.gebaeude} Gebäude</span></div></div>` : "";
+        <span class="meta">${fmt(ich.netWorth)} Nettovermögen · ${fmt(ich.umsatz)} Umsatz · ${ich.gebaeude} Gebäude${r.stadt ? ` · ${ich.arbeiter} Arbeiter` : ""}</span></div></div>` : "";
+  if (r.stadt) document.getElementById("winMein").innerHTML += `<div class="winStadt"><b>${r.stadt.einwohner.toLocaleString("de-DE")}</b>
+      <span>${t("Einwohner — die Stadt ist in dieser Runde von")} ${r.stadt.start} ${t("auf")} ${r.stadt.einwohner.toLocaleString("de-DE")} ${t("gewachsen")}
+      · ${r.stadt.bloecke.map((n, i) => n ? `${n}× ${t(r.stadt.stufen[i])}` : "").filter(Boolean).join(", ")}</span></div>`;
   /* Endstand: Balken relativ zum Sieger */
   const maxNw = Math.max(1, ...r.zeilen.map(z => z.netWorth));
   document.getElementById("wintable").innerHTML = r.zeilen.map((z, i) => `
@@ -1997,10 +2000,24 @@ const EN = {
   "Wartet auf Geld": "Waiting for money", "Kasse bleibt über": "treasury stays above",
   "Genug freie Wohnungen": "Enough free homes", "Kein Bauland mehr frei": "No building land left",
   "Miete an die Stadt": "Rent to the city", "je Einwohner und Minute": "per resident and minute",
+  "Belegschaft": "Staff", "pausiert — Arbeiter frei": "paused — workers released", "steht still (unter 25 %)": "stopped (below 25 %)", "Leistung": "output",
+  "Zu wenig Arbeiter": "Not enough workers",
+  "Die Stadt hat gerade nicht genug Leute. Höhere Löhne (Firma-Panel) holen sie von anderen Firmen — oder warte, bis neue Bewohner zuziehen.": "The city is short of people right now. Higher wages (company panel) draw them from other companies — or wait for new residents.",
+  "Löhne": "Wages", "Arbeiter": "workers", "Sparlohn": "Low wage", "Tariflohn": "Standard wage", "Spitzenlohn": "Top wage", "je Arbeiter/min": "per worker/min",
+  "Lohnkosten": "Wage costs", "Insgesamt gezahlt": "Paid in total", "Senkung auf": "Cut to", "in": "in", "Kündigungsfrist": "notice period",
+  "Löhne nicht voll bezahlt — du bekommst zuletzt Arbeiter, bis du wieder zahlst.": "Wages not paid in full — you get workers last until you pay again.",
+  "Sind Arbeiter knapp, gehen sie zuerst zur Firma mit dem höchsten Lohn. Vom Lohn gehen 30 % als Steuer und Miete an die Stadt — damit baut sie Wohnungen.": "When workers are scarce they go to the company paying most. 30 % of wages go to the city as tax and rent — it builds housing with that.",
+  "Arbeitsmarkt": "Labour market", "der Einwohner arbeiten": "of residents work", "Beschäftigt / Stellen": "Employed / jobs", "beschäftigt": "employed", "Stellen offen": "jobs open",
+  "arbeitslos": "unemployed", "Stellen": "jobs", "Löhne aller Firmen": "Wages of all companies", "Lohnsteuer + Miete an die Stadt": "Wage tax + rent to the city", "der Löhne": "of wages",
+  "Stütze für Arbeitslose": "Benefits for the unemployed", "Arbeit": "Work",
+  "Einwohner — die Stadt ist in dieser Runde von": "residents — this round the city grew from", "auf": "to", "gewachsen": "",
   "Nachfrage in den Läden": "Demand in shops", "wächst mit der Einwohnerzahl": "grows with the population", "Einw.": "res.",
   "der Verkäufer gibt sie vom Erlös ans Finanzamt ab": "the seller pays it from sale proceeds to the tax office",
 };
 const t = de => SPRACHE === "en" ? (EN[de] ?? de) : de;
+/* Gleiche Funktion unter anderem Namen — für Stellen, an denen eine Kachel-
+ * Variable `t` die Übersetzung verdeckt (Gebäudekarte). */
+const tUe = t;
 /* Feste Beschriftungen im Markup übersetzen. Sie stehen als deutscher Text
  * zwischen den Tags — genau die Form, die auch als Schlüssel dient. Ein Lauf
  * über die Textknoten spart es, 166 Stellen einzeln mit einem Attribut zu
@@ -2689,7 +2706,7 @@ async function oeffentlicheLaden() {
         <span class="hofplatz p${i + 1}">${i + 1}</span>
         <span class="hofname"><b>${e.name}</b>${e.sieger ? " 👑" : ""}
           <span class="meta">${modusName[e.modus] || e.modus} · ${e.datum}</span></span>
-        <span class="hofwert"><b>${fmt(e.nw)}</b><span class="meta">in ${e.minuten} min</span></span>
+        <span class="hofwert"><b>${fmt(e.nw)}</b><span class="meta">in ${e.minuten} min${e.einwohner ? ` · ${e.einwohner.toLocaleString("de-DE")} ${t("Einw.")}` : ""}</span></span>
       </div>`).join("");
   }
   function statusZeichnen() {
@@ -5290,12 +5307,20 @@ function clickTile(e) {
     if (bt.studio) kennzahlen.push(["Entwickelt", `${(bt.studio.ep * lvlMult).toFixed(2)} EP/s`, "Entwicklungspunkte"],
       ["Verbraucht", Object.entries(bt.studio.in).map(([g, n]) => `${(n * lvlMult).toFixed(2)} ${gname(g)}`).join(" + "), "pro Sekunde"]);
     if (bt.rz) kennzahlen.push(["Plätze", `${bt.rz.plaetze * lvl}`, "Marktplätze + Steuerungen"], ["Verbraucht", `${(bt.rz.in.strom * lvlMult).toFixed(2)} ${gname("strom")}`, "pro Sekunde"]);
+    /* Belegschaft (Sandkasten): mit 3 von 5 Arbeitern läuft das Gebäude zu 60 % */
+    const belegt = store.get().state.stadt && t.arbeiterSoll ? { ist: t.arbeiter ?? t.arbeiterSoll, soll: t.arbeiterSoll } : null;
+    if (belegt) {
+      const q = belegt.ist / belegt.soll;
+      kennzahlen.push([tUe("Belegschaft"), `${belegt.ist}/${belegt.soll}`, t.paused ? tUe("pausiert — Arbeiter frei") : q < .25 ? tUe("steht still (unter 25 %)") : `${Math.round(Math.min(1, q) * 100)} % ${tUe("Leistung")}`]);
+    }
     const mehr = [];
     if (bt.out && lvl > 1) mehr.push(`Basisrate ${bt.rate}/s × ${lvlMult.toFixed(1)} durch Stufe ${lvl}.`);
     if (bt.boosts) mehr.push(`<b>Boost:</b> ${bt.boosts.map(r => gname(r)).join(" + ")} im Lager bringen je +75 % Tempo und werden dabei verbraucht.`);
     if (bt.retail) mehr.push(`Dein Preis bestimmt das Tempo: Ø-Kurs = volle Rate, teurer = langsamer, billiger = schneller (max. ×2).`
       + ((me.ad?.boost || 1) > 1.001 ? ` <b style="color:var(--accent2)">Werbung aktiv: bis ${Math.round((me.ad.boost - 1) * 100)} % über Ø-Kurs ohne Tempoverlust.</b>` : ""));
     if (t.lien) mehr.push("Auf dem Gebäude liegt ein Pfandrecht — Abreißen ist gesperrt, bis die Anleihe bedient ist.");
+    if (belegt && belegt.ist < belegt.soll && mine && !t.paused)
+      mehr.push(`<b>${tUe("Zu wenig Arbeiter")}:</b> ${tUe("Die Stadt hat gerade nicht genug Leute. Höhere Löhne (Firma-Panel) holen sie von anderen Firmen — oder warte, bis neue Bewohner zuziehen.")}`);
     if (imBauNoch) mehr.push(`Anlage in Arbeit: Das Gebäude produziert erst nach der Bauzeit. Sein Wert zählt aber schon jetzt voll zum Firmenwert — Bauen senkt den Wert deiner Firma nicht.`);
     const nebenKnoepfe = [
       (bt.retail || bt.proc) && mine ? `<button class="tmKlein" id="pause">${t.paused ? "▶ Fortsetzen" : "❚❚ Pausieren"}</button>` : "",
@@ -6703,12 +6728,29 @@ function malEingabe(e) {
 }
 document.addEventListener("keydown", e => { if (e.key === "Escape" && MAL.offen) malSchliessen(); });
 
+/* Löhne (Sandkasten, Etappe 2): drei Stufen, höher gibt Vorrang bei knappen
+ * Arbeitern. Eine Senkung greift erst nach der Kündigungsfrist. */
+function lohnHtml(me, state) {
+  const L = me.lohn, S = state.stadt;
+  if (!L || !S) return "";
+  const stufen = Object.entries(S.loehne);
+  const kosten = L.arbeiter * S.loehne[L.stufe].lohn, rest = L.ab ? Math.max(0, L.ab - state.tick) : 0;
+  return `<div class="sec">${t("Löhne")} <span class="meta">· ${L.arbeiter} / ${L.soll} ${t("Arbeiter")}</span></div>
+    <div class="fLohn">${stufen.map(([k, v]) => `<button class="${k === L.stufe ? "on" : ""}${k === L.wunsch ? " bald" : ""}" data-lohn="${k}">
+      <b>${t(v.name)}</b><span>${v.lohn} $ ${t("je Arbeiter/min")}</span></button>`).join("")}</div>
+    <div class="kzrow"><span>${t("Lohnkosten")}</span><b>${fmt(kosten)}/min</b></div>
+    <div class="kzrow"><span>${t("Insgesamt gezahlt")}</span><b>${fmt(L.gesamt)}</b></div>
+    ${L.wunsch ? `<div class="meta">${t("Senkung auf")} ${t(S.loehne[L.wunsch].name)} ${t("in")} ${rest} s (${t("Kündigungsfrist")}).</div>` : ""}
+    ${L.verzug ? `<div class="meta stMinus">${t("Löhne nicht voll bezahlt — du bekommst zuletzt Arbeiter, bis du wieder zahlst.")}</div>` : ""}
+    <div class="meta" style="padding-bottom:8px">${t("Sind Arbeiter knapp, gehen sie zuerst zur Firma mit dem höchsten Lohn. Vom Lohn gehen 30 % als Steuer und Miete an die Stadt — damit baut sie Wohnungen.")}</div>`;
+}
 /* Stadtübersicht (nur Sandkasten): Einwohner, Wohnungen, Zufriedenheit und
  * was die Stadt gerade baut. Steht oben im Finanzamt, weil die Stadtkasse den
  * Wohnbau bezahlt. */
 function stadtHtml(S, F) {
   if (!S) return "";
   const vz = n => (n > 0 ? "+" : n < 0 ? "−" : "±") + Math.abs(Math.round(n * 100)) + " %";
+  const A = S.arbeit;
   const bewegung = S.wegzug ? `−${S.wegzug} ${t("Wegzug letzte Minute")}` : `+${S.zuzug} ${t("Zuzug letzte Minute")}`;
   const v = S.verlauf || [], emax = Math.max(...v.map(p => p.e), 1), emin = Math.min(...v.map(p => p.e), emax);
   const spanne = Math.max(1, emax - emin), lin = v.length > 1
@@ -6728,7 +6770,12 @@ function stadtHtml(S, F) {
       <div class="meta stAchse"><span>${emin.toLocaleString("de-DE")}</span><span>${t("Einwohner im Verlauf der Runde")}</span><span>${emax.toLocaleString("de-DE")}</span></div>` : ""}
     <div class="stTeile">${(S.teile || []).map(x => `<div class="kzrow"><span>${t(x.name)} <span class="meta">· ${t(x.text)}</span></span><b class="${x.wirkung < 0 ? "stMinus" : x.wirkung > 0 ? "stPlus" : "meta"}">${vz(x.wirkung)}</b></div>`).join("")}</div>
     <div class="kzrow"><span>${t("Wohnbau")} <span class="meta">· ${t("Kasse bleibt über")} ${fmt(S.kasseMin)}</span></span><b class="meta">${status}</b></div>
-    <div class="kzrow"><span>${t("Miete an die Stadt")} <span class="meta">· ${String(S.mieteJe).replace(".", ",")} $ ${t("je Einwohner und Minute")}</span></span><b>${fmt(S.miete)}/min</b></div>
+    <div class="sec">${t("Arbeitsmarkt")} <span class="meta">· ${Math.round(S.quote * 100)} % ${t("der Einwohner arbeiten")}</span></div>
+    <div class="stArbeit"><div class="stArbeitBalken" title="${t("Beschäftigt / Stellen")}"><i style="width:${Math.min(100, A.beschaeftigt / Math.max(1, A.bedarf, A.faehig) * 100).toFixed(1)}%"></i>${A.bedarf > A.faehig ? `<em style="left:${(A.faehig / A.bedarf * 100).toFixed(1)}%"></em>` : ""}</div>
+      <div class="meta stAchse"><span>${A.beschaeftigt.toLocaleString("de-DE")} ${t("beschäftigt")}</span><span>${A.offen ? `${A.offen} ${t("Stellen offen")}` : `${A.arbeitslos} ${t("arbeitslos")}`}</span><span>${A.bedarf.toLocaleString("de-DE")} ${t("Stellen")}</span></div></div>
+    <div class="kzrow"><span>${t("Löhne aller Firmen")}</span><b>${fmt(A.lohnsumme)}/min</b></div>
+    <div class="kzrow"><span>${t("Lohnsteuer + Miete an die Stadt")} <span class="meta">· ${Math.round((S.anteile.steuer + S.anteile.miete) * 100)} % ${t("der Löhne")}</span></span><b>${fmt(A.lohnsteuer + A.miete)}/min</b></div>
+    ${A.stuetze ? `<div class="kzrow"><span>${t("Stütze für Arbeitslose")}</span><b class="stMinus">−${fmt(A.stuetze)}/min</b></div>` : ""}
     <div class="kzrow"><span>${t("Nachfrage in den Läden")} <span class="meta">· ${t("wächst mit der Einwohnerzahl")}</span></span><b>×${String(S.nachfrage).replace(".", ",")}</b></div>
     ${(S.log || []).length ? `<div class="stLog">${S.log.slice(0, 4).map(l => `<div class="meta">Min ${Math.floor(l.tick / 60)} · ${l.text}</div>`).join("")}</div>` : ""}`;
 }
@@ -9750,6 +9797,7 @@ function render({ state, me, myId, chat, room }) {
         <div><span>Zinserträge</span><b class="plus">${geld(me.fin?.zinsErtrag || 0)}</b></div>
         <div><span>Zinsausgaben</span><b class="${me.fin?.zinsAufwand ? "minus" : ""}">${me.fin?.zinsAufwand ? "− " : ""}${geld(me.fin?.zinsAufwand || 0)}</b></div>
       </div>
+      ${lohnHtml(me, state)}
       <div class="sec">Deine Aktie</div>
       <div class="fAktie">
         <div><span>Kurs</span><b>${fk(me.kurs ?? 0)}</b></div>
@@ -10833,6 +10881,8 @@ const kap = k => (SPRACHE === "en" && k.en) ? { ...k, ...k.en } : k;
 
 /* Ausschüttung im Firmen-Panel festlegen */
 document.getElementById("firmabody").addEventListener("click", e => {
+  const lb = e.target.closest("[data-lohn]");
+  if (lb) return act("lohnStufe", { stufe: lb.dataset.lohn });
   if (e.target.closest("[data-malen]")) return malOeffnen();
   const sa = e.target.closest("[data-shopauf]");
   if (sa) { const [x, y] = sa.dataset.shopauf.split(",").map(Number); return shopOeffnen(x, y); }

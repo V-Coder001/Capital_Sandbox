@@ -5,6 +5,22 @@
  * `art`: "neu" (neue Funktion), "besser" (Verbesserung), "fix" (Fehler behoben). */
 window.UPDATES = [
   {
+    id: "2026-10-24b", datum: "2026-10-24",
+    titel: { de: "Arbeitskräfte: Jedes Gebäude braucht Arbeiter", en: "Workforce: every building needs workers" },
+    punkte: [
+      { art: "neu", de: "Im Sandkasten braucht jedes Gebäude Arbeiter aus der Stadt — je teurer, desto mehr (eine Farm 5, ein Stahlwerk 24), jede Ausbaustufe 50 % mehr. Mit 3 von 5 Arbeitern läuft es zu 60 %, unter 25 % steht es still. Pausierte Gebäude geben ihre Leute frei.",
+        en: "In sandbox mode every building needs workers from the city — the pricier, the more (a farm 5, a steel mill 24), 50 % more per upgrade. With 3 of 5 workers it runs at 60 %, below 25 % it stops. Paused buildings release their staff." },
+      { art: "neu", de: "Löhne: Jede Firma wählt Spar-, Tarif- oder Spitzenlohn (4/6/9 $ je Arbeiter und Minute). Sind Arbeiter knapp, gehen sie zuerst zum besten Lohn. Eine Senkung greift erst nach 60 s Kündigungsfrist.",
+        en: "Wages: each company picks low, standard or top wage (4/6/9 $ per worker and minute). When workers are scarce they go to the best payer first. A cut only takes effect after a 60 s notice period." },
+      { art: "neu", de: "Vom Lohn gehen 15 % Lohnsteuer und 15 % Miete an die Stadt, 20 % sparen die Bewohner im Bürgerdepot. Arbeitslose bekommen Stütze aus der Stadtkasse.",
+        en: "Of each wage, 15 % wage tax and 15 % rent go to the city and residents save 20 % in the citizens' depot. The unemployed receive benefits from the city treasury." },
+      { art: "besser", de: "Die Stadt wächst mit der Wirtschaft: Neue Bewohner ziehen nur zu, wenn Stellen offen sind. Viele Arbeitslose senken die Zufriedenheit.",
+        en: "The city grows with the economy: new residents only move in when jobs are open. High unemployment lowers satisfaction." },
+      { art: "neu", de: "Belegschaft auf der Gebäudekarte, Löhne im Firma-Panel, Arbeitsmarkt in der Stadtübersicht. Endbildschirm und Bestenliste zeigen die Einwohner, dazu die Auszeichnung „Größter Arbeitgeber“.",
+        en: "Staff on the building card, wages in the company panel, labour market in the city overview. End screen and leaderboard show the population, plus the “Largest employer” award." },
+    ]
+  },
+  {
     id: "2026-10-24a", datum: "2026-10-24",
     titel: { de: "Die Stadt wächst: Einwohner und Wohnbau", en: "The city grows: residents and housing" },
     punkte: [
