@@ -9503,8 +9503,18 @@ async function spawnBot(cfg, lvl = BOT_LEVELS[BOT_LEVEL_DEFAULT]) {
     st = botMap ? { ...basis, ...x, map: botMap } : { ...basis, ...x };
   });
   let botMeta = null;   // Registrierungsdaten (Tuning-Tabelle, Schwellen) für die Rennlogik
-  s.on("connect", () => s.emit("register", { name: cfg.name, color: cfg.color, industry: cfg.industry, botToken: BOT_TOKEN, familieWunsch: cfg.polizei ? "polizei" : cfg.kartellFamilie },
-    res => { if (res?.ok) { myId = res.you; botMeta = res; } }));
+  /* Nach einem Verbindungsabriss baut socket.io die Verbindung selbst wieder
+   * auf und feuert "connect" erneut. Ein zweites "register" scheiterte dann an
+   * "Name vergeben": Die neue Verbindung gehörte keinem Spieler, jede Aktion
+   * kam als "Nicht registriert" zurück, und der Bot stand für den Rest der
+   * Runde still — mit den paar Gebäuden, die er bis dahin hatte (gemessen:
+   * nie ein Online-Marktplatz). Wer schon eine Firma hat, meldet sich deshalb
+   * wie ein Browser über "rejoin" zurück. */
+  s.on("connect", () => {
+    if (myId) return s.emit("rejoin", { token: myId }, res => { if (res?.ok) botMeta = res; });
+    s.emit("register", { name: cfg.name, color: cfg.color, industry: cfg.industry, botToken: BOT_TOKEN, familieWunsch: cfg.polizei ? "polizei" : cfg.kartellFamilie },
+      res => { if (res?.ok) { myId = res.you; botMeta = res; } });
+  });
   /* Mit Zeitlimit: bleibt eine Bestätigung aus — etwa weil ein Handler sie
    * vergisst —, würde der Bot sonst an dieser Stelle für immer stehen bleiben
    * und den Rest seiner Runde nie erreichen. Lieber weitermachen. */
