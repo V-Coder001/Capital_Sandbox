@@ -2011,6 +2011,16 @@ const EN = {
   "arbeitslos": "unemployed", "Stellen": "jobs", "Löhne aller Firmen": "Wages of all companies", "Lohnsteuer + Miete an die Stadt": "Wage tax + rent to the city", "der Löhne": "of wages",
   "Stütze für Arbeitslose": "Benefits for the unemployed", "Arbeit": "Work",
   "Einwohner — die Stadt ist in dieser Runde von": "residents — this round the city grew from", "auf": "to", "gewachsen": "",
+  "Fachkräfte": "Skilled workers", "der Arbeitenden, mehr durch die Stadtbibliothek": "of the workforce, more via the city library",
+  "Stadtanleihen": "City bonds", "gezeichnet, an der Stadtbank": "subscribed, at the city bank",
+  "Baumaterial für die Stadt": "Building materials for the city", "15 % über Kurs, bezahlt sofort": "15 % above market, paid at once",
+  "noch": "", "danach kauft die Stadt den Rest anderswo": "s left, then the city buys the rest elsewhere", "Lager": "Stock", "Menge": "Qty", "Liefern": "Deliver",
+  "die Hälfte der Stellen hier verlangt Fachkräfte. Mehr bildet die Stadtbibliothek aus (Stadtprojekt).": "half the jobs here need skilled workers. The city library (city project) trains more.",
+  "Steuerungssoftware spart hier ein Viertel der Arbeiter.": "Control software saves a quarter of the workers here.",
+  "Stadt & Arbeit": "City & work", "Wohnblöcke der Stadt": "City housing", "Stufe": "Level", "Plätze": "Homes", "Kosten": "Cost", "ab Einwohnern": "from residents",
+  "Rund 1 Arbeiter je 250 $ Baukosten (2 bis 30), +50 % je Ausbaustufe. Leistung = Besetzung, unter 25 % Stillstand. Labor, Studio und Chipfabrik: die Hälfte Fachkräfte. Steuerungssoftware: −25 %.": "About 1 worker per $250 building cost (2 to 30), +50 % per upgrade. Output = staffing, below 25 % it stops. Lab, studio and chip factory: half skilled workers. Control software: −25 %.",
+  "30 % der Löhne gehen als Lohnsteuer und Miete an die Stadt, 20 % ins Bürgerdepot.": "30 % of wages go to the city as wage tax and rent, 20 % into the citizens' depot.",
+  "höchstens": "at most", "Schulden": "debt",
   "Nachfrage in den Läden": "Demand in shops", "wächst mit der Einwohnerzahl": "grows with the population", "Einw.": "res.",
   "der Verkäufer gibt sie vom Erlös ans Finanzamt ab": "the seller pays it from sale proceeds to the tax office",
 };
@@ -3308,13 +3318,27 @@ const wohnSprite = (stufe, v, nacht) => WOHNSPR[stufe + ":" + v + ":" + nacht] ?
  * Bei einem Ausbau bleibt das alte Haus stehen, bis der neue Block fertig ist. */
 function wohnMalen(t, sx, sy, st) {
   const wb = t.wohnblock, v = (t.x * 7 + t.y * 13) % WOHN_FARBEN.length, nacht = LICHT < .5;
-  const bau = wb.bis && st.tick < wb.bis, zeige = bau ? (wb.alt || 0) : wb.stufe;
+  const bau = (wb.bis && st.tick < wb.bis) || wb.auftrag, zeige = bau ? (wb.alt || 0) : wb.stufe;
   if (zeige) {
     const img = wohnSprite(zeige, v, nacht), oy = sy + TH / 2 - img.anker;
     schattenMalen(img, sx, sy + TH / 2 + 2, oy, WOHN_W, false, .35);
     cx.drawImage(img, sx - WOHN_BX, oy, WOHN_W, WOHN_H);
   }
   if (!bau) return;
+  if (wb.auftrag) {
+    /* Wartet auf Baumaterial: abgesteckter Bauplatz mit Ziegelpalette */
+    const { fw } = WOHN_GEO[wb.stufe], fy = sy + TH / 2 + fw / 2;
+    cx.save();
+    cx.strokeStyle = "rgba(251,191,36,.8)"; cx.lineWidth = 1; cx.setLineDash([2, 3]);
+    cx.beginPath(); cx.moveTo(sx, fy); cx.lineTo(sx + fw, fy - fw / 2); cx.lineTo(sx, fy - fw); cx.lineTo(sx - fw, fy - fw / 2); cx.closePath(); cx.stroke();
+    cx.setLineDash([]);
+    if (!wb.alt) {
+      cx.fillStyle = "#a8674f"; cx.fillRect(sx - 6, sy + TH / 2 - 4, 12, 5);
+      cx.fillStyle = "#c7825f"; cx.fillRect(sx - 4, sy + TH / 2 - 8, 8, 4);
+    }
+    cx.restore();
+    return;
+  }
   const { fw, hh } = WOHN_GEO[wb.stufe], fy = sy + TH / 2 + fw / 2;   // fy = vordere Ecke der Grundfläche
   cx.save();
   cx.strokeStyle = "rgba(251,191,36,.75)"; cx.lineWidth = 1; cx.setLineDash([3, 2]);
@@ -3684,9 +3708,14 @@ function drawAmbient(now) {
     });
     }
   });
-  /* Fußgänger: kleine Pendelwege auf den Straßenzügen (Bürgersteig-Ersatz) */
-  ROUTES.carLines.slice(4, 4 + AMBIENT.people.length).forEach((line, i) => {
-    const spr = AMBIENT.people[i]; if (!spr || line.length < 2) return;
+  /* Fußgänger: kleine Pendelwege auf den Straßenzügen (Bürgersteig-Ersatz).
+   * Im Sandkasten wächst ihre Zahl mit der Einwohnerzahl (Pendler) — tagsüber
+   * eine Figur je 120 Einwohner, höchstens 18; nachts bleibt es bei den sechs. */
+  const stadtJetzt = store.get().state?.stadt;
+  const pendler = stadtJetzt && LICHT > .35 ? Math.min(18, Math.floor(stadtJetzt.einwohner / 120)) : 0;
+  const nPers = Math.max(AMBIENT.people.length, pendler);
+  ROUTES.carLines.slice(4, 4 + nPers).forEach((line, i) => {
+    const spr = AMBIENT.people[i % AMBIENT.people.length]; if (!spr || line.length < 2) return;
     const pos = tilePosAtU(line, now / 1000 * (0.18 + i * 0.03) + i * 3); if (!pos) return;
     const [sx, sy] = iso(pos.x, pos.y);
     verkehrMerken(pos.x, pos.y, () => {
@@ -5309,8 +5338,10 @@ function clickTile(e) {
     if (bt.rz) kennzahlen.push(["Plätze", `${bt.rz.plaetze * lvl}`, "Marktplätze + Steuerungen"], ["Verbraucht", `${(bt.rz.in.strom * lvlMult).toFixed(2)} ${gname("strom")}`, "pro Sekunde"]);
     /* Belegschaft (Sandkasten): mit 3 von 5 Arbeitern läuft das Gebäude zu 60 % */
     const belegt = store.get().state.stadt && t.arbeiterSoll ? { ist: t.arbeiter ?? t.arbeiterSoll, soll: t.arbeiterSoll } : null;
+    const mehr0 = [];
     if (belegt) {
       const q = belegt.ist / belegt.soll;
+      if (t.fachSoll) mehr0.push(`<b>${tUe("Fachkräfte")}:</b> ${t.fach ?? 0} / ${t.fachSoll} — ${tUe("die Hälfte der Stellen hier verlangt Fachkräfte. Mehr bildet die Stadtbibliothek aus (Stadtprojekt).")}`);
       kennzahlen.push([tUe("Belegschaft"), `${belegt.ist}/${belegt.soll}`, t.paused ? tUe("pausiert — Arbeiter frei") : q < .25 ? tUe("steht still (unter 25 %)") : `${Math.round(Math.min(1, q) * 100)} % ${tUe("Leistung")}`]);
     }
     const mehr = [];
@@ -5319,6 +5350,8 @@ function clickTile(e) {
     if (bt.retail) mehr.push(`Dein Preis bestimmt das Tempo: Ø-Kurs = volle Rate, teurer = langsamer, billiger = schneller (max. ×2).`
       + ((me.ad?.boost || 1) > 1.001 ? ` <b style="color:var(--accent2)">Werbung aktiv: bis ${Math.round((me.ad.boost - 1) * 100)} % über Ø-Kurs ohne Tempoverlust.</b>` : ""));
     if (t.lien) mehr.push("Auf dem Gebäude liegt ein Pfandrecht — Abreißen ist gesperrt, bis die Anleihe bedient ist.");
+    mehr.push(...mehr0);
+    if (t.steuerung && belegt) mehr.push(tUe("Steuerungssoftware spart hier ein Viertel der Arbeiter."));
     if (belegt && belegt.ist < belegt.soll && mine && !t.paused)
       mehr.push(`<b>${tUe("Zu wenig Arbeiter")}:</b> ${tUe("Die Stadt hat gerade nicht genug Leute. Höhere Löhne (Firma-Panel) holen sie von anderen Firmen — oder warte, bis neue Bewohner zuziehen.")}`);
     if (imBauNoch) mehr.push(`Anlage in Arbeit: Das Gebäude produziert erst nach der Bauzeit. Sein Wert zählt aber schon jetzt voll zum Firmenwert — Bauen senkt den Wert deiner Firma nicht.`);
@@ -6744,10 +6777,42 @@ function lohnHtml(me, state) {
     ${L.verzug ? `<div class="meta stMinus">${t("Löhne nicht voll bezahlt — du bekommst zuletzt Arbeiter, bis du wieder zahlst.")}</div>` : ""}
     <div class="meta" style="padding-bottom:8px">${t("Sind Arbeiter knapp, gehen sie zuerst zur Firma mit dem höchsten Lohn. Vom Lohn gehen 30 % als Steuer und Miete an die Stadt — damit baut sie Wohnungen.")}</div>`;
 }
+/* Lexikon-Gruppe „Stadt & Arbeit“ (nur wenn die Stadt in diesem Modus wächst) */
+function stadtLexikon() {
+  const S = store.get().state?.stadt;
+  if (!S) return "";
+  return `<details class="lexGruppe" data-lex="lex-stadt" ${LEX_OFFEN.has("lex-stadt") ? "open" : ""}><summary>${t("Stadt & Arbeit")}<span>4</span></summary>
+    <div class="sec">${t("Wohnblöcke der Stadt")}</div>
+    <table><tr><th>${t("Stufe")}</th><th>${t("Plätze")}</th><th>${t("Kosten")}</th><th>${t("ab Einwohnern")}</th></tr>
+    ${S.stufen.map(x => `<tr><td>${t(x.name)}</td><td>${x.plaetze}</td><td>${fmt(x.kosten)}</td><td>${x.ab || "—"}</td></tr>`).join("")}</table>
+    <div class="sec">${t("Arbeiter")}</div>
+    <p class="meta">${t("Rund 1 Arbeiter je 250 $ Baukosten (2 bis 30), +50 % je Ausbaustufe. Leistung = Besetzung, unter 25 % Stillstand. Labor, Studio und Chipfabrik: die Hälfte Fachkräfte. Steuerungssoftware: −25 %.")}</p>
+    <div class="sec">${t("Löhne")}</div>
+    <table>${Object.values(S.loehne).map(l => `<tr><td>${t(l.name)}</td><td style="text-align:right">${l.lohn} $ ${t("je Arbeiter/min")}</td></tr>`).join("")}</table>
+    <p class="meta">${t("30 % der Löhne gehen als Lohnsteuer und Miete an die Stadt, 20 % ins Bürgerdepot.")}</p>
+    <div class="sec">${t("Stadtanleihen")}</div>
+    <p class="meta">${fmt(S.anleihe.betrag)} · ${String(S.anleihe.zins * 100).replace(".", ",")} %/min · ${S.anleihe.laufzeit / 60} min · ${t("höchstens")} ${fmt(S.anleihe.max)} ${t("Schulden")}</p>
+  </details>`;
+}
+/* Wohnbau-Aufträge der Stadt (Etappe 3): Baumaterial liefern, die Stadt zahlt
+ * 15 % über Kurs. Nach Ablauf der Frist kauft sie den Rest teurer anderswo. */
+function wohnAuftraegeHtml(S, me) {
+  if (!S.auftraege?.length) return "";
+  const tick = store.get().state?.tick || 0;
+  return `<div class="sec">${t("Baumaterial für die Stadt")} <span class="meta">· ${t("15 % über Kurs, bezahlt sofort")}</span></div>` + S.auftraege.map(a => `
+    <div class="stAuftrag"><div class="faPKopf"><b>${t(a.name)}</b><span class="meta">${t("noch")} ${Math.max(0, a.frist - tick)} s · ${t("danach kauft die Stadt den Rest anderswo")}</span></div>
+    ${Object.entries(a.needs).map(([g, n]) => `<div class="faProjekt">
+      <div class="faPKopf"><b>${gname(g)}</b><span class="meta">${n.have} / ${n.req} · ${fp(n.pay)}/Stk</span></div>
+      <div class="faBalken"><i style="width:${Math.min(100, n.have / n.req * 100).toFixed(1)}%"></i></div>
+      <div class="faPFuss"><span class="meta">${t("Lager")}: ${Math.floor(me.inv?.[g] || 0)}</span>
+        <input type="number" min="1" id="wb-${a.id}-${g}" placeholder="${t("Menge")}">
+        <button class="buyb" data-wb="${a.id}" data-wbg="${g}" ${(me.inv?.[g] || 0) < 1 || n.have >= n.req ? "disabled" : ""}>${t("Liefern")}</button></div></div>`).join("")}
+    ${Object.keys(a.contrib).length ? `<div class="faLieferanten">${Object.values(a.contrib).map(c => `<span style="--f:${c.color || "#888"}">${c.name}</span>`).join("")}</div>` : ""}</div>`).join("");
+}
 /* Stadtübersicht (nur Sandkasten): Einwohner, Wohnungen, Zufriedenheit und
  * was die Stadt gerade baut. Steht oben im Finanzamt, weil die Stadtkasse den
  * Wohnbau bezahlt. */
-function stadtHtml(S, F) {
+function stadtHtml(S, F, me = {}) {
   if (!S) return "";
   const vz = n => (n > 0 ? "+" : n < 0 ? "−" : "±") + Math.abs(Math.round(n * 100)) + " %";
   const A = S.arbeit;
@@ -6776,6 +6841,9 @@ function stadtHtml(S, F) {
     <div class="kzrow"><span>${t("Löhne aller Firmen")}</span><b>${fmt(A.lohnsumme)}/min</b></div>
     <div class="kzrow"><span>${t("Lohnsteuer + Miete an die Stadt")} <span class="meta">· ${Math.round((S.anteile.steuer + S.anteile.miete) * 100)} % ${t("der Löhne")}</span></span><b>${fmt(A.lohnsteuer + A.miete)}/min</b></div>
     ${A.stuetze ? `<div class="kzrow"><span>${t("Stütze für Arbeitslose")}</span><b class="stMinus">−${fmt(A.stuetze)}/min</b></div>` : ""}
+    ${S.fach ? `<div class="kzrow"><span>${t("Fachkräfte")} <span class="meta">· ${Math.round(S.fach.quote * 100)} % ${t("der Arbeitenden, mehr durch die Stadtbibliothek")}</span></span><b>${S.fach.besetzt} / ${S.fach.bedarf} ${t("Stellen")}</b></div>` : ""}
+    ${S.schulden ? `<div class="kzrow"><span>${t("Stadtanleihen")} <span class="meta">· ${t("gezeichnet, an der Stadtbank")}</span></span><b class="stMinus">${fmt(S.schulden)}</b></div>` : ""}
+    ${wohnAuftraegeHtml(S, me)}
     <div class="kzrow"><span>${t("Nachfrage in den Läden")} <span class="meta">· ${t("wächst mit der Einwohnerzahl")}</span></span><b>×${String(S.nachfrage).replace(".", ",")}</b></div>
     ${(S.log || []).length ? `<div class="stLog">${S.log.slice(0, 4).map(l => `<div class="meta">Min ${Math.floor(l.tick / 60)} · ${l.text}</div>`).join("")}</div>` : ""}`;
 }
@@ -6784,14 +6852,14 @@ function finanzamtRendern(state, me, myId) {
   if (!F?.aktiv) { el.innerHTML = `<div class="meta">In diesem Modus gibt es kein Finanzamt.</div>`; return; }
   /* Perf: Nur rendern wenn sich was ändert (Stadtkasse, Finanzamt-Sätze, etc.) */
   const PP = state.stadtprojekt;
-  const sig = JSON.stringify([F, state.stadt, me.steuer, PP, PP ? Object.keys(PP.needs).map(g => Math.floor(me.inv[g] || 0)) : 0, SPRACHE]);
+  const sig = JSON.stringify([F, state.stadt, ["ziegel", "beton", "stahl", "elektronik"].map(g => Math.floor(me.inv?.[g] || 0)), me.steuer, PP, PP ? Object.keys(PP.needs).map(g => Math.floor(me.inv[g] || 0)) : 0, SPRACHE]);
   if (finanzamtRendern.lastSig === sig) return;
   finanzamtRendern.lastSig = sig;
   const uhr = s => `${Math.floor(s / 60)}:${String(Math.max(0, s) % 60).padStart(2, "0")}`;
   const st = me.steuer || {};
   const P = state.stadtprojekt;
   const pct = n => Math.min(100, n.have / n.req * 100);
-  el.innerHTML = `${stadtHtml(state.stadt, F)}
+  el.innerHTML = `${stadtHtml(state.stadt, F, me)}
     <div class="faKonten">
       <div class="faKonto"><span>Stadtkasse</span><b>${fmt(F.stadtkasse)}</b><em>${P ? "Projekt läuft" : F.stadtkasse >= F.schwelle ? "Projekt kommt gleich" : `Stadtprojekt ab ${fmt(F.schwelle)}`}</em>
         <div class="faBalken"><i style="width:${Math.min(100, F.stadtkasse / F.schwelle * 100).toFixed(1)}%"></i></div></div>
@@ -6836,6 +6904,11 @@ function finanzamtRendern(state, me, myId) {
 }
 document.getElementById("einw").addEventListener("click", () => openPanel("finanzamt"));
 document.getElementById("finanzamtbody").addEventListener("click", e => {
+  const wb = e.target.closest("[data-wb]");
+  if (wb) {
+    const g = wb.dataset.wbg, me = store.get().me;
+    return act("wohnbauLiefern", { id: +wb.dataset.wb, good: g, qty: +document.getElementById(`wb-${wb.dataset.wb}-${g}`).value || Math.floor(me.inv[g] || 0) });
+  }
   const b = e.target.closest("[data-sp]");
   if (!b) return;
   const g = b.dataset.sp, me = store.get().me;
@@ -7221,6 +7294,9 @@ const TUT_SPIEL = [
     },
     p: `Öffne die <b>Börse</b> unten und besorge dir <b>Wasser</b> und <b>Strom</b> — entweder direkt aus einem Angebot oder über eine eigene Kauforder, falls gerade nichts im Buch steht.<br><br>Liegen beide im Lager, läuft deine Farm mit bis zu <b>+150 % Tempo</b> — sie werden dabei verbraucht. Das ist der größte Hebel im frühen Spiel und kostet fast nichts.` },
 
+  { t: "Zwischenstopp — Deine Leute",
+    p: `Jedes Gebäude braucht <b>Arbeiter</b> aus der Stadt. Klick eins deiner Gebäude an: Unter <b>Belegschaft</b> siehst du, wie viele da sind — mit 3 von 5 läuft es zu 60 %.<br><br>Sind Leute knapp, gehen sie zur Firma mit dem besten Lohn. Den stellst du im <b>Firma</b>-Panel ein. Wie viele Einwohner die Stadt hat, steht oben neben deinem Bargeld.` },
+
   { t: "Schritt 6 — Stelle eine eigene Order ein",
     warte: (st, me, id) => st.orders.some(o => o.playerId === id),
     p: `Bisher hast du aus dem Buch gekauft. Jetzt umgekehrt: Stelle an der Börse eine <b>eigene Order</b> ein — verkaufe Obst oder suche eine Ware, die du brauchst.<br><br>Deine Order bleibt stehen, bis jemand sie bedient. Ware und Geld liegen so lange treuhänderisch fest, niemand kann dich hängen lassen.` },
@@ -7256,6 +7332,9 @@ const TUT_EINSTEIGER = [
   { t: "Schritt 1 — Bau dein erstes Produktionsgebäude",
     warte: (st, me, id) => st.map.some(t => t.owner === id && t.btype && !istLaden(t)),
     p: `Klick eine freie Kachel an und bau ein Gebäude <b>deiner Branche</b>.<br><br>Es produziert von allein, Sekunde für Sekunde, ins Lager. Bauen kostet sofort — verdient wird erst später. Das ist der Grundrhythmus des ganzen Spiels.` },
+
+  { t: "Zwischenstopp — Deine Leute",
+    p: `Jedes Gebäude braucht <b>Arbeiter</b> aus der Stadt. Klick eins deiner Gebäude an: Unter <b>Belegschaft</b> siehst du, wie viele da sind — mit 3 von 5 läuft es zu 60 %.<br><br>Sind Leute knapp, gehen sie zur Firma mit dem besten Lohn. Den stellst du im <b>Firma</b>-Panel ein. Wie viele Einwohner die Stadt hat, steht oben neben deinem Bargeld.` },
 
   { t: "Schritt 2 — Bau einen Laden",
     warte: (st, me, id) => st.map.some(t => t.owner === id && istLaden(t)),
@@ -9908,6 +9987,7 @@ function render({ state, me, myId, chat, room }) {
       ${Object.entries(GOODS()).map(([k]) => `<tr><td>${gname(k)}</td><td>${catname(k)}</td><td>${fmt(avg[k] ?? 0)}</td></tr>`).join("")}</table>
       <p class="meta">Kurse regeln sich selbst: Überangebot drückt den Anker bis −50 %, Knappheit hebt ihn bis +30 %. Kurzfristige Schwankung max. ±$5.</p>
       </details>
+      ${stadtLexikon()}
       <details class="lexGruppe" data-lex="lex-regeln" ${LEX_OFFEN.has("lex-regeln") ? "open" : ""}><summary>Regeln kompakt<span>2</span></summary>
       <div class="sec">Geld verdienen — die Rangfolge</div>
       <table>
@@ -10369,6 +10449,47 @@ const TUT_BUCH = [
       back to those who contributed them. You risk nothing but time.</p>
       <div class="merk">Bulk orders are the best way to move large quantities without
       wrecking the rate.</div>` } },
+
+  { t: "Die Stadt wächst", lead: "Einwohner, Arbeiter und Löhne",
+    html: `
+      <p>Im Sandkasten und in der Einsteiger-Runde hat die Stadt <b>Einwohner</b>. Sie wohnen
+      im <b>Wohngebiet</b> rund ums Zentrum — dort baut allein die Stadt, aus der Stadtkasse.</p>
+      <div class="kasten"><div class="t">Wohnblöcke</div>
+      Siedlungshaus (40 Plätze), ab 800 Einwohnern Mietblock (120), ab 2.500 Wohnturm (300).
+      Das Baumaterial kauft die Stadt bei euch: In der Stadtübersicht (Finanzamt) steht, was sie
+      braucht — sie zahlt 15 % über Kurs. Liefert niemand, kauft sie nach 90 s teurer anderswo.</div>
+      <p><b>Jedes Gebäude braucht Arbeiter</b> — rund einen je 250 $ Baukosten, jede Ausbaustufe 50 %
+      mehr. Mit 3 von 5 Arbeitern läuft es zu 60 %, unter 25 % steht es still. Labor, Studio und
+      Chipfabrik brauchen zur Hälfte <b>Fachkräfte</b>; die Stadtbibliothek bildet mehr aus.
+      Steuerungssoftware spart ein Viertel der Arbeiter.</p>
+      <div class="kasten"><div class="t">Löhne</div>
+      Im Firma-Panel wählst du Spar-, Tarif- oder Spitzenlohn (4/6/9 $ je Arbeiter und Minute).
+      Sind Leute knapp, gehen sie zuerst zum besten Lohn. Eine Senkung greift erst nach 60 s.
+      Vom Lohn gehen 30 % als Steuer und Miete an die Stadt — damit baut sie neue Wohnungen.</div>
+      <p>Neue Bewohner ziehen nur zu, wenn es <b>freie Stellen</b> und freie Wohnungen gibt — und wenn
+      Strom, Wasser und Lebensmittel zu kaufen sind. Fehlt der Stadt Geld, gibt sie
+      <b>Stadtanleihen</b> aus, die du an der Stadtbank zeichnen kannst.</p>
+      <div class="merk">Mehr Einwohner heißt mehr Kundschaft: Die Nachfrage in den Läden wächst mit
+      der Stadt, bis ×1,6.</div>`,
+    en: { t: "The city grows", lead: "Residents, workers and wages", html: `
+      <p>In sandbox and beginner rounds the city has <b>residents</b>. They live in the
+      <b>residential ring</b> around the centre — only the city builds there, from its treasury.</p>
+      <div class="kasten"><div class="t">Housing</div>
+      House (40 homes), apartment block from 800 residents (120), tower from 2,500 (300).
+      The city buys its building materials from you: the city overview (tax office) lists what it
+      needs — it pays 15 % above market. If nobody delivers, it buys elsewhere at a higher price after 90 s.</div>
+      <p><b>Every building needs workers</b> — about one per $250 of building cost, 50 % more per
+      upgrade. With 3 of 5 workers it runs at 60 %, below 25 % it stops. Lab, studio and chip
+      factory need half <b>skilled workers</b>; the city library trains more. Control software
+      saves a quarter of the workers.</p>
+      <div class="kasten"><div class="t">Wages</div>
+      In the company panel you pick low, standard or top wage (4/6/9 $ per worker and minute).
+      When people are scarce they go to the best payer first. A cut only takes effect after 60 s.
+      30 % of wages go to the city as tax and rent — it builds new housing with that.</div>
+      <p>New residents only move in when there are <b>open jobs</b> and free homes — and when power,
+      water and food are for sale. If the city runs short of money it issues <b>city bonds</b>
+      you can buy at the city bank.</p>
+      <div class="merk">More residents means more customers: shop demand grows with the city, up to ×1.6.</div>` } },
 
   { t: "Werbeagentur", lead: "Höhere Preise ohne Tempoverlust",
     html: `

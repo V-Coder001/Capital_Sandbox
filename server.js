@@ -2586,7 +2586,7 @@ function buildMapRoh(mode = "sandbox") {
    * prozeduralen Code weiter unten. */
   if (mode === "einsteiger")
     return buildStadtMap({ w: 32, h: 32, seed: 0, ufer: "ecke", sperren: false,
-                           deko: 6, inseln: [[26, 26, 2.6]] });
+                           deko: 6, inseln: [[26, 26, 2.6]], wohnen: true });
   if (mode === "sandbox")
     return buildStadtMap({ w: 30, h: 30, seed: 71, ufer: "sued", sperren: true,
                            deko: 9, inseln: [[6, 27, 2.2], [21, 28, 2.8]], wohnen: true });
@@ -4720,7 +4720,7 @@ const STUFE_TEXT = {
  * sie sah die Stadt während jeder Wettrunde ärmer aus, als sie war, und das
  * Finanzamt erhöhte die Steuern wegen Geld, das nur gebunden war. */
 const bankImEinsatz = () => G.wetten.reduce((a, w) => a + (w.bank ? w.einsatz : 0), 0);
-const stadtVermoegen = () => G.stadtkasse + faBuchwert() + wohnBuchwert() + Math.max(-WETT_RESERVE, bankEigen() + bankImEinsatz() - WETT_RESERVE);
+const stadtVermoegen = () => G.stadtkasse + faBuchwert() + wohnBuchwert() - stadtSchulden() + Math.max(-WETT_RESERVE, bankEigen() + bankImEinsatz() - WETT_RESERVE);
 const steuerStufe = () => STEUER_STUFEN[G.steuerStufe ?? 2];
 const steuerFaktor = () => steuerStufe().faktor;
 const satzGewinn = () => STEUER_SATZ * steuerFaktor();
@@ -4895,7 +4895,7 @@ const STADT = Object.assign({
   ],
   TAKT: 60,               // Sekunden: Zuzug, Wegzug, Wohnbau-Entscheidung
   BAU_DAUER: 60,          // Sekunden Bauzeit je Block oder Ausbau
-  GLEICHZEITIG: 2,        // so viele Baustellen hoechstens
+  GLEICHZEITIG: 3,        // so viele Auftraege und Baustellen zusammen hoechstens
   KASSE_MIN: 3000,        // darunter baut die Stadt nicht (= Notstandsgrenze)
   WOHN_RUECKLAGE: 15000,  // so viel haelt das Finanzamt bei Wohnungsnot von den Fonds fern
   /* Etappe 2: Arbeitskraefte. Jedes Gebaeude braucht Arbeiter (Baukosten /
@@ -4916,6 +4916,18 @@ const STADT = Object.assign({
   LOHNSTEUER: 0.15, MIETANTEIL: 0.15, SPARANTEIL: 0.2,
   STUETZE: 1,             // $ je Arbeitslosem und Minute aus der Stadtkasse
   STELLEN_FAKTOR: 1.5,    // offene Stellen x 1,5 = so viele ziehen hoechstens zu (Familien)
+  /* Etappe 3: Die Stadt kauft ihr Baumaterial bei den Firmen (Lieferauftrag je
+   * Block, 15 % ueber Kurs). Kommt bis zur Frist nicht alles, kauft sie den Rest
+   * fuer den doppelten Kurs von ausserhalb. Reicht die Kasse bei Wohnungsnot
+   * nicht, gibt sie Stadtanleihen aus. */
+  MATERIAL: [{ ziegel: 15 }, { ziegel: 30, beton: 10 }, { beton: 40, stahl: 10, elektronik: 5 }],
+  MAT_AUFSCHLAG: 1.15, AUFTRAG_FRIST: 90, AUSSEN_AUFSCHLAG: 2,
+  ANLEIHE: { betrag: 2000, zins: 0.005, laufzeit: 900, max: 20000 },
+  AUTOMATISIERUNG: 0.25,  // Steuerungssoftware spart ein Viertel der Arbeiter
+  /* Etappe 4: Fachkraefte. Labor, Studio und Chipfabrik brauchen zur Haelfte
+   * Fachkraefte. 10 % der Arbeitenden sind welche, die Stadtbibliothek bildet
+   * weitere 10 % aus, jedes andere fertige Stadtprojekt 2 %. */
+  FACH: { quote: 0.10, bibliothek: 0.10, projekt: 0.02, max: 0.30, anteil: 0.5, gebaeude: ["pharma", "entwicklerstudio", "chipfabrik"] },
   ARBEITSLOS_GRENZE: 0.1, ARBEITSLOS_MALUS_MAX: 0.3,
   FREI_ZIEL: 0.10,        // die Stadt baut, bis 10 % der Wohnungen frei sind
   ZUZUG_ANTEIL: 0.05, ZUZUG_GRUND: 10,
@@ -4932,20 +4944,26 @@ const VERSORGUNG = {
   wasser:  { name: "Wasser",       waren: ["wasser"] },
   nahrung: { name: "Lebensmittel", waren: ["obst", "saft", "gebaeck", "honig"] },
 };
-const stadtAktiv = () => MODE === "sandbox" && !!G.stadt;
+/* Sandkasten und Einsteiger-Runde (Etappe 4); beide laufen auf buildStadtMap mit Wohngebiet. */
+const stadtAktiv = () => (MODE === "sandbox" || MODE === "einsteiger") && !!G.stadt;
+const STADT_ID = "__stadt";   // Emittent der Stadtanleihen
 const wohnPlaetze = stufe => STADT.STUFEN[stufe - 1]?.plaetze || 0;
 const wohnImBau = t => !!(t.wohnblock?.bis && t.wohnblock.bis > G.tick);
+/* Noch nicht bewohnbar: wartet auf Material (auftrag) oder wird gebaut (bis) */
+const wohnUnfertig = t => wohnImBau(t) || !!t.wohnblock?.auftrag;
 const wohnKacheln = () => G.map.filter(t => t.zone === "wohnen" && !t.road && !t.water);
 /* Bewohnbar ist nur, was fertig ist; bei einem Ausbau bleibt die alte Stufe bewohnt. */
 function wohnKapazitaet() {
   let k = 0;
-  for (const t of G.map) if (t.wohnblock) k += wohnImBau(t) ? wohnPlaetze(t.wohnblock.alt || 0) : wohnPlaetze(t.wohnblock.stufe);
+  for (const t of G.map) if (t.wohnblock) k += wohnUnfertig(t) ? wohnPlaetze(t.wohnblock.alt || 0) : wohnPlaetze(t.wohnblock.stufe);
   return k;
 }
 /* Wohnbloecke sind Vermoegen der Stadt: Sie zaehlen zum Buchwert in die
  * Steuerlage, sonst riefe jeder Neubau den Notstand aus (wie frueher die
  * Stadtprojekte). Die Startbloecke zaehlen nicht — sie waren nie Kasse. */
 const wohnBuchwert = () => G.stadt?.investiert || 0;
+/* Gezeichnete Stadtanleihen: Schulden der Stadt, sie mindern die Steuerlage. */
+const stadtSchulden = () => G.bonds.reduce((a, b) => a + (b.issuerId === STADT_ID && b.holderId ? b.principal : 0), 0);
 /* Naechstgelegene Kacheln zuerst, mit Strassenanschluss bevorzugt. */
 function wohnRang(t) {
   const mx = (MAP_W - 1) / 2, my = (MAP_H - 1) / 2;
@@ -4958,7 +4976,7 @@ function stadtInit() {
   if (!G.map.some(t => t.zone === "wohnen")) { G.stadt = null; return; }
   const frei = wohnKacheln().filter(t => !t.park).sort((a, b) => wohnRang(a) - wohnRang(b));
   for (const t of frei.slice(0, STADT.START_BLOECKE)) Object.assign(t, { wohnblock: { stufe: 1 }, park: false, field: false });
-  G.stadt = { einwohner: STADT.START_EINW, verlauf: [{ t: 0, e: STADT.START_EINW }], fehlt: {},
+  G.stadt = { einwohner: STADT.START_EINW, verlauf: [{ t: 0, e: STADT.START_EINW }], fehlt: {}, auftraege: [],
               investiert: 0, gebaut: 0, zuzug: 0, wegzug: 0, log: [], zufr: 1, teile: [] };
 }
 function stadtLog(text) {
@@ -4969,7 +4987,15 @@ function arbeiterBedarf(t) {
   const bt = BTYPES[t.btype];
   if (!bt || !t.owner) return 0;
   const basis = bt.arbeiter ?? Math.min(STADT.ARBEIT_MAX, Math.max(STADT.ARBEIT_MIN, Math.round(bt.cost * STADT.ARBEIT_JE_DOLLAR)));
-  return Math.ceil(basis * (1 + STADT.ARBEIT_AUSBAU * ((t.level || 1) - 1)));
+  const auto = t.steuerung && steuerOffen(t) ? 1 - STADT.AUTOMATISIERUNG : 1;   // Leitstand ersetzt Handarbeit
+  return Math.ceil(basis * (1 + STADT.ARBEIT_AUSBAU * ((t.level || 1) - 1)) * auto);
+}
+const fachBedarf = (t, b = arbeiterBedarf(t)) => STADT.FACH.gebaeude.includes(t.btype) ? Math.ceil(b * STADT.FACH.anteil) : 0;
+function fachQuote() {
+  const fertig = G.stadtprojekteFertig || [];
+  const q = STADT.FACH.quote + (fertig.some(f => f.key === "bibliothek") ? STADT.FACH.bibliothek : 0)
+          + fertig.filter(f => f.key !== "bibliothek").length * STADT.FACH.projekt;
+  return Math.min(STADT.FACH.max, q);
 }
 /* Anteil der Produktion, den die Belegschaft schafft. Ohne Zuteilung (frisch
  * gebaut, noch keine Verteilung gelaufen) voll — die naechste Runde kommt in
@@ -4990,29 +5016,51 @@ function lohnStufe(p) {
 const lohnRang = p => p.lohnVerzug ? -1 : STADT.LOEHNE[lohnStufe(p)].rang;
 /* Alle Stellen der Stadt besetzen: zuerst die hoechste Lohnstufe, innerhalb
  * einer Stufe anteilig, damit kein einzelnes Gebaeude leer ausgeht. */
-function arbeitVerteilen() {
-  const S = G.stadt, faehig = Math.floor(S.einwohner * STADT.ERWERBSQUOTE);
-  const stellen = [];
-  for (const t of G.map) {
-    if (!t.owner || !t.btype) continue;
-    if (t.paused || imBau(t)) { t.arbeiter = null; t.arbeiterSoll = arbeiterBedarf(t); continue; }
-    const b = arbeiterBedarf(t), p = G.players[t.owner];
-    t.arbeiterSoll = b;
-    if (b && p) stellen.push({ t, b, rang: lohnRang(p) });
-  }
-  let pool = faehig, bedarf = 0;
+/* Pool nach Lohnrang vergeben: hoechste Stufe zuerst, innerhalb anteilig,
+ * Rundungsreste an die groessten Betriebe. Liefert, was uebrig bleibt. */
+function poolVergeben(stellen, pool, feld) {
   for (const rang of [...new Set(stellen.map(x => x.rang))].sort((a, b) => b - a)) {
     const gruppe = stellen.filter(x => x.rang === rang), summe = gruppe.reduce((a, x) => a + x.b, 0);
-    bedarf += summe;
-    if (pool >= summe) { for (const x of gruppe) x.t.arbeiter = x.b; pool -= summe; continue; }
+    if (pool >= summe) { for (const x of gruppe) x[feld] = x.b; pool -= summe; continue; }
     const f = pool / summe;
     let vergeben = 0;
-    for (const x of gruppe) { x.t.arbeiter = Math.floor(x.b * f); vergeben += x.t.arbeiter; }
-    /* Rundungsreste an die groessten Betriebe, damit niemand verloren geht */
-    for (const x of [...gruppe].sort((a, b) => b.b - a.b)) { if (vergeben >= pool) break; if (x.t.arbeiter < x.b) { x.t.arbeiter++; vergeben++; } }
+    for (const x of gruppe) { x[feld] = Math.floor(x.b * f); vergeben += x[feld]; }
+    for (const x of [...gruppe].sort((a, b) => b.b - a.b)) { if (vergeben >= pool) break; if (x[feld] < x.b) { x[feld]++; vergeben++; } }
     pool -= vergeben;
   }
-  Object.assign(S, { arbeitsfaehig: faehig, bedarf, beschaeftigt: faehig - pool, arbeitslos: pool, offen: Math.max(0, bedarf - (faehig - pool)) });
+  return pool;
+}
+/* Alle Stellen der Stadt besetzen. Erst die Fachkraefte-Stellen aus dem
+ * Fachkraefte-Pool, dann alle uebrigen Stellen aus dem Rest — wer als
+ * Fachkraft keine passende Stelle findet, arbeitet eben normal mit. */
+function arbeitVerteilen() {
+  const S = G.stadt, faehig = Math.floor(S.einwohner * STADT.ERWERBSQUOTE);
+  const fachPool = Math.floor(faehig * fachQuote());
+  const fach = [], allg = [];
+  for (const t of G.map) {
+    if (!t.owner || !t.btype) continue;
+    const b = arbeiterBedarf(t), fb = fachBedarf(t, b), p = G.players[t.owner];
+    t.arbeiterSoll = b; t.fachSoll = fb || null;
+    if (t.paused || imBau(t)) { t.arbeiter = null; t.fach = null; continue; }
+    if (!b || !p) continue;
+    const rang = lohnRang(p);
+    const x = { t, rang, b: fb, f: 0 }, y = { t, rang, b: b - fb, a: 0 };
+    if (fb) fach.push(x);
+    allg.push(y);
+    t._ax = x; t._ay = y;
+  }
+  const restFach = poolVergeben(fach, fachPool, "f");
+  const rest = poolVergeben(allg, faehig - fachPool + restFach, "a");
+  let bedarf = 0, fachBed = 0, fachBes = 0;
+  for (const y of allg) {
+    const x = y.t._ax || { f: 0, b: 0 };
+    y.t.arbeiter = x.f + y.a; y.t.fach = x.b ? x.f : null;
+    bedarf += x.b + y.b; fachBed += x.b; fachBes += x.f;
+    delete y.t._ax; delete y.t._ay;
+  }
+  const beschaeftigt = faehig - rest;
+  Object.assign(S, { arbeitsfaehig: faehig, bedarf, beschaeftigt, arbeitslos: rest, offen: Math.max(0, bedarf - beschaeftigt),
+    fach: { pool: fachPool, bedarf: fachBed, besetzt: fachBes, quote: fachQuote() } });
 }
 /* Loehne jede Minute. Steuer und Miete gehen an die Stadt, ein Teil wird
  * gespart (Buergerdepot), der Rest ist Konsum. Arbeitslose bekommen Stuetze. */
@@ -5082,30 +5130,105 @@ function stadtZufriedenheit() {
  * spart Bauland und macht die Innenstadt dichter. */
 function wohnbauPruefen() {
   const S = G.stadt, kap = wohnKapazitaet();
-  const baustellen = G.map.filter(wohnImBau).length;
-  if (baustellen >= STADT.GLEICHZEITIG) return;
   const frei = kap - S.einwohner;
   S.wohnungsnot = frei < Math.max(20, kap * STADT.FREI_ZIEL);
+  if (G.map.filter(wohnUnfertig).length >= STADT.GLEICHZEITIG) return;
   if (!S.wohnungsnot) return;
   const kacheln = wohnKacheln().sort((a, b) => wohnRang(a) - wohnRang(b));
-  const ausbau = kacheln.find(t => t.wohnblock && !wohnImBau(t) && t.wohnblock.stufe < STADT.STUFEN.length
-    && S.einwohner >= STADT.STUFEN[t.wohnblock.stufe].ab);
   const neu = kacheln.find(t => !t.wohnblock && !t.park);
+  /* Ausbau ab der Einwohnerschwelle — oder sobald kein Bauplatz mehr frei ist,
+   * sonst bliebe eine kleine Karte (Einsteiger) unter der Schwelle stecken. */
+  const ausbau = kacheln.find(t => t.wohnblock && !wohnUnfertig(t) && t.wohnblock.stufe < STADT.STUFEN.length
+    && (S.einwohner >= STADT.STUFEN[t.wohnblock.stufe].ab || !neu));
   const ziel = ausbau || neu;
   if (!ziel) return;
   const stufe = ausbau ? ausbau.wohnblock.stufe + 1 : 1, art = STADT.STUFEN[stufe - 1];
-  if (G.stadtkasse - art.kosten < STADT.KASSE_MIN) { S.wartetAufGeld = art.kosten; return; }
+  if (G.stadtkasse - art.kosten < STADT.KASSE_MIN) { S.wartetAufGeld = art.kosten; stadtAnleiheAusgeben(); return; }
   S.wartetAufGeld = 0;
+  /* Budget fest binden; das Material zahlt die Stadt daraus an die Lieferanten,
+   * der Rest sind die Bauarbeiten. */
   G.stadtkasse -= art.kosten; S.investiert += art.kosten; S.gebaut++;
-  Object.assign(ziel, { wohnblock: { stufe, alt: ausbau ? ausbau.wohnblock.stufe : 0, bis: G.tick + STADT.BAU_DAUER }, park: false, field: false });
-  stadtLog(`${ausbau ? "Ausbau zum" : "Neubau:"} ${art.name} (+${art.plaetze - (ausbau ? wohnPlaetze(stufe - 1) : 0)} Plätze, ${art.kosten.toLocaleString("de-DE")} $)`);
+  const needs = {};
+  for (const [g, req] of Object.entries(STADT.MATERIAL[stufe - 1] || {}))
+    needs[g] = { req, have: 0, pay: Math.round(MM[g].price * STADT.MAT_AUFSCHLAG * 100) / 100 };
+  const auftrag = { id: id(), x: ziel.x, y: ziel.y, stufe, name: art.name, budget: art.kosten, needs, contrib: {}, frist: G.tick + STADT.AUFTRAG_FRIST };
+  S.auftraege.push(auftrag);
+  Object.assign(ziel, { wohnblock: { stufe, alt: ausbau ? ausbau.wohnblock.stufe : 0, auftrag: auftrag.id }, park: false, field: false });
+  const txt = Object.entries(needs).map(([g, n]) => `${n.req}× ${GOODS[g].name}`).join(", ");
+  stadtLog(`${ausbau ? "Ausbau zum" : "Neubau:"} ${art.name} — Material bestellt: ${txt}`);
   if (stufe > 1 && !G.map.some(t => t !== ziel && t.wohnblock?.stufe >= stufe))
-    io.emit("notice", { text: `Die Stadt wächst: Der erste ${art.name} wird gebaut.` });
+    io.emit("notice", { text: `Die Stadt wächst: Der erste ${art.name} ist geplant — die Stadt kauft dafür ${txt}.` });
+}
+/* Material ist da (oder wurde von ausserhalb gekauft): Bauzeit beginnt. */
+function wohnAuftragAbschliessen(a, aussen) {
+  const S = G.stadt, t = tileAt(a.x, a.y);
+  S.auftraege = S.auftraege.filter(x => x !== a);
+  if (!t?.wohnblock || t.wohnblock.auftrag !== a.id) return;
+  t.wohnblock = { stufe: a.stufe, alt: t.wohnblock.alt, bis: G.tick + STADT.BAU_DAUER };
+  stadtLog(aussen ? `${a.name}: Restmaterial von außerhalb gekauft (${Math.round(aussen).toLocaleString("de-DE")} $), Bau beginnt`
+                  : `${a.name}: Material komplett geliefert, Bau beginnt`);
+}
+function wohnAuftraegePruefen() {
+  for (const a of [...G.stadt.auftraege]) {
+    if (G.tick < a.frist) continue;
+    /* Frist abgelaufen: Rest teuer zukaufen, damit kein Block ewig wartet */
+    let kosten = 0;
+    for (const [g, n] of Object.entries(a.needs)) kosten += Math.max(0, n.req - n.have) * MM[g].price * STADT.AUSSEN_AUFSCHLAG;
+    const ausBudget = Math.min(a.budget, kosten);
+    a.budget -= ausBudget; G.stadtkasse -= kosten - ausBudget; G.stadt.investiert += kosten - ausBudget;
+    wohnAuftragAbschliessen(a, kosten);
+  }
+}
+function wohnbauLiefern(p, { id: aid, good, qty } = {}) {
+  if (!stadtAktiv()) return { error: "Die Stadt baut in diesem Modus nicht" };
+  const a = G.stadt.auftraege.find(x => x.id === +aid) || G.stadt.auftraege.find(x => x.needs[good] && x.needs[good].have < x.needs[good].req);
+  if (!a) return { error: "Kein offener Wohnbau-Auftrag" };
+  const n = a.needs[good];
+  if (!n) return { error: "Diese Ware braucht der Bau nicht" };
+  qty = Math.min(Math.floor(+qty), n.req - n.have, Math.floor(p.inv[good] || 0));
+  if (!(qty > 0)) return { error: "Menge ungültig, Lager leer oder Bedarf gedeckt" };
+  const summe = Math.round(qty * n.pay * 100) / 100;
+  const ausBudget = Math.min(a.budget, summe);
+  a.budget -= ausBudget; G.stadtkasse -= summe - ausBudget;
+  p.inv[good] -= qty; n.have += qty;
+  p.cash += summe; addRevenue(p, summe); p.stats.wohnbau = (p.stats.wohnbau || 0) + qty;
+  (a.contrib[p.id] ??= {})[good] = (a.contrib[p.id][good] || 0) + qty;
+  logTx(p, "Stadt", `${qty}× ${GOODS[good].name} für ${a.name} geliefert`, summe);
+  if (Object.values(a.needs).every(x => x.have >= x.req)) wohnAuftragAbschliessen(a, 0);
+  return { ok: true, summe };
+}
+/* Stadtanleihe: nur bei Wohnungsnot, eine unverkaufte zur Zeit, Schulden gedeckelt.
+ * Sie laeuft ueber das normale Anleihen-System, Spieler und Bots zeichnen sie. */
+function stadtAnleiheAusgeben() {
+  const A = STADT.ANLEIHE;
+  if (G.bonds.some(b => b.issuerId === STADT_ID && !b.holderId)) return;
+  if (stadtSchulden() + A.betrag > A.max) return;
+  G.bonds.push({ id: id(), issuerId: STADT_ID, holderId: null, principal: A.betrag, rate: A.zins, termLeft: A.laufzeit, strikes: 0 });
+  stadtLog(`Stadtanleihe ausgegeben: ${A.betrag.toLocaleString("de-DE")} $, ${String(A.zins * 100).replace(".", ",")} % je Minute, ${A.laufzeit / 60} min`);
+  if (!G.stadt.anleiheGemeldet) { G.stadt.anleiheGemeldet = true;
+    io.emit("notice", { text: `Die Stadt braucht Geld für Wohnungen und gibt eine Stadtanleihe aus (${A.betrag.toLocaleString("de-DE")} $, ${String(A.zins * 100).replace(".", ",")} %/min) — zu zeichnen an der Stadtbank.` }); }
+}
+/* Kupon und Tilgung der Stadt aus der Stadtkasse. Kein Pfandrecht, keine
+ * Versteigerung — fehlt Geld, wird die Zahlung nur verschoben. */
+function stadtAnleiheTick(b) {
+  const holder = G.players[b.holderId], coupon = b.principal * b.rate / 60;
+  if (G.stadtkasse >= coupon) {
+    G.stadtkasse -= coupon; b.strikes = 0;
+    if (holder) { holder.cash += coupon; holder.fin.zinsErtrag += coupon; holder.stats.zinsErtrag += coupon; }
+  } else b.strikes++;
+  if (--b.termLeft > 0) return;
+  if (G.stadtkasse >= b.principal) {
+    G.stadtkasse -= b.principal;
+    if (holder) { holder.cash += b.principal; logTx(holder, "Anleihen", "Tilgung der Stadtanleihe", b.principal); }
+    G.bonds.splice(G.bonds.indexOf(b), 1);
+    if (G.stadt) stadtLog(`Stadtanleihe getilgt (${b.principal.toLocaleString("de-DE")} $)`);
+  } else { b.termLeft = 30; b.strikes += 5; }
 }
 function stadtTick() {
   if (!stadtAktiv()) return;
   const S = G.stadt;
   for (const t of G.map) if (t.wohnblock?.bis && t.wohnblock.bis <= G.tick) t.wohnblock = { stufe: t.wohnblock.stufe };
+  wohnAuftraegePruefen();
   if (G.tick % STADT.VERTEILUNG_TAKT === 0) arbeitVerteilen();
   if (G.tick % 10 === 0) {
     const da = versorgungPruefen();
@@ -5136,9 +5259,12 @@ const stadtNachfrage = () => !stadtAktiv() ? 1
 function stadtPublic() {
   if (!stadtAktiv()) return null;
   const S = G.stadt, kap = wohnKapazitaet();
-  const bloecke = STADT.STUFEN.map((_, i) => G.map.filter(t => t.wohnblock?.stufe === i + 1 && !wohnImBau(t)).length);
+  const bloecke = STADT.STUFEN.map((_, i) => G.map.filter(t => t.wohnblock?.stufe === i + 1 && !wohnUnfertig(t)).length);
   return { einwohner: S.einwohner, kapazitaet: kap, frei: Math.max(0, kap - S.einwohner),
-    baustellen: G.map.filter(wohnImBau).length, bloecke, platz: wohnKacheln().filter(t => !t.wohnblock && !t.park).length,
+    baustellen: G.map.filter(wohnImBau).length,
+    auftraege: S.auftraege.map(a => ({ id: a.id, x: a.x, y: a.y, name: a.name, stufe: a.stufe, needs: a.needs, frist: a.frist,
+      contrib: Object.fromEntries(Object.entries(a.contrib).map(([pid, g]) => [pid, { name: G.players[pid]?.name ?? "—", color: G.players[pid]?.color, goods: g }])) })),
+    schulden: stadtSchulden(), anleihe: STADT.ANLEIHE, fach: S.fach || null, bloecke, platz: wohnKacheln().filter(t => !t.wohnblock && !t.park).length,
     zufr: S.zufr, teile: S.teile, zuzug: S.zuzug, wegzug: S.wegzug, verlauf: S.verlauf,
     nachfrage: Math.round(stadtNachfrage() * 100) / 100, investiert: S.investiert, wartetAufGeld: S.wartetAufGeld || 0,
     log: S.log, stufen: STADT.STUFEN, kasseMin: STADT.KASSE_MIN, bauDauer: STADT.BAU_DAUER, takt: STADT.TAKT,
@@ -5858,7 +5984,7 @@ function snapshot() {
     map: G.map.map(t => ({ x: t.x, y: t.y, zone: t.zone, road: t.road, water: t.water,
       park: t.park, field: t.field, sand: t.sand, deep: t.deep, rock: t.rock,
       piazza: t.piazza, fontana: t.fontana, pier: t.pier, leuchtturm: t.leuchtturm, questura: t.questura, gcasino: t.gcasino, wz: t.wz, famhaus: t.famhaus,
-      bank: t.bank, news: t.news, finanzamt: t.finanzamt, denkmal: t.denkmal, denkmalName: t.denkmalName, schwarz: t.schwarz, deko: t.deko, locked: t.locked, unlockCost: t.unlockCost, owner: t.owner, btype: t.btype, lien: t.lien, shop: t.shop, paused: t.paused, level: t.level, autos: autosDyn(t), sperre: t.sperre ?? null, bauBis: imBau(t) ? t.bauBis : null, wohnblock: t.wohnblock ?? null, arbeiter: t.arbeiter ?? null, arbeiterSoll: t.arbeiterSoll ?? null })),
+      bank: t.bank, news: t.news, finanzamt: t.finanzamt, denkmal: t.denkmal, denkmalName: t.denkmalName, schwarz: t.schwarz, deko: t.deko, locked: t.locked, unlockCost: t.unlockCost, owner: t.owner, btype: t.btype, lien: t.lien, shop: t.shop, paused: t.paused, level: t.level, autos: autosDyn(t), sperre: t.sperre ?? null, bauBis: imBau(t) ? t.bauBis : null, wohnblock: t.wohnblock ?? null, arbeiter: t.arbeiter ?? null, arbeiterSoll: t.arbeiterSoll ?? null, fach: t.fach ?? null, fachSoll: t.fachSoll ?? null })),
     players: Object.fromEntries(Object.entries(G.players).map(([sid, p]) =>
       [sid, { id: sid, name: p.name, color: p.color, lvl: p.lvl, xp: p.xp, industry: p.industry, industries: p.industries,
               familie: p.familie || null,
@@ -5870,9 +5996,9 @@ function snapshot() {
               equity: Object.fromEntries(Object.entries(p.equity).filter(([, c]) => c > 0)
                 .map(([hid, c]) => [istInstitution(hid) ? institutionName(hid) : (G.players[hid]?.name ?? "—"), Math.round(c / AKTIEN * 1000) / 10])) }])),
     orders: G.orders,
-    bonds: G.bonds.map(b => ({ ...b, issuer: G.players[b.issuerId]?.name ?? "—",
+    bonds: G.bonds.map(b => ({ ...b, issuer: G.players[b.issuerId]?.name ?? (b.issuerId === STADT_ID ? "Stadt (Wohnbau)" : "—"),
       holder: b.holderId ? (G.players[b.holderId]?.name ?? "—") : null,
-      issuerRating: G.players[b.issuerId] ? rating(G.players[b.issuerId]) : "D" })),
+      issuerRating: G.players[b.issuerId] ? rating(G.players[b.issuerId]) : b.issuerId === STADT_ID ? "AA" : "D" })),
     shareBids: G.shareBids.map(b => ({ ...b,
       company: G.players[b.companyId]?.name ?? "—",
       bidder: istInstitution(b.bidderId) ? institutionName(b.bidderId) : (G.players[b.bidderId]?.name ?? "—") })),
@@ -6029,7 +6155,7 @@ function dropContract(c) {
  * Nach dem ersten Snapshot reist die Karte nur noch als Differenz über diese
  * Liste. Der Vergleich läuft über JSON, verschachtelte Arrays sind also
  * abgedeckt (derselbe Grund, aus dem `shop` hier steht). */
-const DYNAMIC_TILE_KEYS = ["locked", "owner", "btype", "lien", "shop", "paused", "level", "autos", "sperre", "denkmal", "denkmalName", "bauBis", "system", "steuerung", "rzAktiv", "bestellungen", "vorrat", "wohnblock", "arbeiter", "arbeiterSoll"];
+const DYNAMIC_TILE_KEYS = ["locked", "owner", "btype", "lien", "shop", "paused", "level", "autos", "sperre", "denkmal", "denkmalName", "bauBis", "system", "steuerung", "rzAktiv", "bestellungen", "vorrat", "wohnblock", "arbeiter", "arbeiterSoll", "fach", "fachSoll"];
 /* undefined wird zu null normalisiert, damit auch "Feld gelöscht" (z. B. der
  * Abriss räumt t.shop weg) beim Empfänger sicher ankommt. */
 /* Fahrzeuge gehen MIT ihren gerechneten Werten über die Leitung. Sie hier
@@ -6114,7 +6240,7 @@ function buildReport(siegerId) {
   ].filter(Boolean);
 
   const stadt = stadtAktiv() ? { einwohner: G.stadt.einwohner, start: STADT.START_EINW, wohnungen: wohnKapazitaet(),
-    bloecke: STADT.STUFEN.map((_, i) => G.map.filter(t => t.wohnblock?.stufe === i + 1).length), stufen: STADT.STUFEN.map(x => x.name) } : null;
+    bloecke: STADT.STUFEN.map((_, i) => G.map.filter(t => t.wohnblock?.stufe === i + 1 && !wohnUnfertig(t)).length), stufen: STADT.STUFEN.map(x => x.name) } : null;
   return { zeilen, auszeichnungen, dauerMin: Math.round(G.tick / 60), ziel: WIN_NW, stadt };
 }
 
@@ -6377,6 +6503,7 @@ io.on("connection", socket => {
        * muss nach dem Kartentausch jeder Client die Karte einmal vollstaendig
        * bekommen — der Kachel-Diff traegt nur veraenderliche Felder. */
       G.map = buildMap("einsteiger");
+      stadtInit();   // Etappe 4: auch hier waechst die Stadt
       lastTileSigs = null;
       for (const sock of io.sockets.sockets.values()) { sock.data.gotMap = false; sock.data.meSigs = null; }
     }
@@ -7945,10 +8072,11 @@ io.on("connection", socket => {
     const issuer = G.players[b.issuerId];
     p.cash -= b.principal;
     if (issuer) issuer.cash += b.principal;   // Kapitalzufluss beim Emittenten
+    else if (b.issuerId === STADT_ID) G.stadtkasse += b.principal;   // Stadtanleihe: Geld fuer den Wohnbau
     b.holderId = p.id;
-    logTx(p, "Anleihen", `Anleihe von ${issuer?.name ?? "?"} gekauft`, -b.principal);
+    logTx(p, "Anleihen", `Anleihe von ${issuer?.name ?? (b.issuerId === STADT_ID ? "der Stadt" : "?")} gekauft`, -b.principal);
     if (issuer) logTx(issuer, "Anleihen", `Anleihe platziert bei ${p.name}`, b.principal);
-    io.emit("notice", { text: `${p.name} finanziert ${issuer?.name ?? "?"} mit ${b.principal} $ (${(b.rate * 100).toFixed(1)} %)` });
+    io.emit("notice", { text: `${p.name} finanziert ${issuer?.name ?? (b.issuerId === STADT_ID ? "die Stadt" : "?")} mit ${b.principal} $ (${(b.rate * 100).toFixed(1)} %)` });
     ack?.({ ok: true });
   }));
 
@@ -8237,9 +8365,11 @@ io.on("connection", socket => {
   /* --- Software: Shop-System einstellen (Name, Farbe, Preise) ---
    * Preise und Aussehen gelten sofort; neue Funktionen kosten Entwicklung
    * (softwareEntwickeln). */
+  /* --- Baumaterial fuer einen Wohnblock der Stadt liefern (Etappe 3) --- */
+  socket.on("wohnbauLiefern", guard((p, d, ack) => { ack?.(wohnbauLiefern(p, d)); pushState(); }));
   /* --- Lohnstufe (Sandkasten, Etappe 2): sofort hoeher, nach Kuendigungsfrist niedriger --- */
   socket.on("lohnStufe", guard((p, { stufe }, ack) => {
-    if (!stadtAktiv()) return ack?.({ error: "Löhne gibt es nur im Sandkasten" });
+    if (!stadtAktiv()) return ack?.({ error: "Löhne gibt es nur im Sandkasten und in der Einsteiger-Runde" });
     if (!STADT.LOEHNE[stufe]) return ack?.({ error: "Unbekannte Lohnstufe" });
     const jetzt = lohnStufe(p);
     if (STADT.LOEHNE[stufe].rang >= STADT.LOEHNE[jetzt].rang) { p.lohnStufe = stufe; p.lohnWunsch = null; }
@@ -9310,6 +9440,7 @@ function runTick() {
   /* Anleihen: Kupon pro Sekunde = principal * rate / 60 (Zins „pro Minute") */
   for (const b of [...G.bonds]) {
     if (!b.holderId) continue;
+    if (b.issuerId === STADT_ID) { stadtAnleiheTick(b); continue; }
     const debtor = G.players[b.issuerId], holder = G.players[b.holderId];
     const coupon = b.principal * b.rate / 60;
     if (debtor && debtor.cash >= coupon) {
@@ -9790,6 +9921,7 @@ async function spawnBot(cfg, lvl = BOT_LEVELS[BOT_LEVEL_DEFAULT]) {
   const s = ioClient(`http://localhost:${PORT}`);
   let me = null, st = null, myId = null, lastBuild = 0;
   let swPreisZeit = Date.now();   // Software-Anbieter: wann zuletzt die Gebühr überprüft wurde
+  let lohnKnapp = 0, lohnVoll = 0;   // Stadtwachstum: wie oft hintereinander zu wenig bzw. alle Arbeiter da waren
   let botLogoGroesse = 0;            // Malprogramm: Größe des zuletzt gemalten Logos
   let botLeitVersion = 0;            // Leitstand: mit welcher Systemversion das Design zuletzt gesendet wurde
   const swWechsel = {};           // Online-Marktplatz: wann zuletzt das System gewechselt wurde (je Kachel)
@@ -10317,6 +10449,25 @@ async function spawnBot(cfg, lvl = BOT_LEVELS[BOT_LEVEL_DEFAULT]) {
         const q = Math.min(Math.floor((me.inv[g] || 0) / 2), n.req - n.have);
         if (q > 0) await em("projektLiefern", { good: g, qty: q });
       }
+      /* Wohnbau der Stadt: Baumaterial liefern, was über die eigene Reserve geht */
+      const eigeneWaren = new Set(st.map.filter(t => t.owner === myId && t.btype).map(t => BTYPES[t.btype].proc?.out || BTYPES[t.btype].out));
+      for (const a of st.stadt?.auftraege || []) for (const [g, n] of Object.entries(a.needs)) {
+        /* Wer die Ware selbst herstellt, liefert fast alles; die anderen halten Baureserve */
+        const reserve = eigeneWaren.has(g) ? 3 : g === "ziegel" ? 20 : g === "beton" ? 10 : 5;
+        const q = Math.min(Math.floor((me.inv[g] || 0) - reserve), n.req - n.have);
+        if (q > 0) await em("wohnbauLiefern", { id: a.id, good: g, qty: q });
+      }
+      /* Löhne: Fehlen länger Leute, eine Stufe rauf. Ist dreimal in Folge alles
+       * besetzt oder wird das Geld knapp, wieder runter — sonst schaukeln sich
+       * alle Bots auf Spitzenlohn hoch und zahlen nur mehr, ohne Vorteil. */
+      if (me.lohn && st.stadt?.arbeit) {
+        const A = st.stadt.arbeit, q = me.lohn.soll ? me.lohn.arbeiter / me.lohn.soll : 1;
+        const ordnung = ["spar", "tarif", "spitze"], i = ordnung.indexOf(me.lohn.stufe);
+        lohnKnapp = q < .7 ? lohnKnapp + 1 : 0;
+        lohnVoll = q >= .98 ? lohnVoll + 1 : 0;
+        if (lohnKnapp >= 2 && i < 2 && me.cash > 2500) { await em("lohnStufe", { stufe: ordnung[i + 1] }); lohnKnapp = 0; }
+        else if (!me.lohn.wunsch && i > 0 && (lohnVoll >= 3 || me.cash < 600)) { await em("lohnStufe", { stufe: ordnung[i - 1] }); lohnVoll = 0; }
+      }
       /* Großauftrag: die Hälfte des Lagers beisteuern */
       if (st.groupOrder) for (const [g, n] of Object.entries(st.groupOrder.needs)) {
         const q = Math.min(Math.floor((me.inv[g] || 0) / 2), n.req - n.have);
@@ -10526,7 +10677,10 @@ async function spawnBot(cfg, lvl = BOT_LEVELS[BOT_LEVEL_DEFAULT]) {
           .sort((a, b) => b.rate - a.rate)[0];   // bester Zins zuerst
         if (kandidat) await em("buyBond", { bondId: kandidat.id });
       }
-      if (Date.now() - lastBuild > lvl.bauPause && !planFertig) {
+      /* Arbeitermangel in der Stadt: Ein neues Gebäude stünde halb leer —
+       * meistens lieber abwarten, bis neue Bewohner zuziehen. */
+      const arbeitKnapp = st.stadt?.arbeit && st.stadt.arbeit.offen > st.stadt.arbeit.faehig * .2 && Math.random() < .6;
+      if (Date.now() - lastBuild > lvl.bauPause && !planFertig && !arbeitKnapp) {
         let btid = gesamtplan[built % gesamtplan.length];
         if (BTYPES[btid]?.racing && st.map.some(t => t.owner === myId && BTYPES[t.btype]?.racing))
           btid = gesamtplan[(built + 1) % gesamtplan.length];
