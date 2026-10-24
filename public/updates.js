@@ -5,6 +5,24 @@
  * `art`: "neu" (neue Funktion), "besser" (Verbesserung), "fix" (Fehler behoben). */
 window.UPDATES = [
   {
+    id: "2026-10-24c", datum: "2026-10-24",
+    titel: { de: "Die Stadt kauft bei euch ein — Anleihen, Fachkräfte, Pendler", en: "The city buys from you — bonds, skilled workers, commuters" },
+    punkte: [
+      { art: "neu", de: "Wohnblöcke brauchen Baumaterial: Die Stadt bestellt Ziegel, Beton, Stahl und Elektronik und zahlt 15 % über Kurs. Liefern geht in der Stadtübersicht. Kommt nach 90 s nicht alles, kauft sie den Rest teurer anderswo.",
+        en: "Housing needs building materials: the city orders bricks, concrete, steel and electronics and pays 15 % above market. Deliver in the city overview. If not everything arrives within 90 s, it buys the rest elsewhere at a higher price." },
+      { art: "neu", de: "Stadtanleihen: Fehlt der Stadt bei Wohnungsnot das Geld, gibt sie Anleihen aus (2.000 $, 0,5 % je Minute, 15 min, höchstens 20.000 $ Schulden). Spieler und Bots zeichnen sie an der Stadtbank.",
+        en: "City bonds: if the city lacks money during a housing shortage it issues bonds (2,000 $, 0.5 % per minute, 15 min, at most 20,000 $ debt). Players and bots buy them at the city bank." },
+      { art: "neu", de: "Fachkräfte: Pharma-Labor, Entwicklerstudio und Chipfabrik brauchen zur Hälfte Fachkräfte. 10 % der Arbeitenden sind welche, die Stadtbibliothek bildet weitere 10 % aus.",
+        en: "Skilled workers: pharma lab, developer studio and chip factory need half skilled workers. 10 % of the workforce are skilled, the city library trains another 10 %." },
+      { art: "neu", de: "Steuerungssoftware spart ein Viertel der Arbeiter eines Gebäudes.",
+        en: "Control software saves a quarter of a building's workers." },
+      { art: "besser", de: "Bots passen ihre Löhne an, bauen bei Arbeitermangel seltener neu und liefern Baumaterial an die Stadt.",
+        en: "Bots adjust their wages, build less when workers are scarce and deliver building materials to the city." },
+      { art: "neu", de: "Die Einsteiger-Runde hat jetzt auch eine wachsende Stadt. Mehr Einwohner bringen mehr Pendler auf die Straßen. Neues Kapitel „Die Stadt wächst“ in der Spielanleitung, Lexikon-Gruppe „Stadt & Arbeit“ und ein Tutorial-Schritt.",
+        en: "The beginner round now has a growing city too. More residents bring more commuters to the streets. New chapter “The city grows” in the manual, lexicon group “City & work” and a tutorial step." },
+    ]
+  },
+  {
     id: "2026-10-24b", datum: "2026-10-24",
     titel: { de: "Arbeitskräfte: Jedes Gebäude braucht Arbeiter", en: "Workforce: every building needs workers" },
     punkte: [
