@@ -5,6 +5,22 @@
  * `art`: "neu" (neue Funktion), "besser" (Verbesserung), "fix" (Fehler behoben). */
 window.UPDATES = [
   {
+    id: "2026-10-24d", datum: "2026-10-24",
+    titel: { de: "Software für die Stadt: Bürger-Apps, Jobbörse, neues Software-Panel", en: "Software for the city: citizen apps, job board, new software panel" },
+    punkte: [
+      { art: "neu", de: "Bürger-Apps: Software-Firmen entwickeln eine App für die Einwohner. Bis zu 75 % der Bewohner nutzen Apps, sie wählen nach Qualität und Preis und zahlen ein Abo je Minute. Je Rechenzentrums-Stufe bedient eine Firma 150 Nutzer.",
+        en: "Citizen apps: software companies develop an app for residents. Up to 75 % of residents use apps, choose by quality and price and pay a subscription per minute. Each data-centre level serves 150 users." },
+      { art: "neu", de: "Jobbörse: Firmen abonnieren sie im Firma-Panel und bekommen bei knappen Arbeitern Vorrang — wie +0,3 bis +0,7 Lohnstufen, für eine Gebühr je Arbeiter. Je Rechenzentrums-Stufe des Anbieters 3 Abos.",
+        en: "Job board: companies subscribe in the company panel and get priority when workers are scarce — like +0.3 to +0.7 wage levels, for a fee per worker. 3 subscriptions per data-centre level of the provider." },
+      { art: "neu", de: "Nutzt mindestens die Hälfte der Einwohner eine Bürger-App, steigt die Zufriedenheit um 5 % (Digitale Stadt).",
+        en: "If at least half the residents use a citizen app, satisfaction rises by 5 % (digital city)." },
+      { art: "besser", de: "Software-Panel aufgeräumt: Reiter Markt, Mein System, Entwicklung, Design und Produkte statt einer langen Seite, oben alle eigenen Produkte auf einen Blick.",
+        en: "Software panel tidied up: tabs Market, My system, Development, Design and Products instead of one long page, with all your products at a glance at the top." },
+      { art: "besser", de: "Bots entwickeln Bürger-Apps und Jobbörsen, passen ihre App-Preise an und abonnieren Jobbörsen, wenn ihnen Leute fehlen.",
+        en: "Bots develop citizen apps and job boards, adjust their app prices and subscribe to job boards when they are short of staff." },
+    ]
+  },
+  {
     id: "2026-10-24c", datum: "2026-10-24",
     titel: { de: "Die Stadt kauft bei euch ein — Anleihen, Fachkräfte, Pendler", en: "The city buys from you — bonds, skilled workers, commuters" },
     punkte: [

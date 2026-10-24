@@ -4055,7 +4055,8 @@ const swEigenes = p => Object.values(G.software || {}).find(s => s.ownerId === p
 /* Markenwert des eigenen Systems (siehe SW.MARKENWERT) — Teil der Substanz. */
 const swMarkenwert = p => {
   const prod = G.software && swEigenes(p), mp = G.paint && paintEigenes(p);
-  const summe = (prod?.eb || []).reduce((a, b) => a + b, 0) + (mp?.eb || []).reduce((a, b) => a + b, 0);
+  const app = G.buergerApp && appEigenes(p), jb = G.jobboerse && jobEigenes(p);
+  const summe = [prod, mp, app, jb].reduce((s2, x) => s2 + (x?.eb || []).reduce((a, b) => a + b, 0), 0);
   return summe * SW.MARKENWERT;
 };
 const swKunden = prod => G.map.filter(t => t.system?.produktId === prod.id || t.steuerung?.produktId === prod.id).length;
@@ -4092,6 +4093,108 @@ function swGebuehr(prod, betrag) {
   if (live) { live.einnahmen = (live.einnahmen || 0) + betrag; (live.eb ??= [0])[0] += betrag; }
 }
 /* Einmal je Tick: Auslastung der Anbieter, Ruf, Werbe-Abos, Notlösung. */
+/* ---------- Bürger-App und Jobbörse (Stadtwachstum, Etappe 5) ----------
+ * Zwei Software-Produkte, die direkt an der wachsenden Stadt hängen.
+ * Bürger-App: Ein Teil der Einwohner nutzt Apps und zahlt ein Abo je Minute;
+ * die Nutzer verteilen sich nach Qualität und Preis. Jobbörse: Firmen
+ * abonnieren sie und bekommen bei der Verteilung der Arbeiter Vorrang (wie
+ * eine Teil-Lohnstufe). Beide laufen auf eigener Kapazität der Rechenzentren
+ * (je Stufe 150 App-Nutzer bzw. 3 Abos) — nicht auf den Shop-Plätzen: Die
+ * füllten die Bots in der Simulation komplett, Apps bekamen 0 Nutzer. */
+const BUERGER_APP = {
+  AB_SYSTEM: 1,
+  STUFEN: [
+    { ep: 180, quali: 1.0, quote: 0.35 },   // v1: bis 35 % der Einwohner nutzen Apps
+    { ep: 240, quali: 1.6, quote: 0.55 },
+    { ep: 320, quali: 2.4, quote: 0.75 },
+  ],
+  PREIS_MIN: 0.05, PREIS_MAX: 0.5, PREIS_START: 0.15, PREIS_REF: 0.15, ELASTIZITAET: 1.5,
+  NUTZER_JE_STUFE: 150, DIGITAL_ANTEIL: 0.5, DIGITAL_BONUS: 0.05,
+};
+const JOBBOERSE = {
+  AB_SYSTEM: 1,
+  STUFEN: [{ ep: 160, vorrang: 0.3 }, { ep: 220, vorrang: 0.5 }, { ep: 300, vorrang: 0.7 }],
+  GEB_MIN: 0.2, GEB_MAX: 2, GEB_START: 0.8, ABOS_JE_STUFE: 3,
+};
+const appEigenes = p => Object.values(G.buergerApp || {}).find(x => x.ownerId === p.id) || null;
+const jobEigenes = p => Object.values(G.jobboerse || {}).find(x => x.ownerId === p.id) || null;
+const jobAbonnenten = jb => Object.values(G.players).filter(k => k.jobAbo === jb.id && k.id !== jb.ownerId);
+/* Laufende Rechenzentrums-Stufen einer Firma (mit Strom, fertig gebaut) */
+const rzStufen = ownerId => G.map.filter(t => t.owner === ownerId && BTYPES[t.btype]?.rz && t.rzAktiv && !imBau(t))
+  .reduce((a, t) => a + (t.level || 1), 0);
+/* Vorrang auf dem Arbeitsmarkt: eigene Jobbörse voll, abonnierte anteilig nach Plätzen */
+function jobVorrang(p) {
+  const eigen = jobEigenes(p);
+  if (eigen?.version >= 1) return JOBBOERSE.STUFEN[eigen.version - 1].vorrang;
+  const jb = p.jobAbo && G.jobboerse?.[p.jobAbo];
+  if (!(jb?.version >= 1)) return 0;
+  return JOBBOERSE.STUFEN[jb.version - 1].vorrang * (jb.faktor ?? 1);
+}
+/* Alle 10 s: Plätze der Jobbörsen, Nutzer der Bürger-Apps */
+function softwareStadtTick() {
+  const S = G.stadt;
+  for (const coll of [G.buergerApp, G.jobboerse]) for (const x of Object.values(coll || {}))
+    if (!G.players[x.ownerId]) delete coll[x.id];
+  for (const jb of Object.values(G.jobboerse || {})) {
+    const n = jobAbonnenten(jb).length, plaetze = rzStufen(jb.ownerId) * JOBBOERSE.ABOS_JE_STUFE;
+    jb.faktor = n ? Math.min(1, plaetze / n) : (plaetze > 0 ? 1 : 0); jb.abonnenten = n; jb.plaetze = plaetze;
+  }
+  const apps = Object.values(G.buergerApp || {}).filter(a => a.version >= 1);
+  const quote = Math.max(0, ...apps.map(a => BUERGER_APP.STUFEN[a.version - 1].quote));
+  const gesamt = Math.floor(S.einwohner * quote);
+  const score = a => BUERGER_APP.STUFEN[a.version - 1].quali / Math.pow(a.preis / BUERGER_APP.PREIS_REF, BUERGER_APP.ELASTIZITAET);
+  const summe = apps.reduce((x, a) => x + score(a), 0) || 1;
+  let nutzer = 0;
+  for (const a of Object.values(G.buergerApp || {})) {
+    if (!(a.version >= 1)) { a.nutzer = 0; a.kapazitaet = 0; continue; }
+    a.kapazitaet = rzStufen(a.ownerId) * BUERGER_APP.NUTZER_JE_STUFE;
+    a.wunsch = Math.floor(gesamt * score(a) / summe);
+    a.nutzer = Math.min(a.kapazitaet, a.wunsch);
+    nutzer += a.nutzer;
+  }
+  S.appNutzer = nutzer; S.appQuote = quote;
+}
+/* Jede Minute: Abo-Einnahmen der Bürger-Apps (aus dem Konsum der Bewohner) */
+function buergerAppZahlen() {
+  for (const a of Object.values(G.buergerApp || {})) {
+    (a.eb ??= [0]).unshift(0); if (a.eb.length > 10) a.eb.length = 10;
+    const owner = G.players[a.ownerId], betrag = Math.round((a.nutzer || 0) * a.preis * 100) / 100;
+    if (!owner || !(betrag > 0)) continue;
+    owner.cash += betrag; addRevenue(owner, betrag); a.eb[0] += betrag; a.gesamt = (a.gesamt || 0) + betrag;
+    logTx(owner, "Software", `${a.name}: ${a.nutzer} Nutzer`, betrag);
+  }
+  for (const jb of Object.values(G.jobboerse || {})) { (jb.eb ??= [0]).unshift(0); if (jb.eb.length > 10) jb.eb.length = 10; }
+}
+/* Gebühr der Jobbörse je beschäftigtem Arbeiter, mit den Löhnen fällig */
+function jobboerseGebuehr(p, arbeiter) {
+  const jb = p.jobAbo && G.jobboerse?.[p.jobAbo];
+  if (!jb || jb.ownerId === p.id) { if (p.jobAbo && !jb) p.jobAbo = null; return; }
+  const betrag = Math.round(arbeiter * jb.gebuehr * 100) / 100, owner = G.players[jb.ownerId];
+  if (!(betrag > 0) || !owner) return;
+  if (p.cash < betrag) {
+    p.jobAbo = null;
+    if (!p.bot) emitTo(p.id, "notice", { text: `${jb.name}: Abo gekündigt — die Gebühr war nicht gedeckt.` });
+    return;
+  }
+  p.cash -= betrag; p.stats.ausgaben += betrag;
+  owner.cash += betrag; addRevenue(owner, betrag); (jb.eb ??= [0])[0] += betrag; jb.gesamt = (jb.gesamt || 0) + betrag;
+  logTx(p, "Software", `${jb.name}: Vermittlung für ${arbeiter} Arbeiter`, -betrag);
+}
+function stadtSoftwareVeroeffentlichen(x, p, art) {
+  x.version = x.entwicklung.version; x.entwicklung = null;
+  const text = art === "app" ? `Bürger-App ${x.name} v${x.version}` : `Jobbörse ${x.name} v${x.version}`;
+  marktLog("software", `${p.name} veröffentlicht die ${text}`, { firmaId: p.id });
+  io.emit("notice", { text: `Neu: ${text} von ${p.name}${art === "job" ? " — abonnieren im Firma-Panel" : ""}.` });
+}
+const buergerAppPublic = () => stadtAktiv() ? Object.values(G.buergerApp || {}).map(a => ({ id: a.id, ownerId: a.ownerId, anbieter: G.players[a.ownerId]?.name ?? "—",
+  farbe: G.players[a.ownerId]?.color || "#64748b", name: a.name, version: a.version || 0, preis: a.preis, nutzer: a.nutzer || 0, wunsch: a.wunsch || 0,
+  kapazitaet: a.kapazitaet || 0, einnahmen10: Math.round((a.eb || []).reduce((x, y) => x + y, 0)), gesamt: Math.round(a.gesamt || 0),
+  entwicklung: a.entwicklung ? { version: a.entwicklung.version, ep: Math.floor(a.entwicklung.ep), ziel: a.entwicklung.ziel } : null })) : [];
+const jobboersePublic = () => stadtAktiv() ? Object.values(G.jobboerse || {}).map(jb => ({ id: jb.id, ownerId: jb.ownerId, anbieter: G.players[jb.ownerId]?.name ?? "—",
+  farbe: G.players[jb.ownerId]?.color || "#64748b", name: jb.name, version: jb.version || 0, gebuehr: jb.gebuehr, abonnenten: jb.abonnenten || 0,
+  faktor: Math.round((jb.faktor ?? 1) * 100) / 100, plaetze: jb.plaetze || 0, vorrang: jb.version >= 1 ? JOBBOERSE.STUFEN[jb.version - 1].vorrang : 0,
+  einnahmen10: Math.round((jb.eb || []).reduce((x, y) => x + y, 0)), gesamt: Math.round(jb.gesamt || 0),
+  entwicklung: jb.entwicklung ? { version: jb.entwicklung.version, ep: Math.floor(jb.entwicklung.ep), ziel: jb.entwicklung.ziel } : null })) : [];
 function swTick() {
   G.software ??= {};
   G.swFaktor = {};
@@ -4255,13 +4358,13 @@ function swBetrieb(t, p, bt, sperr = 1) {
     else tempo = 0.5;
   }
   const ep = bt.studio.ep * lvl * frac * tempo;
-  const prod = swEigenes(p), mp = paintEigenes(p), ba = boerseEigenes(p);
+  const prod = swEigenes(p), mp = paintEigenes(p), ba = boerseEigenes(p), app = appEigenes(p), jb = jobEigenes(p);
   /* Laufen mehrere Entwicklungen gleichzeitig (Shop-System, Malprogramm,
    * Börsen-App), teilt das Studio seine EP gleichmäßig — sonst käme ein
    * Zweitprodukt bei Firmen, die ständig am System weiterbauen, nie voran.
    * Die Börsen-App fehlte hier anfangs: Sie bekam nur den EP-Vorrat beim
    * Start und blieb danach für immer stehen. */
-  const laufend = [prod, mp, ba].filter(x => x?.entwicklung).length;
+  const laufend = [prod, mp, ba, app, jb].filter(x => x?.entwicklung).length;
   if (prod?.entwicklung) {
     prod.entwicklung.ep += ep / laufend;
     if (prod.entwicklung.ep >= prod.entwicklung.ziel) swVeroeffentlichen(prod, p);
@@ -4273,6 +4376,10 @@ function swBetrieb(t, p, bt, sperr = 1) {
   if (ba?.entwicklung) {
     ba.entwicklung.ep += ep / laufend;
     if (ba.entwicklung.ep >= ba.entwicklung.ziel) boerseVeroeffentlichen(ba, p);
+  }
+  for (const [x, art] of [[app, "app"], [jb, "job"]]) if (x?.entwicklung) {
+    x.entwicklung.ep += ep / laufend;
+    if (x.entwicklung.ep >= x.entwicklung.ziel) stadtSoftwareVeroeffentlichen(x, p, art);
   }
   if (!laufend) p.swEp = Math.min(SW.EP_SPEICHER, (p.swEp || 0) + ep);
 }
@@ -5013,7 +5120,7 @@ function lohnStufe(p) {
   return STADT.LOEHNE[p.lohnStufe] ? p.lohnStufe : "tarif";
 }
 /* Wer seine Loehne nicht zahlen konnte, bekommt zuletzt Leute. */
-const lohnRang = p => p.lohnVerzug ? -1 : STADT.LOEHNE[lohnStufe(p)].rang;
+const lohnRang = p => p.lohnVerzug ? -1 : STADT.LOEHNE[lohnStufe(p)].rang + jobVorrang(p);
 /* Alle Stellen der Stadt besetzen: zuerst die hoechste Lohnstufe, innerhalb
  * einer Stufe anteilig, damit kein einzelnes Gebaeude leer ausgeht. */
 /* Pool nach Lohnrang vergeben: hoechste Stufe zuerst, innerhalb anteilig,
@@ -5075,6 +5182,7 @@ function loehneZahlen() {
     const warVerzug = p.lohnVerzug;
     p.lohnVerzug = zahl < soll - 0.5;
     p.lohnLetzt = { arbeiter: n, soll, zahl, stufe, tick: G.tick };
+    jobboerseGebuehr(p, n);
     if (!(zahl > 0)) continue;
     p.cash -= zahl; p.stats.ausgaben += zahl; p.stats.loehne = (p.stats.loehne || 0) + zahl;
     logTx(p, "Löhne", `Löhne für ${n} Arbeiter (${STADT.LOEHNE[stufe].name})`, -zahl);
@@ -5119,6 +5227,9 @@ function stadtZufriedenheit() {
   const arbeit = G.tick < STADT.SCHONFRIST ? 0 : -Math.min(STADT.ARBEITSLOS_MALUS_MAX, Math.max(0, quote - STADT.ARBEITSLOS_GRENZE));
   teile.push({ key: "arbeit", name: "Arbeit", wirkung: Math.round(arbeit * 100) / 100,
     text: G.tick < STADT.SCHONFRIST ? "Schonfrist zum Rundenstart" : `${Math.round(quote * 100)} % arbeitslos` });
+  const digital = (S.appNutzer || 0) >= S.einwohner * BUERGER_APP.DIGITAL_ANTEIL ? BUERGER_APP.DIGITAL_BONUS : 0;
+  if (S.appNutzer || digital) teile.push({ key: "digital", name: "Digitale Stadt", wirkung: digital,
+    text: `${Math.round((S.appNutzer || 0) / Math.max(1, S.einwohner) * 100)} % nutzen eine Bürger-App` });
   const stufe = steuerStufe().key;
   const steuer = stufe === "notstand" ? -STADT.NOTSTAND_MALUS : stufe === "knapp" ? -STADT.KNAPP_MALUS : 0;
   teile.push({ key: "steuer", name: "Steuerlage", wirkung: steuer, text: steuerStufe().name });
@@ -5229,13 +5340,14 @@ function stadtTick() {
   const S = G.stadt;
   for (const t of G.map) if (t.wohnblock?.bis && t.wohnblock.bis <= G.tick) t.wohnblock = { stufe: t.wohnblock.stufe };
   wohnAuftraegePruefen();
-  if (G.tick % STADT.VERTEILUNG_TAKT === 0) arbeitVerteilen();
+  if (G.tick % STADT.VERTEILUNG_TAKT === 0) { softwareStadtTick(); arbeitVerteilen(); }
   if (G.tick % 10 === 0) {
     const da = versorgungPruefen();
     for (const g of Object.keys(VERSORGUNG)) S.fehlt[g] = da[g] ? 0 : (S.fehlt[g] || 0) + 10;
   }
   if (G.tick % STADT.TAKT !== 30) return;   // versetzt zu Steuern und Markttag
   loehneZahlen();
+  buergerAppZahlen();
   const z = stadtZufriedenheit();
   S.zufr = z.wert; S.teile = z.teile;
   const kap = wohnKapazitaet();
@@ -5264,7 +5376,7 @@ function stadtPublic() {
     baustellen: G.map.filter(wohnImBau).length,
     auftraege: S.auftraege.map(a => ({ id: a.id, x: a.x, y: a.y, name: a.name, stufe: a.stufe, needs: a.needs, frist: a.frist,
       contrib: Object.fromEntries(Object.entries(a.contrib).map(([pid, g]) => [pid, { name: G.players[pid]?.name ?? "—", color: G.players[pid]?.color, goods: g }])) })),
-    schulden: stadtSchulden(), anleihe: STADT.ANLEIHE, fach: S.fach || null, bloecke, platz: wohnKacheln().filter(t => !t.wohnblock && !t.park).length,
+    schulden: stadtSchulden(), anleihe: STADT.ANLEIHE, fach: S.fach || null, appNutzer: S.appNutzer || 0, bloecke, platz: wohnKacheln().filter(t => !t.wohnblock && !t.park).length,
     zufr: S.zufr, teile: S.teile, zuzug: S.zuzug, wegzug: S.wegzug, verlauf: S.verlauf,
     nachfrage: Math.round(stadtNachfrage() * 100) / 100, investiert: S.investiert, wartetAufGeld: S.wartetAufGeld || 0,
     log: S.log, stufen: STADT.STUFEN, kasseMin: STADT.KASSE_MIN, bauDauer: STADT.BAU_DAUER, takt: STADT.TAKT,
@@ -5896,6 +6008,7 @@ function snapshot() {
     steuerung: STEUERUNG, steuerStufe: STEUER_STUFE, steuerAboCfg: STEUER_ABO,
     leitDesign: LEIT_DESIGN, leitDesignAb: LEIT_DESIGN_AB, leitFunktion: LEIT_FUNKTION, turbo: TURBO,
     anzeigen: anzeigenPublic(), anzeigeCfg: { preisMin: ANZEIGE.PREIS_MIN, preisMax: ANZEIGE.PREIS_MAX, dauer: ANZEIGE.DAUER, text: ANZEIGE.TEXT, maxJe: ANZEIGE.MAX_JE, max: ANZEIGE.MAX },
+    buergerApp: buergerAppPublic(), buergerAppCfg: BUERGER_APP, jobboerse: jobboersePublic(), jobboerseCfg: JOBBOERSE,
     boerseApp: boersePublic(), boerseAppCfg: { stufen: BOERSE_APP.STUFEN, abSystem: BOERSE_APP.AB_SYSTEM, preisMin: BOERSE_APP.PREIS_MIN, preisMax: BOERSE_APP.PREIS_MAX },
     logoV: Object.fromEntries(Object.values(G.players).filter(p => p.logo).map(p => [p.id, p.logo.v])), swDesign: SW_DESIGN, swDesignAb: SW_DESIGN_AB, swCfg: { install: SW.INSTALL, portalInstall: SW.PORTAL_INSTALL, versionEp: SW.VERSION_EP, werbeBoost: SW.WERBE_BOOST, gebMin: SW.GEB_MIN, gebMax: SW.GEB_MAX, einrMax: SW.EINR_MAX, aboMin: SW.ABO_MIN, aboMax: SW.ABO_MAX, handelssteuer: Math.round(satzBoerse() * SW.HANDELSSTEUER * 1000) / 10, markenwert: SW.MARKENWERT },
     marktLog: (G.marktLog || []).slice(0, 20), marktCfg: { aktien: AKTIEN, tag: MARKT.TAG, beta: MARKT.BETA, bauDauer: MARKT.BAU_DAUER, afaDauer: MARKT.AFA_DAUER },
@@ -6109,6 +6222,7 @@ function privateState(p) {
       .map(w => ({ ...w, firma: G.players[w.firmaId]?.name ?? "—" })),
     wettLog: p.wettLog || [], wettMax: wettMax(p),
     lohn: stadtAktiv() ? { stufe: lohnStufe(p), wunsch: p.lohnWunsch || null, ab: p.lohnWunsch ? p.lohnAb : null,
+      jobAbo: p.jobAbo || null, vorrang: Math.round(jobVorrang(p) * 100) / 100,
       verzug: !!p.lohnVerzug, letzt: p.lohnLetzt || null, gesamt: Math.round(p.stats.loehne || 0),
       arbeiter: G.map.reduce((a, t) => a + (t.owner === p.id ? t.arbeiter || 0 : 0), 0),
       soll: G.map.reduce((a, t) => a + (t.owner === p.id ? t.arbeiterSoll || 0 : 0), 0) } : null,
@@ -8342,7 +8456,7 @@ io.on("connection", socket => {
     G.nextDividendIn = DIVIDEND_INTERVAL;
     G.wettrunde = { nr: 1, phase: "annahme", rest: WETT_ANNAHME, start: {} }; G.wetten = []; G.wettLetzte = []; G.wettReserve = WETT_RESERVE;
     G.markt = {}; G.marktLog = []; G.panikTag = null; G.panikErledigt = false; G.fonds = {}; G.etfHist = {}; G.faEtf = {}; G.software = {}; G.paint = {}; G.swFaktor = {}; G.werbeAktiv = new Set();
-    G.boerseApp = {}; G.depot = depotLeer(); G.bstat = {}; G.anzeigen = [];
+    G.boerseApp = {}; G.buergerApp = {}; G.jobboerse = {}; G.depot = depotLeer(); G.bstat = {}; G.anzeigen = [];
     G.stadtkasse = STADT_GRUNDSTOCK; G.steuerStufe = 2; G.boerseGebuehren = 0; G.steuernGesamt = 0; G.stadtprojekt = null; G.projektPause = 120; G.stadtprojekteFertig = [];
     stadtInit();
     for (const pl of Object.values(G.players)) { pl.steuerStand = undefined; pl.steuerSchuld = 0; pl.steuerLetzter = null; }
@@ -8365,6 +8479,65 @@ io.on("connection", socket => {
   /* --- Software: Shop-System einstellen (Name, Farbe, Preise) ---
    * Preise und Aussehen gelten sofort; neue Funktionen kosten Entwicklung
    * (softwareEntwickeln). */
+  /* --- Bürger-App und Jobbörse (Etappe 5) --- */
+  const stadtSwPruefen = (p, cfgX, was) => {
+    if (!stadtAktiv()) return "Nur im Sandkasten und in der Einsteiger-Runde";
+    if (!istSoftwareFirma(p)) return `Nur Software-Firmen entwickeln ${was}`;
+    if (!(swEigenes(p)?.version >= cfgX.AB_SYSTEM)) return `Erst ab Shop-System v${cfgX.AB_SYSTEM}`;
+    return null;
+  };
+  const stadtSwName = (d, x, coll) => {
+    const name = sicherText(String(d.name ?? x?.name ?? "").trim().slice(0, 20));
+    if (name.length < 3) return { error: "Name: mindestens 3 Zeichen" };
+    if (Object.values(coll).some(o => o !== x && o.name.toLowerCase() === name.toLowerCase())) return { error: "Diesen Namen gibt es schon" };
+    return { name };
+  };
+  const stadtSwEntwickeln = (p, x, cfgX, art) => {
+    if (!x) return { error: "Lege zuerst Name und Preis fest" };
+    if (x.entwicklung) return { error: `v${x.entwicklung.version} ist schon in Arbeit` };
+    if ((x.version || 0) >= cfgX.STUFEN.length) return { error: "Schon voll ausgebaut" };
+    if (!G.map.some(t => t.owner === p.id && BTYPES[t.btype]?.studio)) return { error: "Dafür brauchst du ein Entwicklerstudio" };
+    const version = (x.version || 0) + 1, ep = cfgX.STUFEN[version - 1].ep, vorrat = Math.min(ep, p.swEp || 0);
+    p.swEp = (p.swEp || 0) - vorrat;
+    x.entwicklung = { version, ziel: ep, ep: vorrat };
+    marktLog("software", `${p.name} entwickelt ${art === "app" ? "die Bürger-App" : "die Jobbörse"} ${x.name} v${version}`, { firmaId: p.id });
+    if (x.entwicklung.ep >= ep) stadtSoftwareVeroeffentlichen(x, p, art);
+    return { ok: true, ep };
+  };
+  socket.on("appEinstellen", guard((p, d = {}, ack) => {
+    const f = stadtSwPruefen(p, BUERGER_APP, "Bürger-Apps"); if (f) return ack?.({ error: f });
+    G.buergerApp ??= {};
+    let x = appEigenes(p);
+    const n = stadtSwName(d, x, G.buergerApp); if (n.error) return ack?.(n);
+    const preis = Math.round(Math.min(BUERGER_APP.PREIS_MAX, Math.max(BUERGER_APP.PREIS_MIN, +d.preis || x?.preis || BUERGER_APP.PREIS_START)) * 100) / 100;
+    if (!x) { x = { id: "app_" + id(), ownerId: p.id, name: n.name, version: 0, preis, nutzer: 0, eb: [0], entwicklung: null }; G.buergerApp[x.id] = x; }
+    x.name = n.name; x.preis = preis;
+    ack?.({ ok: true, id: x.id }); pushState();
+  }));
+  socket.on("appEntwickeln", guard((p, _d, ack) => { ack?.(stadtSwEntwickeln(p, istSoftwareFirma(p) && appEigenes(p), BUERGER_APP, "app")); pushState(); }));
+  socket.on("jobEinstellen", guard((p, d = {}, ack) => {
+    const f = stadtSwPruefen(p, JOBBOERSE, "Jobbörsen"); if (f) return ack?.({ error: f });
+    G.jobboerse ??= {};
+    let x = jobEigenes(p);
+    const n = stadtSwName(d, x, G.jobboerse); if (n.error) return ack?.(n);
+    const gebuehr = Math.round(Math.min(JOBBOERSE.GEB_MAX, Math.max(JOBBOERSE.GEB_MIN, +d.gebuehr || x?.gebuehr || JOBBOERSE.GEB_START)) * 100) / 100;
+    if (!x) { x = { id: "job_" + id(), ownerId: p.id, name: n.name, version: 0, gebuehr, eb: [0], entwicklung: null }; G.jobboerse[x.id] = x; }
+    x.name = n.name; x.gebuehr = gebuehr;
+    ack?.({ ok: true, id: x.id }); pushState();
+  }));
+  socket.on("jobEntwickeln", guard((p, _d, ack) => { ack?.(stadtSwEntwickeln(p, istSoftwareFirma(p) && jobEigenes(p), JOBBOERSE, "job")); pushState(); }));
+  socket.on("jobAbo", guard((p, { id: jid } = {}, ack) => {
+    if (!stadtAktiv()) return ack?.({ error: "Nur im Sandkasten und in der Einsteiger-Runde" });
+    if (!jid) { p.jobAbo = null; ack?.({ ok: true }); return pushState(); }
+    const jb = G.jobboerse?.[jid];
+    if (!(jb?.version >= 1)) return ack?.({ error: "Diese Jobbörse ist noch nicht fertig" });
+    if (jb.ownerId === p.id) return ack?.({ error: "Deine eigene Jobbörse wirkt ohnehin für dich" });
+    /* Ausgebucht: je Rechenzentrums-Stufe des Anbieters nur ABOS_JE_STUFE Abos */
+    if (p.jobAbo !== jb.id && jobAbonnenten(jb).length >= rzStufen(jb.ownerId) * JOBBOERSE.ABOS_JE_STUFE)
+      return ack?.({ error: `${jb.name} ist ausgebucht — dem Anbieter fehlen Plätze im Rechenzentrum` });
+    p.jobAbo = jb.id;
+    ack?.({ ok: true }); pushState();
+  }));
   /* --- Baumaterial fuer einen Wohnblock der Stadt liefern (Etappe 3) --- */
   socket.on("wohnbauLiefern", guard((p, d, ack) => { ack?.(wohnbauLiefern(p, d)); pushState(); }));
   /* --- Lohnstufe (Sandkasten, Etappe 2): sofort hoeher, nach Kuendigungsfrist niedriger --- */
@@ -9844,11 +10017,11 @@ const BOT_CFGS = [
    * das Stadtportal. */
   { name: "Byteforge",       industry: "software",  color: "#60a5fa",
     plan: ["rechenzentrum", "entwicklerstudio"], needs: ["strom", "elektronik"], vorrat: { strom: 150, elektronik: 5 },
-    sw: { name: "KassenKlick", paint: "PixelPinsel", paintPreis: 800, boerse: "TradeBot", boersePreis: 1000, steuerAbo: 30, anzeigenPreis: 60,
+    sw: { name: "KassenKlick", paint: "PixelPinsel", paintPreis: 800, boerse: "TradeBot", boersePreis: 1000, app: "KlickTalk", job: "KlickJobs", steuerAbo: 30, anzeigenPreis: 60,
           leit: { thema: "industrie", anzeige: "ziffern", schrift: "mono", effekt: "scan", titel: "KassenKlick Control", meldung: "Läuft wie geschmiert — Byteforge-Support rund um die Uhr", akzent: "#fbbf24" }, einrichtung: 300, gebuehr: 3, abo: 120, module: ["bewertungen", "lieferung"] } },
   { name: "Pixelwerk",       industry: "software",  color: "#f472b6",
     plan: ["entwicklerstudio", "rechenzentrum"], needs: ["strom", "elektronik"], vorrat: { strom: 150, elektronik: 5 },
-    sw: { name: "ShopStern", paint: "MalMeister", paintPreis: 1200, boerse: "Aktienfuchs", boersePreis: 1500, steuerAbo: 50, anzeigenPreis: 100,
+    sw: { name: "ShopStern", paint: "MalMeister", paintPreis: 1200, boerse: "Aktienfuchs", boersePreis: 1500, app: "SternStream", job: "SternJobs", steuerAbo: 50, anzeigenPreis: 100,
           leit: { thema: "neon", anzeige: "ringe", schrift: "modern", effekt: "funken", titel: "ShopStern Cockpit", meldung: "Pixelwerk ✦ mehr Ausstoß, weniger Sorgen", akzent: "#a78bfa" }, einrichtung: 600, gebuehr: 4, abo: 180, module: ["lieferung", "bewertungen"] } },
 ];
 let botsStarted = false;
@@ -10294,6 +10467,21 @@ async function spawnBot(cfg, lvl = BOT_LEVELS[BOT_LEVEL_DEFAULT]) {
             else if (!ba.entwicklung && ba.version < BOERSE_APP.STUFEN.length && me.cash > 1500) await em("boerseEntwickeln", {});
           }
         }
+        /* Etappe 5: Bürger-App und Jobbörse, sobald das eigene System steht */
+        if (st.stadt && meins?.version >= 2 && cfg.sw.app) {
+          const app = (st.buergerApp || []).find(x => x.ownerId === myId);
+          const job = (st.jobboerse || []).find(x => x.ownerId === myId);
+          if (!app) await em("appEinstellen", { name: cfg.sw.app, preis: BUERGER_APP.PREIS_START });
+          else if (!app.entwicklung && app.version < BUERGER_APP.STUFEN.length && me.cash > 1500) await em("appEntwickeln", {});
+          /* Preis: Ist die App am Platzlimit, rauf; hat sie kaum Nutzer, runter */
+          else if (app.version >= 1 && Math.random() < .2) {
+            const voll = app.wunsch > app.kapazitaet;   // Platz fehlt, nicht Nachfrage
+            const neu = voll ? app.preis + .02 : app.wunsch < 100 ? app.preis - .01 : app.preis;
+            if (Math.abs(neu - app.preis) > .001) await em("appEinstellen", { name: app.name, preis: neu });
+          }
+          if (!job) await em("jobEinstellen", { name: cfg.sw.job, gebuehr: JOBBOERSE.GEB_START });
+          else if (!job.entwicklung && job.version < JOBBOERSE.STUFEN.length && me.cash > 1500 && app?.version >= 1) await em("jobEntwickeln", {});
+        }
       }
       /* --- Werbenetz: mit Polster ab und zu eine Anzeige bei dem System buchen,
        * das je Dollar die meiste Wirkung bringt (Reichweite ÷ Preis). Nur wer
@@ -10465,6 +10653,12 @@ async function spawnBot(cfg, lvl = BOT_LEVELS[BOT_LEVEL_DEFAULT]) {
         const ordnung = ["spar", "tarif", "spitze"], i = ordnung.indexOf(me.lohn.stufe);
         lohnKnapp = q < .7 ? lohnKnapp + 1 : 0;
         lohnVoll = q >= .98 ? lohnVoll + 1 : 0;
+        /* Jobbörse statt Lohnspirale: günstiger Vorrang, solange Leute fehlen */
+        if (!me.lohn.jobAbo && q < .9 && me.cash > 1500) {
+          const best = (st.jobboerse || []).filter(j => j.version >= 1 && j.ownerId !== myId && j.faktor > .5)
+            .sort((a, b) => b.vorrang / b.gebuehr - a.vorrang / a.gebuehr)[0];
+          if (best) await em("jobAbo", { id: best.id });
+        } else if (me.lohn.jobAbo && lohnVoll >= 4) await em("jobAbo", { id: null });
         if (lohnKnapp >= 2 && i < 2 && me.cash > 2500) { await em("lohnStufe", { stufe: ordnung[i + 1] }); lohnKnapp = 0; }
         else if (!me.lohn.wunsch && i > 0 && (lohnVoll >= 3 || me.cash < 600)) { await em("lohnStufe", { stufe: ordnung[i - 1] }); lohnVoll = 0; }
       }
