@@ -2071,8 +2071,11 @@ const BTYPES = {
    * (gemessen: der Bot verbaute sein ganzes Startkapital in Freischaltungen,
    * konnte danach keinen Strom mehr kaufen, das Hotel stand still und ohne
    * Produktion kam auch kein Geld nach). Die Küste bleibt dem Hotel. */
-  campingplatz: { name: "Campingplatz", en: "Campground", cost: 1500, out: "uebernachtung", rate: 10/60, zone: "agrar", industry: "touristik" },
-  strandhotel:  { name: "Strandhotel", en: "Beach hotel",  cost: 2400, out: null, rate: 0, zone: "kueste", industry: "touristik",
+  /* arbeiter: feste Belegschaft (Stadtwachstum). Mit Baukosten/250 brach die
+   * Touristik von 113k auf 17k $ Vermögen ein — Hotel und Campingplatz waren
+   * die lohnintensivsten Betriebe im Verhältnis zu ihrem Ertrag. */
+  campingplatz: { name: "Campingplatz", en: "Campground", cost: 1500, out: "uebernachtung", rate: 10/60, zone: "agrar", industry: "touristik", arbeiter: 3 },
+  strandhotel:  { name: "Strandhotel", en: "Beach hotel",  cost: 2400, out: null, rate: 0, zone: "kueste", industry: "touristik", arbeiter: 5,
                   proc: { in: { wasser: 2.5, strom: 1.25 }, out: "uebernachtung", rate: 10/30 } },
   brunnen:    { name: "Brunnen", en: "Well",           cost: 800,  out: "wasser",   rate: 2.5,  zone: "agrar",     industry: "versorger" },
   windpark:   { name: "Windpark", en: "Wind farm",          cost: 2200, out: "strom",    rate: 5,    zone: "kueste",    industry: "versorger" },
@@ -2128,10 +2131,13 @@ const BTYPES = {
    * Byteforge kam in 30 Spielminuten nie über das Studio hinaus, sein System
    * hatte 0 Plätze, und kein einziger Marktplatz konnte es nehmen.
    * Stromverbrauch so, dass fünf Kunden das Rechenzentrum deutlich tragen. */
-  entwicklerstudio: { name: "Entwicklerstudio", en: "Dev studio", cost: 3000, out: null, rate: 0, zone: "zentrum", industry: "software",
+  /* arbeiter: feste Belegschaft statt Baukosten/250 (Stadtwachstum) — ein
+   * Rechenzentrum mit 14 Leuten (Stufe 3: 28) fraß in der Messung jeden
+   * Mehrertrag des Ausbaus durch Löhne auf. */
+  entwicklerstudio: { name: "Entwicklerstudio", en: "Dev studio", cost: 3000, out: null, rate: 0, zone: "zentrum", industry: "software", arbeiter: 6,
                       studio: { in: { strom: 0.3, elektronik: 0.005 }, ep: 1 } },
-  rechenzentrum:    { name: "Rechenzentrum", en: "Data centre", cost: 3500, out: null, rate: 0, zone: "zentrum", industry: "software",
-                      rz: { in: { strom: 0.3 }, plaetze: 5 } },
+  rechenzentrum:    { name: "Rechenzentrum", en: "Data centre", cost: 3500, out: null, rate: 0, zone: "zentrum", industry: "software", arbeiter: 4,
+                      rz: { in: { strom: 0.2 }, plaetze: 5 } },   // 0,3 → 0,2: Strom fraß ein Drittel der Software-Einnahmen
   /* Online-Marktplatz: der EINZIGE Laden. Er führt alle Waren, die früher
    * Marktstand, Baustoffhandel, Kontor, Grüner Laden, Autohaus und
    * Waffenhandel verkauften — nur Kartell-Ware nicht. Verkauf an die Stadt
@@ -3699,13 +3705,13 @@ const SW_MODULE = {
 };
 const SW = {
   INSTALL: 45, PORTAL_INSTALL: 90,   // Sekunden bis der Marktplatz öffnet
-  PORTAL_GEBUEHR: 5,                 // % je Verkauf beim Stadtportal
+  PORTAL_GEBUEHR: 8,                 // % je Verkauf beim Stadtportal (Balancing: 5 → 8, sonst konnten private Systeme kaum etwas verlangen)
   VERSION_EP: 60,                    // Grundaufwand jeder neuen Version
   WERBE_BOOST: 0.20,                 // Werbemodul: wie eine volle Agentur-Kampagne (+20 %)
   /* Gebühr bis 8 %: Mit höchstens 4 % (und Bots bei 1,5–3,5 %) blieb einer
    * Software-Firma nur ein Bruchteil dessen, was ihre Kunden verdienten.
    * Ein gutes System macht +30–40 % Tempo — da lohnen sich auch 6 % noch
-   * deutlich gegenüber dem Stadtportal (5 %, ohne Module). */
+   * deutlich gegenüber dem Stadtportal (seit dem Balancing 8 %, ohne Module). */
   GEB_MIN: 0.5, GEB_MAX: 8, EINR_MAX: 1500,
   /* Werbe-Abo je Marktplatz und Minute. Eine dauerhaft volle Kampagne der
    * alten Werbeagentur kostete rund 660 $/min (11 $/s, siehe AD_PACKAGES).
@@ -3720,7 +3726,7 @@ const SW = {
    * 45 Minuten mit 11–13k $ da, die Produzenten mit 40–180k $, obwohl ihre
    * Systeme in der halben Stadt liefen. Darum zählt das Ertragswert-Prinzip:
    * die Einnahmen der letzten 10 Minuten × MARKENWERT gehen in den Firmenwert. */
-  MARKENWERT: 2,
+  MARKENWERT: 8,   // Software wird über ihre Erträge bewertet (Balancing: 2 → 8)
 };
 /* ---- Skill-Tree je Branche ----
  * Die allgemeinen Module oben wirken auf alle Waren. Daneben hat jede Branche
@@ -4104,12 +4110,12 @@ function swGebuehr(prod, betrag) {
 const BUERGER_APP = {
   AB_SYSTEM: 1,
   STUFEN: [
-    { ep: 180, quali: 1.0, quote: 0.35 },   // v1: bis 35 % der Einwohner nutzen Apps
-    { ep: 240, quali: 1.6, quote: 0.55 },
-    { ep: 320, quali: 2.4, quote: 0.75 },
+    { ep: 180, quali: 1.0, quote: 0.40 },   // v1: bis 40 % der Einwohner nutzen Apps
+    { ep: 240, quali: 1.6, quote: 0.60 },
+    { ep: 320, quali: 2.4, quote: 0.85 },
   ],
-  PREIS_MIN: 0.05, PREIS_MAX: 0.5, PREIS_START: 0.15, PREIS_REF: 0.15, ELASTIZITAET: 1.5,
-  NUTZER_JE_STUFE: 150, DIGITAL_ANTEIL: 0.5, DIGITAL_BONUS: 0.05,
+  PREIS_MIN: 0.05, PREIS_MAX: 1, PREIS_START: 0.5, PREIS_REF: 0.5, ELASTIZITAET: 1.5,
+  NUTZER_JE_STUFE: 200, DIGITAL_ANTEIL: 0.5, DIGITAL_BONUS: 0.05,
 };
 const JOBBOERSE = {
   AB_SYSTEM: 1,
@@ -10018,11 +10024,11 @@ const BOT_CFGS = [
   { name: "Byteforge",       industry: "software",  color: "#60a5fa",
     plan: ["rechenzentrum", "entwicklerstudio"], needs: ["strom", "elektronik"], vorrat: { strom: 150, elektronik: 5 },
     sw: { name: "KassenKlick", paint: "PixelPinsel", paintPreis: 800, boerse: "TradeBot", boersePreis: 1000, app: "KlickTalk", job: "KlickJobs", steuerAbo: 30, anzeigenPreis: 60,
-          leit: { thema: "industrie", anzeige: "ziffern", schrift: "mono", effekt: "scan", titel: "KassenKlick Control", meldung: "Läuft wie geschmiert — Byteforge-Support rund um die Uhr", akzent: "#fbbf24" }, einrichtung: 300, gebuehr: 3, abo: 120, module: ["bewertungen", "lieferung"] } },
+          leit: { thema: "industrie", anzeige: "ziffern", schrift: "mono", effekt: "scan", titel: "KassenKlick Control", meldung: "Läuft wie geschmiert — Byteforge-Support rund um die Uhr", akzent: "#fbbf24" }, einrichtung: 300, gebuehr: 5, abo: 120, module: ["bewertungen", "lieferung"] } },
   { name: "Pixelwerk",       industry: "software",  color: "#f472b6",
     plan: ["entwicklerstudio", "rechenzentrum"], needs: ["strom", "elektronik"], vorrat: { strom: 150, elektronik: 5 },
     sw: { name: "ShopStern", paint: "MalMeister", paintPreis: 1200, boerse: "Aktienfuchs", boersePreis: 1500, app: "SternStream", job: "SternJobs", steuerAbo: 50, anzeigenPreis: 100,
-          leit: { thema: "neon", anzeige: "ringe", schrift: "modern", effekt: "funken", titel: "ShopStern Cockpit", meldung: "Pixelwerk ✦ mehr Ausstoß, weniger Sorgen", akzent: "#a78bfa" }, einrichtung: 600, gebuehr: 4, abo: 180, module: ["lieferung", "bewertungen"] } },
+          leit: { thema: "neon", anzeige: "ringe", schrift: "modern", effekt: "funken", titel: "ShopStern Cockpit", meldung: "Pixelwerk ✦ mehr Ausstoß, weniger Sorgen", akzent: "#a78bfa" }, einrichtung: 600, gebuehr: 6, abo: 180, module: ["lieferung", "bewertungen"] } },
 ];
 let botsStarted = false;
 /* Vom ersten Spieler der Runde gewählt (siehe register): wie viele Bots je
@@ -10094,7 +10100,7 @@ async function spawnBot(cfg, lvl = BOT_LEVELS[BOT_LEVEL_DEFAULT]) {
   const s = ioClient(`http://localhost:${PORT}`);
   let me = null, st = null, myId = null, lastBuild = 0;
   let swPreisZeit = Date.now();   // Software-Anbieter: wann zuletzt die Gebühr überprüft wurde
-  let lohnKnapp = 0, lohnVoll = 0;   // Stadtwachstum: wie oft hintereinander zu wenig bzw. alle Arbeiter da waren
+  let lohnKnapp = 0, lohnVoll = 0, swKundenAlt = null;   // Stadtwachstum: wie oft hintereinander zu wenig bzw. alle Arbeiter da waren
   let botLogoGroesse = 0;            // Malprogramm: Größe des zuletzt gemalten Logos
   let botLeitVersion = 0;            // Leitstand: mit welcher Systemversion das Design zuletzt gesendet wurde
   const swWechsel = {};           // Online-Marktplatz: wann zuletzt das System gewechselt wurde (je Kachel)
@@ -10418,8 +10424,14 @@ async function spawnBot(cfg, lvl = BOT_LEVELS[BOT_LEVEL_DEFAULT]) {
           /* Untergrenze 2,5 %: Im Messlauf drückte Byteforge seine Gebühr auf
            * 1 % und kam nie über 6.000 $ Vermögen — zu wenig für Strom und
            * Rechenzentren. Kunden gewinnt man über den Branchenbaum. */
+          /* Erst den Preis, dann das Rechenzentrum: Fast voll → Gebühr rauf (bis
+           * 7 %); laufen Kunden weg → wieder runter. Vorher stieg sie nur bei
+           * ganz vollem Rechenzentrum, und weil der Bot dann ausbaute, blieb sie
+           * die ganze Runde bei 3 % — Software verdiente kaum etwas. */
           if (meins.kunden === 0 && fremdeMitKunden) geb = Math.max(2.5, geb - 0.5);
-          else if (meins.plaetze > 0 && meins.kunden >= meins.plaetze) geb = Math.min(6, geb + 0.5);
+          else if (swKundenAlt != null && meins.kunden < swKundenAlt * 0.8) geb = Math.max(2.5, geb - 0.5);
+          else if (swKundenAlt != null && meins.kunden > 0 && meins.kunden >= swKundenAlt) geb = Math.min(7.5, geb + 0.5);   // Kunden bleiben → vorsichtig teurer
+          swKundenAlt = meins.kunden;
           /* Steuerungs-Abo wie die Gebühr: voll ausgelastet → teurer, keine
            * Steuerungskunden, während andere welche haben → billiger. */
           let sa = meins.steuerAbo ?? STEUER_ABO.START;
@@ -10473,10 +10485,15 @@ async function spawnBot(cfg, lvl = BOT_LEVELS[BOT_LEVEL_DEFAULT]) {
           const job = (st.jobboerse || []).find(x => x.ownerId === myId);
           if (!app) await em("appEinstellen", { name: cfg.sw.app, preis: BUERGER_APP.PREIS_START });
           else if (!app.entwicklung && app.version < BUERGER_APP.STUFEN.length && me.cash > 1500) await em("appEntwickeln", {});
-          /* Preis: Ist die App am Platzlimit, rauf; hat sie kaum Nutzer, runter */
+          /* Preis: Am Platzlimit rauf. Runter nur, wenn die eigene App deutlich
+           * weniger Nutzer will als der Schnitt — ein niedriger Preis holt Nutzer
+           * nur von der Konkurrenz, nicht mehr Nutzer insgesamt (gemessen: zwei
+           * Bots unterboten sich bis 0,05 $). */
           else if (app.version >= 1 && Math.random() < .2) {
+            const fertig = (st.buergerApp || []).filter(x => x.version >= 1);
+            const schnitt = fertig.reduce((a, x) => a + x.wunsch, 0) / Math.max(1, fertig.length);
             const voll = app.wunsch > app.kapazitaet;   // Platz fehlt, nicht Nachfrage
-            const neu = voll ? app.preis + .02 : app.wunsch < 100 ? app.preis - .01 : app.preis;
+            const neu = voll ? app.preis + .05 : fertig.length > 1 && app.wunsch < schnitt * .8 ? app.preis - .05 : app.preis;
             if (Math.abs(neu - app.preis) > .001) await em("appEinstellen", { name: app.name, preis: neu });
           }
           if (!job) await em("jobEinstellen", { name: cfg.sw.job, gebuehr: JOBBOERSE.GEB_START });
@@ -11085,7 +11102,28 @@ async function spawnBot(cfg, lvl = BOT_LEVELS[BOT_LEVEL_DEFAULT]) {
        * ausbaut, während ihr Kernprodukt fehlt, wirtschaftet nicht plausibel. */
       const abdeckung = INDUSTRY_COVERAGE[cfg.industry] || [];
       const abdeckungFertig = cfg.planLoop || built >= abdeckung.length;
-      const upgradable = lvl.leveln && abdeckungFertig && st.map.find(t => t.owner === myId && t.btype &&
+      /* Ohne eigenen Laden kein Ausbau: Gemessen steckten Küstenperle und
+       * Stahlfaust ihr ganzes Geld in Ausbauten, hatten nie einen
+       * Online-Marktplatz und machten in 60 Minuten 4–5k Umsatz. */
+      const hatLaden = st.map.some(t => t.owner === myId && BTYPES[t.btype]?.online);
+      /* Software stellt keine Ware her: Sie baut Rechenzentren aus, sobald
+       * Shop-Kunden, App-Nutzer oder Jobbörsen-Abos an die Grenze stoßen, und
+       * sonst das Studio. Vorher blieben beide ewig auf Stufe 1 — mit 5
+       * Kunden und 150 App-Nutzern je Rechenzentrum für die ganze Runde. */
+      let upgradable = null;
+      if (cfg.industry === "software") {
+        const sys = (st.software || []).find(x => x.ownerId === myId && !x.portal);
+        const app = (st.buergerApp || []).find(x => x.ownerId === myId);
+        const job = (st.jobboerse || []).find(x => x.ownerId === myId);
+        /* Rechenzentrum für Shop-Kunden erst ausbauen, wenn die Gebühr schon oben ist */
+        const eng = (sys && sys.gebuehr >= 5 && sys.kunden >= (sys.plaetze || 0) - 1) || (app && app.wunsch > app.kapazitaet) || (job && job.abonnenten >= job.plaetze);
+        const eigene = st.map.filter(t => t.owner === myId && (t.level || 1) < 5);
+        /* Studio nur, solange etwas entwickelt wird — sonst kostet die höhere
+         * Stufe nur Strom und Löhne (gemessen: Studio Stufe 5 ohne Projekt). */
+        const entwickelt = sys?.entwicklung || app?.entwicklung || job?.entwicklung
+          || (st.paint || []).some(x => x.ownerId === myId && x.entwicklung) || (st.boerseApp || []).some(x => x.ownerId === myId && x.entwicklung);
+        upgradable = lvl.leveln && (eng ? eigene.find(t => BTYPES[t.btype]?.rz) : entwickelt ? eigene.find(t => BTYPES[t.btype]?.studio) : null);
+      } else upgradable = lvl.leveln && abdeckungFertig && hatLaden && st.map.find(t => t.owner === myId && t.btype &&
         (BTYPES[t.btype].out || BTYPES[t.btype].proc) && (t.level || 1) < 5);
       if (upgradable) {
         const ubt = BTYPES[upgradable.btype], ulvl = upgradable.level || 1;

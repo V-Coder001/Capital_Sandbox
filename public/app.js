@@ -2021,7 +2021,7 @@ const EN = {
   "Rund 1 Arbeiter je 250 $ Baukosten (2 bis 30), +50 % je Ausbaustufe. Leistung = Besetzung, unter 25 % Stillstand. Labor, Studio und Chipfabrik: die Hälfte Fachkräfte. Steuerungssoftware: −25 %.": "About 1 worker per $250 building cost (2 to 30), +50 % per upgrade. Output = staffing, below 25 % it stops. Lab, studio and chip factory: half skilled workers. Control software: −25 %.",
   "30 % der Löhne gehen als Lohnsteuer und Miete an die Stadt, 20 % ins Bürgerdepot.": "30 % of wages go to the city as wage tax and rent, 20 % into the citizens' depot.",
   "höchstens": "at most", "Schulden": "debt", "Bürger-Apps und Jobbörse": "Citizen apps and job board",
-  "Bürger-App: bis 75 % der Einwohner zahlen ein Abo je Minute, 150 Nutzer je Rechenzentrums-Stufe des Anbieters. Jobbörse: Vorrang wie +0,3 bis +0,7 Lohnstufen gegen eine Gebühr je Arbeiter, 3 Abos je Rechenzentrums-Stufe.": "Citizen app: up to 75 % of residents pay a subscription per minute, 150 users per data-centre level of the provider. Job board: priority like +0.3 to +0.7 wage levels for a fee per worker, 3 subscriptions per data-centre level.",
+  "Bürger-App: bis 85 % der Einwohner zahlen ein Abo je Minute, 200 Nutzer je Rechenzentrums-Stufe des Anbieters. Jobbörse: Vorrang wie +0,3 bis +0,7 Lohnstufen gegen eine Gebühr je Arbeiter, 3 Abos je Rechenzentrums-Stufe.": "Citizen app: up to 85 % of residents pay a subscription per minute, 200 users per data-centre level of the provider. Job board: priority like +0.3 to +0.7 wage levels for a fee per worker, 3 subscriptions per data-centre level.",
   "Markt": "Market", "Mein System": "My system", "Entwicklung": "Development", "Design": "Design", "Produkte": "Products",
   "Shop-System": "Shop system", "Bürger-App": "Citizen app", "Bürger-Apps": "Citizen apps", "Jobbörse": "Job board", "Jobbörsen": "Job boards", "Börsen-App": "Stock app", "Malprogramm": "Paint program",
   "fehlt": "missing", "Nutzer": "users", "Abos": "subscriptions", "verkauft": "sold", "EP-Vorrat": "EP stock", "ein Studio: 1 EP/s": "one studio: 1 EP/s",
@@ -6938,7 +6938,7 @@ function stadtLexikon() {
     <table>${Object.values(S.loehne).map(l => `<tr><td>${t(l.name)}</td><td style="text-align:right">${l.lohn} $ ${t("je Arbeiter/min")}</td></tr>`).join("")}</table>
     <p class="meta">${t("30 % der Löhne gehen als Lohnsteuer und Miete an die Stadt, 20 % ins Bürgerdepot.")}</p>
     <div class="sec">${t("Bürger-Apps und Jobbörse")}</div>
-    <p class="meta">${t("Bürger-App: bis 75 % der Einwohner zahlen ein Abo je Minute, 150 Nutzer je Rechenzentrums-Stufe des Anbieters. Jobbörse: Vorrang wie +0,3 bis +0,7 Lohnstufen gegen eine Gebühr je Arbeiter, 3 Abos je Rechenzentrums-Stufe.")}</p>
+    <p class="meta">${t("Bürger-App: bis 85 % der Einwohner zahlen ein Abo je Minute, 200 Nutzer je Rechenzentrums-Stufe des Anbieters. Jobbörse: Vorrang wie +0,3 bis +0,7 Lohnstufen gegen eine Gebühr je Arbeiter, 3 Abos je Rechenzentrums-Stufe.")}</p>
     <div class="sec">${t("Stadtanleihen")}</div>
     <p class="meta">${fmt(S.anleihe.betrag)} · ${String(S.anleihe.zins * 100).replace(".", ",")} %/min · ${S.anleihe.laufzeit / 60} min · ${t("höchstens")} ${fmt(S.anleihe.max)} ${t("Schulden")}</p>
   </details>`;
@@ -7361,7 +7361,7 @@ const TUT_IND = {
     { t: "Baue ein Rechenzentrum", build: "rechenzentrum",
       p: `Ebenfalls im <em>Zentrum</em>: <b>Rechenzentrum</b> ($3.500). Es trägt deine Kunden — 5 Online-Marktplätze je Stufe — und braucht dauernd <b>Strom</b>. Ohne Strom fällt dein System aus, und deine Kunden verkaufen nichts.` },
     { t: "Dein Geschäft",
-      p: `Jede Firma kann einen <b>Online-Marktplatz</b> bauen, verkauft dort aber erst mit einem installierten Shop-System. Du verdienst an der <b>Einrichtung</b>, an der <b>Gebühr je Verkauf</b> und am <b>Werbe-Abo</b> — Werbung läuft hier nur noch über Werbemodule. Neue Versionen mit mehr Funktionen ziehen Kunden an; die Bots prüfen jede neue Software und wechseln, wenn sie besser ist. Die Konkurrenz ist das <b>Stadtportal</b>: teuer (5 %), aber immer da.` },
+      p: `Jede Firma kann einen <b>Online-Marktplatz</b> bauen, verkauft dort aber erst mit einem installierten Shop-System. Du verdienst an der <b>Einrichtung</b>, an der <b>Gebühr je Verkauf</b> und am <b>Werbe-Abo</b> — Werbung läuft hier nur noch über Werbemodule. Neue Versionen mit mehr Funktionen ziehen Kunden an; die Bots prüfen jede neue Software und wechseln, wenn sie besser ist. Die Konkurrenz ist das <b>Stadtportal</b>: teuer (8 %), aber immer da.` },
   ],
   ruestung: [
     { t: "Schalte Industrie frei & baue eine Munitionsfabrik", build: "munitionsfabrik",
@@ -7422,7 +7422,7 @@ const TUT_SPIEL = [
 
   { t: "Schritt 3 — Installiere ein Shop-System",
     warte: (st, me, id) => st.map.some(t => t.owner === id && t.btype === "onlinemarkt" && t.system),
-    p: `Ein Online-Marktplatz verkauft erst mit einem <b>Shop-System</b>. Klicke ihn an und wähle eins: von einer Software-Firma (günstiger, schneller) oder das <b>Stadtportal</b> (kostet 5 % je Verkauf, ist aber immer da).<br><br>Tipp: Ein System mit <b>Agrar-Baum</b> verkauft dein Obst schneller als ein Allrounder.` },
+    p: `Ein Online-Marktplatz verkauft erst mit einem <b>Shop-System</b>. Klicke ihn an und wähle eins: von einer Software-Firma (günstiger, schneller) oder das <b>Stadtportal</b> (kostet 8 % je Verkauf, ist aber immer da).<br><br>Tipp: Ein System mit <b>Agrar-Baum</b> verkauft dein Obst schneller als ein Allrounder.` },
 
   { t: "Schritt 4 — Stelle dein Obst zum Verkauf",
     warte: (st, me, id) => st.map.some(t => t.owner === id && t.btype === "onlinemarkt" && (t.shop || []).some(sl => sl && sl.good)),
@@ -10082,7 +10082,7 @@ function render({ state, me, myId, chat, room }) {
       else if (b.ad) { was = "<b>Werbekampagnen</b>";
         mehr = "Reichweite hebt den Preis, den deine Läden ohne Tempoverlust verlangen können — bis +20 % mit einer Agentur, je weitere +10 % (max. +40 %). Ohne neue Kampagne nach gut zwei Minuten wieder beim Ø-Kurs."; }
       else if (b.online) { was = `<b>${b.retail.slots} Regale</b> · alles außer Fahrzeugen und Waffen`;
-        mehr = "Verkauft erst, wenn ein Shop-System installiert ist — von einer Software-Firma oder das Stadtportal (5 % je Verkauf). Das System bestimmt Tempo, Gebühr und ob es ein Werbemodul gibt."; }
+        mehr = "Verkauft erst, wenn ein Shop-System installiert ist — von einer Software-Firma oder das Stadtportal (8 % je Verkauf). Das System bestimmt Tempo, Gebühr und ob es ein Werbemodul gibt."; }
       else if (b.retail) { was = `<b>${b.retail.slots} Regal${b.retail.slots > 1 ? "e" : ""}</b> · ${b.retail.goods.map(g => gname(g)).join(", ")}`;
         mehr = "Du setzt den Preis: Ø-Kurs = volle Rate, teurer verkauft langsamer, billiger schneller (max. ×2). Einrichten per Klick aufs Gebäude."; }
       else if (b.racing) { was = "<b>Motorsport</b> · Garage für Rennwagen"; }
@@ -10403,7 +10403,7 @@ const TUT_BUCH = [
       Marge und Umschlag.</div>
       <ul>
         <li>Der einzige Laden ist der <b>Online-Marktplatz</b>: 3 Regale für alle Waren, jede Ausbaustufe bringt eins dazu.</li>
-        <li>Er verkauft erst mit einem <b>Shop-System</b> — von einer Software-Firma oder das Stadtportal (5 % je Verkauf).</li>
+        <li>Er verkauft erst mit einem <b>Shop-System</b> — von einer Software-Firma oder das Stadtportal (8 % je Verkauf).</li>
         <li>Systeme mit dem <b>Baum deiner Branche</b> verkaufen deine Waren schneller.</li>
       </ul>
       <div class="merk">Mitspieler können in deinem Online-Shop direkt einkaufen. Dafür
@@ -10417,7 +10417,7 @@ const TUT_BUCH = [
       faster — up to double the pace. You decide between margin and turnover.</div>
       <ul>
         <li>The only shop is the <b>online marketplace</b>: 3 shelves for every good, each upgrade adds one.</li>
-        <li>It only sells with a <b>shop system</b> installed — from a software company or the city portal (5 % per sale).</li>
+        <li>It only sells with a <b>shop system</b> installed — from a software company or the city portal (8 % per sale).</li>
         <li>Systems with your <b>industry's tree</b> sell your goods faster.</li>
       </ul>
       <div class="merk">Other players can buy directly in your online shop. Half the exchange

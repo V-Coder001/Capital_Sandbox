@@ -5,6 +5,22 @@
  * `art`: "neu" (neue Funktion), "besser" (Verbesserung), "fix" (Fehler behoben). */
 window.UPDATES = [
   {
+    id: "2026-10-25a", datum: "2026-10-25",
+    titel: { de: "Balancing: Software kann vorne mitspielen", en: "Balancing: software can compete for the top" },
+    punkte: [
+      { art: "besser", de: "Das Stadtportal kostet jetzt 8 % statt 5 % je Verkauf. Eigene Shop-Systeme der Software-Firmen werden dadurch attraktiver, und sie können mehr verlangen.",
+        en: "The city portal now costs 8 % instead of 5 % per sale. Software companies' own shop systems become more attractive and can charge more." },
+      { art: "besser", de: "Markenwert der Software-Firmen: die Einnahmen der letzten 10 Minuten zählen achtfach (vorher zweifach) zum Firmenwert — ihr Wert steckt in laufenden Erträgen, nicht in Gebäuden.",
+        en: "Software brand value: the last 10 minutes of income count eight times (previously twice) towards company value — its worth lies in recurring income, not buildings." },
+      { art: "besser", de: "Bürger-Apps: Abo bis 1,00 $ je Nutzer und Minute (Start 0,50 $), bis 85 % der Einwohner nutzen Apps, 200 Nutzer je Rechenzentrums-Stufe.",
+        en: "Citizen apps: subscription up to 1.00 $ per user and minute (start 0.50 $), up to 85 % of residents use apps, 200 users per data-centre level." },
+      { art: "besser", de: "Weniger Personal und Strom: Rechenzentrum 4 Arbeiter und 0,2 Strom je Stufe, Entwicklerstudio 6 Arbeiter, Campingplatz 3, Strandhotel 5. Die Touristik litt besonders unter den Löhnen.",
+        en: "Less staff and power: data centre 4 workers and 0.2 power per level, developer studio 6 workers, campground 3, beach hotel 5. Tourism suffered most from wages." },
+      { art: "fix", de: "Software-Bots bauen jetzt Rechenzentren aus, wenn Kunden, App-Nutzer oder Abos an die Grenze stoßen, erhöhen ihre Gebühren schrittweise und unterbieten sich bei App-Preisen nicht mehr bis aufs Minimum. Bots ohne eigenen Laden bauen nichts mehr aus.",
+        en: "Software bots now upgrade data centres when customers, app users or subscriptions hit the limit, raise their fees step by step and no longer undercut each other's app prices down to the minimum. Bots without their own shop no longer upgrade." },
+    ]
+  },
+  {
     id: "2026-10-24d", datum: "2026-10-24",
     titel: { de: "Software für die Stadt: Bürger-Apps, Jobbörse, neues Software-Panel", en: "Software for the city: citizen apps, job board, new software panel" },
     punkte: [
