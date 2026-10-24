@@ -5,6 +5,24 @@
  * `art`: "neu" (neue Funktion), "besser" (Verbesserung), "fix" (Fehler behoben). */
 window.UPDATES = [
   {
+    id: "2026-10-24a", datum: "2026-10-24",
+    titel: { de: "Die Stadt wächst: Einwohner und Wohnbau", en: "The city grows: residents and housing" },
+    punkte: [
+      { art: "neu", de: "Im Sandkasten hat die Stadt jetzt Einwohner. Sie wohnen im neuen Wohngebiet rund ums Zentrum, wo allein die Stadt baut: Siedlungshäuser, ab 800 Einwohnern Mietblöcke, ab 2.500 Wohntürme.",
+        en: "In sandbox mode the city now has residents. They live in the new residential ring around the centre, where only the city builds: houses, apartment blocks from 800 residents, towers from 2,500." },
+      { art: "neu", de: "Die Stadt baut aus der Stadtkasse, sobald weniger als 10 % der Wohnungen frei sind. Bewohner zahlen Miete an die Stadt — mehr Steuern und mehr Einwohner heißt schnelleres Wachstum.",
+        en: "The city builds from its treasury whenever fewer than 10 % of homes are free. Residents pay rent to the city — more taxes and more residents mean faster growth." },
+      { art: "neu", de: "Mehr Einwohner, mehr Kundschaft: Die Nachfrage in den Läden wächst mit der Einwohnerzahl (bis ×1,6).",
+        en: "More residents, more customers: shop demand grows with the population (up to ×1.6)." },
+      { art: "neu", de: "Zufriedenheit bestimmt, wie schnell Menschen zuziehen: Fehlen Strom, Wasser oder Lebensmittel im Handel, herrscht Steuernotstand, sinkt sie — fertige Stadtprojekte heben sie.",
+        en: "Satisfaction sets how fast people move in: missing power, water or food in shops or a tax emergency lowers it — finished city projects raise it." },
+      { art: "neu", de: "Einwohnerzahl in der Kopfleiste; ein Klick (oder auf das Wohngebiet) öffnet die Stadtübersicht im Finanzamt mit Verlauf, Wohnungen und Baustellen.",
+        en: "Population in the header; a click (or on the residential area) opens the city overview in the tax office with history, homes and construction." },
+      { art: "besser", de: "Bei Wohnungsnot hält das Finanzamt Geld für den Wohnbau zurück, statt alles in Fonds zu stecken. Wohnblöcke zählen zum Vermögen der Stadt.",
+        en: "During a housing shortage the tax office keeps money back for housing instead of putting it all into funds. Housing counts towards the city's assets." },
+    ]
+  },
+  {
     id: "2026-10-23b", datum: "2026-10-23",
     titel: { de: "Steuerungssoftware für Produktionsgebäude", en: "Control software for production buildings" },
     punkte: [

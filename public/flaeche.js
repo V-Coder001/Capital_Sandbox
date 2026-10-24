@@ -24,7 +24,7 @@
     vermessung: {
       line: "125,211,252",
       agrar: "#173a2e", field: "#1c4434", park: "#18402f", zentrum: "#1b2535", industrie: "#2a2b31",
-      kueste: "#33402f", sand: "#4a4128", wasser: "#0d2a40", deep: "#0a2134", road: "#0d131d",
+      kueste: "#33402f", sand: "#4a4128", wasser: "#0d2a40", deep: "#0a2134", road: "#0d131d", wohnen: "#2a2a3c",
       furche: "rgba(125,211,252,.10)", schraffur: "rgba(251,191,36,.20)", raster: "rgba(125,211,252,.09)",
       wasserLinie: null, lane: "rgba(125,211,252,.5)", hoehe: "rgba(125,211,252,.16)",
       grenze: "rgba(125,211,252,.55)", indGrenze: "rgba(251,191,36,.6)",
@@ -37,7 +37,7 @@
     papier: {
       line: "31,26,20",
       agrar: "#c6cf9f", field: "#b8c58a", park: "#a9bd84", zentrum: "#e4dccb", industrie: "#c9c4bb",
-      kueste: "#d9d3a8", sand: "#eadbb2", wasser: "#a8c3cc", deep: "#93b3be", road: "#f8f4ea",
+      kueste: "#d9d3a8", sand: "#eadbb2", wasser: "#a8c3cc", deep: "#93b3be", road: "#f8f4ea", wohnen: "#e6d3c6",
       furche: "rgba(31,26,20,.18)", schraffur: "rgba(31,26,20,.30)", raster: "rgba(31,26,20,.14)",
       wasserLinie: "rgba(31,26,20,.20)", lane: "rgba(31,26,20,.35)", hoehe: "rgba(31,26,20,.22)",
       grenze: "rgba(31,26,20,.85)", indGrenze: "rgba(156,59,31,.9)",
@@ -71,6 +71,11 @@
       if (a === "field") {                     // Ackerfurchen
         g.strokeStyle = P.furche; g.lineWidth = .8;
         for (let k = -TW; k < TW * 2; k += 6) { g.beginPath(); g.moveTo(k, 0); g.lineTo(k + TW, TH); g.stroke(); }
+      }
+      if (a === "wohnen") {                    // Wohngebiet: Parzellen wie im Bebauungsplan
+        g.strokeStyle = `rgba(${P.line},${th === "papier" ? .22 : .14})`; g.lineWidth = .8;
+        g.beginPath(); g.moveTo(TW / 2, TH * .18); g.lineTo(TW / 2, TH * .82);
+        g.moveTo(TW * .2, TH / 2); g.lineTo(TW * .8, TH / 2); g.stroke();
       }
       if (a === "industrie") {                 // Beton: Warnschraffur + Hallenraster
         g.strokeStyle = P.schraffur; g.lineWidth = 1.3;
@@ -200,7 +205,7 @@
     g.strokeStyle = P.indGrenze; g.lineWidth = 2.4; g.stroke(kanten.ind);
 
     // Bezirksschilder: je zusammenhängendem Bezirksteil ab 12 Kacheln
-    const NAMEN = { agrar: "AGRAR", zentrum: "ZENTRUM", industrie: "INDUSTRIE", kueste: "KÜSTE" };
+    const NAMEN = { agrar: "AGRAR", zentrum: "ZENTRUM", industrie: "INDUSTRIE", kueste: "KÜSTE", wohnen: "WOHNGEBIET" };
     const gesehen = new Set(), schilder = [];
     for (const t of map) {
       const k = t.x + "," + t.y; if (gesehen.has(k) || t.water || !NAMEN[t.zone]) continue;
@@ -216,7 +221,7 @@
       const mx = teil.reduce((s, u) => s + u.x, 0) / teil.length, my = teil.reduce((s, u) => s + u.y, 0) / teil.length;
       // Schild auf eine Straße/freie Kachel nahe dem Schwerpunkt, nicht mitten auf ein Gebäude
       let best = null, bd = 1e9;
-      for (const u of teil) { const d = (u.x - mx) ** 2 + (u.y - my) ** 2 + (u.btype ? 6 : 0); if (d < bd) { bd = d; best = u; } }
+      for (const u of teil) { const d = (u.x - mx) ** 2 + (u.y - my) ** 2 + (u.btype || (u.zone === "wohnen" && !u.road) ? 6 : 0); if (d < bd) { bd = d; best = u; } }
       schilder.push({ x: best.x, y: best.y, text: NAMEN[t.zone], ind: t.zone === "industrie" });
     }
 
