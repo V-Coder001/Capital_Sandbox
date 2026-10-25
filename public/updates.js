@@ -5,6 +5,14 @@
  * `art`: "neu" (neue Funktion), "besser" (Verbesserung), "fix" (Fehler behoben). */
 window.UPDATES = [
   {
+    id: "2026-10-25l", datum: "2026-10-25",
+    titel: { de: "Anleihenmarkt im Stadtnetz", en: "Bond market in the city network" },
+    punkte: [
+      { art: "besser", de: "Anleihen haben eine eigene Website: anleihen.cs im Stadtnetz. Anleihen am Markt als Karten mit Rating, Zins, Laufzeit und Zinsen bis zum Ende (Stadtanleihen zuerst), deine Anlagen und Schulden, ein Formular mit Vorschau zum Ausgeben sowie Zwangsversteigerungen und Vertragsangebote. Der Dock-Knopf „Finanzen“ entfällt im Sandkasten.",
+        en: "Bonds have their own website: anleihen.cs in the city network. Bonds on the market as cards with rating, interest, term and interest until maturity (city bonds first), your investments and debts, an issue form with preview, plus foreclosure auctions and contract offers. The “Finance” dock button is gone in the sandbox." },
+    ]
+  },
+  {
     id: "2026-10-25k", datum: "2026-10-25",
     titel: { de: "Stadtbank im Stadtnetz", en: "City bank in the city network" },
     punkte: [
