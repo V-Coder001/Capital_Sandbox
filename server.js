@@ -2299,6 +2299,14 @@ const adBoost = p => MODE === "sandbox"
   ? 1 + (G.werbeAktiv?.has(p.id) ? SW.WERBE_BOOST : 0) + anzeigenBoost(p)   // Werbemodul + gebuchte Anzeigen im Werbenetz
   : 1 + adCap(adAgenturen(p)) * Math.min(100, p.adReach || 0) / 100;
 const PRODUCTS = Object.keys(GOODS);   // was Städte in Großaufträgen nachfragen — mittlerweile alle Waren
+/* Sandkasten ohne Mafia: Die heiße Ware (Schwarzgebrannter, Falschgeld,
+ * Goldbarren, Schmuggelzigaretten) und die Familien-Gebäude gehören zur
+ * Kartellwirtschaft. Gebaut werden konnten sie im Sandkasten nie, sie standen
+ * aber in Großaufträgen, Kursticker und Warenlisten. */
+const mitMafia = () => MODE === "kartell";
+const warenListe = () => mitMafia() ? PRODUCTS : PRODUCTS.filter(g => !ILLEGAL.includes(g));
+const goodsPublic = () => mitMafia() ? GOODS : Object.fromEntries(warenListe().map(g => [g, GOODS[g]]));
+const btypesPublic = () => mitMafia() ? BTYPES : Object.fromEntries(Object.entries(BTYPES).filter(([, b]) => !b.familie && !b.casino));
 
 /* Gruppenaufträge: eine Stadt braucht Waren, alle zahlen gemeinsam ein.
  * Bei Abschluss erhält jeder Einzahler Ø-Kurs × 2 je geliefertem Stück. */
@@ -4801,7 +4809,7 @@ function matchOrder(order) {
 function spawnGroupOrder() {
   const city = CITIES[Math.floor(Math.random() * CITIES.length)];
   const nGoods = Math.random() < 0.5 ? 1 : 2;
-  const goods = [...PRODUCTS].sort(() => Math.random() - 0.5).slice(0, nGoods);
+  const goods = [...warenListe()].sort(() => Math.random() - 0.5).slice(0, nGoods);
   const needs = {};
   /* Zielwert je Ware, skaliert mit der Spielerzahl — die mit Abstand
    * bestvergütete Absatzquelle (Ø×2 vs. Vertrieb ×1,2–1,6), aber nur gemeinsam
@@ -4902,13 +4910,13 @@ function marktbericht(sp) {
   const liste = teile => teile.length <= 1 ? (teile[0] || "")
     : teile.slice(0, -1).join(", ") + (en ? " and " : " und ") + teile[teile.length - 1];
 
-  const waren = Object.keys(GOODS)
+  const waren = warenListe()
     .map(k => ({ k, name: wname(k), v: wandel(k), kurs: MM[k].price }))
     .filter(x => x.v != null && Math.abs(x.v) >= 2).sort((a, b) => b.v - a.v);
   const hoch = waren.filter(x => x.v > 0).slice(0, 3);
   const tief = waren.filter(x => x.v < 0).slice(-3).reverse();
 
-  const knapp = Object.keys(GOODS).map(k => {
+  const knapp = warenListe().map(k => {
     const angebot = G.orders.filter(o => o.good === k && o.side === "sell").reduce((a, o) => a + o.qty, 0);
     const nachfrage = G.orders.filter(o => o.good === k && o.side === "buy").reduce((a, o) => a + o.qty, 0);
     return { k, name: wname(k), nachfrage, leer: angebot === 0 && nachfrage >= 10 };
@@ -6614,7 +6622,7 @@ function snapshot() {
     })() : null,
     lastTrade: G.lastTrade,
     news: G.news,
-    avg: Object.fromEntries(Object.keys(GOODS).map(k => [k, MM[k].price])),
+    avg: Object.fromEntries(warenListe().map(k => [k, MM[k].price])),
     groupOrder: G.groupOrder ? { id: G.groupOrder.id, city: G.groupOrder.city, ttl: G.groupOrder.ttl,
       needs: G.groupOrder.needs,
       contrib: Object.fromEntries(Object.entries(G.groupOrder.contrib).map(([pid, goods]) =>
@@ -6906,7 +6914,7 @@ io.on("connection", socket => {
     p.socketId = socket.id; p.disconnected = false; p.disconnectedAt = null;
     socket.data.registered = true;
     io.emit("notice", { text: `${p.name} ist wieder da.` });
-    ack?.({ ok: true, goods: GOODS, btypes: BTYPES, rooms: ROOMS, you: token, winGoal: WIN_NW,
+    ack?.({ ok: true, goods: goodsPublic(), btypes: btypesPublic(), rooms: ROOMS, you: token, winGoal: WIN_NW,
       questDefs: QUESTSET(), industry: p.industry, industries: INDUSTRIES, racingUnlock: RACING_UNLOCK_NW,
       tuning: TUNING, tuningMax: TUNING_MAX, raceStats: RACE_STATS, stats: STATS,
       botLevels: Object.fromEntries(Object.entries(BOT_LEVELS).map(([k, v]) => [k, v.name])),
@@ -6975,7 +6983,7 @@ io.on("connection", socket => {
         : `${name} schwört „${famDef(G.players[pid].familie).name}“ die Treue.` });
     }
     io.emit("notice", { text: `${name} ist der Sitzung beigetreten.` + (Object.keys(G.players).length === 1 ? ` Rundenziel: ${WIN_NW.toLocaleString("de-DE")} $` : "") });
-    ack?.({ ok: true, goods: GOODS, btypes: BTYPES, rooms: ROOMS, you: pid, winGoal: WIN_NW, questDefs: QUESTSET(), industry, industries: INDUSTRIES,
+    ack?.({ ok: true, goods: goodsPublic(), btypes: btypesPublic(), rooms: ROOMS, you: pid, winGoal: WIN_NW, questDefs: QUESTSET(), industry, industries: INDUSTRIES,
       /* Dieselben Motorsport-Daten wie beim Wiederverbinden weiter oben. Fehlten
        * sie hier, stünde beim frisch beigetretenen Spieler im Panel überall
        * "undefined" — genau das war beim ersten Blick auf die Oberfläche zu sehen. */
