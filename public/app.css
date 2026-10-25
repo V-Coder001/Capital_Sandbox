@@ -1732,3 +1732,92 @@ em.auf,.bankZeile em.auf{color:#15803d}em.ab,.bankZeile em.ab{color:#b91c1c}
 .swcKnopf:hover{border-color:var(--accent,#60a5fa)}
 .swcLinks{display:flex;gap:8px;flex-wrap:wrap}
 @media (max-width:560px){.swcAuftrag{grid-template-columns:1fr auto}.swcTipp{grid-template-columns:auto 1fr}.swcTipp .swcKnopf{grid-column:2}}
+/* Weitere Vorlagen */
+.fw-dunkel{--fwTitel:"Space Grotesk",var(--font);color:#e5e7eb}
+.fw-dunkel .fwHero{background:#0b1220;border:1px solid color-mix(in srgb,var(--fw) 60%,#0b1220);box-shadow:inset 0 -3px 0 var(--fw)}
+.fw-dunkel .fwAbschnitt{background:#111827;border-color:#1f2937}
+.fw-dunkel .fwAbschnitt h2{color:#f9fafb}.fw-dunkel .fwAbschnitt h2::before{content:"// ";color:var(--fw)}
+.fw-dunkel .fwProdukt,.fw-dunkel .fwBetrieb,.fw-dunkel .fwStimmen blockquote,.fw-dunkel .fwZahlen>div,.fw-dunkel .fwTeam>div,.fw-dunkel .fwKontakt>div,.fw-dunkel .fwFaq details,.fw-dunkel .fwNews>div{background:#0b1220;border-color:#1f2937}
+.fw-dunkel .fwGalerie figure{background:linear-gradient(180deg,color-mix(in srgb,var(--fw) 25%,#111827),#111827)}
+.fw-dunkel .fwProdukt small,.fw-dunkel .fwGalerie figcaption,.fw-dunkel .fwUeber p,.fw-dunkel .fwStimmen p,.fw-dunkel .fwStimmen cite,.fw-dunkel small{color:#cbd5e1}
+.fw-dunkel .fwStimmen p,.fw-dunkel .fwFaq summary,.fw-dunkel .fwNews b{color:#f3f4f6}
+.fw-dunkel .fwAngebot{background:#0b1220;border-color:#1f2937}
+.fw-retro{--fwR:0;--fwTitel:"Bebas Neue",Impact,sans-serif;background:#fdf6e3;padding:10px;border-radius:6px}
+.fw-retro .fwHero{background:var(--fw);border:3px solid #1f2937;box-shadow:6px 6px 0 #1f2937}
+.fw-retro .fwHero h1{font-weight:400;font-size:44px;letter-spacing:.03em}
+.fw-retro .fwAbschnitt{border:3px solid #1f2937;box-shadow:4px 4px 0 #1f2937;background:#fffbeb}
+.fw-retro .fwAbschnitt h2{font-weight:400;font-size:26px;letter-spacing:.04em}
+.fw-retro .fwKnopf{border:2px solid #1f2937;box-shadow:2px 2px 0 #1f2937}
+.fw-natur{--fwR:16px;--fwTitel:"DM Serif Display",Georgia,serif;background:#f5f1e6;padding:10px;border-radius:14px}
+.fw-natur .fwHero{background:linear-gradient(160deg,color-mix(in srgb,var(--fw) 85%,#365314),color-mix(in srgb,var(--fw) 60%,#a3a380))}
+.fw-natur .fwHero h1{font-weight:400}
+.fw-natur .fwAbschnitt{background:#fffdf7;border-color:#e7e0cc}
+.fw-natur .fwAbschnitt h2{font-weight:400;font-size:22px;color:color-mix(in srgb,var(--fw) 70%,#1c1917)}
+.fw-natur .fwAbschnitt h2::before{content:"🌿 ";font-size:16px}
+.fw-modern{--fwR:14px;--fwTitel:"Archivo",var(--font)}
+.fw-modern .fwHero{background:#fff;color:#0f172a;border:1px solid #e5e7eb;padding:34px 28px 24px}
+.fw-modern .fwHero h1{font-size:40px;font-weight:900;letter-spacing:-.03em;background:linear-gradient(90deg,var(--fw),color-mix(in srgb,var(--fw) 50%,#f59e0b));-webkit-background-clip:text;background-clip:text;color:transparent}
+.fw-modern .fwHero p{color:#475569}
+.fw-modern .fwHeroLeiste>span:not(.fwKnopf){background:#f1f5f9;color:#334155}
+.fw-modern .fwKnopf.hell{background:var(--fw);color:#fff}
+.fw-modern .fwAbschnitt{border:0;box-shadow:0 1px 2px rgba(15,23,42,.06),0 8px 24px rgba(15,23,42,.06)}
+.fw-modern .fwAbschnitt h2{font-weight:900;letter-spacing:-.02em}
+/* Schrift */
+.fwS-modern{--fwTitel:"Space Grotesk",var(--font)}
+.fwS-serif{--fwTitel:"Playfair Display","Fraunces",Georgia,serif}
+.fwS-rund{--fwTitel:"Fredoka",var(--font)}
+.fwS-kraft{--fwTitel:"Bebas Neue",Impact,sans-serif}.fwS-kraft .fwHero h1,.fwS-kraft .fwAbschnitt h2{font-weight:400;letter-spacing:.03em}.fwS-kraft .fwHero h1{font-size:44px}
+.fwS-hand{--fwTitel:"Caveat",cursive}.fwS-hand .fwHero h1{font-size:46px}.fwS-hand .fwAbschnitt h2{font-size:26px}
+.fwS-pixel{--fwTitel:"Press Start 2P",monospace}.fwS-pixel .fwHero h1{font-size:22px;line-height:1.4}.fwS-pixel .fwAbschnitt h2{font-size:13px;line-height:1.5}
+/* Kopf */
+.fwK-verlauf .fwHero{background:linear-gradient(135deg,var(--fw),color-mix(in srgb,var(--fw) 55%,#000));color:#fff;border:0;box-shadow:none;text-align:left;align-items:stretch}
+.fwK-flach .fwHero{background:var(--fw);color:#fff;border:0;box-shadow:none;text-align:left;align-items:stretch}
+.fwK-verlauf .fwHeroMarke,.fwK-flach .fwHeroMarke{flex-direction:row}
+.fwK-verlauf .fwHero h1,.fwK-flach .fwHero h1{background:none;color:#fff;-webkit-background-clip:border-box;background-clip:border-box}
+.fwK-verlauf .fwHero p,.fwK-flach .fwHero p{color:rgba(255,255,255,.9)}
+.fwK-verlauf .fwHeroLeiste>span:not(.fwKnopf),.fwK-flach .fwHeroLeiste>span:not(.fwKnopf){background:rgba(255,255,255,.18);color:#fff}
+.fwK-verlauf .fwKnopf.hell,.fwK-flach .fwKnopf.hell{margin-left:auto;background:#fff;color:color-mix(in srgb,var(--fw) 80%,#000)}
+.fwK-zentriert .fwHero{text-align:center;align-items:center}.fwK-zentriert .fwHeroMarke{flex-direction:column;gap:8px}.fwK-zentriert .fwHeroLeiste{justify-content:center}.fwK-zentriert .fwKnopf.hell{margin-left:0}
+.fwK-gross .fwHero{min-height:240px;justify-content:flex-end;padding:40px 30px 24px}.fwK-gross .fwHero h1{font-size:48px}.fwK-gross .fwLogo{width:72px;height:72px;font-size:32px}
+/* Muster: eigene Ebene über dem Kopf-Hintergrund */
+.fwHero>*{position:relative;z-index:1}
+[class*="fwM-"] .fwHero::before{content:"";position:absolute;inset:0;pointer-events:none;--m:rgba(255,255,255,.2)}
+.fw-elegant[class*="fwM-"] .fwHero::before,.fw-modern[class*="fwM-"]:not(.fwK-verlauf):not(.fwK-flach) .fwHero::before{--m:color-mix(in srgb,var(--fw) 18%,transparent)}
+.fwM-punkte .fwHero::before{background:radial-gradient(var(--m) 1.6px,transparent 1.7px) 0 0/16px 16px}
+.fwM-streifen .fwHero::before{background:repeating-linear-gradient(45deg,var(--m) 0 8px,transparent 8px 22px);opacity:.7}
+.fwM-wellen .fwHero::before{background:radial-gradient(circle at 50% 120%,transparent 17px,var(--m) 18px 21px,transparent 22px) 0 0/44px 22px}
+.fwM-raster .fwHero::before{background:linear-gradient(var(--m) 1px,transparent 1px) 0 0/22px 22px,linear-gradient(90deg,var(--m) 1px,transparent 1px) 0 0/22px 22px;opacity:.8}
+/* Ecken */
+.fwE-eckig{--fwR:0}.fwE-normal{--fwR:10px}.fwE-rund{--fwR:24px}
+/* Neue Abschnitte */
+.fwZahlen{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:8px}
+.fwZahlen>div{display:flex;flex-direction:column;align-items:center;gap:2px;padding:14px 8px;border-radius:var(--fwR);background:#f8fafc;border:1px solid #eef0f4}
+.fwZahlen b{font:800 26px var(--fwTitel);color:var(--fw)}.fwZahlen span{font-size:12px;color:#4b5563}
+.fwTeam{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px}
+.fwTeam>div{display:flex;flex-direction:column;align-items:center;gap:3px;padding:14px 8px;border-radius:var(--fwR);background:#f8fafc;border:1px solid #eef0f4;text-align:center}
+.fwTeam span{width:54px;height:54px;border-radius:50%;display:grid;place-items:center;font-size:28px;background:color-mix(in srgb,var(--fw) 15%,#fff)}
+.fwTeam b{font-size:13.5px}.fwTeam small{font-size:11.5px;color:#4b5563}
+.fwKontakt{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:8px}
+.fwKontakt>div{display:grid;grid-template-columns:auto 1fr;column-gap:10px;align-items:center;padding:10px 12px;border-radius:var(--fwR);background:#f8fafc;border:1px solid #eef0f4}
+.fwKontakt span{grid-row:span 2;font-size:22px}.fwKontakt b{font-size:13px}.fwKontakt small{font-size:12px;color:#4b5563}
+.fwFaq{display:flex;flex-direction:column;gap:6px}
+.fwFaq details{border-radius:var(--fwR);background:#f8fafc;border:1px solid #eef0f4;padding:10px 12px}
+.fwFaq summary{cursor:pointer;font-weight:700;font-size:13.5px;color:#111827}
+.fwFaq summary::marker{color:var(--fw)}.fwFaq p{margin:6px 0 0;font-size:13px;color:#374151}
+.fwNews{display:flex;flex-direction:column;gap:6px}
+.fwNews>div{display:flex;flex-direction:column;gap:2px;padding:9px 12px;border-radius:var(--fwR);background:#f8fafc;border-left:3px solid var(--fw)}
+.fwNews small{font-size:10.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--fw);font-weight:700}.fwNews b{font-size:13.5px;color:#111827}
+/* Generator: neue Gruppen */
+.genVorlagen.viele{grid-template-columns:repeat(4,1fr)}
+.genChips{display:flex;flex-wrap:wrap;gap:5px}
+.genChips button{padding:5px 10px;border-radius:999px;border:1px solid #d4d8e2;background:#fff;color:#111827;font:500 12px var(--font);cursor:pointer}
+.genChips button.on{background:#111827;border-color:#111827;color:#fff}
+.genChips button[data-gens="schrift:serif"]{font-family:"Playfair Display",Georgia,serif}.genChips button[data-gens="schrift:rund"]{font-family:"Fredoka",sans-serif}
+.genChips button[data-gens="schrift:kraft"]{font-family:"Bebas Neue",Impact,sans-serif;font-size:14px;letter-spacing:.04em}.genChips button[data-gens="schrift:hand"]{font-family:"Caveat",cursive;font-size:15px}
+.genChips button[data-gens="schrift:pixel"]{font-family:"Press Start 2P",monospace;font-size:8.5px}
+.genZufall{padding:8px;border-radius:8px;border:1px dashed #94a3b8;background:#fff;color:#111827;font:600 12.5px var(--font);cursor:pointer}
+.genZufall:hover{border-style:solid;border-color:#111827}
+.genMehr{border-top:1px solid #e3e6ee;padding-top:10px;display:flex;flex-direction:column;gap:10px}
+.genMehr>summary{cursor:pointer;font-size:11.5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#4b5563}
+.fw-dunkel .fwFaq p,.fw-dunkel .fwTeam small,.fw-dunkel .fwKontakt small,.fw-dunkel .fwZahlen span{color:#cbd5e1}
+.fw-dunkel .fwTeam b,.fw-dunkel .fwKontakt b{color:#f3f4f6}

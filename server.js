@@ -4269,10 +4269,15 @@ const WEB_STADTPORTAL = "stadtportal";
  * liegt bis zur Auslieferung beim Auftrag; liefert ein Mensch nicht binnen
  * FRIST, geht die Standard-Vorlage live und nur die Hälfte wird bezahlt. */
 const WEB_DESIGN = {
-  ABSCHNITTE: ["produkte", "betriebe", "angebot", "bewertungen", "ueber", "aktie", "galerie"],
-  VORLAGEN: ["klar", "elegant", "bunt"],
-  FARBEN: ["#0f766e", "#1d4ed8", "#7c3aed", "#be123c", "#b45309", "#15803d", "#0e7490", "#334155"],
-  MAX_ABSCHNITTE: 6, FRIST: 300, BOT_DAUER: 45, OHNE: 0.6,
+  ABSCHNITTE: ["produkte", "betriebe", "angebot", "bewertungen", "ueber", "aktie", "galerie", "zahlen", "team", "kontakt", "faq", "news"],
+  VORLAGEN: ["klar", "elegant", "bunt", "dunkel", "retro", "natur", "modern"],
+  FARBEN: ["#0f766e", "#1d4ed8", "#7c3aed", "#be123c", "#b45309", "#15803d", "#0e7490", "#334155", "#db2777", "#ea580c", "#ca8a04", "#0f172a"],
+  /* Feinschliff: "" heißt „wie die Vorlage“ */
+  SCHRIFTEN: ["", "modern", "serif", "rund", "kraft", "hand", "pixel"],
+  KOEPFE: ["", "verlauf", "flach", "zentriert", "gross"],
+  ECKEN: ["", "eckig", "normal", "rund"],
+  MUSTER: ["", "punkte", "streifen", "wellen", "raster"],
+  MAX_ABSCHNITTE: 8, FRIST: 300, BOT_DAUER: 45, OHNE: 0.6,
 };
 /* Qualität 0,6 (ungestaltet) bis 1,0: Grundwert 0,7, je Abschnitt 0,05 (bis 4),
  * Slogan 0,05, „Über uns“ mit Inhalt 0,05 */
@@ -4286,6 +4291,10 @@ function webDesignPruefen(d, kunde) {
   const ab = [...new Set((Array.isArray(d.abschnitte) ? d.abschnitte : []).filter(a => WEB_DESIGN.ABSCHNITTE.includes(a)))].slice(0, WEB_DESIGN.MAX_ABSCHNITTE);
   return {
     vorlage: WEB_DESIGN.VORLAGEN.includes(d.vorlage) ? d.vorlage : "klar",
+    schrift: WEB_DESIGN.SCHRIFTEN.includes(d.schrift) ? d.schrift : "",
+    kopf: WEB_DESIGN.KOEPFE.includes(d.kopf) ? d.kopf : "",
+    ecken: WEB_DESIGN.ECKEN.includes(d.ecken) ? d.ecken : "",
+    muster: WEB_DESIGN.MUSTER.includes(d.muster) ? d.muster : "",
     farbe: WEB_DESIGN.FARBEN.includes(d.farbe) ? d.farbe : (kunde?.color || WEB_DESIGN.FARBEN[0]),
     titel: sicherText(String(d.titel || kunde?.name || "").trim().slice(0, 30)) || kunde?.name || "",
     slogan: sicherText(String(d.slogan || "").trim().slice(0, 60)),
@@ -4297,8 +4306,11 @@ function webDesignPruefen(d, kunde) {
 const webStandard = kunde => webDesignPruefen({ vorlage: "klar", titel: kunde.name, abschnitte: ["produkte", "betriebe"] }, kunde);
 function webBotDesign(kunde) {
   const ind = kunde.industry, SLOGAN = { agrar: "Frisch vom Hof in die Stadt", rohstoff: "Wir bauen die Stadt", versorger: "Strom und Wasser, rund um die Uhr", tech: "Elektronik für jeden Ausbau", touristik: "Urlaub direkt am Meer", ruestung: "Sicherheit für die Stadt", software: "Software, die läuft" };
-  return webDesignPruefen({ vorlage: WEB_DESIGN.VORLAGEN[Math.floor(Math.random() * 3)], farbe: kunde.color, titel: kunde.name, slogan: SLOGAN[ind] || "",
-    abschnitte: ["produkte", "angebot", "bewertungen", "betriebe"], ueber: "" }, kunde);
+  const zufall = l => l[Math.floor(Math.random() * l.length)];
+  const extra = zufall(["zahlen", "team", "kontakt", "galerie"]);
+  return webDesignPruefen({ vorlage: zufall(WEB_DESIGN.VORLAGEN), farbe: zufall(WEB_DESIGN.FARBEN), titel: kunde.name, slogan: SLOGAN[ind] || "",
+    muster: zufall(WEB_DESIGN.MUSTER), kopf: zufall(WEB_DESIGN.KOEPFE),
+    abschnitte: ["produkte", "angebot", "bewertungen", "betriebe", extra], ueber: "" }, kunde);
 }
 function webAuftragAbschliessen(kunde, design, anteil = 1) {
   const ws = kunde.website, a = ws?.auftrag; if (!a || a.status !== "offen") return;
