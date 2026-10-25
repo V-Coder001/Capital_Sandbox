@@ -938,13 +938,17 @@
  * ================================================================ */
 window.EINST = (() => {
   const STUFEN = {
-    hoch:    { aufloesung: 1,   hintergrund: true,  wolken: true,  verkehr: true,  licht: true,  fps: 60 },
-    mittel:  { aufloesung: .75, hintergrund: true,  wolken: true,  verkehr: true,  licht: true,  fps: 60 },
-    niedrig: { aufloesung: .5,  hintergrund: false, wolken: false, verkehr: false, licht: false, fps: 30 },
+    /* glas: Unschärfe hinter Leisten und Panels (backdrop-filter). Sie muss bei
+     * jedem neu gezeichneten Kartenbild mitberechnet werden — auf Retina und
+     * schwächeren Grafikchips einer der teuersten Posten. */
+    hoch:    { aufloesung: 1,   hintergrund: true,  wolken: true,  verkehr: true,  licht: true,  fps: 60, glas: true },
+    mittel:  { aufloesung: .75, hintergrund: true,  wolken: true,  verkehr: true,  licht: true,  fps: 60, glas: false },
+    niedrig: { aufloesung: .5,  hintergrund: false, wolken: false, verkehr: false, licht: false, fps: 30, glas: false },
   };
   const STANDARD = Object.assign({ qualitaet: "hoch" }, STUFEN.hoch, {
     radEmpf: 1, zoomZumZeiger: true, trackpadSchiebt: true, tastatur: true,
     effekte: true, effekteVol: 60,
+    autoQualitaet: true, fpsAnzeige: false,
   });
   let w = {};
   try { w = JSON.parse(localStorage.getItem("cs_einst") || "{}") || {}; } catch {}
@@ -965,6 +969,12 @@ window.EINST = (() => {
     alle: () => Object.assign({}, e),
   };
   return new Proxy(api, { get: (t, k) => k in t ? t[k] : e[k] });
+})();
+/* Glas-Effekt an/aus: eine Klasse am Dokument schaltet alle backdrop-filter ab */
+(() => {
+  const anwenden = () => document.documentElement.classList.toggle("ohneGlas", !EINST.glas);
+  anwenden();
+  document.addEventListener("einstellung", e => { if (e.detail === "glas" || e.detail === "qualitaet") anwenden(); });
 })();
 </script>
 <script>
@@ -1067,6 +1077,9 @@ document.addEventListener("click", e => {
       <label class="eSchalter"><span>Wolken</span><input type="checkbox" data-einst="wolken"><i></i></label>
       <label class="eSchalter"><span>Verkehr<small>Autos und Lieferwagen auf den Straßen</small></span><input type="checkbox" data-einst="verkehr"><i></i></label>
       <label class="eSchalter"><span>Tageszeit &amp; Licht<small>Dämmerung, Nacht, Dunst</small></span><input type="checkbox" data-einst="licht"><i></i></label>
+      <label class="eSchalter"><span>Glas-Effekt<small>Unschärfe hinter Leisten und Fenstern — kostet viel Grafikleistung</small></span><input type="checkbox" data-einst="glas"><i></i></label>
+      <label class="eSchalter"><span>Automatisch anpassen<small>Ruckelt das Spiel, schaltet es die Grafik stufenweise herunter</small></span><input type="checkbox" data-einst="autoQualitaet"><i></i></label>
+      <label class="eSchalter"><span>Bildrate anzeigen<small>Kleine Anzeige unten links: Bilder pro Sekunde</small></span><input type="checkbox" data-einst="fpsAnzeige"><i></i></label>
       <div class="eGruppe">
         <div class="eLabel">Kartenstil</div>
         <div class="eSegment" role="radiogroup" aria-label="Kartenstil">
