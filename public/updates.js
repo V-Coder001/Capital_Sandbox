@@ -5,6 +5,26 @@
  * `art`: "neu" (neue Funktion), "besser" (Verbesserung), "fix" (Fehler behoben). */
 window.UPDATES = [
   {
+    id: "2026-10-25b", datum: "2026-10-25",
+    titel: { de: "Balancing: Die Rüstung ist zurück im Geschäft", en: "Balancing: the arms industry is back in business" },
+    punkte: [
+      { art: "besser", de: "Das Stadtnetz bietet jetzt auch Erz und Stahl als Notversorgung an (25 % über Grundpreis, begrenzt nachgefüllt). Bisher stand die Rüstungskette oft eine halbe Runde ohne Stahl still.",
+        en: "The city grid now also offers ore and steel as emergency supply (25 % above base price, limited refill). Until now the arms chain often stood idle without steel for half a round." },
+      { art: "besser", de: "Rüstungsgüter haben einen größeren Stadtmarkt: Viel Absatz drückt den Kurs von Munition, Pistolen und Panzern weniger stark.",
+        en: "Armaments have a larger city market: high sales push down the price of ammunition, pistols and tanks less." },
+      { art: "besser", de: "Waffenschmiede und Panzerwerk produzieren knapp 20 % mehr. Die Werke brauchen weniger Personal: Munitionsfabrik 4, Waffenschmiede 10, Panzerwerk 16 Arbeiter.",
+        en: "Gunsmith and tank works produce almost 20 % more. The plants need fewer staff: ammunition factory 4, gunsmith 10, tank works 16 workers." },
+      { art: "fix", de: "Rüstungs-Bot: verkauft seine Munition an die Stadt, statt sie zu horten, kauft Stahl, Elektronik und Diesel, sobald die Werke stehen, und baut das Panzerwerk, bevor er ausbaut. Auch die Touristik verkauft ihre Übernachtungen jetzt sofort im Laden.",
+        en: "Arms bot: sells its ammunition to the city instead of hoarding it, buys steel, electronics and diesel once its plants stand, and builds the tank works before upgrading. Tourism now also sells its overnight stays in the shop right away." },
+      { art: "fix", de: "Bots verkaufen zugekaufte Zutaten nicht mehr mit Verlust weiter und geben sie nicht an Stadtprojekte ab. Baumaterial für das nächste eigene Gebäude behalten sie.",
+        en: "Bots no longer resell purchased ingredients at a loss or hand them to city projects. They keep the building materials for their next own building." },
+      { art: "fix", de: "Bots bedienen Kaufgebote anderer Firmen vor den Stadtkunden. Ziegel kamen so bisher kaum an der Börse an, und viele Bauten blieben aus.",
+        en: "Bots serve other companies' buy orders before city customers. Until now bricks rarely reached the exchange and many buildings were never built." },
+      { art: "fix", de: "Bots passen ihre Regalpreise dem Kurs an, erhöhen den Lohn auch mit knapper Kasse, wenn ihnen fast alle Arbeiter fehlen, und geben in Geldnot keine Aktienmehrheit mehr ab.",
+        en: "Bots adjust their shelf prices to the market, raise wages even when cash is tight if they are short of almost all workers, and no longer give up their majority stake when short of money." },
+    ]
+  },
+  {
     id: "2026-10-25a", datum: "2026-10-25",
     titel: { de: "Balancing: Software kann vorne mitspielen", en: "Balancing: software can compete for the top" },
     punkte: [

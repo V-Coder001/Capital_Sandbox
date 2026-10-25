@@ -513,6 +513,13 @@ const STADTNETZ_ID = "stadtnetz";
 const STADTNETZ = {
   strom:      { faktor: 1.6, proMin: 150, max: 300 },
   elektronik: { faktor: 1.5, proMin: 8,   max: 20 },
+  /* Erz und Stahl für die Rüstung. Die Rohstoff-Bots verbrauchen ihr Erz fast
+   * ganz selbst (ein Stahlwerk frisst 1 Erz/s, eine Mine fördert 0,38), und
+   * ein Stahlwerk stand in drei von vier Messrunden erst ab Minute 40 oder
+   * nie. Munitionsfabrik und Waffenschmiede standen so die halbe Runde still,
+   * Rüstung kam auf 2–12k $ Vermögen. Wer selbst Stahl kocht, bleibt billiger. */
+  erze:       { faktor: 1.25, proMin: 30, max: 60 },
+  stahl:      { faktor: 1.25, proMin: 8,  max: 20 },
 };
 /* Fahrzeuge sind Endprodukte: hoher Stückwert, dafür langsame Fertigung und ein
  * eigener Absatzweg (Autohaus). Am Handelskontor wären sie mit dessen hoher
@@ -1403,7 +1410,12 @@ const matCost = bt => {
  * Folge: Monokultur (z. B. nur Plantagen) ruiniert sich ihren eigenen Preis. */
 const MM = Object.fromEntries(Object.keys(GOODS).map(k =>
   [k, { price: BASEP[k], anchor: BASEP[k], sold: 0, band: Math.min(5, BASEP[k] * 0.5) }]));
-const soldPressure = k => MM[k].sold * BASEP[k] / 4000;   // verkaufter Wert / $4000 = 1 Druckpunkt
+/* Marktiefe: Für Rüstungsgüter ist der Stadtmarkt größer (Polizei, Wachdienste,
+ * Schützenvereine) — derselbe Absatz drückt den Kurs weniger. Die Branche hat
+ * nur drei Waren und musste sie zugekauft veredeln; gemessen drückte
+ * Stahlfaust allein Panzer auf 60 % und Pistolen auf 78 % des Grundpreises. */
+const MARKT_TIEFE = { munition: 1.5, pistole: 2.5, panzer: 2.5 };
+const soldPressure = k => MM[k].sold * BASEP[k] / (4000 * (MARKT_TIEFE[k] || 1));   // verkaufter Wert / $4000 = 1 Druckpunkt
 function noteSold(k, qty) { MM[k].sold = Math.max(-200 / BASEP[k], MM[k].sold + qty); }
 
 const BOOST_MULT = 0.75;   // je verfügbarem Boost-Rohstoff: +75 % Produktion
@@ -2151,13 +2163,20 @@ const BTYPES = {
    * Werte sind auf 2,2x Wertschöpfung und rund fünf Minuten Amortisation
    * gerechnet, also auf dem Niveau von Stahlwerk und Chipfabrik. Der Einstieg
    * über die Munitionsfabrik ist billig und braucht nur Erze und Öl; wer
-   * Panzer bauen will, hängt dagegen an drei fremden Branchen gleichzeitig. */
-  munitionsfabrik: { name: "Munitionsfabrik", en: "Ammunition factory", cost: 1400, out: null, rate: 0, zone: "industrie", industry: "ruestung",
+   * Panzer bauen will, hängt dagegen an drei fremden Branchen gleichzeitig.
+   * Waffenschmiede und Panzerwerk liefern knapp 20 % mehr (10/45 → 10/38,
+   * 10/95 → 10/80): Gerechnet waren die 2,2x auf Grundpreisen, gemessen kauft
+   * die Branche Stahl mit Stadtnetz-Aufschlag zu und verkauft unter Grundpreis —
+   * real blieben rund 1,5x, bei 240k $ Umsatz nur ~55k $ Vermögen.
+   * arbeiter: feste Belegschaft statt Baukosten/250 — die Werke sind teuer,
+   * aber Fertigung, kein Handwerk. Ein Panzerwerk auf Stufe 4 hätte sonst 75
+   * Leute gebunden, die Branche zahlte gemessen 20k $ Lohn je Runde. */
+  munitionsfabrik: { name: "Munitionsfabrik", en: "Ammunition factory", cost: 1400, out: null, rate: 0, zone: "industrie", industry: "ruestung", arbeiter: 4,
                      proc: { in: { erze: 0.18, oel: 0.13 }, out: "munition", rate: 10/30 } },
-  waffenschmiede:  { name: "Waffenschmiede", en: "Gunsmith",  cost: 4000, out: null, rate: 0, zone: "industrie", industry: "ruestung",
-                     proc: { in: { stahl: 0.055, elektronik: 0.030, munition: 0.075 }, out: "pistole", rate: 10/45 } },
-  panzerwerk:      { name: "Panzerwerk", en: "Tank works",      cost: 8000, out: null, rate: 0, zone: "industrie", industry: "ruestung",
-                     proc: { in: { stahl: 0.105, elektronik: 0.055, diesel: 0.070 }, out: "panzer", rate: 10/95 } },
+  waffenschmiede:  { name: "Waffenschmiede", en: "Gunsmith",  cost: 4000, out: null, rate: 0, zone: "industrie", industry: "ruestung", arbeiter: 10,
+                     proc: { in: { stahl: 0.055, elektronik: 0.030, munition: 0.075 }, out: "pistole", rate: 10/38 } },
+  panzerwerk:      { name: "Panzerwerk", en: "Tank works",      cost: 8000, out: null, rate: 0, zone: "industrie", industry: "ruestung", arbeiter: 16,
+                     proc: { in: { stahl: 0.105, elektronik: 0.055, diesel: 0.070 }, out: "panzer", rate: 10/80 } },
   waffenhandel:    { name: "Waffenhandel", en: "Arms dealer",    cost: 5200, out: null, rate: 0, zone: "zentrum",
                      retail: { slots: 2, base: 0.30, goods: WEAPONS } },
   /* ---- Motorsport ----
@@ -9995,28 +10014,43 @@ const BOT_CFGS = [
   { name: "Nordsee Öl",      industry: "versorger", color: "#e5762f",
     plan: ["oelpumpe"], planLoop: true, maxGebaeude: 4, needs: [], alwaysSell: ["oel"] },
 
+  /* Stahl und Öl erst, wenn ein Autowerk steht (bedarfAusWerken). Fest auf
+   * der Einkaufsliste kauften beide Bots Stahl beim Stadtnetz, ohne ein Werk
+   * dafür zu haben, und reichten ihn knapp unter Einkauf weiter — 190k $
+   * Umsatz im Kreis, auf den die Umsatzsteuer fällig wurde. */
   { name: "ChipWerke",       industry: "tech",      color: "#a78bfa",
-    plan: ["onlinemarkt", "rennlabor", "siliziummine", "werbeagentur"], needs: ["strom", "stahl", "oel"] },
+    plan: ["onlinemarkt", "rennlabor", "siliziummine", "werbeagentur"], needs: ["strom"], bedarfAusWerken: true },
   { name: "Volt & Silicon",  industry: "tech",      color: "#e879f9",
-    plan: ["onlinemarkt", "siliziummine", "werbeagentur"], needs: ["strom", "stahl"], rennstall: true },
+    plan: ["onlinemarkt", "siliziummine", "werbeagentur"], needs: ["strom"], bedarfAusWerken: true, rennstall: true },
 
   /* Touristik: kauft Wasser und Strom zu und verkauft Übernachtungen über ein
    * eigenes Kontor. Bewusst nur einer — die Branche ist neu und soll den Markt
-   * erst einmal nicht dominieren. */
+   * erst einmal nicht dominieren.
+   * Kein alwaysSell für Übernachtungen (derselbe Fehler wie bei Stahlfausts
+   * Munition): Ins Regal kamen sie erst ab 300 Stück, an der Börse kaufte sie
+   * niemand — gemessen bis Minute 40 kein einziger Verkauf, 632 auf Lager. */
   { name: "Küstenperle",     industry: "touristik", color: "#2dd4bf",
     plan: ["campingplatz", "onlinemarkt", "strandhotel", "werbeagentur"], maxGebaeude: 4,
-    needs: ["wasser", "strom"], alwaysSell: ["uebernachtung"], rennstall: true },
+    needs: ["wasser", "strom"], rennstall: true },
 
   /* Rüstung: baut erst die billige Munitionsfabrik, damit früh Geld reinkommt,
    * und kauft Stahl, Elektronik und Diesel für die teureren Stufen zu. */
   { name: "Stahlfaust",      industry: "ruestung",  color: "#f43f5e",
-    plan: ["onlinemarkt", "munitionsfabrik", "werbeagentur"], maxGebaeude: 5, rennstall: true,
+    plan: ["onlinemarkt", "munitionsfabrik", "waffenschmiede", "panzerwerk", "werbeagentur"], rennstall: true,
+    /* Laden direkt nach der Munitionsfabrik: Munition verkauft sich an die
+     * Stadt, und das ist das einzige Geld, bis Stahl für die Waffenschmiede da ist. */
+    omNach: 1, bedarfAusWerken: true, abdeckungVorAusbau: true, dividendeAnteil: 0.10,
     /* Bewusst nur die Zutaten der ersten Stufen: Jede Ware in dieser Liste
      * bindet beim Einkauf bis zu 25 Stück Kapital. Mit Stahl (115 $) und
      * Elektronik (98 $) gleichzeitig war der Bot sofort klamm und kam über
      * die Munitionsfabrik nie hinaus — gemessen: Bargeld 2001 → 1136 bei
-     * einem einzigen Gebäude. */
-    needs: ["erze", "oel", "stahl"], alwaysSell: ["munition"] },
+     * einem einzigen Gebäude. Stahl, Elektronik und Diesel kauft er deshalb
+     * erst, wenn Waffenschmiede bzw. Panzerwerk stehen (bedarfAusWerken) —
+     * Diesel kaufte er vorher nie, das Panzerwerk stand still.
+     * Kein alwaysSell für Munition mehr: Das behandelte sie wie Strom (Regal
+     * erst ab 300 Stück, sonst nur Börse), dort kaufte sie aber niemand —
+     * gemessen lagen bis zu 215 Stück unverkauft im Lager. */
+    needs: ["erze", "oel"] },
   /* Software: entwickeln je ein Shop-System und betreiben es. Die beiden
    * unterscheiden sich im Preis — Byteforge ist billig und schlicht, Pixelwerk
    * teurer, legt aber schneller Funktionen nach. Ohne sie gäbe es im Spiel nur
@@ -10099,6 +10133,8 @@ async function spawnBot(cfg, lvl = BOT_LEVELS[BOT_LEVEL_DEFAULT]) {
   const { io: ioClient } = await import("socket.io-client");
   const s = ioClient(`http://localhost:${PORT}`);
   let me = null, st = null, myId = null, lastBuild = 0;
+  let bauMat = {};   // Baumaterial fürs nächste Gebäude des Bauplans (aus dem vorigen Durchlauf)
+  let ausschuettungGesetzt = null;   // zuletzt festgelegte Dividende (cfg.dividendeAnteil)
   let swPreisZeit = Date.now();   // Software-Anbieter: wann zuletzt die Gebühr überprüft wurde
   let lohnKnapp = 0, lohnVoll = 0, swKundenAlt = null;   // Stadtwachstum: wie oft hintereinander zu wenig bzw. alle Arbeiter da waren
   let botLogoGroesse = 0;            // Malprogramm: Größe des zuletzt gemalten Logos
@@ -10626,6 +10662,13 @@ async function spawnBot(cfg, lvl = BOT_LEVELS[BOT_LEVEL_DEFAULT]) {
       for (const t of st.map) if (t.owner === myId && t.btype) {
         const b = BTYPES[t.btype]; if (b?.out) eigeneWare.add(b.out); if (b?.proc) eigeneWare.add(b.proc.out);
       }
+      /* Firmen vor Stadtkunden: Für eigene Ware mit einem marktüblichen
+       * Börsengebot einer anderen Firma bleibt das Regal frei, bis das Gebot
+       * bedient ist (das passiert weiter unten). Sonst leerte das Regal das
+       * Lager schneller, als der Bot-Takt nachkam — ein Gebot über 22 Ziegel
+       * stand eine ganze Runde offen, und Stahlfaust baute sein Panzerwerk nie. */
+      const gefragt = new Set(st.orders.filter(o => o.side === "buy" && o.playerId !== myId
+        && eigeneWare.has(o.good) && o.price >= (st.avg[o.good] || o.price) * 0.97).map(o => o.good));
       for (const t of st.map) {
         if (t.owner !== myId || !t.shop) continue;
         /* Grundversorgung (alwaysSell: Strom, Wasser, Öl) gehört an die Börse —
@@ -10634,11 +10677,23 @@ async function spawnBot(cfg, lvl = BOT_LEVELS[BOT_LEVEL_DEFAULT]) {
          * und beide Software-Firmen standen 35 Minuten ohne Strom da. Nur echter
          * Überschuss darf ins Regal. */
         const grund = new Set(cfg.alwaysSell || []);
-        const goods = (BTYPES[t.btype]?.retail?.goods || []).filter(g => me.inv[g] > (grund.has(g) ? 300 : 5) && eigeneWare.has(g))
+        const goods = (BTYPES[t.btype]?.retail?.goods || []).filter(g => me.inv[g] > (grund.has(g) ? 300 : 5) && eigeneWare.has(g) && !gefragt.has(g))
           .sort((a2, b2) => (me.inv[b2] || 0) * (st.avg[b2] || 0) - (me.inv[a2] || 0) * (st.avg[a2] || 0));
-        /* Grundversorgung wieder aus dem Regal nehmen, sobald der Überschuss weg ist. */
+        /* Grundversorgung wieder aus dem Regal nehmen, sobald der Überschuss weg ist —
+         * ebenso gefragte Ware (siehe oben). */
         t.shop.forEach((sl, i) => {
-          if (sl && grund.has(sl.good) && (me.inv[sl.good] || 0) < 100) { em("configureShop", { x: t.x, y: t.y, slot: i, good: null }); t.shop[i] = null; }
+          if (sl && ((grund.has(sl.good) && (me.inv[sl.good] || 0) < 100) || gefragt.has(sl.good))) { em("configureShop", { x: t.x, y: t.y, slot: i, good: null }); t.shop[i] = null; }
+        });
+        /* Der Regalpreis wurde einmal gesetzt und nie angepasst. Fällt der Kurs,
+         * verkauft das Regal nur noch halb so schnell — gemessen lagen bei
+         * Stahlfaust 170 Pistolen zu 121 $ im Regal, Kurs 87 $. Staut sich die
+         * Ware, geht der Preis auf den Kurs zurück. */
+        t.shop.forEach((sl, i) => {
+          if (sl && !sl.qty && st.avg[sl.good] && ((me.inv[sl.good] || 0) > 40 && sl.price > st.avg[sl.good] * 1.1
+              || sl.price < st.avg[sl.good] * 0.9)) {   // erholt sich der Kurs, zieht der Preis nach
+            const neu = Math.round(st.avg[sl.good] * 100) / 100;
+            em("configureShop", { x: t.x, y: t.y, slot: i, good: sl.good, price: neu }); sl.price = neu;
+          }
         });
         const belegt = new Set(t.shop.filter(Boolean).map(sl => sl.good));
         t.shop.forEach((sl, i) => {
@@ -10649,17 +10704,36 @@ async function spawnBot(cfg, lvl = BOT_LEVELS[BOT_LEVEL_DEFAULT]) {
           em("configureShop", { x: t.x, y: t.y, slot: i, good: g, price: Math.round(st.avg[g] * 100) / 100 });
         });
       }
+      /* Was der Bot für sich zukauft (Bedarf und Zutaten der eigenen Werke),
+       * gibt er nicht an die Stadt ab und verkauft es nicht weiter. Stahlfaust
+       * lieferte gekauften Stahl und Elektronik ans Stadtprojekt (halbes Lager,
+       * ohne Sofortzahlung) und an den Wohnbau (bis auf 5 Stück, unter
+       * Einkaufspreis) — die Waffenschmiede stand. */
+      const zutaten = new Set(cfg.needs || []);
+      for (const t of st.map) if (t.owner === myId && BTYPES[t.btype]?.proc)
+        for (const g of Object.keys(BTYPES[t.btype].proc.in)) zutaten.add(g);
+      for (const g of eigeneWare) zutaten.delete(g);
       /* Stadtprojekt: ebenfalls die Hälfte des Lagers liefern */
       if (st.stadtprojekt) for (const [g, n] of Object.entries(st.stadtprojekt.needs)) {
-        const q = Math.min(Math.floor((me.inv[g] || 0) / 2), n.req - n.have);
+        if (zutaten.has(g)) continue;
+        const q = Math.min(Math.floor(((me.inv[g] || 0) - (bauMat[g] || 0)) / 2), n.req - n.have);
         if (q > 0) await em("projektLiefern", { good: g, qty: q });
       }
       /* Wohnbau der Stadt: Baumaterial liefern, was über die eigene Reserve geht */
       const eigeneWaren = new Set(st.map.filter(t => t.owner === myId && t.btype).map(t => BTYPES[t.btype].proc?.out || BTYPES[t.btype].out));
       for (const a of st.stadt?.auftraege || []) for (const [g, n] of Object.entries(a.needs)) {
         /* Wer die Ware selbst herstellt, liefert fast alles; die anderen halten Baureserve */
-        const reserve = eigeneWaren.has(g) ? 3 : g === "ziegel" ? 20 : g === "beton" ? 10 : 5;
-        const q = Math.min(Math.floor((me.inv[g] || 0) - reserve), n.req - n.have);
+        /* Eigene Ware: offene Börsengebote gehen vor. Montan & Bau lieferte
+         * alle Ziegel an den Wohnbau, ein Gebot über 6 Ziegel stand 45 Minuten
+         * unbedient, und Stahlfaust konnte seine Waffenschmiede nicht bauen. */
+        const gebotsMenge = eigeneWaren.has(g) ? st.orders.filter(o => o.side === "buy" && o.good === g && o.playerId !== myId).reduce((m, o) => m + o.qty, 0) : 0;
+        const reserve = eigeneWaren.has(g) ? (gebotsMenge ? (g === "ziegel" || g === "beton" ? 13 : 4) + Math.min(30, gebotsMenge) : 3)
+          : zutaten.has(g) ? 25 : g === "ziegel" ? 20 : g === "beton" ? 10 : 5;
+        /* Material fürs nächste eigene Gebäude bleibt da. Sonst kaufte der Bot
+         * die 20 Ziegel fürs Panzerwerk, lieferte 4 davon gleich wieder ab und
+         * bestellte neu — gemessen 17,8k $ Ziegel gekauft, 14,6k $ abgegeben. */
+        const reserveBau = Math.max(reserve, bauMat[g] || 0);
+        const q = Math.min(Math.floor((me.inv[g] || 0) - reserveBau), n.req - n.have);
         if (q > 0) await em("wohnbauLiefern", { id: a.id, good: g, qty: q });
       }
       /* Löhne: Fehlen länger Leute, eine Stufe rauf. Ist dreimal in Folge alles
@@ -10676,12 +10750,17 @@ async function spawnBot(cfg, lvl = BOT_LEVELS[BOT_LEVEL_DEFAULT]) {
             .sort((a, b) => b.vorrang / b.gebuehr - a.vorrang / a.gebuehr)[0];
           if (best) await em("jobAbo", { id: best.id });
         } else if (me.lohn.jobAbo && lohnVoll >= 4) await em("jobAbo", { id: null });
-        if (lohnKnapp >= 2 && i < 2 && me.cash > 2500) { await em("lohnStufe", { stufe: ordnung[i + 1] }); lohnKnapp = 0; }
+        /* Fast ohne Leute darf er auch mit wenig Geld erhöhen — Lohn zahlt er nur
+         * für Arbeiter, die er hat. Sonst Todesspirale: Stahlfaust stand mit
+         * 300 $ beim Sparlohn, bekam 15 Minuten lang keinen einzigen Arbeiter,
+         * produzierte nichts und kam nie über die 2.500 $. */
+        if (lohnKnapp >= 2 && i < 2 && (me.cash > 2500 || q < .3)) { await em("lohnStufe", { stufe: ordnung[i + 1] }); lohnKnapp = 0; }
         else if (!me.lohn.wunsch && i > 0 && (lohnVoll >= 3 || me.cash < 600)) { await em("lohnStufe", { stufe: ordnung[i - 1] }); lohnVoll = 0; }
       }
       /* Großauftrag: die Hälfte des Lagers beisteuern */
       if (st.groupOrder) for (const [g, n] of Object.entries(st.groupOrder.needs)) {
-        const q = Math.min(Math.floor((me.inv[g] || 0) / 2), n.req - n.have);
+        if (zutaten.has(g)) continue;
+        const q = Math.min(Math.floor(((me.inv[g] || 0) - (bauMat[g] || 0)) / 2), n.req - n.have);
         if (q > 0) await em("contribute", { good: g, qty: q });
       }
       /* Zwangsversteigerungen: bieten bis max. 70 % des Neuwerts (Schnäppchenjäger).
@@ -10755,6 +10834,17 @@ async function spawnBot(cfg, lvl = BOT_LEVELS[BOT_LEVEL_DEFAULT]) {
         const betrag = Math.floor((me.cash - RUECKLAGE) * 0.15 / 100) * 100;
         if (e && betrag >= 100) await em("etfKaufen", { branche: e.branche, betrag });
       }
+      /* Dividende nach Marge statt pauschal 25 % des Umsatzes: Ein Veredler
+       * kauft fast alles zu, 25 % vom Umsatz waren bei Stahlfaust rund ein
+       * Drittel seines Rohgewinns. Fester Betrag je Periode aus dem Umsatz der
+       * letzten 10 Minuten, nur bei spürbarer Änderung neu gesetzt. */
+      if (cfg.dividendeAnteil) {
+        const ziel = Math.round((st.players[myId]?.rev10 || 0) * cfg.dividendeAnteil / 100) * 100;
+        if (ausschuettungGesetzt == null || Math.abs(ziel - ausschuettungGesetzt) > Math.max(300, ausschuettungGesetzt * 0.15)) {
+          const r = await em("setAusschuettung", { betrag: ziel });
+          if (r?.ok) ausschuettungGesetzt = ziel;
+        }
+      }
       /* Kapitalerhöhung: Wer noch fast alles an sich selbst hält, gibt ab und
        * zu ein kleines Paket aus. Ohne Angebote im Buch hätten Spieler und
        * Bürgerdepot nichts zu kaufen. */
@@ -10797,7 +10887,7 @@ async function spawnBot(cfg, lvl = BOT_LEVELS[BOT_LEVEL_DEFAULT]) {
       let omBonus = 0;
       if (st.mode === "sandbox") gesamtplan = gesamtplan.filter(b => b !== "werbeagentur");
       if (!cfg.planLoop && cfg.industry !== "software" && st.mode !== "renntag" && st.mode !== "kartell") {   // Software-Bots haben nichts zu verkaufen
-        gesamtplan.splice(Math.min(2, gesamtplan.length), 0, "onlinemarkt"); omBonus = 1;
+        gesamtplan.splice(Math.min(cfg.omNach ?? 2, gesamtplan.length), 0, "onlinemarkt"); omBonus = 1;
       }
       const built = st.map.filter(t => t.owner === myId && t.btype).length;
       /* planLoop: der Bot arbeitet seinen Plan nicht einmal ab, sondern beginnt
@@ -10808,6 +10898,7 @@ async function spawnBot(cfg, lvl = BOT_LEVELS[BOT_LEVEL_DEFAULT]) {
       const maxGeb = Math.min(lvl.maxGebaeude + rennBonus + omBonus, (cfg.maxGebaeude ?? Infinity) + rennBonus + omBonus,
                               cfg.planLoop ? Infinity : gesamtplan.length);
       const planFertig = built >= maxGeb;
+      bauMat = planFertig ? {} : matCost(BTYPES[gesamtplan[built % gesamtplan.length]] || {});
 
       /* ---- Fremdkapital ----
        * Bisher rührte kein Bot das Anleihesystem an: `issueBond` und `buyBond`
@@ -10945,7 +11036,10 @@ async function spawnBot(cfg, lvl = BOT_LEVELS[BOT_LEVEL_DEFAULT]) {
       for (const b of (st.shareBids || []).filter(b => b.companyId === myId)) {
         const block = st.players[myId]?.kurs || 0;   // je Aktie
         const fair = block * b.count;
-        const klamm = me.cash < 1500;
+        /* Notlage gilt nur bis zur Mehrheit — dieselbe 50-%-Grenze wie beim
+         * Notverkauf oben. Ohne sie nahm Stahlfaust bei knapper Kasse zwei
+         * 25er-Gebote zum fairen Preis an und hielt danach 1 % an sich selbst. */
+        const klamm = me.cash < 1500 && (st.players[myId]?.ownPct ?? 0) - b.count >= 50;
         /* Fonds, Finanzamt und Bürgerdepot kaufen nur kleine Pakete und
          * greifen nie nach der Kontrolle — dafür reicht der faire Kurs. Mit
          * dem Aufschlag wie für Mitspieler lehnten die Bots jede ihrer
@@ -10982,6 +11076,12 @@ async function spawnBot(cfg, lvl = BOT_LEVELS[BOT_LEVEL_DEFAULT]) {
        * und Wasser im Lager steigern die Produktion um bis zu 150 %, das ist der
        * größte Hebel, den ein Bot ohne Sonderrechte ziehen kann. */
       const bedarf = new Set(cfg.needs);
+      /* Zutaten der eigenen Werke nachkaufen, sobald das Werk steht — nicht
+       * vorher, damit kein Kapital in Vorräten für spätere Stufen liegt. */
+      if (cfg.bedarfAusWerken) for (const t of st.map) {
+        if (t.owner !== myId || !BTYPES[t.btype]?.proc) continue;
+        for (const g of Object.keys(BTYPES[t.btype].proc.in)) if (!eigeneWare.has(g)) bedarf.add(g);
+      }
       /* Boost-Rohstoffe nur mit Kapitalpolster kaufen — sonst geht das Geld für
        * Strom und Wasser drauf, das eigentlich das nächste Gebäude finanzieren
        * sollte, und der starke Bot fällt hinter den schwachen zurück. */
@@ -11025,7 +11125,19 @@ async function spawnBot(cfg, lvl = BOT_LEVELS[BOT_LEVEL_DEFAULT]) {
       for (const g of bedarf) {
         const vorratZiel = cfg.vorrat?.[g] ?? 25;   // Software-Bots halten mehr Strom (Rechenzentren)
         if (me.inv[g] >= vorratZiel) continue;
-        if (st.orders.some(o => o.playerId === myId && o.side === "buy" && o.good === g)) continue;
+        const alteOrder = st.orders.find(o => o.playerId === myId && o.side === "buy" && o.good === g);
+        if (alteOrder) {
+          /* Fast leer und die eigene Order liegt nicht über dem günstigsten
+           * Angebot: zurückziehen und unten neu zum Angebotspreis kaufen. Sonst
+           * blieb sie ewig stehen (zu Ø × 1,03 knapp über dem Kurs, also nie
+           * "daneben") und blockierte den Notkauf — gemessen hatte Stahlfaust
+           * minutenlang 0 Erz, während 60 Stück im Buch lagen. Auch eine Order
+           * genau zum Angebotspreis kann hängen: Das Stadtnetz füllt sein
+           * Angebot nach, eine ruhende Order kreuzt das nicht von selbst. */
+          const ask = st.orders.filter(o => o.good === g && o.side === "sell" && o.playerId !== myId).reduce((m, o) => Math.min(m, o.price), Infinity);
+          if (!((me.inv[g] || 0) < vorratZiel / 3 && ask >= alteOrder.price && ask <= st.avg[g] * 1.7)) continue;
+          await em("cancelOrder", { orderId: alteOrder.id });
+        }
         /* Aufschlag statt Abschlag. Vorher wurde mit (kaufAufschlag - 0.03)
          * geboten, also auf Stufe "Mittel" zu Ø × 0,97 — während Verkäufer zu
          * Ø × 1,02 anboten. Die beiden Seiten kreuzten sich nie: die Ziegelei
@@ -11101,7 +11213,13 @@ async function spawnBot(cfg, lvl = BOT_LEVELS[BOT_LEVEL_DEFAULT]) {
        * einer Nachfrage von 22 Stück. Eine Firma, die ihre Mine zum fünften Mal
        * ausbaut, während ihr Kernprodukt fehlt, wirtschaftet nicht plausibel. */
       const abdeckung = INDUSTRY_COVERAGE[cfg.industry] || [];
-      const abdeckungFertig = cfg.planLoop || built >= abdeckung.length;
+      /* abdeckungVorAusbau: erst wenn wirklich jedes Werk steht. Sonst zählt der
+       * Online-Marktplatz mit — Stahlfaust galt nach Munitionsfabrik, Laden und
+       * Waffenschmiede als fertig, baute aus und kam nie zum Panzerwerk, also
+       * nie zu seiner dritten Ware (zwei Waren drückt er allein auf den Boden). */
+      const abdeckungFertig = cfg.planLoop || (cfg.abdeckungVorAusbau
+        ? planFertig || abdeckung.every(b => st.map.some(t => t.owner === myId && t.btype === b))
+        : built >= abdeckung.length);
       /* Ohne eigenen Laden kein Ausbau: Gemessen steckten Küstenperle und
        * Stahlfaust ihr ganzes Geld in Ausbauten, hatten nie einen
        * Online-Marktplatz und machten in 60 Minuten 4–5k Umsatz. */
@@ -11124,7 +11242,10 @@ async function spawnBot(cfg, lvl = BOT_LEVELS[BOT_LEVEL_DEFAULT]) {
           || (st.paint || []).some(x => x.ownerId === myId && x.entwicklung) || (st.boerseApp || []).some(x => x.ownerId === myId && x.entwicklung);
         upgradable = lvl.leveln && (eng ? eigene.find(t => BTYPES[t.btype]?.rz) : entwickelt ? eigene.find(t => BTYPES[t.btype]?.studio) : null);
       } else upgradable = lvl.leveln && abdeckungFertig && hatLaden && st.map.find(t => t.owner === myId && t.btype &&
-        (BTYPES[t.btype].out || BTYPES[t.btype].proc) && (t.level || 1) < 5);
+        (BTYPES[t.btype].out || BTYPES[t.btype].proc) && (t.level || 1) < 5
+        /* Kein Ausbau, solange dem Werk Zutaten fehlen: Stahlfaust baute seine
+         * Munitionsfabrik ohne Erz bis Stufe 5 aus und war danach pleite. */
+        && !Object.entries(BTYPES[t.btype].proc?.in || {}).some(([g, n]) => (me.inv[g] || 0) < n * levelMult(t.level) * 30));
       if (upgradable) {
         const ubt = BTYPES[upgradable.btype], ulvl = upgradable.level || 1;
         const ec = Math.ceil(ubt.cost / 2500 * ulvl), cc = Math.round(ubt.cost * 0.35 * ulvl);
@@ -11147,7 +11268,7 @@ async function spawnBot(cfg, lvl = BOT_LEVELS[BOT_LEVEL_DEFAULT]) {
        * Elektronik pendelte in der Messung um 9 Stück — mit einer pauschalen
        * Reserve von 6 wären davon nur 3 je Zyklus in den Markt gegangen, zu
        * wenig, um die Nachfrage je einzuholen. */
-      const reserveFuer = g => (g === "ziegel" || g === "beton") ? 12 : 3;
+      const reserveFuer = g => Math.max((g === "ziegel" || g === "beton") ? 12 : 3, bauMat[g] || 0);
       /* Rangfolge nach AUFSCHLAG auf den Ø-Kurs, nicht nach dem Stückpreis.
        * Vorher stand hier `b.price - a.price` — quer über alle Waren sortiert,
        * also gewann immer die teuerste Ware. Strom kostet rund 2 $, Stahl 127 $,
@@ -11160,8 +11281,12 @@ async function spawnBot(cfg, lvl = BOT_LEVELS[BOT_LEVEL_DEFAULT]) {
        * Der Aufschlag ist zudem das ehrlichere Signal: Er zeigt, wie dringend
        * jemand die Ware braucht, unabhängig davon, was sie grundsätzlich kostet. */
       const aufschlag = o => o.price / Math.max(0.01, st.avg[o.good] || o.price);
+      /* Zugekaufte Zutaten der eigenen Werke werden nicht weiterverkauft.
+       * Gemessen kaufte Stahlfaust Stahl beim Stadtnetz für ~161 $ und gab ihn
+       * hier an fremde Gebote zu 125–140 $ wieder ab: 163k $ Einkauf, 136k $
+       * Weiterverkauf in einer Runde — und der Waffenschmiede fehlte er. */
       const gebote = st.orders
-        .filter(o => o.side === "buy" && o.playerId !== myId &&
+        .filter(o => o.side === "buy" && o.playerId !== myId && !zutaten.has(o.good) &&
                      (me.inv[o.good] || 0) > reserveFuer(o.good) + 1)
         .sort((a, b) => aufschlag(b) - aufschlag(a));
       /* Mehrere Gebote je Zyklus bedienen. Bei einem einzigen pro Bot-Takt
@@ -11174,7 +11299,8 @@ async function spawnBot(cfg, lvl = BOT_LEVELS[BOT_LEVEL_DEFAULT]) {
       /* BÖRSE BEFÜLLEN ohne Überschuss: nur wenn das Buch dünn ist */
       let eingestellt = 0;
       for (const g of Object.keys(me.inv)) {
-        if (me.inv[g] < 18) continue;
+        const frei = me.inv[g] - (bauMat[g] || 0);   // Material fürs nächste Gebäude bleibt liegen
+        if (frei < 18 || zutaten.has(g)) continue;
         /* Das Stadtnetz zählt nicht mit: Sein teures Notangebot (20 Elektronik)
          * hielt ChipWerke sonst davon ab, je selbst Elektronik anzubieten —
          * gemessen lagen nach 45 Minuten 890 Stück ungenutzt in ihrem Lager. */
@@ -11184,8 +11310,8 @@ async function spawnBot(cfg, lvl = BOT_LEVELS[BOT_LEVEL_DEFAULT]) {
         /* Großer Überschuss geht in größeren Posten raus: Mit höchstens 10 Stück
          * je Zyklus lagen bei ChipWerke nach 45 Minuten 770 Elektronik, während
          * andere sie händeringend suchten. */
-        const posten = Math.max(10, Math.min(200, Math.floor((me.inv[g] - 8) * 0.25)));
-        await em("placeOrder", { side: "sell", good: g, qty: Math.min(posten, Math.floor(me.inv[g] - 8)),
+        const posten = Math.max(10, Math.min(200, Math.floor((frei - 8) * 0.25)));
+        await em("placeOrder", { side: "sell", good: g, qty: Math.min(posten, Math.floor(frei - 8)),
           price: Math.round(st.avg[g] * (lvl.verkaufKurs + 0.04) * 100) / 100 });
         if (++eingestellt >= 2) break;   // zwei Waren je Zyklus statt einer
       }
