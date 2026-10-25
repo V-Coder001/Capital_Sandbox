@@ -2032,6 +2032,74 @@ const EN = {
   "30 % der Löhne gehen als Lohnsteuer und Miete an die Stadt, 20 % ins Bürgerdepot.": "30 % of wages go to the city as wage tax and rent, 20 % into the citizens' depot.",
   "höchstens": "at most", "Schulden": "debt", "Bürger-Apps und Jobbörse": "Citizen apps and job board",
   "Bürger-App: bis 85 % der Einwohner zahlen ein Abo je Minute, 200 Nutzer je Rechenzentrums-Stufe des Anbieters. Jobbörse: Vorrang wie +0,3 bis +0,7 Lohnstufen gegen eine Gebühr je Arbeiter, 3 Abos je Rechenzentrums-Stufe.": "Citizen app: up to 85 % of residents pay a subscription per minute, 200 users per data-centre level of the provider. Job board: priority like +0.3 to +0.7 wage levels for a fee per worker, 3 subscriptions per data-centre level.",
+  /* Stadtnetz (Etappe 8) */
+  "Ab Website-Modul „Aktionen“ (v3): 5 Minuten +25 % Reichweite.": "From website module “Campaigns” (v3): +25 % reach for 5 minutes.",
+  "Aktie an der Stadtbank": "Shares at the city bank",
+  "Aktion starten": "Start campaign",
+  "Alle Websites der Stadt": "All websites in the city",
+  "Anbieter vergleichen": "Compare providers",
+  "Anzeige": "Ad",
+  "Ausschreibungen": "Tenders",
+  "Ausschreibungsportal": "Tender portal",
+  "Baustoff-Portal": "Building-materials portal",
+  "Baustoff-Woche": "Building-materials week",
+  "Besucher/min": "visitors/min",
+  "Bieten und liefern im Firma-Panel": "Bid and deliver in the company panel",
+  "Das Stadtnetz": "The city network",
+  "Das Stadtnetz wird von der Stadt betrieben": "The city network is run by the city",
+  "Dein Angebot": "Your offer",
+  "Deine Firma ist im Stadtnetz nicht zu finden — ohne Website sehen dich Kunden nicht.": "Your company can't be found in the city network — without a website customers don't see you.",
+  "Deine Website: So sehen Kunden und Mitspieler deine Firma im Stadtnetz.": "Your website: this is how customers and other players see your company in the city network.",
+  "Du hast noch keine Website. Software-Firmen bauen sie dir — oder das Stadtportal die Grundseite.": "You have no website yet. Software companies build one for you — or the city portal builds the basic site.",
+  "Einwohner online": "residents online",
+  "Erntefest-Rabatt": "Harvest-festival sale",
+  "Firma oder Ware suchen …": "Search company or goods …",
+  "Firmen": "Companies",
+  "Frühbucher-Aktion": "Early-bird offer",
+  "Gebote offen": "bids open",
+  "Gerade kein offener Auftrag.": "No open order right now.",
+  "Gratis-Monat": "Free month",
+  "Großhandel": "Wholesale",
+  "Grundseite vom Stadtportal": "Basic site from the city portal",
+  "Hofladen": "Farm shop",
+  "Im Stadtnetz (Knopf unten) stehen alle Firmen mit Website. Mit einem Branchenportal kaufst du dort direkt ein — zum Beispiel Obst im Hofladen oder Strom im Kundenportal.": "The city network (button at the bottom) lists every company with a website. With an industry portal you buy directly there — for example fruit in the farm shop or power in the customer portal.",
+  "Im Stadtnetz stehen alle Firmen mit Website, sortiert nach Besuchern. Branchenportal: Direktkauf zum Ø-Kurs plus 5 % (Hofladen, Großhandel, Baustoff-Portal, Kundenportal), Rohstoff +5 % auf Wohnbau-Lieferungen, Rüstung 5 % günstigere Gebote, +15 % je Lieferung und häufigere Ausschreibungen. Aktionen: 600 $, 5 Minuten +25 % Reichweite, danach 15 Minuten Pause.": "The city network lists every company with a website, sorted by visitors. Industry portal: direct purchase at average price plus 5 % (farm shop, wholesale, building-materials portal, customer portal), raw materials +5 % on housing deliveries, defence 5 % cheaper bids, +15 % per delivery and more frequent tenders. Campaigns: 600 $, +25 % reach for 5 minutes, then a 15-minute break.",
+  "Kundenportal": "Customer portal",
+  "Liefern im Stadt-Panel": "Deliver in the city panel",
+  "Läuft": "Running",
+  "Läuft gerade": "Happening now",
+  "Messeauftritt": "Trade-fair appearance",
+  "Mit dem Modul „Branchenportal“ wird deine Website zum Laden: Mitspieler kaufen direkt bei dir, Rohstoff und Rüstung bekommen Auftrags-Boni.": "With the “Industry portal” module your website becomes a shop: other players buy directly from you, raw materials and defence get order bonuses.",
+  "Modul wechseln bei": "Switch module at",
+  "Nichts gefunden.": "Nothing found.",
+  "Noch hat keine Firma eine Website.": "No company has a website yet.",
+  "Noch keine eigene Ware.": "No own goods yet.",
+  "Noch nichts gebaut.": "Nothing built yet.",
+  "Nächste Aktion in": "Next campaign in",
+  "Nächste Ausschreibung kommt bald.": "Next tender coming soon.",
+  "Produkt-Launch": "Product launch",
+  "Rechenzentren und Software": "Data centres and software",
+  "Seiten": "pages",
+  "Stadtnetz": "City network",
+  "Stadtnetz und Branchenportale": "City network and industry portals",
+  "Suchen": "Search",
+  "Unsere Betriebe": "Our venues",
+  "Website von": "Website by",
+  "Wechselprämie": "Switching bonus",
+  "Wohnbau-Aufträge der Stadt": "City housing orders",
+  "Wohnbau-Aufträge suchen Baumaterial": "housing orders need building materials",
+  "Zum Online-Shop": "To the online shop",
+  "Zurück zum Stadtnetz": "Back to the city network",
+  "Zuschlag": "Awarded",
+  "gekauft": "bought",
+  "hat noch keine Website.": "has no website yet.",
+  "je Stück": "per unit",
+  "keine Website": "no website",
+  "mehr Reichweite für": "more reach for",
+  "mit Portal +5 % auf jede Lieferung": "with portal +5 % on every delivery",
+  "mit Portal: Gebote zählen 5 % günstiger, Lieferungen +15 %, Ausschreibungen häufiger": "with portal: bids count 5 % cheaper, deliveries +15 %, more frequent tenders",
+  "nach Besuchern": "by visitors",
+  "sofort verfügbar": "available now",
   /* Rechenzentren und Websites (Etappe 7) */
   "200 Strom kaufen": "Buy 200 power",
   "Aktionen": "Campaigns",
@@ -5951,7 +6019,7 @@ addEventListener("keydown", e => {
 });
 
 /* ---- Dock & Panels ---- */
-const DOCK = [["karte","Karte"],["plan","Planbüro"],["kartell","Kartell"],["lager","Lager"],["boerse","Börse"],["bonds","Finanzen"],["firma","Firma"],["touristik","Touristik"],["motorsport","Motorsport"],["lexikon","Lexikon"],["chat","Chat"]];
+const DOCK = [["karte","Karte"],["plan","Planbüro"],["kartell","Kartell"],["lager","Lager"],["boerse","Börse"],["bonds","Finanzen"],["firma","Firma"],["netz","Stadtnetz"],["touristik","Touristik"],["motorsport","Motorsport"],["lexikon","Lexikon"],["chat","Chat"]];
 const dock = document.getElementById("dock");
 DOCK.forEach(([pid, label]) => { const b = document.createElement("button");
   b.className = "dockbtn"; b.dataset.p = pid; b.textContent = label;
@@ -5967,6 +6035,8 @@ DOCK.forEach(([pid, label]) => { const b = document.createElement("button");
   if (pid === "motorsport") { b.id = "dockMotor"; b.style.display = "none"; }
   /* Touristik: erst mit eigenem Campingplatz oder Strandhotel (Etappe 6) */
   if (pid === "touristik") { b.id = "dockTour"; b.style.display = "none"; }
+  /* Stadtnetz (Etappe 8): kein Panel, sondern ein Browserfenster — nur mit wachsender Stadt */
+  if (pid === "netz") { b.id = "dockNetz"; b.style.display = "none"; b.addEventListener("click", () => netzOeffnen(null)); dock.append(b); return; }
   b.addEventListener("click", () => openPanel(pid)); dock.append(b); });
 /* stumm=true nur für den Aufruf beim Seitenaufbau: dort gibt es weder eine
  * Nutzergeste noch schon ein SFX-Modul (das entsteht erst weiter unten). */
@@ -6656,6 +6726,167 @@ document.getElementById("rzFenster").addEventListener("click", e => {
   if (e.target.closest("[data-rzwebneu]")) return em("webEinstellen", { name: document.getElementById("rzWebName")?.value, preis: state.websiteCfg?.PREIS_START || 25 }, t("Website-Baukasten angelegt"));
   const ha = e.target.closest("[data-hotelauf]");
   if (ha) { rzSchliessen(); return hotelOeffnen(ha.dataset.hotelauf); }
+});
+/* ---- Stadtnetz und Firmen-Websites (Etappe 8) ----
+ * Startseite mit allen Websites der Stadt, sortiert nach Besuchern, und je
+ * Firma eine eigene Seite: Grundseite für alle, Branchenportal mit Direktkauf
+ * (Hofladen, Großhandel, Baustoff-Portal, Kundenportal) oder Ausschreibungen,
+ * Aktionen ab Modul v3. Touristik öffnet die Buchungsseite, Software die Statusseite. */
+const NETZ = { offen: false, seite: null, suche: "", menge: {}, sig: {} };
+function netzOeffnen(pid = null) {
+  const st = store.get().state;
+  if (pid && st.players?.[pid]?.industry === "touristik") return hotelOeffnen(pid);
+  if (pid && st.players?.[pid]?.industry === "software" && !st.rechenzentren?.websites?.[pid]) return rzOeffnen(pid);
+  const el = document.getElementById("netzFenster");
+  if (!NETZ.offen) {
+    el.hidden = false;
+    el.innerHTML = `<div class="sfBrowser hfBrowser netzBrowser" role="dialog" aria-label="${t("Stadtnetz")}">
+      <div class="sfLeiste"><button type="button" class="sfZu" data-netzzurueck aria-label="${t("Zurück zum Stadtnetz")}">←</button>
+        <span class="sfUrl"></span><button type="button" class="sfZu" data-netzzu aria-label="${t("Schließen")}">✕</button></div>
+      <header class="sfKopf"></header>
+      <div class="sfBanner" hidden></div>
+      <div class="sfHinweis" hidden></div>
+      <div class="rzInhalt netzInhalt"></div>
+      <footer class="sfFuss"></footer>
+    </div>`;
+    SFX.spiel("klick");
+  }
+  Object.assign(NETZ, { offen: true, seite: pid, sig: {} });
+  netzZeichnen();
+}
+function netzSchliessen() {
+  NETZ.offen = false;
+  const el = document.getElementById("netzFenster");
+  el.hidden = true; el.innerHTML = "";
+}
+const netzSetze = (sel, html, key) => {
+  if (NETZ.sig[key] === html) return;
+  NETZ.sig[key] = html;
+  const el = document.querySelector("#netzFenster " + sel); if (el) el.innerHTML = html;
+};
+function netzZeichnen() {
+  const { state, me, myId } = store.get();
+  if (!state?.stadt) return netzSchliessen();
+  const fenster = document.getElementById("netzFenster");
+  const W = state.rechenzentren?.websites || {}, cfg = state.websiteCfg;
+  fenster.querySelector("[data-netzzurueck]").style.visibility = NETZ.seite ? "visible" : "hidden";
+  if (!NETZ.seite) {
+    fenster.querySelector(".sfBrowser").style.setProperty("--sys", "#0f766e");
+    netzSetze(".sfUrl", "🔒 stadtnetz.cs", "url");
+    netzSetze(".sfKopf", `<div class="sfMarke"><span class="sfLogo" style="background:#0f766e">S</span><div><b>${t("Stadtnetz")}</b><small>${t("Alle Websites der Stadt")} · ${state.stadt.einwohner} ${t("Einwohner online")}</small></div></div>
+      <label class="netzSuche"><span class="sr">${t("Suchen")}</span><input id="netzSuche" type="search" placeholder="${t("Firma oder Ware suchen …")}" value="${escapeHtml(NETZ.suche)}"></label>`, "kopfStart");
+    fenster.querySelector(".sfBanner").hidden = true;
+    const meineSeite = W[myId];
+    fenster.querySelector(".sfHinweis").hidden = !!meineSeite || state.players?.[myId]?.industry === "software";
+    netzSetze(".sfHinweis", `${t("Deine Firma ist im Stadtnetz nicht zu finden — ohne Website sehen dich Kunden nicht.")} <button type="button" class="hfKarte" data-netzanbieter>${t("Anbieter vergleichen")}</button>`, "hinweisStart");
+    /* Läuft gerade: Fest, Ausschreibung, Wohnbau, Aktionen */
+    const chips = [];
+    if (state.touristik?.fest) chips.push(`<button type="button" class="netzChip" data-netzauf="${state.touristik.fest.ownerId}">🎉 ${t(state.touristik.fest.name)} · ${escapeHtml(rohText(state.touristik.fest.veranstalter))}</button>`);
+    for (const a of state.stadt.ruest?.auftraege || []) chips.push(`<span class="netzChip">🛡 ${t("Ausschreibung")} ${a.name} · ${a.phase === "bieten" ? t("Gebote offen") : `${t("Zuschlag")}: ${escapeHtml(rohText(a.gewinnerName || ""))}`}</span>`);
+    if (state.stadt.auftraege?.length) chips.push(`<span class="netzChip">🧱 ${state.stadt.auftraege.length} ${t("Wohnbau-Aufträge suchen Baumaterial")}</span>`);
+    for (const [pid, w] of Object.entries(W)) if (w.aktion && state.players[pid]) chips.push(`<button type="button" class="netzChip" data-netzauf="${pid}">⚡ ${t(w.aktion.name)} · ${escapeHtml(rohText(state.players[pid].name))}</button>`);
+    const q = NETZ.suche.trim().toLowerCase();
+    const passt = (pid, w) => { if (!q) return true; const p = state.players[pid]; return rohText(p.name).toLowerCase().includes(q) || (BRANCHE_NAME[p.industry] || "").toLowerCase().includes(q) || (w?.angebot || []).some(a => gname(a.g).toLowerCase().includes(q)) || (w?.portal || "").toLowerCase().includes(q); };
+    const firmen = Object.entries(W).filter(([pid, w]) => state.players[pid] && w.stufe > 0 && passt(pid, w)).sort((a, b) => b[1].besucher - a[1].besucher);
+    const karte = ([pid, w]) => { const p = state.players[pid];
+      return `<button type="button" class="netzEintrag" data-netzauf="${pid}">
+        <span class="netzEintragKopf">${logoHtml(pid, "netzLogo", p.color)}<span><b>${escapeHtml(rohText(p.name))}</b><small class="mono">${shopSlug(p.name)}.cs</small></span></span>
+        <span class="netzEintragInfo">${t(BRANCHE_NAME[p.industry] || "")} · ${t(cfg?.MODULE[w.modul]?.name || "")}${w.stufe >= 2 && w.portal ? ` · ${t(w.portal)}` : ""}</span>
+        <span class="netzEintragFuss"><span class="mono">${w.besucher} ${t("Besucher/min")}</span>${w.aktion ? `<em>⚡ ${t(w.aktion.name)}</em>` : ""}</span></button>`; };
+    const rzFirmen = Object.keys(state.rechenzentren?.firmen || {}).filter(pid => state.players[pid] && (!q || rohText(state.players[pid].name).toLowerCase().includes(q) || "rechenzentrum software hosting".includes(q)));
+    const anz = (state.anzeigen || []).slice(0, 3);
+    netzSetze(".netzInhalt", `${chips.length ? `<section class="rzBox"><b>${t("Läuft gerade")}</b><div class="netzChips">${chips.join("")}</div></section>` : ""}
+      ${anz.length ? `<div class="netzAnzeigen">${anz.map(a => `<button type="button" class="netzAnz" data-netzauf="${a.firmaId}"><small>${t("Anzeige")}</small><b>${escapeHtml(rohText(a.firma))}</b><span>${escapeHtml(rohText(a.text))}</span></button>`).join("")}</div>` : ""}
+      <section class="rzBox"><div class="rzBoxKopf"><b>${t("Firmen")}</b><small>${firmen.length} ${t("Websites")} · ${t("nach Besuchern")}</small></div>
+        <div class="netzGrid">${firmen.map(karte).join("") || `<div class="sfLeer">${q ? t("Nichts gefunden.") : t("Noch hat keine Firma eine Website.")}</div>`}</div></section>
+      <section class="rzBox"><b>${t("Rechenzentren und Software")}</b>
+        <div class="netzGrid">${rzFirmen.map(pid => { const p = state.players[pid], up = state.rechenzentren.firmen[pid].uptime || [], qu = up.length ? Math.round(up.reduce((a, b) => a + b, 0) / up.length * 100) : 100;
+          return `<button type="button" class="netzEintrag" data-rzauf="${pid}"><span class="netzEintragKopf">${logoHtml(pid, "netzLogo", p.color)}<span><b>${escapeHtml(rohText(p.name))}</b><small class="mono">status.cs/${shopSlug(p.name)}</small></span></span>
+            <span class="netzEintragInfo">${t("Hosting für Shops, Apps und Websites")}</span><span class="netzEintragFuss"><span class="mono">${qu} % ${t("online")}</span></span></button>`; }).join("") || `<div class="sfLeer">${t("Noch keine Software-Firma mit Rechenzentrum.")}</div>`}</div></section>`, "inhaltStart" + q);
+    netzSetze(".sfFuss", `<span class="sfFussLogo">🏛</span><span>${t("Das Stadtnetz wird von der Stadt betrieben")} · ${firmen.length + rzFirmen.length} ${t("Seiten")}</span>`, "fussStart");
+    return;
+  }
+  /* ---- Seite einer Firma ---- */
+  const pid = NETZ.seite, p = state.players[pid], w = W[pid];
+  if (!p) return netzOeffnen(null);
+  const meins = pid === myId, B = BTYPES(), ind = p.industry;
+  const anbieter = w && (w.anbieter === "stadtportal" ? null : (state.website || []).find(x => x.id === w.anbieter));
+  fenster.querySelector(".sfBrowser").style.setProperty("--sys", p.color || "#0f766e");
+  netzSetze(".sfUrl", `🔒 ${shopSlug(p.name)}.cs`, "url" + pid);
+  netzSetze(".sfKopf", `<div class="sfMarke">${logoHtml(pid, "sfLogo", p.color)}<div><b>${escapeHtml(rohText(p.name))}</b><small>${t(BRANCHE_NAME[ind] || "")}${w ? ` · ${t(cfg?.MODULE[w.modul]?.name || "")}` : ""}</small></div></div>
+    <span class="rzBadges">${w ? `<span class="sfBadge">${w.besucher} ${t("Besucher/min")}</span><span class="sfBadge">+${Math.round((w.bonus || 0) * 100)} % ${t("Reichweite")}</span>` : `<span class="sfBadge">${t("keine Website")}</span>`}</span>`, "kopf" + pid + (logoBild(pid) || "").length);
+  const banner = fenster.querySelector(".sfBanner");
+  banner.hidden = !w?.aktion;
+  netzSetze(".sfBanner", w?.aktion ? `<b>⚡</b><span>${t(w.aktion.name)} — ${t("noch")} ${Math.floor(w.aktion.rest / 60)}:${String(w.aktion.rest % 60).padStart(2, "0")} · +${Math.round((state.rechenzentren.aktion?.boost || .25) * 100)} % ${t("Reichweite")}</span>` : "", "banner" + pid);
+  fenster.querySelector(".sfHinweis").hidden = !meins;
+  netzSetze(".sfHinweis", t("Deine Website: So sehen Kunden und Mitspieler deine Firma im Stadtnetz."), "hinweis");
+  if (!w?.stufe) {
+    netzSetze(".netzInhalt", `<div class="sfLeer">${meins ? t("Du hast noch keine Website. Software-Firmen bauen sie dir — oder das Stadtportal die Grundseite.") : `${escapeHtml(rohText(p.name))} ${t("hat noch keine Website.")}`}</div>
+      ${meins ? `<div class="netzMitte"><button type="button" class="sfKaufen" data-netzanbieter>${t("Anbieter vergleichen")}</button></div>` : ""}`, "leer" + pid);
+    netzSetze(".sfFuss", "", "fuss" + pid);
+    return;
+  }
+  /* Betriebe und Produkte */
+  const geb = {};
+  for (const x of state.map) if (x.owner === pid && x.btype) geb[x.btype] = (geb[x.btype] || 0) + 1;
+  const waren = [...new Set(Object.keys(geb).map(b => B[b]?.proc?.out || B[b]?.out).filter(Boolean))];
+  const shop = state.map.find(x => x.owner === pid && B[x.btype]?.online && x.system);
+  const betriebe = Object.entries(geb).map(([b, n]) => `<div class="netzBetrieb">${spriteUrl(b, 0, 0) ? `<img src="${spriteUrl(b, 0, 0)}" alt="">` : ""}<span><b>${n}× ${bname(b)}</b></span></div>`).join("");
+  const produkte = waren.map(g => `<div class="netzProdukt"><span>${WAREN_ICON[g] || "📦"}</span><b>${gname(g)}</b><small class="mono">Ø ${fp(state.avg?.[g] || 0)}</small></div>`).join("");
+  let portal = "";
+  if (w.stufe >= 2) {
+    const angebot = (w.angebot || []).map(a => {
+      const n = Math.max(1, Math.min(NETZ.menge[a.g] || 10, a.menge || 1));
+      return `<article class="sfProdukt"><div class="sfBild"><span>${WAREN_ICON[a.g] || "📦"}</span></div><h5>${gname(a.g)}</h5>
+        <div class="sfPreis"><b>${fp(a.preis)}</b><span>${t("je Stück")} · Ø ${fp(state.avg?.[a.g] || 0)}</span></div>
+        <div class="sfInfo">${a.menge} ${t("sofort verfügbar")}</div>
+        ${meins ? `<div class="sfEigen">${t("Dein Angebot")}</div>` : `<div class="sfKauf"><div class="sfMenge"><button type="button" data-netzm="${a.g}" data-d="-10" aria-label="${t("weniger")}">−</button><input type="number" min="1" max="${a.menge || 1}" value="${n}" data-netzn="${a.g}" aria-label="${t("Menge")}"><button type="button" data-netzm="${a.g}" data-d="10" aria-label="${t("mehr")}">+</button></div>
+          <button type="button" class="sfKaufen" data-netzkauf="${a.g}" ${a.menge < 1 || me.cash < a.preis ? "disabled" : ""}>${t("Kaufen")} · ${fmt(n * a.preis)}</button></div>`}</article>`;
+    }).join("");
+    let extra = "";
+    if (ind === "rohstoff") extra = `<section class="rzBox"><div class="rzBoxKopf"><b>${t("Wohnbau-Aufträge der Stadt")}</b><small>${t("mit Portal +5 % auf jede Lieferung")}</small></div>
+      ${(state.stadt.auftraege || []).map(a => `<div class="rzZeile netzAuftrag"><span>${escapeHtml(a.name)}</span><span>${Object.entries(a.needs).map(([g, n]) => `${n.have}/${n.req} ${gname(g)}`).join(" · ")}</span><b class="mono">${Math.max(0, a.frist - state.tick)} s</b></div>`).join("") || `<small>${t("Gerade kein offener Auftrag.")}</small>`}
+      ${meins ? `<button type="button" class="sfKaufen" data-netzpanel="finanzamt">${t("Liefern im Stadt-Panel")}</button>` : ""}</section>`;
+    if (ind === "ruestung") extra = `<section class="rzBox"><div class="rzBoxKopf"><b>${t("Ausschreibungen")}</b><small>${t("mit Portal: Gebote zählen 5 % günstiger, Lieferungen +15 %, Ausschreibungen häufiger")}</small></div>
+      ${(state.stadt.ruest?.auftraege || []).map(a => `<div class="rzZeile netzAuftrag"><span>${a.name}</span><span>${Object.entries(a.needs).map(([g, n]) => `${n.have}/${n.req} ${gname(g)}`).join(" · ")}</span><b class="mono">${a.phase === "bieten" ? `${t("Gebote")}: ${Math.max(0, a.bisBieten - state.tick)} s` : escapeHtml(rohText(a.gewinnerName || ""))}</b></div>`).join("") || `<small>${t("Nächste Ausschreibung kommt bald.")}</small>`}
+      ${meins ? `<button type="button" class="sfKaufen" data-netzpanel="firma">${t("Bieten und liefern im Firma-Panel")}</button>` : ""}</section>`;
+    portal = `<h4 class="hfTitel">${t(w.portal || "Branchenportal")}</h4>${angebot ? `<div class="sfGrid">${angebot}</div>` : ""}${extra}`;
+  } else if (meins) portal = `<section class="rzBox"><b>${t(state.rechenzentren?.portale?.[ind]?.name || "Branchenportal")}</b><small>${t("Mit dem Modul „Branchenportal“ wird deine Website zum Laden: Mitspieler kaufen direkt bei dir, Rohstoff und Rüstung bekommen Auftrags-Boni.")}</small>
+      ${anbieter ? `<button type="button" class="sfKaufen" data-rzauf="${anbieter.ownerId}" data-rzreiterziel="websites">${t("Modul wechseln bei")} ${escapeHtml(rohText(anbieter.name))}</button>` : `<button type="button" class="sfKaufen" data-netzanbieter>${t("Anbieter vergleichen")}</button>`}</section>`;
+  const A = state.rechenzentren?.aktion;
+  const aktion = meins ? (w.stufe >= 3 ? `<section class="rzBox"><div class="rzBoxKopf"><b>⚡ ${t(A?.namen?.[ind] || "Aktion")}</b><small>${Math.round((A?.boost || .25) * 100)} % ${t("mehr Reichweite für")} ${(A?.dauer || 300) / 60} min · ${fmt(A?.kosten || 600)}</small></div>
+      ${w.aktion ? `<div class="sfEigen">${t("Läuft")} · ${t("noch")} ${Math.ceil(w.aktion.rest / 60)} min</div>` : w.aktionPause ? `<div class="sfEigen">${t("Nächste Aktion in")} ${Math.ceil(w.aktionPause / 60)} min</div>`
+        : `<button type="button" class="sfKaufen" data-netzaktion ${me.cash < (A?.kosten || 600) ? "disabled" : ""}>${t("Aktion starten")} · ${fmt(A?.kosten || 600)}</button>`}</section>`
+    : `<section class="rzBox"><b>⚡ ${t("Aktionen")}</b><small>${t("Ab Website-Modul „Aktionen“ (v3): 5 Minuten +25 % Reichweite.")}</small></section>`) : "";
+  netzSetze(".netzInhalt", `<div class="rzZwei">
+      <section class="rzBox"><b>${t("Unsere Betriebe")}</b><div class="netzBetriebe">${betriebe || `<small>${t("Noch nichts gebaut.")}</small>`}</div></section>
+      <section class="rzBox"><b>${t("Produkte")}</b><div class="netzProdukte">${produkte || `<small>${t("Noch keine eigene Ware.")}</small>`}</div>
+        <div class="netzKnoepfe">${shop ? `<button type="button" class="hfKarte" data-shopauf="${shop.x},${shop.y}">🛒 ${t("Zum Online-Shop")}</button>` : ""}<button type="button" class="hfKarte" data-netzpanel="bank">📈 ${t("Aktie an der Stadtbank")}</button></div></section>
+    </div>${portal}${aktion}`, "inhalt" + pid);
+  netzSetze(".sfFuss", anbieter ? `${logoHtml(anbieter.ownerId, "sfFussLogo", anbieter.farbe)}<span>${t("Website von")} <b>${escapeHtml(rohText(anbieter.name))}</b> · ${escapeHtml(rohText(anbieter.anbieter))}</span>` : `<span class="sfFussLogo">🏛</span><span>${t("Grundseite vom Stadtportal")}</span>`, "fuss" + pid);
+}
+document.getElementById("netzFenster").addEventListener("input", e => {
+  if (e.target.id === "netzSuche") { NETZ.suche = e.target.value; netzZeichnen(); }
+  const n = e.target.closest?.("[data-netzn]"); if (n) NETZ.menge[n.dataset.netzn] = Math.max(1, Math.floor(+n.value) || 1);
+});
+document.getElementById("netzFenster").addEventListener("click", e => {
+  if (e.target.closest("[data-netzzu]") || e.target.id === "netzFenster") return netzSchliessen();
+  if (e.target.closest("[data-netzzurueck]")) return netzOeffnen(null);
+  const auf = e.target.closest("[data-netzauf]");
+  if (auf) { const pid = auf.dataset.netzauf, ind = store.get().state.players?.[pid]?.industry; if (ind === "touristik" || (ind === "software" && !store.get().state.rechenzentren?.websites?.[pid])) netzSchliessen(); return netzOeffnen(pid); }
+  const rz = e.target.closest("[data-rzauf]");
+  if (rz) { netzSchliessen(); return rzOeffnen(rz.dataset.rzauf, rz.dataset.rzreiterziel); }
+  if (e.target.closest("[data-netzanbieter]")) { netzSchliessen(); SW_REITER = "markt"; return openPanel("software"); }
+  const pn = e.target.closest("[data-netzpanel]");
+  if (pn) { netzSchliessen(); return openPanel(pn.dataset.netzpanel); }
+  /* Shop öffnet der allgemeine Klick-Handler am Dokument; hier nur schließen */
+  if (e.target.closest("[data-shopauf]")) return netzSchliessen();
+  const m = e.target.closest("[data-netzm]");
+  if (m) { const g = m.dataset.netzm, inp = document.querySelector(`#netzFenster [data-netzn="${g}"]`); const v = Math.max(1, Math.min(+inp.max || 1, (+inp.value || 1) + +m.dataset.d)); inp.value = v; NETZ.menge[g] = v; NETZ.sig.inhalt = null; return netzZeichnen(); }
+  const k = e.target.closest("[data-netzkauf]");
+  if (k) { const g = k.dataset.netzkauf, qty = NETZ.menge[g] || +document.querySelector(`#netzFenster [data-netzn="${g}"]`)?.value || 10;
+    return socket.emit("direktKaufen", { firmaId: NETZ.seite, good: g, qty }, r => { if (r?.error) return toast(r.error, true); toast(`${r.qty}× ${gname(g)} ${t("gekauft")} · ${fmt(r.summe)}`); render(store.get()); }); }
+  if (e.target.closest("[data-netzaktion]")) return socket.emit("webAktionStarten", {}, r => { if (r?.error) return toast(r.error, true); toast(`⚡ ${t(r.name)} ${t("läuft")}`); render(store.get()); });
 });
 /* ---- Software-Panel: Reiter, Überblick, Bürger-App und Jobbörse (Etappe 5) ---- */
 let SW_REITER = (() => { try { return localStorage.getItem("cs_swReiter") || "markt"; } catch { return "markt"; } })();
@@ -7736,7 +7967,7 @@ function ruestHtml(me, state, my) {
 function stadtLexikon() {
   const S = store.get().state?.stadt;
   if (!S) return "";
-  return `<details class="lexGruppe" data-lex="lex-stadt" ${LEX_OFFEN.has("lex-stadt") ? "open" : ""}><summary>${t("Stadt & Arbeit")}<span>7</span></summary>
+  return `<details class="lexGruppe" data-lex="lex-stadt" ${LEX_OFFEN.has("lex-stadt") ? "open" : ""}><summary>${t("Stadt & Arbeit")}<span>8</span></summary>
     <div class="sec">${t("Wohnblöcke der Stadt")}</div>
     <table><tr><th>${t("Stufe")}</th><th>${t("Plätze")}</th><th>${t("Kosten")}</th><th>${t("ab Einwohnern")}</th></tr>
     ${S.stufen.map(x => `<tr><td>${t(x.name)}</td><td>${x.plaetze}</td><td>${fmt(x.kosten)}</td><td>${x.ab || "—"}</td></tr>`).join("")}</table>
@@ -7751,6 +7982,8 @@ function stadtLexikon() {
     <p class="meta">${t("Jede Minute 10 Gäste plus 4 je 100 Einwohner, mal Zufriedenheit. Sie wählen nach Bewertung und Zimmerpreis; wer zu teuer ist, verliert Gäste an andere Urlaubsorte. Strandhotel 2 bis 5 Sterne (Renovieren 1.500 / 3.000 / 5.000 $), ab 3 Sternen Frühstück für 3 / 5 / 8 $ je Gast. Stadtfeste: +60 bis +150 % Gäste für 5 bis 8 Minuten.")}</p>
     <div class="sec">${t("Websites und Rechenzentren")}</div>
     <p class="meta">${t("Software-Firmen entwickeln einen Website-Baukasten (Grundseite, Branchenportal, Aktionen). Andere Firmen zahlen 400 $ Einrichtung und ein Abo je Minute und bekommen +5 / +10 / +15 % Reichweite: schneller verkaufen, mehr Gäste, mehr Grundbedarf. Je Rechenzentrums-Stufe 2 Websites; der Anbieter verteilt seine Plätze selbst. Ohne Anbieter: Stadtportal-Grundseite für 600 $ und 45 $/min.")}</p>
+    <div class="sec">${t("Stadtnetz und Branchenportale")}</div>
+    <p class="meta">${t("Im Stadtnetz stehen alle Firmen mit Website, sortiert nach Besuchern. Branchenportal: Direktkauf zum Ø-Kurs plus 5 % (Hofladen, Großhandel, Baustoff-Portal, Kundenportal), Rohstoff +5 % auf Wohnbau-Lieferungen, Rüstung 5 % günstigere Gebote, +15 % je Lieferung und häufigere Ausschreibungen. Aktionen: 600 $, 5 Minuten +25 % Reichweite, danach 15 Minuten Pause.")}</p>
     <div class="sec">${t("Stadtanleihen")}</div>
     <p class="meta">${fmt(S.anleihe.betrag)} · ${String(S.anleihe.zins * 100).replace(".", ",")} %/min · ${S.anleihe.laufzeit / 60} min · ${t("höchstens")} ${fmt(S.anleihe.max)} ${t("Schulden")}</p>
   </details>`;
@@ -8461,6 +8694,8 @@ const HINWEISE = [
     text: "Jede Minute kommen Gäste in die Stadt und wählen ein Hotel nach Bewertung und Zimmerpreis. Renovierte Strandhotels bekommen mehr Sterne (ab 3 Sternen mit Frühstück), und ein Stadtfest lockt viele Gäste auf einmal.", panel: ["touristik", "Touristik"] },
   { id: "website", wann: (st, me, id) => (st.website || []).some(w => w.version >= 1 && w.ownerId !== id) && !st.rechenzentren?.websites?.[id], titel: "Eine Website für deine Firma",
     text: "Software-Firmen bauen jetzt Websites. Eine eigene Website bringt mehr Reichweite: Deine Läden verkaufen schneller, Hotels bekommen mehr Gäste. Bestellen kannst du sie auf der Statusseite eines Rechenzentrums.", panel: ["software", "Software"] },
+  { id: "stadtnetz", wann: st => Object.values(st.rechenzentren?.websites || {}).filter(w => w.stufe > 0).length >= 2, titel: "Das Stadtnetz",
+    text: "Im Stadtnetz (Knopf unten) stehen alle Firmen mit Website. Mit einem Branchenportal kaufst du dort direkt ein — zum Beispiel Obst im Hofladen oder Strom im Kundenportal.", panel: null },
   { id: "aktien", wann: st => st.tick > 900, titel: "Aktien und Übernahmen",
     text: "Jede Firma hat 100 Aktien. An der Stadtbank kaufst du Anteile anderer Firmen und kassierst Dividende — oder übernimmst eine Firma ganz. Behalte die Mehrheit an deiner eigenen.", panel: ["bank", "Stadtbank"] },
   { id: "ziel", wann: st => st.tick > 1500, titel: "Auf dem Weg zum Ziel",
@@ -10626,6 +10861,8 @@ function render({ state, me, myId, chat, room }) {
   if (!typingIn(document.getElementById("p-touristik"))) touristikRendern(state, me, myId);
   if (HOTEL.offen && !typingIn(document.getElementById("hotelFenster"))) hotelZeichnen();
   if (RZW.offen && !typingIn(document.getElementById("rzFenster"))) rzZeichnen();
+  { const dn = document.getElementById("dockNetz"); if (dn) dn.style.display = state.stadt ? "" : "none"; }
+  if (NETZ.offen && !(document.activeElement && document.getElementById("netzFenster").contains(document.activeElement) && document.activeElement.tagName === "INPUT" && document.activeElement.type === "number")) netzZeichnen();
 
   /* Stadtbank: Kurstafel, Angebote und Depot — der gesamte Anteilshandel */
   if (document.getElementById("p-bank").classList.contains("open") &&
