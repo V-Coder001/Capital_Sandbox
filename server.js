@@ -11150,23 +11150,26 @@ async function spawnBot(cfg, lvl = BOT_LEVELS[BOT_LEVEL_DEFAULT]) {
           if (typ && (me.inv.uebernachtung || 0) >= Math.max(20, tf.gaeste * 2)) await em("festStarten", { typ });
         }
       }
-      /* --- Website (Etappe 7): mit Polster die Website mit dem meisten Bonus je
-       * Dollar bestellen, später aufwerten. Ohne Software-Anbieter notfalls die
-       * teure Grundseite des Stadtportals. --- */
-      if (st.stadt && st.website && cfg.industry !== "software" && Math.random() < .1) {
+      /* --- Website (Etappe 7): die Website mit dem meisten Bonus je Dollar
+       * bestellen, später aufwerten. Ohne Software-Anbieter die Grundseite des
+       * Stadtportals. Früher erst ab 6.000 $ (Stadtportal 10.000 $) und nur bei
+       * jedem zehnten Zug — das Stadtnetz blieb bis weit in die Runde leer. --- */
+      if (st.stadt && st.website && cfg.industry !== "software" && Math.random() < .25) {
         const meine = st.rechenzentren?.websites?.[myId];
-        const modulFuer = w => ["aktion", "portal", "grund"].find(m => WEBSITE.MODULE[m].ab <= w.version);
+        const modulFuer = (w, cash) => ["aktion", "portal", "grund"].find(m => WEBSITE.MODULE[m].ab <= w.version
+          && (m === "grund" || (m === "portal" ? cash > 5000 : cash > 8000)));
         const angebote = (st.website || []).filter(w => w.version >= 1 && w.ownerId !== myId && (w.kunden < w.plaetze || meine?.anbieter === w.id));
-        if (!meine && me.cash > 6000) {
-          const best = angebote.map(w => { const m = me.cash > 12000 ? modulFuer(w) : "grund"; return { w, m, wert: WEBSITE.MODULE[m].bonus / (w.preis * WEBSITE.MODULE[m].faktor) }; })
-            .sort((a, b) => b.wert - a.wert)[0];
+        const wahl = () => angebote.map(w => { const m = modulFuer(w, me.cash); return { w, m, wert: WEBSITE.MODULE[m].bonus / (w.preis * WEBSITE.MODULE[m].faktor) }; })
+          .sort((a, b) => b.wert - a.wert)[0];
+        if (!meine) {
+          const best = me.cash > 2500 && wahl();
           if (best) await em("websiteBestellen", { anbieter: best.w.id, modul: best.m });
-          else if (me.cash > 10000) await em("websiteBestellen", { anbieter: WEB_STADTPORTAL, modul: "grund" });
-        } else if (meine?.anbieter === WEB_STADTPORTAL && angebote.length) {
-          const billig = angebote.sort((a, b) => a.preis - b.preis)[0];
-          if (billig.preis < WEBSITE.STADTPORTAL.preis) await em("websiteBestellen", { anbieter: billig.id, modul: "grund" });
-        } else if (meine && me.cash > 15000) {
-          const w = angebote.find(x => x.id === meine.anbieter), m = w && modulFuer(w);
+          else if (!angebote.length && me.cash > 4500) await em("websiteBestellen", { anbieter: WEB_STADTPORTAL, modul: "grund" });
+        } else if (meine.anbieter === WEB_STADTPORTAL && angebote.length && me.cash > 2500) {
+          const best = wahl();
+          if (best && (best.m !== "grund" || best.w.preis < WEBSITE.STADTPORTAL.preis)) await em("websiteBestellen", { anbieter: best.w.id, modul: best.m });
+        } else if (me.cash > 5000) {
+          const w = angebote.find(x => x.id === meine.anbieter), m = w && modulFuer(w, me.cash);
           if (m && WEBSITE.MODULE[m].ab > WEBSITE.MODULE[meine.modul].ab) await em("websiteBestellen", { anbieter: w.id, modul: m });
         }
       }
