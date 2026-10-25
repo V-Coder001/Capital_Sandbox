@@ -2032,6 +2032,58 @@ const EN = {
   "30 % der Löhne gehen als Lohnsteuer und Miete an die Stadt, 20 % ins Bürgerdepot.": "30 % of wages go to the city as wage tax and rent, 20 % into the citizens' depot.",
   "höchstens": "at most", "Schulden": "debt", "Bürger-Apps und Jobbörse": "Citizen apps and job board",
   "Bürger-App: bis 85 % der Einwohner zahlen ein Abo je Minute, 200 Nutzer je Rechenzentrums-Stufe des Anbieters. Jobbörse: Vorrang wie +0,3 bis +0,7 Lohnstufen gegen eine Gebühr je Arbeiter, 3 Abos je Rechenzentrums-Stufe.": "Citizen app: up to 85 % of residents pay a subscription per minute, 200 users per data-centre level of the provider. Job board: priority like +0.3 to +0.7 wage levels for a fee per worker, 3 subscriptions per data-centre level.",
+  /* Touristik (Etappe 6) */
+  "Auf": "To",
+  "Bewertung": "Rating",
+  "Deine Betriebe": "Your venues",
+  "Deine Touristik": "Your tourism",
+  "Die Sterne über 2 zählen nur anteilig. Kauf Obst, Honig, Saft oder Gebäck an der Börse.": "Stars above 2 only count partly. Buy fruit, honey, juice or pastries at the exchange.",
+  "Festival": "Festival",
+  "Frühstück fehlt": "Breakfast missing",
+  "Frühstück je Minute": "Breakfast per minute",
+  "Gäste": "Guests",
+  "Gäste der Stadt": "Guests in the city",
+  "Gäste für deine Hotels": "Guests for your hotels",
+  "Gäste je Minute": "guests per minute",
+  "Gäste kommen nur in eine wachsende Stadt (Sandkasten).": "Guests only come to a growing city (sandbox).",
+  "Gäste und Hotels": "Guests and hotels",
+  "Gäste wollten zu dir, aber dein Lager war leer. Mehr Übernachtungen produzieren — oder den Preis anheben.": "guests wanted to stay with you, but your stock was empty. Produce more lodging — or raise the price.",
+  "Gäste wählen nach Bewertung und Preis. Bei deiner Bewertung bringt etwa": "Guests choose by rating and price. At your rating, about",
+  "Gäste übernachten bei Touristik-Firmen auf Campingplätzen und in Strandhotels.": "Guests stay with tourism companies at campgrounds and beach hotels.",
+  "Hotels der Stadt": "Hotels in the city",
+  "Höchste Stufe": "Top level",
+  "Jede Minute 10 Gäste plus 4 je 100 Einwohner, mal Zufriedenheit. Sie wählen nach Bewertung und Zimmerpreis; wer zu teuer ist, verliert Gäste an andere Urlaubsorte. Strandhotel 2 bis 5 Sterne (Renovieren 1.500 / 3.000 / 5.000 $), ab 3 Sternen Frühstück für 3 / 5 / 8 $ je Gast. Stadtfeste: +60 bis +150 % Gäste für 5 bis 8 Minuten.": "Every minute 10 guests plus 4 per 100 residents, times satisfaction. They choose by rating and room price; too expensive loses guests to other destinations. Beach hotel 2 to 5 stars (renovation 1,500 / 3,000 / 5,000 $), from 3 stars breakfast worth 3 / 5 / 8 $ per guest. City festivals: +60 to +150 % guests for 5 to 8 minutes.",
+  "Jede Minute kommen Gäste in die Stadt und wählen ein Hotel nach Bewertung und Zimmerpreis. Renovierte Strandhotels bekommen mehr Sterne (ab 3 Sternen mit Frühstück), und ein Stadtfest lockt viele Gäste auf einmal.": "Every minute guests come to the city and pick a hotel by rating and room price. Renovated beach hotels get more stars (breakfast from 3 stars), and a city festival brings many guests at once.",
+  "Konzert": "Concert",
+  "Lebensmittel für": "food worth",
+  "Noch kein Hotel fertig.": "No hotel finished yet.",
+  "Renovieren bringt Sterne, ab 3 Sternen gibt es Frühstück": "renovating adds stars, breakfast from 3 stars",
+  "Renoviert": "Renovated",
+  "Restzeit": "time left",
+  "Stadtfest veranstalten": "Host a city festival",
+  "Sterne": "stars",
+  "Sterne renovieren": "stars — renovate",
+  "Strandfest": "Beach party",
+  "Touristik-Panel öffnen": "Open tourism panel",
+  "Zimmer je Minute": "rooms per minute",
+  "Zimmerpreis": "Room price",
+  "Zimmerpreis $ je Gast": "Room price $ per guest",
+  "Zimmerpreis, Gäste, Stadtfeste": "Room price, guests, city festivals",
+  "am meisten ein, solange genug Zimmer da sind. Zu teuer: Gäste fahren woanders hin.": "earns the most while you have enough rooms. Too expensive: guests go elsewhere.",
+  "fest 1 Stern": "fixed 1 star",
+  "finden kein Zimmer": "find no room",
+  "gerade läuft eins": "one is running",
+  "im Bau": "under construction",
+  "im Lager": "in stock",
+  "in den Läden": "in shops",
+  "je Minute": "per minute",
+  "je Nacht": "per night",
+  "kommen": "arrive",
+  "lockt Gäste für alle Hotels, du bekommst mehr davon": "draws guests for all hotels, you get more of them",
+  "mit Frühstück": "with breakfast",
+  "nächstes in": "next in",
+  "zu teuer — fahren woanders hin": "too expensive — go elsewhere",
+  "übernachten": "stay overnight",
   "Markt": "Market", "Mein System": "My system", "Entwicklung": "Development", "Design": "Design", "Produkte": "Products",
   "Shop-System": "Shop system", "Bürger-App": "Citizen app", "Bürger-Apps": "Citizen apps", "Jobbörse": "Job board", "Jobbörsen": "Job boards", "Börsen-App": "Stock app", "Malprogramm": "Paint program",
   "fehlt": "missing", "Nutzer": "users", "Abos": "subscriptions", "verkauft": "sold", "EP-Vorrat": "EP stock", "ein Studio: 1 EP/s": "one studio: 1 EP/s",
@@ -5425,6 +5477,16 @@ function clickTile(e) {
         + (akt ? `<button class="tmHaupt" id="leitAuf" style="margin-top:6px"><span>🎛 Leitstand öffnen</span><small>Anzeigen${akt.version >= (store.get().state.leitFunktion?.turbo ?? 2) ? ", Turbo" : ""}${akt.version >= (store.get().state.leitFunktion?.nachkauf ?? 3) ? ", Nachkauf" : ""} — im Design von ${akt.anbieter}</small></button>`
           + `<button class="tmKlein" id="steuerAus" style="margin-top:4px">Steuerung abschalten</button>` : "");
     }
+    /* Touristik (Etappe 6): Sterne, Renovieren, Weg ins Touristik-Panel */
+    let tourHtml = "";
+    const tCfg = store.get().state.touristikCfg;
+    if (store.get().state.touristik && tCfg && (t.btype === "campingplatz" || t.btype === "strandhotel")) {
+      const s = t.btype === "campingplatz" ? 1 : (t.sterne || tCfg.START_STERNE), kosten = tCfg.RENOVIEREN[s];
+      const firma = store.get().state.touristik.firmen.find(f => f.id === t.owner);
+      tourHtml = `<div class="tmHinweis">${sterneHtml(s)} ${s} ${tUe("Sterne")}${s >= 3 ? ` · ${tUe("mit Frühstück")}` : ""}${firma ? `<br>${tUe("Firma")}: ${firma.gaeste} ${tUe("Gäste je Minute")} · ${fmt(firma.preis)} ${tUe("je Nacht")}` : ""}</div>`
+        + (mine && t.btype === "strandhotel" && s < tCfg.MAX_STERNE ? `<button class="tmKlein" id="renov" style="margin-top:4px" ${me.cash < kosten ? "disabled" : ""}>${tUe("Auf")} ${s + 1} ${tUe("Sterne renovieren")} · ${fmt(kosten)}</button>` : "")
+        + (mine ? `<button class="tmHaupt" id="tourPanel" style="margin-top:6px"><span>🏨 ${tUe("Touristik-Panel öffnen")}</span><small>${tUe("Zimmerpreis, Gäste, Stadtfeste")}</small></button>` : "");
+    }
     /* Übersichtliche Gebäudekarte: Kopf (Bild, Name, Stufe, Besitzer, Status),
      * zwei bis drei Kennzahlen, EIN Hauptknopf, kleine Nebenknöpfe. Die
      * Erklärtexte stehen eingeklappt unter „Mehr erfahren". */
@@ -5483,6 +5545,7 @@ function clickTile(e) {
       ${kennzahlen.length ? `<div class="tmZahlen">${kennzahlen.map(([k, v, u]) => `<div><span>${k}</span><b class="${String(v).length > 10 ? "lang" : ""}">${v}</b><small>${u}</small></div>`).join("")}</div>` : ""}
       ${swHtml ? `<div class="tmAbschnitt">${bt.online ? "Shop-System" : "Software"}</div>${swHtml}` : ""}
       ${steuerHtml ? `<div class="tmAbschnitt">Steuerungssoftware</div>${steuerHtml}` : ""}
+      ${tourHtml ? `<div class="tmAbschnitt">${tUe("Gäste")}</div>${tourHtml}` : ""}
       ${shopHtml ? `<div class="tmAbschnitt">Regale</div>${shopHtml}` : ""}
       ${stallHtml ? `<div class="tmAbschnitt">Garage</div>${stallHtml}` : ""}
       ${adHtml ? `<div class="tmAbschnitt">Werbung</div>${adHtml}` : ""}
@@ -5507,6 +5570,8 @@ function clickTile(e) {
       act("systemWerbung", { x: t.x, y: t.y, an: ev.currentTarget.dataset.an === "1" }); tm.style.display = "none";
     });
     tm.querySelector("#swPanel")?.addEventListener("click", () => { tm.style.display = "none"; openPanel("software"); });
+    tm.querySelector("#tourPanel")?.addEventListener("click", () => { tm.style.display = "none"; openPanel("touristik"); });
+    tm.querySelector("#renov")?.addEventListener("click", () => { act("renovieren", { x: t.x, y: t.y }); tm.style.display = "none"; });
     tm.querySelector("#shopAuf")?.addEventListener("click", () => { tm.style.display = "none"; shopOeffnen(t.x, t.y); });
     tm.querySelector("#upgrade")?.addEventListener("click", () => { act("upgradeBuilding", { x: t.x, y: t.y }); tm.style.display = "none"; });
     tm.querySelectorAll("[data-slot]").forEach(b => b.addEventListener("click", () => {
@@ -5724,7 +5789,7 @@ addEventListener("keydown", e => {
 });
 
 /* ---- Dock & Panels ---- */
-const DOCK = [["karte","Karte"],["plan","Planbüro"],["kartell","Kartell"],["lager","Lager"],["boerse","Börse"],["bonds","Finanzen"],["firma","Firma"],["motorsport","Motorsport"],["lexikon","Lexikon"],["chat","Chat"]];
+const DOCK = [["karte","Karte"],["plan","Planbüro"],["kartell","Kartell"],["lager","Lager"],["boerse","Börse"],["bonds","Finanzen"],["firma","Firma"],["touristik","Touristik"],["motorsport","Motorsport"],["lexikon","Lexikon"],["chat","Chat"]];
 const dock = document.getElementById("dock");
 DOCK.forEach(([pid, label]) => { const b = document.createElement("button");
   b.className = "dockbtn"; b.dataset.p = pid; b.textContent = label;
@@ -5738,6 +5803,8 @@ DOCK.forEach(([pid, label]) => { const b = document.createElement("button");
   /* Motorsport erscheint erst mit dem ersten eigenen Rennstall — vorher wäre
    * es ein Knopf, hinter dem nichts steht. */
   if (pid === "motorsport") { b.id = "dockMotor"; b.style.display = "none"; }
+  /* Touristik: erst mit eigenem Campingplatz oder Strandhotel (Etappe 6) */
+  if (pid === "touristik") { b.id = "dockTour"; b.style.display = "none"; }
   b.addEventListener("click", () => openPanel(pid)); dock.append(b); });
 /* stumm=true nur für den Aufruf beim Seitenaufbau: dort gibt es weder eine
  * Nutzergeste noch schon ein SFX-Modul (das entsteht erst weiter unten). */
@@ -5982,6 +6049,85 @@ function paintHtml(state, me, eigene) {
       : `<div class="note">Voll ausgebaut: ${stufeText(STUFEN[STUFEN.length - 1])}.</div>`) : ""}
     ${mp?.version >= 1 ? `<div class="mpZeile"><button class="mini" id="mpMalen">🎨 Eigenes Logo malen</button>${offen[0] ? `<button class="mini" data-shopauf="${offen[0].x},${offen[0].y}">🛒 Deinen Shop ansehen</button>` : ""}</div>` : ""}`;
 }
+/* ---- Touristik-Panel (Etappe 6): Gäste, Zimmerpreis, Sterne, Stadtfeste ---- */
+const tourEntwurf = {};
+const sterneHtml = (n, max = 5) => `<span class="tourSterne" title="${String(Math.round(n * 10) / 10).replace(".", ",")} ${t("Sterne")}">${[1, 2, 3, 4, 5].slice(0, max).map(i => `<i class="${n >= i - .25 ? "on" : n >= i - .75 ? "halb" : ""}">★</i>`).join("")}</span>`;
+const tourQualiC = (cfg, s) => { const i = Math.max(0, Math.min(cfg.QUALI.length - 1, s - 1)), lo = Math.floor(i); return cfg.QUALI[lo] + ((cfg.QUALI[lo + 1] ?? cfg.QUALI[lo]) - cfg.QUALI[lo]) * (i - lo); };
+function touristikRendern(state, me, myId) {
+  const T = state.touristik, cfg = state.touristikCfg;
+  const betriebe = (state.map || []).filter(x => x.owner === myId && (x.btype === "campingplatz" || x.btype === "strandhotel"));
+  const knopf = document.getElementById("dockTour");
+  if (knopf) knopf.style.display = T && betriebe.length ? "" : "none";
+  const body = document.getElementById("tourbody");
+  if (!body || !document.getElementById("p-touristik").classList.contains("open")) return;
+  if (!T || !cfg) { body.innerHTML = `<div class="note">${t("Gäste kommen nur in eine wachsende Stadt (Sandkasten).")}</div>`; return; }
+  const meine = T.firmen.find(f => f.id === myId), fest = T.fest, tick = state.tick;
+  const festBanner = fest ? `<div class="tourFest">🎉 <b>${t(fest.name)}</b> ${t("von")} ${escapeHtml(rohText(fest.veranstalter))} · ${t("Restzeit")} ${Math.floor(fest.rest / 60)}:${String(fest.rest % 60).padStart(2, "0")} · +${Math.round(cfg.FESTE[fest.typ].gaeste * 100)} % ${t("Gäste")}</div>` : "";
+  const stadt = `<div class="sec">${t("Gäste der Stadt")} <span class="meta">· ${t("je Minute")}</span></div>
+    <div class="swZahlen">
+      <div><b>${T.gaeste}</b><span>${t("kommen")}</span></div>
+      <div><b style="color:var(--up)">${T.bedient}</b><span>${t("übernachten")}</span></div>
+      <div><b>${T.woanders}</b><span>${t("zu teuer — fahren woanders hin")}</span></div>
+      <div><b style="color:${T.abgewiesen ? "var(--down)" : "inherit"}">${T.abgewiesen}</b><span>${t("finden kein Zimmer")}</span></div></div>`;
+  let eigen = "";
+  if (betriebe.length) {
+    const preis = tourEntwurf.preis ?? meine?.preis ?? cfg.PREIS_REF;
+    const richt = Math.round(cfg.PREIS_REF * Math.sqrt(2 * tourQualiC(cfg, meine?.bewertung || 1)));
+    const pause = T.pause?.[myId] || 0;
+    const zeilen = betriebe.map(x => {
+      const s = x.btype === "campingplatz" ? 1 : (x.sterne || cfg.START_STERNE), imBau = x.bauBis && tick < x.bauBis;
+      const kosten = cfg.RENOVIEREN[s];
+      const aktion = x.btype !== "strandhotel" ? `<span class="meta">${t("fest 1 Stern")}</span>`
+        : s >= cfg.MAX_STERNE ? `<span class="meta">${t("Höchste Stufe")}</span>`
+        : `<button class="mini" data-renov="${x.x},${x.y}" ${imBau || me.cash < kosten ? "disabled" : ""}>${t("Auf")} ${s + 1} ★ · ${fmt(kosten)}</button>`;
+      return `<div class="swListeZeile"><span class="swName"><i style="background:${state.players?.[myId]?.color || "var(--accent)"}"></i><span><b>${bname(x.btype)}</b><small>${imBau ? t("im Bau") : `${t("Stufe")} ${x.level || 1}${s >= 3 ? ` · ${t("mit Frühstück")}` : ""}`}</small></span></span>
+        ${sterneHtml(s)}<span></span>${aktion}</div>`;
+    }).join("");
+    const lager = cfg.FRUEH_WAREN.map(g => `${gname(g)} ${Math.floor(me.inv?.[g] || 0)}`).join(" · ");
+    const festKnoepfe = Object.entries(cfg.FESTE).map(([k, f]) => {
+      const gesperrt = !!fest || pause > 0 || me.cash < f.kosten || !meine?.zimmer;
+      return `<button class="tourFestKnopf" data-fest="${k}" ${gesperrt ? "disabled" : ""}><b>${t(f.name)}</b><span>${fmt(f.kosten)} · ${f.dauer / 60} min</span>
+        <small>+${Math.round(f.gaeste * 100)} % ${t("Gäste")} · +${Math.round(f.zufr * 100)} % ${t("Zufriedenheit")}${f.laeden ? ` · +${Math.round(f.laeden * 100)} % ${t("in den Läden")}` : ""}</small></button>`;
+    }).join("");
+    eigen = `<div class="sec" style="margin-top:16px">${t("Deine Touristik")}</div>
+      <div class="swZahlen">
+        <div><b>${meine?.gaeste ?? 0}</b><span>${t("Gäste je Minute")}</span></div>
+        <div><b>${sterneHtml(meine?.bewertung || 0)}</b><span>${t("Bewertung")} ${String(meine?.bewertung ?? 0).replace(".", ",")}</span></div>
+        <div><b>${meine?.zimmer ?? 0}</b><span>${t("Zimmer je Minute")} · ${t("Lager")} ${Math.floor(me.inv?.uebernachtung || 0)}</span></div>
+        <div><b style="color:var(--up)">${fmt(meine?.einnahmen10 || 0)}</b><span>${t("Einnahmen 10 min")}</span></div></div>
+      ${meine?.abgewiesen ? `<div class="mpWarn">⚠ ${meine.abgewiesen} ${t("Gäste wollten zu dir, aber dein Lager war leer. Mehr Übernachtungen produzieren — oder den Preis anheben.")}</div>` : ""}
+      ${meine && meine.fruehOk < .95 && meine.fruehSoll ? `<div class="mpWarn">⚠ ${t("Frühstück fehlt")} (${Math.round(meine.fruehOk * 100)} %): ${t("Die Sterne über 2 zählen nur anteilig. Kauf Obst, Honig, Saft oder Gebäck an der Börse.")}</div>` : ""}
+      <div class="swForm">
+        <label><span>${t("Zimmerpreis $ je Gast")}</span><input id="tourPreis" type="number" min="${cfg.PREIS_MIN}" max="${cfg.PREIS_MAX}" step="1" value="${preis}"></label>
+        <button class="buyb" id="tourPreisSpeichern" style="align-self:end">${t("Übernehmen")}</button>
+      </div>
+      <div class="note" style="margin:-4px 0 10px">${t("Gäste wählen nach Bewertung und Preis. Bei deiner Bewertung bringt etwa")} <b>${fmt(richt)}</b> ${t("am meisten ein, solange genug Zimmer da sind. Zu teuer: Gäste fahren woanders hin.")}</div>
+      <div class="sec">${t("Deine Betriebe")} <span class="meta">· ${t("Renovieren bringt Sterne, ab 3 Sternen gibt es Frühstück")}</span></div>
+      <div class="swListe">${zeilen}</div>
+      ${meine?.fruehSoll ? `<div class="note" style="margin:6px 0 0">${t("Frühstück je Minute")}: ${t("Lebensmittel für")} ${fmt(meine.fruehSoll)} · ${t("im Lager")}: ${lager}</div>` : ""}
+      <div class="sec" style="margin-top:16px">${t("Stadtfest veranstalten")} <span class="meta">· ${fest ? t("gerade läuft eins") : pause > 0 ? `${t("nächstes in")} ${Math.ceil(pause / 60)} min` : t("lockt Gäste für alle Hotels, du bekommst mehr davon")}</span></div>
+      <div class="tourFeste">${festKnoepfe}</div>`;
+  } else eigen = `<div class="note" style="margin-top:12px">${t("Gäste übernachten bei Touristik-Firmen auf Campingplätzen und in Strandhotels.")}</div>`;
+  const rang = T.firmen.filter(f => f.zimmer > 0).sort((a, b) => b.gaeste - a.gaeste);
+  const liste = `<div class="sec" style="margin-top:16px">${t("Hotels der Stadt")}</div>
+    ${rang.length ? `<div class="swListe">${rang.map(f => `<div class="swListeZeile${f.id === myId ? " meins" : ""}">
+      <span class="swName"><i style="background:${f.farbe}"></i><span><b>${escapeHtml(rohText(f.name))}</b><small>${f.zimmer} ${t("Zimmer je Minute")}</small></span></span>
+      ${sterneHtml(f.bewertung)}<span class="mono">${fmt(f.preis)}</span><span class="mono">${f.gaeste} ${t("Gäste")}</span></div>`).join("")}</div>`
+      : `<div class="note">${t("Noch kein Hotel fertig.")}</div>`}`;
+  const html = festBanner + stadt + eigen + liste;
+  if (body._sig !== html) { body._sig = html; body.innerHTML = html; }
+}
+document.getElementById("p-touristik").addEventListener("input", e => { if (e.target.id === "tourPreis") tourEntwurf.preis = e.target.value; });
+document.getElementById("p-touristik").addEventListener("click", e => {
+  if (e.target.closest("#tourPreisSpeichern")) return socket.emit("zimmerpreis", { preis: +document.getElementById("tourPreis")?.value }, r => {
+    if (r?.error) return toast(r.error, true);
+    delete tourEntwurf.preis; toast(`${t("Zimmerpreis")}: ${fmt(r.preis)}`); render(store.get());
+  });
+  const rv = e.target.closest("[data-renov]");
+  if (rv) { const [x, y] = rv.dataset.renov.split(",").map(Number); return socket.emit("renovieren", { x, y }, r => { if (r?.error) return toast(r.error, true); toast(`${t("Renoviert")}: ${r.sterne} ★`); render(store.get()); }); }
+  const fe = e.target.closest("[data-fest]");
+  if (fe) return socket.emit("festStarten", { typ: fe.dataset.fest }, r => { if (r?.error) return toast(r.error, true); render(store.get()); });
+});
 /* ---- Software-Panel: Reiter, Überblick, Bürger-App und Jobbörse (Etappe 5) ---- */
 let SW_REITER = (() => { try { return localStorage.getItem("cs_swReiter") || "markt"; } catch { return "markt"; } })();
 const appEntwurf = {}, jobEntwurf = {};
@@ -7045,7 +7191,7 @@ function ruestHtml(me, state, my) {
 function stadtLexikon() {
   const S = store.get().state?.stadt;
   if (!S) return "";
-  return `<details class="lexGruppe" data-lex="lex-stadt" ${LEX_OFFEN.has("lex-stadt") ? "open" : ""}><summary>${t("Stadt & Arbeit")}<span>5</span></summary>
+  return `<details class="lexGruppe" data-lex="lex-stadt" ${LEX_OFFEN.has("lex-stadt") ? "open" : ""}><summary>${t("Stadt & Arbeit")}<span>6</span></summary>
     <div class="sec">${t("Wohnblöcke der Stadt")}</div>
     <table><tr><th>${t("Stufe")}</th><th>${t("Plätze")}</th><th>${t("Kosten")}</th><th>${t("ab Einwohnern")}</th></tr>
     ${S.stufen.map(x => `<tr><td>${t(x.name)}</td><td>${x.plaetze}</td><td>${fmt(x.kosten)}</td><td>${x.ab || "—"}</td></tr>`).join("")}</table>
@@ -7056,6 +7202,8 @@ function stadtLexikon() {
     <p class="meta">${t("30 % der Löhne gehen als Lohnsteuer und Miete an die Stadt, 20 % ins Bürgerdepot.")}</p>
     <div class="sec">${t("Bürger-Apps und Jobbörse")}</div>
     <p class="meta">${t("Bürger-App: bis 85 % der Einwohner zahlen ein Abo je Minute, 200 Nutzer je Rechenzentrums-Stufe des Anbieters. Jobbörse: Vorrang wie +0,3 bis +0,7 Lohnstufen gegen eine Gebühr je Arbeiter, 3 Abos je Rechenzentrums-Stufe.")}</p>
+    <div class="sec">${t("Gäste und Hotels")}</div>
+    <p class="meta">${t("Jede Minute 10 Gäste plus 4 je 100 Einwohner, mal Zufriedenheit. Sie wählen nach Bewertung und Zimmerpreis; wer zu teuer ist, verliert Gäste an andere Urlaubsorte. Strandhotel 2 bis 5 Sterne (Renovieren 1.500 / 3.000 / 5.000 $), ab 3 Sternen Frühstück für 3 / 5 / 8 $ je Gast. Stadtfeste: +60 bis +150 % Gäste für 5 bis 8 Minuten.")}</p>
     <div class="sec">${t("Stadtanleihen")}</div>
     <p class="meta">${fmt(S.anleihe.betrag)} · ${String(S.anleihe.zins * 100).replace(".", ",")} %/min · ${S.anleihe.laufzeit / 60} min · ${t("höchstens")} ${fmt(S.anleihe.max)} ${t("Schulden")}</p>
   </details>`;
@@ -7762,6 +7910,8 @@ const HINWEISE = [
     text: "Für neue Wohnungen gibt die Stadt eine Anleihe aus. Wer sie zeichnet, bekommt jede Minute Zinsen und das Geld nach 15 Minuten zurück — zu finden an der Stadtbank.", panel: ["bank", "Stadtbank"] },
   { id: "software", wann: (st, me, id) => st.players?.[id]?.industry === "software" && st.tick > 30, titel: "Dein Software-Panel",
     text: "Als Software-Firma baust du Shop-Systeme, Bürger-Apps und Jobbörsen für die anderen. Alles liegt im Software-Panel in Reitern: Markt, Mein System, Entwicklung, Design und Produkte.", panel: ["software", "Software"] },
+  { id: "touristik", wann: (st, me, id) => !!st.touristik && (st.map || []).some(x => x.owner === id && (x.btype === "campingplatz" || x.btype === "strandhotel") && !(x.bauBis > st.tick)), titel: "Gäste für deine Hotels",
+    text: "Jede Minute kommen Gäste in die Stadt und wählen ein Hotel nach Bewertung und Zimmerpreis. Renovierte Strandhotels bekommen mehr Sterne (ab 3 Sternen mit Frühstück), und ein Stadtfest lockt viele Gäste auf einmal.", panel: ["touristik", "Touristik"] },
   { id: "aktien", wann: st => st.tick > 900, titel: "Aktien und Übernahmen",
     text: "Jede Firma hat 100 Aktien. An der Stadtbank kaufst du Anteile anderer Firmen und kassierst Dividende — oder übernimmst eine Firma ganz. Behalte die Mehrheit an deiner eigenen.", panel: ["bank", "Stadtbank"] },
   { id: "ziel", wann: st => st.tick > 1500, titel: "Auf dem Weg zum Ziel",
@@ -9923,6 +10073,8 @@ function render({ state, me, myId, chat, room }) {
   /* Software: Systemvergleich für alle, Baukasten für Software-Firmen */
   if (document.getElementById("p-software").classList.contains("open") &&
       !typingIn(document.getElementById("p-software"))) softwareRendern(state, me, myId);
+  /* Touristik: Dock-Knopf immer, das Panel nur offen und ohne Eingabe */
+  if (!typingIn(document.getElementById("p-touristik"))) touristikRendern(state, me, myId);
 
   /* Stadtbank: Kurstafel, Angebote und Depot — der gesamte Anteilshandel */
   if (document.getElementById("p-bank").classList.contains("open") &&

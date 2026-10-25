@@ -4233,6 +4233,123 @@ const jobboersePublic = () => stadtAktiv() ? Object.values(G.jobboerse || {}).ma
   faktor: Math.round((jb.faktor ?? 1) * 100) / 100, plaetze: jb.plaetze || 0, vorrang: jb.version >= 1 ? JOBBOERSE.STUFEN[jb.version - 1].vorrang : 0,
   einnahmen10: Math.round((jb.eb || []).reduce((x, y) => x + y, 0)), gesamt: Math.round(jb.gesamt || 0),
   entwicklung: jb.entwicklung ? { version: jb.entwicklung.version, ep: Math.floor(jb.entwicklung.ep), ziel: jb.entwicklung.ziel } : null })) : [];
+/* ---------- Touristik: Gäste, Sterne, Stadtfeste (Stadtwachstum, Etappe 6) ----------
+ * Bis hierher verkaufte die Touristik nur Übernachtungen über den Markt, und
+ * jeder Verkauf drückte den eigenen Kurs — Tabellenende in jeder Messreihe.
+ * Jetzt kommen jede Minute Gäste in die Stadt (mehr, je größer und zufriedener
+ * sie ist) und wählen ein Hotel nach Bewertung und Zimmerpreis, wie die Bürger
+ * ihre App. Ein fester Anteil „Urlaub woanders“ sorgt dafür, dass auch eine
+ * Firma ohne Konkurrenz nicht beliebig teuer werden kann. Bezahlt wird aus dem
+ * Lager: ohne Übernachtung kein Zimmer. */
+const TOURISTIK = {
+  GRUND: 10, JE_100: 4,                 // Gäste je Minute: 10 + 4 je 100 Einwohner
+  PREIS_MIN: 15, PREIS_MAX: 120, PREIS_REF: 38, ELASTIZITAET: 2, WOANDERS: 0.5,
+  QUALI: [1, 1.35, 1.8, 2.4, 3.1],      // je Stern
+  START_STERNE: 2, MAX_STERNE: 5,
+  RENOVIEREN: { 2: 1500, 3: 3000, 4: 5000 },   // von x auf x+1 Sterne
+  FRUEHSTUECK: { 3: 3, 4: 5, 5: 8 },    // Grundwert in $ je Gast
+  FRUEH_WAREN: ["obst", "honig", "saft", "gebaeck"],   // billigste zuerst
+  FESTE: {
+    strandfest: { name: "Strandfest", kosten: 1200, dauer: 300, gaeste: 0.6, zufr: 0.03, laeden: 0 },
+    konzert:    { name: "Konzert",    kosten: 2500, dauer: 300, gaeste: 1.0, zufr: 0.05, laeden: 0 },
+    festival:   { name: "Festival",   kosten: 5000, dauer: 480, gaeste: 1.5, zufr: 0.08, laeden: 0.10 },
+  },
+  FEST_PAUSE: 600, VERANSTALTER: 1.5, FEST_STADTANTEIL: 0.2,
+};
+const TOUR_BETRIEBE = ["campingplatz", "strandhotel"];
+const tourSterne = t => t.btype === "campingplatz" ? 1 : (t.sterne || TOURISTIK.START_STERNE);
+const tourBetriebe = pid => G.map.filter(t => t.owner === pid && TOUR_BETRIEBE.includes(t.btype) && !imBau(t));
+const tourQuali = sterne => {
+  const i = Math.max(0, Math.min(TOURISTIK.QUALI.length - 1, sterne - 1)), lo = Math.floor(i), f = i - lo;
+  return TOURISTIK.QUALI[lo] + (TOURISTIK.QUALI[Math.min(lo + 1, TOURISTIK.QUALI.length - 1)] - TOURISTIK.QUALI[lo]) * f;
+};
+const tourFest = () => G.tour?.fest && G.tour.fest.bis > G.tick ? G.tour.fest : null;
+const tourFestDef = () => { const f = tourFest(); return f ? TOURISTIK.FESTE[f.typ] : null; };
+/* Kennzahlen einer Firma: Zimmer je Minute, Bewertung (Sterne, Frühstück
+ * eingerechnet) und der Frühstückswert je Gast. Gewichtet nach Zimmern. */
+function tourFirma(p) {
+  const T = G.tour ??= { firmen: {} }, f = T.firmen[p.id] ??= { preis: TOURISTIK.PREIS_REF, fruehOk: 1, eb: [0] };
+  let zimmer = 0, sterneSumme = 0, frueh = 0, roh = 0;
+  for (const t of tourBetriebe(p.id)) {
+    const bt = BTYPES[t.btype], z = (bt.proc ? bt.proc.rate : bt.rate) * levelMult(t.level) * 60, s = tourSterne(t);
+    /* Ohne Frühstück zählen die Sterne über 2 nur anteilig */
+    const eff = s >= 3 ? 2 + (s - 2) * f.fruehOk : s;
+    zimmer += z; sterneSumme += z * eff; roh += z * s; frueh += z * (TOURISTIK.FRUEHSTUECK[s] || 0);
+  }
+  return { f, zimmer, bewertung: zimmer ? sterneSumme / zimmer : 0, sterne: zimmer ? roh / zimmer : 0, frueh: zimmer ? frueh / zimmer : 0 };
+}
+/* Jede Minute (Stadt-Takt): Gäste verteilen, Zimmer abrechnen, Frühstück servieren */
+function touristikTick() {
+  const S = G.stadt, T = G.tour ??= { firmen: {} }, fest = tourFest(), festDef = tourFestDef();
+  for (const pid of Object.keys(T.firmen)) if (!G.players[pid]) delete T.firmen[pid];
+  const gaeste = Math.round((TOURISTIK.GRUND + S.einwohner / 100 * TOURISTIK.JE_100) * (S.zufr || 1) * (1 + (festDef?.gaeste || 0)));
+  const anbieter = [];
+  for (const p of Object.values(G.players)) {
+    const k = tourFirma(p);
+    (k.f.eb ??= [0]).unshift(0); if (k.f.eb.length > 10) k.f.eb.length = 10;
+    Object.assign(k.f, { gaeste: 0, abgewiesen: 0, zimmer: Math.round(k.zimmer), bewertung: Math.round(k.bewertung * 10) / 10, sterne: Math.round(k.sterne * 10) / 10 });
+    if (!(k.zimmer > 0)) continue;
+    const score = tourQuali(k.bewertung) / Math.pow(k.f.preis / TOURISTIK.PREIS_REF, TOURISTIK.ELASTIZITAET) * (fest?.ownerId === p.id ? TOURISTIK.VERANSTALTER : 1);
+    anbieter.push({ p, k, score, frei: Math.floor(p.inv.uebernachtung || 0), bekommt: 0 });
+  }
+  const summe = anbieter.reduce((a, x) => a + x.score, 0);
+  let abgewiesen = 0;
+  for (const x of anbieter) {
+    const wunsch = Math.round(gaeste * x.score / (summe + TOURISTIK.WOANDERS));
+    x.bekommt = Math.min(wunsch, x.frei); x.frei -= x.bekommt; abgewiesen += wunsch - x.bekommt;
+    x.k.f.abgewiesen = wunsch - x.bekommt;
+  }
+  /* Wer kein Zimmer fand, versucht es bei den anderen (nach Punktzahl) */
+  for (const x of [...anbieter].sort((a, b) => b.score - a.score)) {
+    if (!(abgewiesen > 0)) break;
+    const q = Math.min(abgewiesen, x.frei);
+    x.bekommt += q; x.frei -= q; abgewiesen -= q;
+  }
+  let bedient = 0, umsatz = 0;
+  for (const x of anbieter) {
+    const { p, k } = x, n = x.bekommt;
+    if (n > 0) {
+      const betrag = Math.round(n * k.f.preis * 100) / 100;
+      p.inv.uebernachtung -= n; p.cash += betrag; addRevenue(p, betrag);
+      k.f.eb[0] += betrag; k.f.gesamt = (k.f.gesamt || 0) + betrag; k.f.gaeste = n;
+      logTx(p, "Gäste", `${n} Gäste à ${String(k.f.preis).replace(".", ",")} $`, betrag);
+      bedient += n; umsatz += betrag;
+    }
+    /* Frühstück für die Gäste der Häuser ab 3 Sternen, aus dem eigenen Lager */
+    const soll = n * k.frueh;
+    if (soll > 0) {
+      let rest = soll;
+      for (const g of TOURISTIK.FRUEH_WAREN) {
+        if (!(rest > 0)) break;
+        const menge = Math.min(p.inv[g] || 0, rest / BASEP[g]);
+        if (!(menge > 0)) continue;
+        p.inv[g] -= menge; rest -= menge * BASEP[g];
+      }
+      const ok = Math.max(0, Math.min(1, 1 - rest / soll));
+      if (ok < 0.95 && k.f.fruehOk >= 0.95 && !p.bot) emitTo(p.id, "notice", { text: "Frühstück fehlt: Deine Gäste ab 3 Sternen bekommen zu wenig Lebensmittel — die Bewertung sinkt. Obst, Honig, Saft oder Gebäck ins Lager." });
+      k.f.fruehOk = ok; k.f.fruehSoll = Math.round(soll);
+    } else { k.f.fruehOk = 1; k.f.fruehSoll = 0; }
+  }
+  T.gaeste = gaeste; T.bedient = bedient; T.abgewiesen = Math.max(0, abgewiesen);
+  T.woanders = anbieter.length ? Math.round(gaeste * TOURISTIK.WOANDERS / (summe + TOURISTIK.WOANDERS)) : gaeste;
+  T.umsatz = Math.round(umsatz);
+}
+/* Stadtfest: Zufriedenheit als eigener Teil, Läden-Nachfrage beim Festival */
+const festZufr = () => tourFestDef()?.zufr || 0;
+const festLaeden = () => tourFestDef()?.laeden || 0;
+function touristikPublic() {
+  if (!stadtAktiv()) return null;
+  const T = G.tour ??= { firmen: {} }, fest = tourFest();
+  return {
+    gaeste: T.gaeste || 0, bedient: T.bedient || 0, abgewiesen: T.abgewiesen || 0, woanders: T.woanders || 0, feste: T.feste || 0,
+    fest: fest ? { typ: fest.typ, name: TOURISTIK.FESTE[fest.typ].name, ownerId: fest.ownerId, veranstalter: G.players[fest.ownerId]?.name ?? "—", rest: fest.bis - G.tick } : null,
+    pause: Object.fromEntries(Object.entries(T.pause || {}).filter(([, b]) => b > G.tick).map(([pid, b]) => [pid, b - G.tick])),
+    firmen: Object.entries(T.firmen).filter(([pid, f]) => G.players[pid] && (f.zimmer > 0 || f.gesamt > 0 || tourBetriebe(pid).length)).map(([pid, f]) => ({ id: pid, name: G.players[pid].name, farbe: G.players[pid].color,
+      preis: f.preis, gaeste: f.gaeste || 0, abgewiesen: f.abgewiesen || 0, zimmer: f.zimmer || 0, bewertung: f.bewertung || 0, sterne: f.sterne || 0,
+      fruehOk: Math.round((f.fruehOk ?? 1) * 100) / 100, fruehSoll: f.fruehSoll || 0,
+      einnahmen10: Math.round((f.eb || []).reduce((a, b) => a + b, 0)), gesamt: Math.round(f.gesamt || 0) })),
+  };
+}
 function swTick() {
   G.software ??= {};
   G.swFaktor = {};
@@ -5074,7 +5191,8 @@ const STADT = Object.assign({
    * für Besucher. So wachsen Versorger und Touristik mit der Stadt, wie Software
    * über die Bürger-Apps. Lebensmittel bewusst nicht: Agrar lag ohnehin vorn.
    * Höchstens die Hälfte eines Lagers je Minute, damit keine Kette stehen bleibt. */
-  BEDARF: { strom: 12, wasser: 12, uebernachtung: 2 }, BEDARF_ANTEIL_MAX: 0.5, BEDARF_PREIS_MIN: 0.7,   // Stadt zahlt mindestens 70 % des Grundpreises
+  /* Übernachtungen seit Etappe 6 nicht mehr hier: Gäste buchen selbst (touristikTick). */
+  BEDARF: { strom: 12, wasser: 12 }, BEDARF_ANTEIL_MAX: 0.5, BEDARF_PREIS_MIN: 0.7,   // Stadt zahlt mindestens 70 % des Grundpreises
   /* Etappe 4: Fachkraefte. Labor, Studio und Chipfabrik brauchen zur Haelfte
    * Fachkraefte. 10 % der Arbeitenden sind welche, die Stadtbibliothek bildet
    * weitere 10 % aus, jedes andere fertige Stadtprojekt 2 %. */
@@ -5137,7 +5255,8 @@ function stadtLog(text) {
 function arbeiterBedarf(t) {
   const bt = BTYPES[t.btype];
   if (!bt || !t.owner) return 0;
-  const basis = bt.arbeiter ?? Math.min(STADT.ARBEIT_MAX, Math.max(STADT.ARBEIT_MIN, Math.round(bt.cost * STADT.ARBEIT_JE_DOLLAR)));
+  const basis = (bt.arbeiter ?? Math.min(STADT.ARBEIT_MAX, Math.max(STADT.ARBEIT_MIN, Math.round(bt.cost * STADT.ARBEIT_JE_DOLLAR))))
+    + (t.btype === "strandhotel" ? Math.max(0, tourSterne(t) - TOURISTIK.START_STERNE) : 0);   // je Stern über 2 ein Arbeiter mehr
   const auto = t.steuerung && steuerOffen(t) ? 1 - STADT.AUTOMATISIERUNG : 1;   // Leitstand ersetzt Handarbeit
   return Math.ceil(basis * (1 + STADT.ARBEIT_AUSBAU * ((t.level || 1) - 1)) * auto);
 }
@@ -5274,6 +5393,9 @@ function stadtZufriedenheit() {
   const digital = (S.appNutzer || 0) >= S.einwohner * BUERGER_APP.DIGITAL_ANTEIL ? BUERGER_APP.DIGITAL_BONUS : 0;
   if (S.appNutzer || digital) teile.push({ key: "digital", name: "Digitale Stadt", wirkung: digital,
     text: `${Math.round((S.appNutzer || 0) / Math.max(1, S.einwohner) * 100)} % nutzen eine Bürger-App` });
+  const fest = tourFest();
+  if (fest) teile.push({ key: "stadtfest", name: "Stadtfest", wirkung: festZufr(),
+    text: `${TOURISTIK.FESTE[fest.typ].name} von ${G.players[fest.ownerId]?.name ?? "—"}` });
   const stufe = steuerStufe().key;
   const steuer = stufe === "notstand" ? -STADT.NOTSTAND_MALUS : stufe === "knapp" ? -STADT.KNAPP_MALUS : 0;
   teile.push({ key: "steuer", name: "Steuerlage", wirkung: steuer, text: steuerStufe().name });
@@ -5540,6 +5662,7 @@ function stadtTick() {
   loehneZahlen();
   buergerAppZahlen();
   grundbedarfKaufen();
+  touristikTick();
   const z = stadtZufriedenheit();
   S.zufr = z.wert; S.teile = z.teile;
   const kap = wohnKapazitaet();
@@ -5559,7 +5682,7 @@ function stadtTick() {
 /* Nachfrage der Laeden waechst gedaempft mit der Einwohnerzahl: beim Start
  * genau 1, bei der fuenffachen Stadt rund 1,6 (Deckel). */
 const stadtNachfrage = () => !stadtAktiv() ? 1
-  : Math.max(STADT.NACHFRAGE_MIN, Math.min(STADT.NACHFRAGE_MAX, Math.pow(G.stadt.einwohner / STADT.START_EINW, STADT.NACHFRAGE_EXP)));
+  : Math.max(STADT.NACHFRAGE_MIN, Math.min(STADT.NACHFRAGE_MAX, Math.pow(G.stadt.einwohner / STADT.START_EINW, STADT.NACHFRAGE_EXP))) * (1 + festLaeden());
 function stadtPublic() {
   if (!stadtAktiv()) return null;
   const S = G.stadt, kap = wohnKapazitaet();
@@ -6201,7 +6324,7 @@ function snapshot() {
     steuerung: STEUERUNG, steuerStufe: STEUER_STUFE, steuerAboCfg: STEUER_ABO,
     leitDesign: LEIT_DESIGN, leitDesignAb: LEIT_DESIGN_AB, leitFunktion: LEIT_FUNKTION, turbo: TURBO,
     anzeigen: anzeigenPublic(), anzeigeCfg: { preisMin: ANZEIGE.PREIS_MIN, preisMax: ANZEIGE.PREIS_MAX, dauer: ANZEIGE.DAUER, text: ANZEIGE.TEXT, maxJe: ANZEIGE.MAX_JE, max: ANZEIGE.MAX },
-    buergerApp: buergerAppPublic(), buergerAppCfg: BUERGER_APP, jobboerse: jobboersePublic(), jobboerseCfg: JOBBOERSE,
+    buergerApp: buergerAppPublic(), buergerAppCfg: BUERGER_APP, touristik: touristikPublic(), touristikCfg: TOURISTIK, jobboerse: jobboersePublic(), jobboerseCfg: JOBBOERSE,
     boerseApp: boersePublic(), boerseAppCfg: { stufen: BOERSE_APP.STUFEN, abSystem: BOERSE_APP.AB_SYSTEM, preisMin: BOERSE_APP.PREIS_MIN, preisMax: BOERSE_APP.PREIS_MAX },
     logoV: Object.fromEntries(Object.values(G.players).filter(p => p.logo).map(p => [p.id, p.logo.v])), swDesign: SW_DESIGN, swDesignAb: SW_DESIGN_AB, swCfg: { install: SW.INSTALL, portalInstall: SW.PORTAL_INSTALL, versionEp: SW.VERSION_EP, werbeBoost: SW.WERBE_BOOST, gebMin: SW.GEB_MIN, gebMax: SW.GEB_MAX, einrMax: SW.EINR_MAX, aboMin: SW.ABO_MIN, aboMax: SW.ABO_MAX, handelssteuer: Math.round(satzBoerse() * SW.HANDELSSTEUER * 1000) / 10, markenwert: SW.MARKENWERT },
     marktLog: (G.marktLog || []).slice(0, 20), marktCfg: { aktien: AKTIEN, tag: MARKT.TAG, beta: MARKT.BETA, bauDauer: MARKT.BAU_DAUER, afaDauer: MARKT.AFA_DAUER },
@@ -6465,7 +6588,7 @@ function dropContract(c) {
  * Nach dem ersten Snapshot reist die Karte nur noch als Differenz über diese
  * Liste. Der Vergleich läuft über JSON, verschachtelte Arrays sind also
  * abgedeckt (derselbe Grund, aus dem `shop` hier steht). */
-const DYNAMIC_TILE_KEYS = ["locked", "owner", "btype", "lien", "shop", "paused", "level", "autos", "sperre", "denkmal", "denkmalName", "bauBis", "system", "steuerung", "rzAktiv", "bestellungen", "vorrat", "wohnblock", "arbeiter", "arbeiterSoll", "fach", "fachSoll"];
+const DYNAMIC_TILE_KEYS = ["locked", "owner", "btype", "lien", "shop", "paused", "level", "autos", "sperre", "denkmal", "denkmalName", "bauBis", "system", "steuerung", "rzAktiv", "bestellungen", "vorrat", "wohnblock", "arbeiter", "arbeiterSoll", "fach", "fachSoll", "sterne"];
 /* undefined wird zu null normalisiert, damit auch "Feld gelöscht" (z. B. der
  * Abriss räumt t.shop weg) beim Empfänger sicher ankommt. */
 /* Fahrzeuge gehen MIT ihren gerechneten Werten über die Leitung. Sie hier
@@ -7882,7 +8005,7 @@ io.on("connection", socket => {
     if (MODE === "kartell" && p.familie) kampfPunkte(bezirkVon(x, y), p.familie, 2);   // Tauziehen
     if (bt.out || bt.proc) questProg(p, "build");
     if (bt.familie) questProg(p, "familiebau");
-    p.cash -= bt.cost + unlockCost; t.owner = p.id; t.btype = btype; t.level = 1; gainXp(p, 20);
+    p.cash -= bt.cost + unlockCost; t.owner = p.id; t.btype = btype; t.level = 1; t.sterne = undefined; gainXp(p, 20);
     /* Geld und Material werden zur Anlage — der Buchwert bleibt gleich. Während
      * der Bauzeit ist es eine "Anlage in Arbeit" und produziert noch nichts. */
     t.anlagewert = bt.cost + unlockCost + matWert;
@@ -8245,7 +8368,7 @@ io.on("connection", socket => {
     p.cash += BTYPES[t.btype].cost * 0.5;
     logTx(p, "Bau", `Abriss ${BTYPES[t.btype].name}`, BTYPES[t.btype].cost * 0.5);
     p.stats.abgerissen++;
-    t.owner = null; t.btype = null; t.shop = undefined; t.anlagewert = undefined; t.bauBis = undefined; t.system = undefined; t.steuerung = undefined; t.rzAktiv = undefined; t.bestellungen = undefined; t.vorrat = undefined;
+    t.owner = null; t.btype = null; t.shop = undefined; t.anlagewert = undefined; t.bauBis = undefined; t.system = undefined; t.steuerung = undefined; t.sterne = undefined; t.rzAktiv = undefined; t.bestellungen = undefined; t.vorrat = undefined;
     ack?.({ ok: true });
   }));
 
@@ -8657,7 +8780,7 @@ io.on("connection", socket => {
     G.nextDividendIn = DIVIDEND_INTERVAL;
     G.wettrunde = { nr: 1, phase: "annahme", rest: WETT_ANNAHME, start: {} }; G.wetten = []; G.wettLetzte = []; G.wettReserve = WETT_RESERVE;
     G.markt = {}; G.marktLog = []; G.panikTag = null; G.panikErledigt = false; G.fonds = {}; G.etfHist = {}; G.faEtf = {}; G.software = {}; G.paint = {}; G.swFaktor = {}; G.werbeAktiv = new Set();
-    G.boerseApp = {}; G.buergerApp = {}; G.jobboerse = {}; G.depot = depotLeer(); G.bstat = {}; G.anzeigen = [];
+    G.boerseApp = {}; G.buergerApp = {}; G.jobboerse = {}; G.tour = { firmen: {} }; G.depot = depotLeer(); G.bstat = {}; G.anzeigen = [];
     G.stadtkasse = STADT_GRUNDSTOCK; G.steuerStufe = 2; G.boerseGebuehren = 0; G.steuernGesamt = 0; G.stadtprojekt = null; G.projektPause = 120; G.stadtprojekteFertig = [];
     stadtInit();
     for (const pl of Object.values(G.players)) { pl.steuerStand = undefined; pl.steuerSchuld = 0; pl.steuerLetzter = null; }
@@ -8714,6 +8837,45 @@ io.on("connection", socket => {
     if (!x) { x = { id: "app_" + id(), ownerId: p.id, name: n.name, version: 0, preis, nutzer: 0, eb: [0], entwicklung: null }; G.buergerApp[x.id] = x; }
     x.name = n.name; x.preis = preis;
     ack?.({ ok: true, id: x.id }); pushState();
+  }));
+  /* --- Touristik (Etappe 6): Zimmerpreis, Renovieren, Stadtfest --- */
+  socket.on("zimmerpreis", guard((p, d, ack) => {
+    if (!stadtAktiv()) return ack?.({ error: "Gäste gibt es nur mit wachsender Stadt" });
+    const preis = Math.round(Math.min(TOURISTIK.PREIS_MAX, Math.max(TOURISTIK.PREIS_MIN, +d?.preis || TOURISTIK.PREIS_REF)) * 100) / 100;
+    tourFirma(p).f.preis = preis;
+    ack?.({ ok: true, preis }); pushState();
+  }));
+  socket.on("renovieren", guard((p, { x, y } = {}, ack) => {
+    const t = tileAt(x, y);
+    if (!t || t.owner !== p.id || t.btype !== "strandhotel") return ack?.({ error: "Nur ein eigenes Strandhotel lässt sich renovieren" });
+    if (imBau(t)) return ack?.({ error: "Das Hotel ist noch im Bau" });
+    const s = tourSterne(t);
+    if (s >= TOURISTIK.MAX_STERNE) return ack?.({ error: `Schon ${TOURISTIK.MAX_STERNE} Sterne` });
+    const kosten = TOURISTIK.RENOVIEREN[s];
+    if (p.cash < kosten) return ack?.({ error: `Zu wenig Kapital (${kosten.toLocaleString("de-DE")} $ nötig)` });
+    p.cash -= kosten; p.stats.ausgaben += kosten; investieren(p, kosten);
+    t.anlagewert = anlageWert(t) + kosten; t.sterne = s + 1;
+    logTx(p, "Ausbau", `Strandhotel renoviert: jetzt ${s + 1} Sterne`, -kosten);
+    if (s + 1 === 3 && !p.bot) emitTo(p.id, "notice", { text: "Ab 3 Sternen erwarten deine Gäste Frühstück: Obst, Honig, Saft oder Gebäck im Lager." });
+    ack?.({ ok: true, sterne: s + 1 }); pushState();
+  }));
+  socket.on("festStarten", guard((p, { typ } = {}, ack) => {
+    const def = TOURISTIK.FESTE[typ];
+    if (!stadtAktiv() || !def) return ack?.({ error: "Unbekanntes Fest" });
+    if (!tourBetriebe(p.id).length) return ack?.({ error: "Feste veranstalten nur Firmen mit einem fertigen Campingplatz oder Strandhotel" });
+    const T = G.tour ??= { firmen: {} }, laeuft = tourFest();
+    if (laeuft) return ack?.({ error: `In der Stadt läuft schon ein Fest (${TOURISTIK.FESTE[laeuft.typ].name}, noch ${Math.ceil((laeuft.bis - G.tick) / 60)} min)` });
+    const pause = (T.pause ??= {})[p.id] || 0;
+    if (pause > G.tick) return ack?.({ error: `Dein nächstes Fest geht in ${Math.ceil((pause - G.tick) / 60)} min` });
+    if (p.cash < def.kosten) return ack?.({ error: `Zu wenig Kapital (${def.kosten.toLocaleString("de-DE")} $ nötig)` });
+    p.cash -= def.kosten; p.stats.ausgaben += def.kosten;
+    G.stadtkasse += Math.round(def.kosten * TOURISTIK.FEST_STADTANTEIL);   // Genehmigung, Reinigung, Sicherheit
+    T.fest = { typ, ownerId: p.id, bis: G.tick + def.dauer }; T.feste = (T.feste || 0) + 1;
+    T.pause[p.id] = G.tick + def.dauer + TOURISTIK.FEST_PAUSE;
+    logTx(p, "Touristik", `${def.name} veranstaltet`, -def.kosten);
+    stadtLog(`${def.name} von ${p.name}`);
+    io.emit("notice", { text: `🎉 ${p.name} veranstaltet ein ${def.name}: ${def.dauer / 60} Minuten lang +${Math.round(def.gaeste * 100)} % Gäste${def.laeden ? `, +${Math.round(def.laeden * 100)} % in den Läden` : ""}.` });
+    ack?.({ ok: true }); pushState();
   }));
   socket.on("appEntwickeln", guard((p, _d, ack) => { ack?.(stadtSwEntwickeln(p, istSoftwareFirma(p) && appEigenes(p), BUERGER_APP, "app")); pushState(); }));
   socket.on("jobEinstellen", guard((p, d = {}, ack) => {
@@ -10229,7 +10391,7 @@ const BOT_CFGS = [
    * von vier Gebäuden fällt — die Branche lag auch ohne ihn am Tabellenende. */
   { name: "Küstenperle",     industry: "touristik", color: "#2dd4bf",
     plan: ["campingplatz", "onlinemarkt", "strandhotel", "campingplatz", "strandhotel", "werbeagentur"],
-    needs: ["wasser", "strom"], vorrat: { wasser: 160, strom: 80 }, rennstall: true },
+    needs: ["wasser", "strom"], vorrat: { wasser: 160, strom: 80, obst: 60 }, rennstall: true },   // Obst: Frühstück ab 3 Sternen
 
   /* Rüstung: baut erst die billige Munitionsfabrik, damit früh Geld reinkommt,
    * und kauft Stahl, Elektronik und Diesel für die teureren Stufen zu. */
@@ -10734,6 +10896,32 @@ async function spawnBot(cfg, lvl = BOT_LEVELS[BOT_LEVEL_DEFAULT]) {
           else if (!job.entwicklung && job.version < JOBBOERSE.STUFEN.length && me.cash > 1500 && app?.version >= 1) await em("jobEntwickeln", {});
         }
       }
+      /* --- Touristik (Etappe 6): Zimmerpreis nachführen, Hotels renovieren,
+       * Feste veranstalten. Richtpreis ist das Optimum gegen „Urlaub woanders“
+       * (38 $ × √(2 × Qualität)); fehlen Zimmer, wird es teurer, staut sich das
+       * Lager, billiger. --- */
+      if (st.stadt && st.touristik && cfg.industry === "touristik") {
+        const tf = (st.touristik.firmen || []).find(f => f.id === myId);
+        if (tf?.zimmer > 0 && Math.random() < .3) {
+          const richt = TOURISTIK.PREIS_REF * Math.sqrt(2 * tourQuali(tf.bewertung || 1));
+          let neu = tf.preis;
+          if (tf.abgewiesen > 0) neu *= 1.06;
+          else if ((me.inv.uebernachtung || 0) > tf.gaeste * 4 + 20) neu *= .95;
+          else neu += (richt - neu) * .2;
+          neu = Math.round(Math.min(richt * 1.4, Math.max(richt * .6, neu)));
+          if (Math.abs(neu - tf.preis) >= 1) await em("zimmerpreis", { preis: neu });
+        }
+        /* Renovieren mit Polster — ab 3 Sternen nur, solange das Frühstück klappt */
+        const reno = st.map.filter(t2 => t2.owner === myId && t2.btype === "strandhotel" && !t2.bauBis && (t2.sterne || TOURISTIK.START_STERNE) < TOURISTIK.MAX_STERNE)
+          .sort((a, b) => (a.sterne || TOURISTIK.START_STERNE) - (b.sterne || TOURISTIK.START_STERNE))[0];
+        const renoKosten = reno ? TOURISTIK.RENOVIEREN[reno.sterne || TOURISTIK.START_STERNE] : 0;
+        if (reno && me.cash > renoKosten * 2 + 2000 && (tf?.fruehOk ?? 1) > .9 && Math.random() < .2) await em("renovieren", { x: reno.x, y: reno.y });
+        /* Fest, wenn keins läuft und genug Zimmer auf Lager sind */
+        if (tf?.zimmer > 0 && !st.touristik.fest && !st.touristik.pause?.[myId] && Math.random() < .1) {
+          const typ = me.cash > 15000 ? "festival" : me.cash > 8000 ? "konzert" : me.cash > 4000 ? "strandfest" : null;
+          if (typ && (me.inv.uebernachtung || 0) >= Math.max(20, tf.gaeste * 2)) await em("festStarten", { typ });
+        }
+      }
       /* --- Werbenetz: mit Polster ab und zu eine Anzeige bei dem System buchen,
        * das je Dollar die meiste Wirkung bringt (Reichweite ÷ Preis). Nur wer
        * selbst einen Online-Shop hat, profitiert davon. --- */
@@ -10880,12 +11068,16 @@ async function spawnBot(cfg, lvl = BOT_LEVELS[BOT_LEVEL_DEFAULT]) {
          * und beide Software-Firmen standen 35 Minuten ohne Strom da. Nur echter
          * Überschuss darf ins Regal. */
         const grund = new Set(cfg.alwaysSell || []);
-        const goods = (BTYPES[t.btype]?.retail?.goods || []).filter(g => me.inv[g] > (grund.has(g) ? 300 : 5) && eigeneWare.has(g) && !gefragt.has(g))
+        /* Touristik: Gäste zahlen weit mehr als das Regal (Zimmerpreis statt
+         * Kurs). Ins Regal kommt nur, was über zwei Minuten Gäste hinausgeht. */
+        const tf = cfg.industry === "touristik" ? (st.touristik?.firmen || []).find(f => f.id === myId) : null;
+        const gastReserve = tf?.zimmer > 0 ? Math.max(30, (tf.gaeste + tf.abgewiesen) * 2) : 0;
+        const goods = (BTYPES[t.btype]?.retail?.goods || []).filter(g => me.inv[g] > (grund.has(g) ? 300 : g === "uebernachtung" ? gastReserve + 5 : 5) && eigeneWare.has(g) && !gefragt.has(g))
           .sort((a2, b2) => (me.inv[b2] || 0) * (st.avg[b2] || 0) - (me.inv[a2] || 0) * (st.avg[a2] || 0));
         /* Grundversorgung wieder aus dem Regal nehmen, sobald der Überschuss weg ist —
          * ebenso gefragte Ware (siehe oben). */
         t.shop.forEach((sl, i) => {
-          if (sl && ((grund.has(sl.good) && (me.inv[sl.good] || 0) < 100) || gefragt.has(sl.good))) { em("configureShop", { x: t.x, y: t.y, slot: i, good: null }); t.shop[i] = null; }
+          if (sl && ((grund.has(sl.good) && (me.inv[sl.good] || 0) < 100) || gefragt.has(sl.good) || (sl.good === "uebernachtung" && (me.inv[sl.good] || 0) < gastReserve))) { em("configureShop", { x: t.x, y: t.y, slot: i, good: null }); t.shop[i] = null; }
         });
         /* Der Regalpreis wurde einmal gesetzt und nie angepasst. Fällt der Kurs,
          * verkauft das Regal nur noch halb so schnell — gemessen lagen bei
@@ -11302,6 +11494,8 @@ async function spawnBot(cfg, lvl = BOT_LEVELS[BOT_LEVEL_DEFAULT]) {
        * und Wasser im Lager steigern die Produktion um bis zu 150 %, das ist der
        * größte Hebel, den ein Bot ohne Sonderrechte ziehen kann. */
       const bedarf = new Set(cfg.needs);
+      /* Touristik: Frühstück für die Hotels ab 3 Sternen (Obst ist am billigsten) */
+      if (cfg.industry === "touristik" && st.map.some(t2 => t2.owner === myId && (t2.sterne || 0) >= 3)) bedarf.add("obst");
       /* Zutaten der eigenen Werke nachkaufen, sobald das Werk steht — nicht
        * vorher, damit kein Kapital in Vorräten für spätere Stufen liegt. */
       if (cfg.bedarfAusWerken) for (const t of st.map) {
