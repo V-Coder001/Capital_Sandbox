@@ -2048,6 +2048,12 @@ const EN = {
   "ab der Hälfte der Einwohner: Digitale Stadt +5 %": "from half the residents: digital city +5 %", "Digitale Stadt": "Digital city",
   "Bürger-App gespeichert": "Citizen app saved", "Jobbörse gespeichert": "Job board saved", "Entwicklung gestartet": "Development started",
   "Erst brauchst du ein eigenes Shop-System — lege es im Reiter „Mein System“ an.": "First you need your own shop system — create it in the “My system” tab.",
+  "Glas-Effekt": "Glass effect", "Unschärfe hinter Leisten und Fenstern — kostet viel Grafikleistung": "Blur behind bars and windows — costs a lot of graphics power",
+  "Automatisch anpassen": "Adjust automatically", "Ruckelt das Spiel, schaltet es die Grafik stufenweise herunter": "If the game stutters, graphics are lowered step by step",
+  "Bildrate anzeigen": "Show frame rate", "Kleine Anzeige unten links: Bilder pro Sekunde": "Small display bottom left: frames per second",
+  "Grafik automatisch reduziert": "Graphics reduced automatically", "Glas-Effekt aus": "glass effect off", "Auflösung 75 %": "resolution 75 %",
+  "Wolken aus": "clouds off", "animierter Hintergrund aus": "animated background off", "Auflösung 50 %": "resolution 50 %",
+  "Ändern unter Einstellungen → Grafik.": "Change under Settings → Graphics.",
   "Nachfrage in den Läden": "Demand in shops", "wächst mit der Einwohnerzahl": "grows with the population", "Einw.": "res.",
   "der Verkäufer gibt sie vom Erlös ans Finanzamt ab": "the seller pays it from sale proceeds to the tax office",
 };
@@ -4336,6 +4342,41 @@ addEventListener("keydown", e => {
 });
 addEventListener("keyup", e => TASTEN.delete(e.key.toLowerCase()));
 addEventListener("blur", () => TASTEN.clear());
+/* ---- Bildrate: Anzeige und automatische Anpassung ----
+ * Misst die Abstände zwischen den Bildern. Mit „Automatisch anpassen“ schaltet
+ * das Spiel bei anhaltendem Ruckeln (unter ~40 Bilder/s) stufenweise herunter:
+ * erst den Glas-Effekt, dann die Auflösung, dann Wolken und Hintergrund. Nur
+ * bei sichtbarem Tab, laufender Runde und Ziel „Maximal“ — im 30er-Modus wäre
+ * jedes Bild „langsam“. */
+const LEISTUNG = { abst: [], letzt: 0, anzeigeT: 0, pruefT: 0, ruheBis: 0 };
+const AUTO_STUFEN = [["glas", false, "Glas-Effekt aus"], ["aufloesung", .75, "Auflösung 75 %"], ["wolken", false, "Wolken aus"],
+                     ["hintergrund", false, "animierter Hintergrund aus"], ["aufloesung", .5, "Auflösung 50 %"]];
+document.addEventListener("einstellung", () => { LEISTUNG.ruheBis = performance.now() + 4000; LEISTUNG.abst.length = 0; });
+addEventListener("resize", () => { LEISTUNG.ruheBis = performance.now() + 4000; LEISTUNG.abst.length = 0; });
+function leistungMessen(jetzt) {
+  const L = LEISTUNG;
+  /* Pausen über 250 ms sind kein Ruckeln, sondern ein gedrosseltes oder
+   * verdecktes Fenster (dort laufen 1–2 Bilder/s) — sie zählen nicht. */
+  if (L.letzt && jetzt - L.letzt < 250) { L.abst.push(jetzt - L.letzt); if (L.abst.length > 240) L.abst.shift(); }
+  L.letzt = jetzt;
+  const med = () => { const a = [...L.abst].sort((x, y) => x - y); return a[Math.floor(a.length / 2)] || 16.7; };
+  if (EINST.fpsAnzeige && jetzt - L.anzeigeT > 500) {
+    L.anzeigeT = jetzt;
+    let el = document.getElementById("fpsAnzeige");
+    if (!el) { el = document.createElement("div"); el.id = "fpsAnzeige"; document.body.append(el); }
+    const letzte = L.abst.slice(-60), ruckler = letzte.filter(x => x > 50).length;
+    el.textContent = `${Math.round(1000 / med())} Bilder/s${ruckler ? ` · ${ruckler} Hänger` : ""}\n${EINST.qualitaet} · ${Math.round(DPR() * 100) / 100}× · ${EINST.glas ? "Glas an" : "Glas aus"}`;
+  } else if (!EINST.fpsAnzeige) document.getElementById("fpsAnzeige")?.remove();
+  if (!EINST.autoQualitaet || EINST.fps !== 60 || document.visibilityState !== "visible" || !store.get().state?.started) return;
+  if (jetzt < L.ruheBis || jetzt - L.pruefT < 3000 || L.abst.length < 90) return;
+  L.pruefT = jetzt;
+  if (med() <= 25) return;
+  const stufe = AUTO_STUFEN.find(([k, v]) => k === "aufloesung" ? (EINST.aufloesung || 1) > v : EINST[k] !== v);
+  if (!stufe) return;
+  EINST.setzen(stufe[0], stufe[1]);
+  L.ruheBis = jetzt + 8000;
+  toast(`${t("Grafik automatisch reduziert")}: ${t(stufe[2])}. ${t("Ändern unter Einstellungen → Grafik.")}`);
+}
 function draw() {
   requestAnimationFrame(draw);
   /* Bildrate begrenzen (Einstellung „30 Bilder/s") — spart Akku und Lüfter. */
@@ -4390,6 +4431,13 @@ function draw() {
    * behalten ihren eigenen Look. */
   const FL = !!window.FLAECHE && !ITALIA_LOOK && !PLAN_LOOK;
   draw.welt = cx.getTransform();   // für den Atmosphären-Clip
+  /* Nur Sichtbares zeichnen: Kacheln außerhalb des Bildausschnitts (plus Rand
+   * für hohe Gebäude, die nach oben ins Bild ragen) überspringen. Bei
+   * hineingezoomter Karte fällt so der Großteil der 900 Kacheln weg. */
+  const kz = cam.z, SICHT = { x0: -(innerWidth / 2 + cam.x) / kz - 90, x1: (innerWidth / 2 - cam.x) / kz + 90,
+                              y0: -(120 + cam.y) / kz - 90, y1: (innerHeight - 120 - cam.y) / kz + 170 };
+  const imBild = t => { const sx = (t.x - t.y) * TW / 2, sy = (t.x + t.y) * TH / 2;
+    return sx >= SICHT.x0 && sx <= SICHT.x1 && sy >= SICHT.y0 && sy <= SICHT.y1; };
   /* Kamera bewegt? Dann pausiert der Topo-Hintergrund kurz (siehe startTopo). */
   const camSig = cam.x + "|" + cam.y + "|" + cam.z;
   if (draw.camSig !== camSig) { draw.camSig = camSig; window.KAMERA_BEWEGT = performance.now(); }
@@ -4544,7 +4592,7 @@ function draw() {
   /* Wasser-Effekte in einem eigenen Durchgang — direkt beim Kachelzeichnen
    * würden die danach gemalten Nachbarrauten sie sofort wieder übermalen. */
   for (const t of st.map) {
-    if (!t.water) continue;
+    if (!t.water || !imBild(t)) continue;
     const [sx, sy] = iso(t.x, t.y);
     /* Wandernde Lichtglanzpunkte, damit die Fläche lebt. */
     const h = (t.x * 31 + t.y * 17) % 97;
@@ -4574,6 +4622,7 @@ function draw() {
    * kommt und ihn wieder uebermalen wuerde. Nach dem vollstaendigen Boden
    * gezeichnet, bleibt er liegen. */
   for (const t of st.map) {
+    if (!imBild(t)) continue;
     const spr = t.bank    ? (BANKSPR || spriteFor("kontor", t.x, t.y))
               : t.news    ? (NEWSSPR || spriteFor("buero", t.x, t.y))
               : t.finanzamt ? (STADT_SPR.finanzamt || spriteFor("buero", t.x, t.y))
@@ -4587,7 +4636,7 @@ function draw() {
     drawSchatten(spr, sx, sy, t.deko ? dekoGroesse(spr) : t.btype ? 64 : 72);
   }
   for (const t of st.map) {
-    if (!t.park || t.btype) continue;
+    if (!t.park || t.btype || !imBild(t)) continue;
     const [sx, sy] = iso(t.x, t.y);
     for (const b of dekoStellen(t)) drawSchatten(b.img, sx + b.ox, sy + b.oy, b.gr);
   }
@@ -4601,6 +4650,7 @@ function draw() {
   drawAmbient(now);
   drawTrucks(now);
   for (const t of st.map) {
+    if (!imBild(t)) continue;   // Verkehr dieser Kachel zeichnet verkehrRest() am Ende
     const [sx, sy] = iso(t.x, t.y);
     if (t.park && !t.btype) {
       /* Der fruehere dunkle Ellipsenfleck unter jedem Baum ist weg: einer je
@@ -5045,6 +5095,7 @@ function draw() {
   drawClouds(now);
   drawAtmosphere();
   rennStreckeZeichnen();
+  leistungMessen(pnow);
 }
 requestAnimationFrame(draw);
 

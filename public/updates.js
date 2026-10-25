@@ -6,6 +6,20 @@
 window.UPDATES = [
   {
     id: "2026-10-25c", datum: "2026-10-25",
+    titel: { de: "Flüssigeres Spiel: Glas-Effekt, automatische Grafik, Bildraten-Anzeige", en: "Smoother game: glass effect, automatic graphics, frame-rate display" },
+    punkte: [
+      { art: "besser", de: "Neue Grafik-Einstellung „Glas-Effekt“: die Unschärfe hinter Leisten und Fenstern lässt sich abschalten. Sie muss bei jedem Kartenbild neu berechnet werden und ist auf Retina-Bildschirmen und schwächeren Rechnern einer der größten Bremsklötze. Bei Qualität Mittel und Niedrig ist sie jetzt aus.",
+        en: "New graphics setting “Glass effect”: the blur behind bars and windows can be switched off. It has to be recalculated for every map frame and is one of the biggest slowdowns on Retina screens and weaker computers. It is now off at medium and low quality." },
+      { art: "neu", de: "„Automatisch anpassen“ (an): Ruckelt das Spiel länger unter etwa 40 Bilder pro Sekunde, schaltet es die Grafik stufenweise herunter — erst Glas, dann Auflösung, dann Wolken und Hintergrund — und sagt Bescheid.",
+        en: "“Adjust automatically” (on): if the game stays below about 40 frames per second, graphics are lowered step by step — first glass, then resolution, then clouds and background — with a notice." },
+      { art: "neu", de: "„Bildrate anzeigen“: kleine Anzeige unten links mit Bildern pro Sekunde und Hängern.",
+        en: "“Show frame rate”: a small display bottom left with frames per second and hitches." },
+      { art: "besser", de: "Die Karte zeichnet nur noch, was im Bild ist. Hineingezoomt halbiert das die Zeichenzeit.",
+        en: "The map only draws what is on screen. When zoomed in this halves the drawing time." },
+    ]
+  },
+  {
+    id: "2026-10-25c", datum: "2026-10-25",
     titel: { de: "Rüstungsaufträge: Ausschreibungen von Polizei, Stadtwache und Co.", en: "Arms contracts: tenders from the police, city guard and more" },
     punkte: [
       { art: "neu", de: "Polizei, Stadtwache, Schützenverein und Grenzschutz schreiben regelmäßig Lieferungen aus. Rüstungsfirmen bieten 60 s lang verdeckt in Prozent des Listenpreises (80–140 %), das günstigste Gebot bekommt den Zuschlag. Zu finden im Firma-Fenster.",
