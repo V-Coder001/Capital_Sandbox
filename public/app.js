@@ -2540,6 +2540,75 @@ const EN = {
   "Ändern unter Einstellungen → Grafik.": "Change under Settings → Graphics.",
   "Nachfrage in den Läden": "Demand in shops", "wächst mit der Einwohnerzahl": "grows with the population", "Einw.": "res.",
   "der Verkäufer gibt sie vom Erlös ans Finanzamt ab": "the seller pays it from sale proceeds to the tax office",
+  /* Website-Generator und Software-Cockpit */
+  "Website-Generator": "Website generator",
+  "Website für": "Website for",
+  "Honorar": "Fee",
+  "Mehr Abschnitte (bis 4), ein Slogan und ein Text „Über uns“ heben die Qualität — und damit die Reichweite deines Kunden.": "More sections (up to 4), a slogan and an “About us” text raise the quality — and with it your client's reach.",
+  "Vorlage": "Template",
+  "Klar": "Clean",
+  "Elegant": "Elegant",
+  "Bunt": "Colourful",
+  "Farbe": "Colour",
+  "Titel": "Title",
+  "Slogan": "Slogan",
+  "z. B. Frisch vom Hof in die Stadt": "e.g. Fresh from the farm to the city",
+  "Abschnitte": "Sections",
+  "nach oben": "move up",
+  "nach unten": "move down",
+  "entfernen": "remove",
+  "Noch kein Abschnitt — füg unten einen hinzu.": "No section yet — add one below.",
+  "Über uns": "About us",
+  "Wer seid ihr, was macht euch besonders?": "Who are you, what makes you special?",
+  "Website ausliefern": "Deliver website",
+  "Änderungen veröffentlichen": "Publish changes",
+  "Website ausgeliefert": "Website delivered",
+  "Betriebe": "Facilities",
+  "Direktkauf": "Direct purchase",
+  "Bewertungen": "Reviews",
+  "Aktie": "Share",
+  "Galerie": "Gallery",
+  "Waren mit Ø-Kurs und Link zum Shop": "Goods with average price and shop link",
+  "Alle Gebäude der Firma": "All of the company's buildings",
+  "Hofladen, Großhandel … (ab Branchenportal)": "Farm shop, wholesale … (from industry portal)",
+  "Stimmen von Kunden": "What customers say",
+  "Eigener Text über die Firma": "Your own text about the company",
+  "Kurs und Verlauf der Aktie": "Share price and chart",
+  "Große Bilder der Gebäude": "Large pictures of the buildings",
+  "Unsere Aktie": "Our share",
+  "An der Stadtbank": "At the city bank",
+  "Hier steht der Text über die Firma.": "The text about the company goes here.",
+  "Erscheint, sobald die Firma das Modul „Branchenportal“ hat.": "Appears once the company has the “Industry portal” module.",
+  "gestaltet diese Website gerade": "is designing this website right now",
+  "Diese Website wird gerade gestaltet": "This website is being designed right now",
+  "Übersicht": "Overview",
+  "Kunden gesamt": "Total customers",
+  "keine Entwicklung": "no development",
+  "keins": "none",
+  "Strom": "power",
+  "Website-Aufträge": "Website orders",
+  "noch kein Website-Baukasten": "no website builder yet",
+  "Gestalten": "Design",
+  "Website überarbeiten": "Revise website",
+  "Läuft die Frist ab, geht die Standard-Vorlage online und du bekommst nur das halbe Honorar.": "If the deadline passes, the standard template goes online and you only get half the fee.",
+  "Gerade kein offener Auftrag. Neue Bestellungen erscheinen hier — mit Frist und Honorar.": "No open order right now. New orders appear here — with deadline and fee.",
+  "Mit einem Website-Baukasten (auf deiner Statusseite) bestellen Firmen bei dir Websites, die du selbst gestaltest.": "With a website builder (on your status page), companies order websites from you that you design yourself.",
+  "noch nicht": "not yet",
+  "anlegen →": "create →",
+  "später": "later",
+  "Was jetzt?": "What now?",
+  "Meine Statusseite": "My status page",
+  "Leg dein Shop-System an — damit fängt alles an.": "Create your shop system — that's where it all starts.",
+  "Bau ein Rechenzentrum: Ohne Plätze kann niemand dein System, deine App oder Websites nutzen.": "Build a data center: without slots nobody can use your system, your app or websites.",
+  "Fällt er aus, gehen alle Kunden offline.": "If it runs out, all customers go offline.",
+  "Firma wartet auf ihre Website.": "company is waiting for its website.",
+  "Firmen warten auf ihre Website.": "companies are waiting for their website.",
+  "Dein Shop-System ist voll — mehr Plätze gibt es mit einem Rechenzentrums-Ausbau.": "Your shop system is full — upgrade a data center for more slots.",
+  "Gerade läuft keine Entwicklung — deine EP sammeln sich nur an.": "No development running — your DP are just piling up.",
+  "Leg einen Website-Baukasten an: Firmen bestellen Websites, du gestaltest sie und kassierst das Honorar.": "Create a website builder: companies order websites, you design them and collect the fee.",
+  "wird gestaltet": "being designed",
+  "Die Website ist gerade offline — dem Rechenzentrum des Anbieters fehlt Strom oder Platz.": "The website is offline right now — the provider's data center lacks power or space.",
+  "Die Software-Firma gestaltet deine Startseite individuell — Vorlage, Farben, Abschnitte. Die Einrichtung bekommt sie erst bei Lieferung.": "The software company designs your homepage individually — template, colours, sections. It only receives the setup fee on delivery."
 };
 const t = de => SPRACHE === "en" ? (EN[de] ?? de) : de;
 /* Gleiche Funktion unter anderem Namen — für Stellen, an denen eine Kachel-
@@ -6836,7 +6905,8 @@ function rzZeichnen() {
         ? `<div class="sfEigen">${t("Deine Website läuft hier")}: ${t(wcfg.MODULE[meineSeite.modul].name)}${meineSeite.online ? "" : ` · ${t("wird eingerichtet")}`} · +${Math.round((meineSeite.bonus || 0) * 100)} % ${t("Reichweite")}</div>
            <button type="button" class="hfKarte" data-rzkuendigen>${t("Website kündigen")}</button>`
         : `<button type="button" class="sfKaufen" data-rzbestellen ${ver < (gew?.ab || 9) || (!laeuft && web.kunden >= web.plaetze) ? "disabled" : ""}>${t(gew.name)} ${laeuft ? t("wechseln") : t("bestellen")} · ${fmt(Math.round(web.preis * gew.faktor))}/min${laeuft ? "" : ` + ${fmt(wcfg.EINRICHTUNG)} ${t("Einrichtung")}`}</button>
-           ${!laeuft && web.kunden >= web.plaetze ? `<small>${t("Ausgebucht — dem Anbieter fehlen Plätze im Rechenzentrum.")}</small>` : ""}`;
+           ${!laeuft && web.kunden >= web.plaetze ? `<small>${t("Ausgebucht — dem Anbieter fehlen Plätze im Rechenzentrum.")}</small>` : ""}
+           ${!laeuft ? `<small>${t("Die Software-Firma gestaltet deine Startseite individuell — Vorlage, Farben, Abschnitte. Die Einrichtung bekommt sie erst bei Lieferung.")}</small>` : ""}`;
     }
     const entw = meins ? (web ? (web.entwicklung
         ? `<div class="sfEigen">v${web.entwicklung.version} ${t("in Arbeit")}: ${web.entwicklung.ep} / ${web.entwicklung.ziel} EP</div>`
@@ -6848,7 +6918,10 @@ function rzZeichnen() {
     const kunden = (web?.liste || []).map(k => {
       const hat = (state.touristik?.firmen || []).some(f => f.id === k.id && f.zimmer > 0);
       return `<div class="rzKunde"><i class="${k.online ? "an" : "aus"}"></i><span><b>${escapeHtml(rohText(k.name))}</b><small class="mono">${shopSlug(k.name)}.cs · ${t(wcfg.MODULE[k.modul]?.name || "")}</small></span>
-        ${hat ? `<button type="button" class="hfKarte" data-hotelauf="${k.id}">${t("Ansehen")}</button>` : `<span class="rzOn ${k.online ? "an" : "aus"}">${k.online ? t("online") : t("wird eingerichtet")}</span>`}</div>`;
+        ${meins && k.auftrag === "offen" ? `<button type="button" class="sfKaufen" data-genauf="${k.id}">🛠 ${t("Gestalten")} · ${Math.floor(k.rest / 60)}:${String(k.rest % 60).padStart(2, "0")}</button>`
+          : k.auftrag === "offen" ? `<span class="rzOn aus">${t("wird gestaltet")}</span>`
+          : meins ? `<button type="button" class="hfKarte" data-genauf="${k.id}" title="${t("Website überarbeiten")}">✎ ${Math.round((k.qualitaet || 0) * 100)} %</button>`
+          : hat ? `<button type="button" class="hfKarte" data-hotelauf="${k.id}">${t("Ansehen")}</button>` : `<span class="rzOn ${k.online ? "an" : "aus"}">${k.online ? t("online") : t("wird eingerichtet")}</span>`}</div>`;
     }).join("");
     html = `<div class="rzZwei">
       <section class="rzBox"><b>${t("Website-Baukasten")}${web ? ` · ${escapeHtml(rohText(web.name))} v${ver}` : ""}</b>
@@ -6911,6 +6984,8 @@ document.getElementById("rzFenster").addEventListener("click", e => {
   if (e.target.closest("[data-rzwebneu]")) return em("webEinstellen", { name: document.getElementById("rzWebName")?.value, preis: state.websiteCfg?.PREIS_START || 25 }, t("Website-Baukasten angelegt"));
   const ha = e.target.closest("[data-hotelauf]");
   if (ha) { rzSchliessen(); return hotelOeffnen(ha.dataset.hotelauf); }
+  const ga = e.target.closest("[data-genauf]");
+  if (ga) { rzSchliessen(); return genOeffnen(ga.dataset.genauf); }
 });
 /* Großer Verlauf für bank.cs: Fläche, gestrichelte Startlinie, Achse rechts */
 function bankChart(h, fmtW) {
@@ -6930,6 +7005,135 @@ function bankChart(h, fmtW) {
     <text x="0" y="${H + 20}" font-size="13" fill="#4b5563">${t("vor")} ${minuten} min</text><text x="${W}" y="${H + 20}" font-size="13" fill="#4b5563" text-anchor="end">${t("jetzt")}</text>
   </svg></div>`;
 }
+/* ---- Firmen-Website nach Design (Website-Generator) ----
+ * Rendert die Website einer Firma so, wie ihre Software-Firma sie gestaltet
+ * hat: Vorlage (klar/elegant/bunt), Farbe, Titel, Slogan und die Abschnitte in
+ * gewählter Reihenfolge. Das Stadtnetz zeigt sie, der Generator nutzt sie als
+ * Live-Vorschau (vorschau = true: Knöpfe ohne Wirkung). */
+const FW_ABSCHNITT = { produkte: "Produkte", betriebe: "Betriebe", angebot: "Direktkauf", bewertungen: "Bewertungen", ueber: "Über uns", aktie: "Aktie", galerie: "Galerie" };
+const FW_BESCHREIBUNG = { produkte: "Waren mit Ø-Kurs und Link zum Shop", betriebe: "Alle Gebäude der Firma", angebot: "Hofladen, Großhandel … (ab Branchenportal)",
+  bewertungen: "Stimmen von Kunden", ueber: "Eigener Text über die Firma", aktie: "Kurs und Verlauf der Aktie", galerie: "Große Bilder der Gebäude" };
+const FW_STIMMEN = {
+  agrar: ["Das Obst schmeckt wie früher.", "Bester Honig der Stadt!", "Pünktlich geliefert, frisch wie versprochen."],
+  rohstoff: ["Ziegel in Top-Qualität, schnell da.", "Unser Wohnblock steht dank euch.", "Fairer Preis für Beton."],
+  versorger: ["Nie wieder Stromausfall.", "Wasser immer verfügbar — danke!", "Zuverlässig wie ein Uhrwerk."],
+  tech: ["Die Elektronik hat unseren Ausbau gerettet.", "Schnell, sauber, günstig.", "Bester Chip-Lieferant weit und breit."],
+  touristik: ["Traumhafter Blick aufs Meer.", "Das Frühstück war ein Gedicht.", "Wir kommen nächstes Jahr wieder!"],
+  software: ["Das Shop-System läuft wie geschmiert.", "Support antwortet sofort.", "Endlich eine App, die man versteht."],
+  ruestung: ["Zuverlässig und termingerecht geliefert.", "Die Stadtwache ist zufrieden.", "Präzise Arbeit."],
+};
+const FW_NAMEN = ["Lena B.", "Familie Okafor", "Jonas K.", "Mira S.", "Herr Brandt", "Aylin T.", "Kenji M.", "Oma Hilde"];
+function firmenSeiteHtml(state, me, myId, pid, design, vorschau = false) {
+  const p = state.players[pid], w = state.rechenzentren?.websites?.[pid], B = BTYPES(), ind = p?.industry, meins = pid === myId;
+  if (!p) return "";
+  const d = design || w?.design || { vorlage: "klar", farbe: p.color, titel: p.name, slogan: "", abschnitte: ["produkte", "betriebe"], ueber: "" };
+  const geb = {};
+  for (const x of state.map) if (x.owner === pid && x.btype) geb[x.btype] = (geb[x.btype] || 0) + 1;
+  const waren = [...new Set(Object.keys(geb).map(b => B[b]?.proc?.out || B[b]?.out).filter(Boolean))];
+  const shop = state.map.find(x => x.owner === pid && B[x.btype]?.online && x.system);
+  const knopf = (attr, text, cls = "fwKnopf") => vorschau ? `<span class="${cls}">${text}</span>` : `<button type="button" class="${cls}" ${attr}>${text}</button>`;
+  const titel = escapeHtml(rohText(d.titel || p.name)), slogan = d.slogan ? escapeHtml(rohText(d.slogan)) : "";
+  const hero = `<section class="fwHero"><div class="fwHeroMarke">${logoHtml(pid, "fwLogo", d.farbe)}<div><h1>${titel}</h1>${slogan ? `<p>${slogan}</p>` : ""}</div></div>
+    <div class="fwHeroLeiste"><span>${t(BRANCHE_NAME[ind] || "")}</span>${w ? `<span>${w.besucher} ${t("Besucher/min")}</span>` : ""}${shop ? knopf(`data-shopauf="${shop.x},${shop.y}"`, `🛒 ${t("Zum Online-Shop")}`, "fwKnopf hell") : ""}</div></section>`;
+  const abschnitt = typ => {
+    if (typ === "produkte") return `<section class="fwAbschnitt"><h2>${t("Produkte")}</h2><div class="fwProdukte">${waren.map(g => `<div class="fwProdukt"><span>${WAREN_ICON[g] || "📦"}</span><b>${gname(g)}</b><small>Ø ${fp(state.avg?.[g] || 0)}</small></div>`).join("") || `<small>${t("Noch keine eigene Ware.")}</small>`}</div></section>`;
+    if (typ === "betriebe") return `<section class="fwAbschnitt"><h2>${t("Unsere Betriebe")}</h2><div class="fwBetriebe">${Object.entries(geb).map(([b, n]) => `<div class="fwBetrieb">${spriteUrl(b, 0, 0) ? `<img src="${spriteUrl(b, 0, 0)}" alt="">` : ""}<span><b>${n}×</b> ${bname(b)}</span></div>`).join("") || `<small>${t("Noch nichts gebaut.")}</small>`}</div></section>`;
+    if (typ === "galerie") return `<section class="fwAbschnitt"><h2>${t("Galerie")}</h2><div class="fwGalerie">${Object.keys(geb).slice(0, 6).map(b => `<figure>${spriteUrl(b, 0, 0) ? `<img src="${spriteUrl(b, 0, 0)}" alt="">` : ""}<figcaption>${bname(b)}</figcaption></figure>`).join("") || `<small>${t("Noch nichts gebaut.")}</small>`}</div></section>`;
+    if (typ === "ueber") return `<section class="fwAbschnitt fwUeber"><h2>${t("Über uns")}</h2><p>${d.ueber ? escapeHtml(rohText(d.ueber)) : `<i>${t("Hier steht der Text über die Firma.")}</i>`}</p></section>`;
+    if (typ === "bewertungen") { const st = FW_STIMMEN[ind] || FW_STIMMEN.agrar, n0 = rohText(p.name).length;
+      return `<section class="fwAbschnitt"><h2>${t("Bewertungen")}</h2><div class="fwStimmen">${st.map((x, i) => `<blockquote><span>${"★".repeat(i === 2 ? 4 : 5)}${i === 2 ? "☆" : ""}</span><p>„${t(x)}“</p><cite>${FW_NAMEN[(n0 + i * 3) % FW_NAMEN.length]}</cite></blockquote>`).join("")}</div></section>`; }
+    if (typ === "aktie") { const h = firmHist[pid] || [], dd = h.length > 1 && h[0] ? (h[h.length - 1] / h[0] - 1) * 100 : 0;
+      return `<section class="fwAbschnitt"><h2>${t("Unsere Aktie")}</h2><div class="fwAktie"><b class="mono">${fk(p.kurs || 0)}</b><em class="${dd >= 0 ? "auf" : "ab"}">${dd >= 0 ? "+" : "−"}${Math.abs(dd).toFixed(1).replace(".", ",")} %</em>${h.length > 1 ? sparklineVon(h, 120, 32) : ""}${knopf(`data-netzaktie="${pid}"`, t("An der Stadtbank"))}</div></section>`; }
+    if (typ === "angebot") {
+      const name = state.rechenzentren?.portale?.[ind]?.name || "Branchenportal";
+      if (!(w?.stufe >= 2)) return vorschau || meins ? `<section class="fwAbschnitt"><h2>${t(name)}</h2><small class="fwHinweis">${t("Erscheint, sobald die Firma das Modul „Branchenportal“ hat.")}</small></section>` : "";
+      const angebot = (w.angebot || []).map(a => { const n = Math.max(1, Math.min(NETZ.menge[a.g] || 10, a.menge || 1));
+        return `<article class="fwAngebot"><span class="fwAngebotIcon">${WAREN_ICON[a.g] || "📦"}</span><b>${gname(a.g)}</b><span class="mono">${fp(a.preis)}</span><small>${a.menge} ${t("sofort verfügbar")}</small>
+          ${meins || vorschau ? `<span class="fwEigen">${t(meins ? "Dein Angebot" : "Kaufen")}</span>` : `<div class="sfMenge"><button type="button" data-netzm="${a.g}" data-d="-10" aria-label="${t("weniger")}">−</button><input type="number" min="1" max="${a.menge || 1}" value="${n}" data-netzn="${a.g}" aria-label="${t("Menge")}"><button type="button" data-netzm="${a.g}" data-d="10" aria-label="${t("mehr")}">+</button></div>
+          <button type="button" class="fwKnopf" data-netzkauf="${a.g}" ${a.menge < 1 || me.cash < a.preis ? "disabled" : ""}>${t("Kaufen")} · ${fmt(n * a.preis)}</button>`}</article>`; }).join("");
+      let extra = "";
+      if (ind === "rohstoff") extra = `<div class="fwListe"><b>${t("Wohnbau-Aufträge der Stadt")}</b>${(state.stadt?.auftraege || []).map(a => `<span>${escapeHtml(a.name)} · ${Object.entries(a.needs).map(([g, n]) => `${n.have}/${n.req} ${gname(g)}`).join(" · ")}</span>`).join("") || `<small>${t("Gerade kein offener Auftrag.")}</small>`}</div>`;
+      if (ind === "ruestung") extra = `<div class="fwListe"><b>${t("Ausschreibungen")}</b>${(state.stadt?.ruest?.auftraege || []).map(a => `<span>${a.name} · ${Object.entries(a.needs).map(([g, n]) => `${n.have}/${n.req} ${gname(g)}`).join(" · ")}</span>`).join("") || `<small>${t("Nächste Ausschreibung kommt bald.")}</small>`}</div>`;
+      return `<section class="fwAbschnitt"><h2>${t(name)}</h2>${angebot ? `<div class="fwAngebote">${angebot}</div>` : ""}${extra}</section>`;
+    }
+    return "";
+  };
+  return `<div class="fw fw-${d.vorlage || "klar"}" style="--fw:${d.farbe || p.color || "#0f766e"}">${hero}${(d.abschnitte || []).map(abschnitt).join("")}</div>`;
+}
+/* ---- Website-Generator (Software-Firmen) ----
+ * Bestellt eine Firma eine Website, gestaltet die Software-Firma sie hier:
+ * Vorlage, Farbe, Titel, Slogan, Abschnitte (hinzufügen, verschieben,
+ * entfernen) und ein Text „Über uns“. Rechts läuft die Vorschau mit
+ * firmenSeiteHtml. Die Qualität (wie beim Server) bestimmt die Wirkung. */
+const GEN = { offen: false, kunde: null, e: null };
+const genQualitaet = d => Math.min(1, 0.7 + 0.05 * Math.min(4, d.abschnitte.length) + (d.slogan ? 0.05 : 0) + (d.abschnitte.includes("ueber") && (d.ueber || "").length >= 40 ? 0.05 : 0));
+function genOeffnen(kundeId) {
+  const st = store.get().state, k = st.players[kundeId], w = st.rechenzentren?.websites?.[kundeId];
+  if (!k) return;
+  const d = w?.design;
+  GEN.offen = true; GEN.kunde = kundeId;
+  GEN.e = d ? { ...d, titel: rohText(d.titel || k.name), slogan: rohText(d.slogan || ""), ueber: rohText(d.ueber || ""), abschnitte: [...(d.abschnitte || [])] }
+    : { vorlage: "klar", farbe: (st.rechenzentren?.design?.FARBEN || [])[0] || "#0f766e", titel: rohText(k.name), slogan: "", ueber: "", abschnitte: ["produkte", "betriebe"] };
+  const el = document.getElementById("genFenster");
+  el.hidden = false;
+  el.innerHTML = `<div class="genRahmen" role="dialog" aria-label="${t("Website-Generator")}">
+    <aside class="genEditor"></aside>
+    <div class="genVorschau"><div class="sfLeiste"><span class="sfPunkte"><i></i><i></i><i></i></span><span class="sfUrl">🔒 ${shopSlug(k.name)}.cs</span><button type="button" class="sfZu" data-genzu aria-label="${t("Schließen")}">✕</button></div><div class="genSeite"></div></div>
+  </div>`;
+  sfSchriftenLaden();
+  genEditor(); genVorschau();
+}
+function genSchliessen() { GEN.offen = false; const el = document.getElementById("genFenster"); el.hidden = true; el.innerHTML = ""; }
+function genEditor() {
+  const st = store.get().state, k = st.players[GEN.kunde], w = st.rechenzentren?.websites?.[GEN.kunde], D = st.rechenzentren?.design, e = GEN.e;
+  if (!k || !D) return genSchliessen();
+  const q = genQualitaet(e), auftrag = w?.auftrag?.status === "offen" ? w.auftrag : null;
+  const frei = D.ABSCHNITTE.filter(a => !e.abschnitte.includes(a));
+  document.querySelector("#genFenster .genEditor").innerHTML = `
+    <div class="genKopf"><b>${t("Website für")} ${escapeHtml(rohText(k.name))}</b><small>${t(BRANCHE_NAME[k.industry] || "")} · ${t(st.websiteCfg?.MODULE[w?.modul]?.name || "")}${auftrag ? ` · ${t("Honorar")} ${fmt(auftrag.honorar)} · ${t("noch")} <span class="genFrist">${Math.floor(auftrag.rest / 60)}:${String(auftrag.rest % 60).padStart(2, "0")}</span>` : ""}</small></div>
+    <div class="genQualitaet"><span>${t("Qualität")}</span><div class="genBalken"><i style="width:${Math.round(q * 100)}%"></i></div><b class="mono">${Math.round(q * 100)} %</b></div>
+    <small class="genTipp">${t("Mehr Abschnitte (bis 4), ein Slogan und ein Text „Über uns“ heben die Qualität — und damit die Reichweite deines Kunden.")}</small>
+    <div class="genGruppe"><span>${t("Vorlage")}</span><div class="genVorlagen">${D.VORLAGEN.map(v => `<button type="button" class="${e.vorlage === v ? "on" : ""}" data-genvorlage="${v}">${t({ klar: "Klar", elegant: "Elegant", bunt: "Bunt" }[v])}</button>`).join("")}</div></div>
+    <div class="genGruppe"><span>${t("Farbe")}</span><div class="genFarben">${D.FARBEN.map(f => `<button type="button" class="${e.farbe === f ? "on" : ""}" style="background:${f}" data-genfarbe="${f}" aria-label="${f}"></button>`).join("")}</div></div>
+    <label class="genFeld"><span>${t("Titel")}</span><input id="genTitel" maxlength="30" value="${escapeHtml(e.titel)}"></label>
+    <label class="genFeld"><span>${t("Slogan")}</span><input id="genSlogan" maxlength="60" placeholder="${t("z. B. Frisch vom Hof in die Stadt")}" value="${escapeHtml(e.slogan)}"></label>
+    <div class="genGruppe"><span>${t("Abschnitte")} (${e.abschnitte.length}/${D.MAX_ABSCHNITTE})</span>
+      <ol class="genAbschnitte">${e.abschnitte.map((a, i) => `<li><b>${t(FW_ABSCHNITT[a])}</b><span class="genPfeile"><button type="button" data-genhoch="${i}" ${i ? "" : "disabled"} aria-label="${t("nach oben")}">↑</button><button type="button" data-genrunter="${i}" ${i < e.abschnitte.length - 1 ? "" : "disabled"} aria-label="${t("nach unten")}">↓</button><button type="button" data-genweg="${i}" aria-label="${t("entfernen")}">✕</button></span></li>`).join("") || `<small>${t("Noch kein Abschnitt — füg unten einen hinzu.")}</small>`}</ol>
+      ${frei.length && e.abschnitte.length < D.MAX_ABSCHNITTE ? `<div class="genNeu">${frei.map(a => `<button type="button" data-genneu="${a}" title="${t(FW_BESCHREIBUNG[a])}">+ ${t(FW_ABSCHNITT[a])}</button>`).join("")}</div>` : ""}</div>
+    ${e.abschnitte.includes("ueber") ? `<label class="genFeld"><span>${t("Über uns")} <small>(${e.ueber.length}/220)</small></span><textarea id="genUeber" maxlength="220" rows="3" placeholder="${t("Wer seid ihr, was macht euch besonders?")}">${escapeHtml(e.ueber)}</textarea></label>` : ""}
+    <button type="button" class="sfKaufen genSenden" data-gensenden ${e.abschnitte.length ? "" : "disabled"}>${auftrag ? `${t("Website ausliefern")} · +${fmt(auftrag.honorar)}` : t("Änderungen veröffentlichen")}</button>`;
+}
+function genVorschau() {
+  const { state, me, myId } = store.get();
+  const el = document.querySelector("#genFenster .genSeite"); if (!el) return;
+  el.innerHTML = firmenSeiteHtml(state, me, myId, GEN.kunde, { ...GEN.e, titel: GEN.e.titel, slogan: GEN.e.slogan, ueber: GEN.e.ueber }, true);
+}
+document.getElementById("genFenster").addEventListener("input", e => {
+  if (!GEN.offen) return;
+  if (e.target.id === "genTitel") GEN.e.titel = e.target.value;
+  if (e.target.id === "genSlogan") GEN.e.slogan = e.target.value;
+  if (e.target.id === "genUeber") { GEN.e.ueber = e.target.value; const z = e.target.closest("label")?.querySelector("small"); if (z) z.textContent = `(${e.target.value.length}/220)`; }
+  const q = genQualitaet(GEN.e), b = document.querySelector("#genFenster .genQualitaet");
+  if (b) { b.querySelector("i").style.width = Math.round(q * 100) + "%"; b.querySelector("b").textContent = Math.round(q * 100) + " %"; }
+  genVorschau();
+});
+document.getElementById("genFenster").addEventListener("click", e => {
+  if (e.target.closest("[data-genzu]") || e.target.id === "genFenster") return genSchliessen();
+  const E = GEN.e; let neu = true;
+  const v = e.target.closest("[data-genvorlage]"), f = e.target.closest("[data-genfarbe]"), h = e.target.closest("[data-genhoch]"), r = e.target.closest("[data-genrunter]"), w = e.target.closest("[data-genweg]"), n = e.target.closest("[data-genneu]");
+  if (v) E.vorlage = v.dataset.genvorlage;
+  else if (f) E.farbe = f.dataset.genfarbe;
+  else if (h) { const i = +h.dataset.genhoch; [E.abschnitte[i - 1], E.abschnitte[i]] = [E.abschnitte[i], E.abschnitte[i - 1]]; }
+  else if (r) { const i = +r.dataset.genrunter; [E.abschnitte[i + 1], E.abschnitte[i]] = [E.abschnitte[i], E.abschnitte[i + 1]]; }
+  else if (w) E.abschnitte.splice(+w.dataset.genweg, 1);
+  else if (n) E.abschnitte.push(n.dataset.genneu);
+  else neu = false;
+  if (neu) { SFX.spiel("klick"); genEditor(); genVorschau(); return; }
+  if (e.target.closest("[data-gensenden]")) socket.emit("websiteGestalten", { kundeId: GEN.kunde, design: E }, res => {
+    if (res?.error) return toast(res.error, true);
+    toast(`${t("Website ausgeliefert")} · ${t("Qualität")} ${Math.round(res.qualitaet * 100)} %`); SFX.spiel("kasse"); genSchliessen(); render(store.get());
+  });
+});
 /* ---- Stadtkurier (ersetzt die Nachrichtenzentrale im Sandkasten) ----
  * Die Artikel stellt der Client aus dem zusammen, was der Spielstand ohnehin
  * kennt: Marktberichte (Wirtschaft), Aktienkäufe und Ausschüttungen (Börse),
@@ -7054,6 +7258,7 @@ function netzZeichnen() {
   const W = state.rechenzentren?.websites || {}, cfg = state.websiteCfg;
   fenster.querySelector("[data-netzzurueck]").style.visibility = NETZ.seite ? "visible" : "hidden";
   const kopfEl = fenster.querySelector(".sfKopf");
+  kopfEl.style.display = "";
   kopfEl.classList.toggle("netzHero", !NETZ.seite);
   kopfEl.classList.toggle("netzZeitung", NETZ.seite === "kurier");
   /* Eilmeldung oben im Stadtnetz: Großauftrag oder offene Ausschreibung */
@@ -7379,6 +7584,8 @@ function netzZeichnen() {
   const anbieter = w && (w.anbieter === "stadtportal" ? null : (state.website || []).find(x => x.id === w.anbieter));
   fenster.querySelector(".sfBrowser").style.setProperty("--sys", p.color || "#0f766e");
   netzSetze(".sfUrl", `🔒 ${shopSlug(p.name)}.cs`, "url" + pid);
+  kopfEl.style.display = w?.stufe ? "none" : "";   // mit Website zeigt der Hero der Seite Name und Logo
+  if (w?.design?.vorlage === "bunt") sfSchriftenLaden();
   netzSetze(".sfKopf", `<div class="sfMarke">${logoHtml(pid, "sfLogo", p.color)}<div><b>${escapeHtml(rohText(p.name))}</b><small>${t(BRANCHE_NAME[ind] || "")}${w ? ` · ${t(cfg?.MODULE[w.modul]?.name || "")}` : ""}</small></div></div>
     <span class="rzBadges">${w ? `<span class="sfBadge">${w.besucher} ${t("Besucher/min")}</span><span class="sfBadge">+${Math.round((w.bonus || 0) * 100)} % ${t("Reichweite")}</span>` : `<span class="sfBadge">${t("keine Website")}</span>`}</span>`, "kopf" + pid + (logoBild(pid) || "").length);
   const banner = fenster.querySelector(".sfBanner");
@@ -7387,48 +7594,23 @@ function netzZeichnen() {
   fenster.querySelector(".sfHinweis").hidden = !meins;
   netzSetze(".sfHinweis", t("Deine Website: So sehen Kunden und Mitspieler deine Firma im Stadtnetz."), "hinweis");
   if (!w?.stufe) {
-    netzSetze(".netzInhalt", `<div class="sfLeer">${meins ? t("Du hast noch keine Website. Software-Firmen bauen sie dir — oder das Stadtportal die Grundseite.") : `${escapeHtml(rohText(p.name))} ${t("hat noch keine Website.")}`}</div>
-      ${meins ? `<div class="netzMitte"><button type="button" class="sfKaufen" data-netzanbieter>${t("Anbieter vergleichen")}</button></div>` : ""}`, "leer" + pid);
+    netzSetze(".netzInhalt", `<div class="sfLeer">${w ? `⚠ ${t("Die Website ist gerade offline — dem Rechenzentrum des Anbieters fehlt Strom oder Platz.")}` : meins ? t("Du hast noch keine Website. Software-Firmen bauen sie dir — oder das Stadtportal die Grundseite.") : `${escapeHtml(rohText(p.name))} ${t("hat noch keine Website.")}`}</div>
+      ${meins && !w ? `<div class="netzMitte"><button type="button" class="sfKaufen" data-netzanbieter>${t("Anbieter vergleichen")}</button></div>` : ""}`, "leer" + pid + !!w);
     netzSetze(".sfFuss", "", "fuss" + pid);
     return;
   }
-  /* Betriebe und Produkte */
-  const geb = {};
-  for (const x of state.map) if (x.owner === pid && x.btype) geb[x.btype] = (geb[x.btype] || 0) + 1;
-  const waren = [...new Set(Object.keys(geb).map(b => B[b]?.proc?.out || B[b]?.out).filter(Boolean))];
-  const shop = state.map.find(x => x.owner === pid && B[x.btype]?.online && x.system);
-  const betriebe = Object.entries(geb).map(([b, n]) => `<div class="netzBetrieb">${spriteUrl(b, 0, 0) ? `<img src="${spriteUrl(b, 0, 0)}" alt="">` : ""}<span><b>${n}× ${bname(b)}</b></span></div>`).join("");
-  const produkte = waren.map(g => `<div class="netzProdukt"><span>${WAREN_ICON[g] || "📦"}</span><b>${gname(g)}</b><small class="mono">Ø ${fp(state.avg?.[g] || 0)}</small></div>`).join("");
-  let portal = "";
-  if (w.stufe >= 2) {
-    const angebot = (w.angebot || []).map(a => {
-      const n = Math.max(1, Math.min(NETZ.menge[a.g] || 10, a.menge || 1));
-      return `<article class="sfProdukt"><div class="sfBild"><span>${WAREN_ICON[a.g] || "📦"}</span></div><h5>${gname(a.g)}</h5>
-        <div class="sfPreis"><b>${fp(a.preis)}</b><span>${t("je Stück")} · Ø ${fp(state.avg?.[a.g] || 0)}</span></div>
-        <div class="sfInfo">${a.menge} ${t("sofort verfügbar")}</div>
-        ${meins ? `<div class="sfEigen">${t("Dein Angebot")}</div>` : `<div class="sfKauf"><div class="sfMenge"><button type="button" data-netzm="${a.g}" data-d="-10" aria-label="${t("weniger")}">−</button><input type="number" min="1" max="${a.menge || 1}" value="${n}" data-netzn="${a.g}" aria-label="${t("Menge")}"><button type="button" data-netzm="${a.g}" data-d="10" aria-label="${t("mehr")}">+</button></div>
-          <button type="button" class="sfKaufen" data-netzkauf="${a.g}" ${a.menge < 1 || me.cash < a.preis ? "disabled" : ""}>${t("Kaufen")} · ${fmt(n * a.preis)}</button></div>`}</article>`;
-    }).join("");
-    let extra = "";
-    if (ind === "rohstoff") extra = `<section class="rzBox"><div class="rzBoxKopf"><b>${t("Wohnbau-Aufträge der Stadt")}</b><small>${t("mit Portal +5 % auf jede Lieferung")}</small></div>
-      ${(state.stadt.auftraege || []).map(a => `<div class="rzZeile netzAuftrag"><span>${escapeHtml(a.name)}</span><span>${Object.entries(a.needs).map(([g, n]) => `${n.have}/${n.req} ${gname(g)}`).join(" · ")}</span><b class="mono">${Math.max(0, a.frist - state.tick)} s</b></div>`).join("") || `<small>${t("Gerade kein offener Auftrag.")}</small>`}
-      ${meins ? `<button type="button" class="sfKaufen" data-netzpanel="finanzamt">${t("Liefern im Stadt-Panel")}</button>` : ""}</section>`;
-    if (ind === "ruestung") extra = `<section class="rzBox"><div class="rzBoxKopf"><b>${t("Ausschreibungen")}</b><small>${t("mit Portal: Gebote zählen 5 % günstiger, Lieferungen +15 %, Ausschreibungen häufiger")}</small></div>
-      ${(state.stadt.ruest?.auftraege || []).map(a => `<div class="rzZeile netzAuftrag"><span>${a.name}</span><span>${Object.entries(a.needs).map(([g, n]) => `${n.have}/${n.req} ${gname(g)}`).join(" · ")}</span><b class="mono">${a.phase === "bieten" ? `${t("Gebote")}: ${Math.max(0, a.bisBieten - state.tick)} s` : escapeHtml(rohText(a.gewinnerName || ""))}</b></div>`).join("") || `<small>${t("Nächste Ausschreibung kommt bald.")}</small>`}
-      ${meins ? `<button type="button" class="sfKaufen" data-netzpanel="firma">${t("Bieten und liefern im Firma-Panel")}</button>` : ""}</section>`;
-    portal = `<h4 class="hfTitel">${t(w.portal || "Branchenportal")}</h4>${angebot ? `<div class="sfGrid">${angebot}</div>` : ""}${extra}`;
-  } else if (meins) portal = `<section class="rzBox"><b>${t(state.rechenzentren?.portale?.[ind]?.name || "Branchenportal")}</b><small>${t("Mit dem Modul „Branchenportal“ wird deine Website zum Laden: Mitspieler kaufen direkt bei dir, Rohstoff und Rüstung bekommen Auftrags-Boni.")}</small>
+  /* Inhalt nach dem Design der Software-Firma (firmenSeiteHtml) */
+  const auftrag = w.auftrag?.status === "offen" ? w.auftrag : null;
+  let eigenes = "";
+  if (meins && w.stufe < 2) eigenes += `<section class="rzBox"><b>${t(state.rechenzentren?.portale?.[ind]?.name || "Branchenportal")}</b><small>${t("Mit dem Modul „Branchenportal“ wird deine Website zum Laden: Mitspieler kaufen direkt bei dir, Rohstoff und Rüstung bekommen Auftrags-Boni.")}</small>
       ${anbieter ? `<button type="button" class="sfKaufen" data-rzauf="${anbieter.ownerId}" data-rzreiterziel="websites">${t("Modul wechseln bei")} ${escapeHtml(rohText(anbieter.name))}</button>` : `<button type="button" class="sfKaufen" data-netzanbieter>${t("Anbieter vergleichen")}</button>`}</section>`;
   const A = state.rechenzentren?.aktion;
-  const aktion = meins ? (w.stufe >= 3 ? `<section class="rzBox"><div class="rzBoxKopf"><b>⚡ ${t(A?.namen?.[ind] || "Aktion")}</b><small>${Math.round((A?.boost || .25) * 100)} % ${t("mehr Reichweite für")} ${(A?.dauer || 300) / 60} min · ${fmt(A?.kosten || 600)}</small></div>
+  if (meins) eigenes += w.stufe >= 3 ? `<section class="rzBox"><div class="rzBoxKopf"><b>⚡ ${t(A?.namen?.[ind] || "Aktion")}</b><small>${Math.round((A?.boost || .25) * 100)} % ${t("mehr Reichweite für")} ${(A?.dauer || 300) / 60} min · ${fmt(A?.kosten || 600)}</small></div>
       ${w.aktion ? `<div class="sfEigen">${t("Läuft")} · ${t("noch")} ${Math.ceil(w.aktion.rest / 60)} min</div>` : w.aktionPause ? `<div class="sfEigen">${t("Nächste Aktion in")} ${Math.ceil(w.aktionPause / 60)} min</div>`
         : `<button type="button" class="sfKaufen" data-netzaktion ${me.cash < (A?.kosten || 600) ? "disabled" : ""}>${t("Aktion starten")} · ${fmt(A?.kosten || 600)}</button>`}</section>`
-    : `<section class="rzBox"><b>⚡ ${t("Aktionen")}</b><small>${t("Ab Website-Modul „Aktionen“ (v3): 5 Minuten +25 % Reichweite.")}</small></section>`) : "";
-  netzSetze(".netzInhalt", `<div class="rzZwei">
-      <section class="rzBox"><b>${t("Unsere Betriebe")}</b><div class="netzBetriebe">${betriebe || `<small>${t("Noch nichts gebaut.")}</small>`}</div></section>
-      <section class="rzBox"><b>${t("Produkte")}</b><div class="netzProdukte">${produkte || `<small>${t("Noch keine eigene Ware.")}</small>`}</div>
-        <div class="netzKnoepfe">${shop ? `<button type="button" class="hfKarte" data-shopauf="${shop.x},${shop.y}">🛒 ${t("Zum Online-Shop")}</button>` : ""}<button type="button" class="hfKarte" data-netzpanel="bank">📈 ${t("Aktie an der Stadtbank")}</button></div></section>
-    </div>${portal}${aktion}`, "inhalt" + pid);
+    : `<section class="rzBox"><b>⚡ ${t("Aktionen")}</b><small>${t("Ab Website-Modul „Aktionen“ (v3): 5 Minuten +25 % Reichweite.")}</small></section>`;
+  netzSetze(".netzInhalt", `${auftrag ? `<div class="fwBau">🛠 ${anbieter ? `${escapeHtml(rohText(anbieter.anbieter))} ${t("gestaltet diese Website gerade")}` : t("Diese Website wird gerade gestaltet")} · ${t("noch")} ${Math.floor(auftrag.rest / 60)}:${String(auftrag.rest % 60).padStart(2, "0")}</div>` : ""}
+    ${firmenSeiteHtml(state, me, myId, pid, null)}${eigenes ? `<div class="fwEigenes">${eigenes}</div>` : ""}`, "inhalt" + pid);
   netzSetze(".sfFuss", anbieter ? `${logoHtml(anbieter.ownerId, "sfFussLogo", anbieter.farbe)}<span>${t("Website von")} <b>${escapeHtml(rohText(anbieter.name))}</b> · ${escapeHtml(rohText(anbieter.anbieter))}</span>` : `<span class="sfFussLogo">🏛</span><span>${t("Grundseite vom Stadtportal")}</span>`, "fuss" + pid);
 }
 document.getElementById("netzFenster").addEventListener("input", e => {
@@ -7466,6 +7648,8 @@ document.getElementById("netzFenster").addEventListener("click", e => {
   if (bak) { NETZ.bankTab = "aktien"; NETZ.bankAktie = bak.dataset.bankaktie || null; NETZ.sig = {}; return netzZeichnen(); }
   const bh = e.target.closest("[data-bankhandeln]");
   if (bh) { firmenAuf.add(bh.dataset.bankhandeln); BANK_REITER = "markt"; bankReiterZeigen(); NETZ.bankTab = "handeln"; NETZ.sig = {}; return netzZeichnen(); }
+  const na = e.target.closest("[data-netzaktie]");
+  if (na) { NETZ.bankTab = "aktien"; NETZ.bankAktie = na.dataset.netzaktie; return netzOeffnen("bank"); }
   const bw = e.target.closest("[data-boersewahl]");
   if (bw) { NETZ.ware = bw.dataset.boersewahl; NETZ.bwPreis = null; return netzZeichnen(); }
   const bs = e.target.closest("[data-bwseite]");
@@ -7510,9 +7694,63 @@ document.getElementById("netzFenster").addEventListener("click", e => {
   if (e.target.closest("[data-netzaktion]")) return socket.emit("webAktionStarten", {}, r => { if (r?.error) return toast(r.error, true); toast(`⚡ ${t(r.name)} ${t("läuft")}`); render(store.get()); });
 });
 /* ---- Software-Panel: Reiter, Überblick, Bürger-App und Jobbörse (Etappe 5) ---- */
-let SW_REITER = (() => { try { return localStorage.getItem("cs_swReiter") || "markt"; } catch { return "markt"; } })();
+let SW_REITER = (() => { try { return localStorage.getItem("cs_swReiter") || "uebersicht"; } catch { return "uebersicht"; } })();
 const appEntwurf = {}, jobEntwurf = {};
 /* Einnahmen aller eigenen Produkte auf einen Blick, über den Reitern */
+/* Cockpit für Software-Firmen: alles Wichtige auf einen Blick — wie im
+ * Touristik-Panel. Kennzahlen, offene Website-Aufträge mit Frist, je Produkt
+ * Stand und der nächste Schritt, dazu Hinweise, was gerade fehlt. */
+function swCockpit(state, me, myId, eigene) {
+  const eig = arr => (arr || []).find(x => x.ownerId === myId);
+  const app = eig(state.buergerApp), job = eig(state.jobboerse), ba = eig(state.boerseApp), mp = eig(state.paint), web = eig(state.website);
+  const B = BTYPES(), racks = state.map.filter(x => x.owner === myId && B[x.btype]?.rz);
+  const am = racks.filter(x => !(x.bauBis > state.tick));
+  const stromJeMin = am.reduce((a, x) => a + B[x.btype].rz.in.strom * rzLvl(x.level) * 60, 0);
+  const stromMin = stromJeMin ? Math.floor((me.inv?.strom || 0) / stromJeMin) : Infinity;
+  const summe = [eigene, app, job, ba, web].reduce((a, x) => a + (x?.einnahmen10 || 0), 0);
+  const kunden = (eigene?.kunden || 0) + (app?.nutzer || 0) + (job?.abonnenten || 0) + (web?.kunden || 0);
+  const dev = [eigene, app, job, ba, web, mp].find(x => x?.entwicklung);
+  const auftraege = (web?.liste || []).filter(k => k.auftrag === "offen").sort((a, b) => a.rest - b.rest);
+  const zeit = s => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+  /* Was jetzt? — die dringendsten Punkte zuerst */
+  const tipps = [];
+  if (!eigene) tipps.push(["🚀", t("Leg dein Shop-System an — damit fängt alles an."), "system", t("Mein System")]);
+  if (state.stadt && !racks.length) tipps.push(["🏢", t("Bau ein Rechenzentrum: Ohne Plätze kann niemand dein System, deine App oder Websites nutzen."), null, null]);
+  if (racks.length && stromMin < 6) tipps.push(["⚡", `${t("Strom wird knapp")}: ${t("noch")} ${stromMin} min. ${t("Fällt er aus, gehen alle Kunden offline.")}`, "rz", t("Statusseite")]);
+  if (auftraege.length) tipps.push(["🛠", `${auftraege.length} ${t(auftraege.length === 1 ? "Firma wartet auf ihre Website." : "Firmen warten auf ihre Website.")}`, null, null]);
+  if (eigene?.version >= 1 && eigene.plaetze && eigene.kunden >= eigene.plaetze) tipps.push(["📦", t("Dein Shop-System ist voll — mehr Plätze gibt es mit einem Rechenzentrums-Ausbau."), "rz", t("Statusseite")]);
+  if (eigene && !dev) tipps.push(["🧪", t("Gerade läuft keine Entwicklung — deine EP sammeln sich nur an."), "entwicklung", t("Entwicklung")]);
+  if (eigene?.version >= 1 && !web) tipps.push(["🌐", t("Leg einen Website-Baukasten an: Firmen bestellen Websites, du gestaltest sie und kassierst das Honorar."), "rz", t("Statusseite")]);
+  /* Produkt-Kacheln: Stand, Kennzahl, nächster Schritt */
+  const produkt = (icon, name, x, zahl, ziel, ab = true) => `<button type="button" class="swcProdukt${x?.version >= 1 ? " an" : ""}" ${ziel === "rz" ? `data-rzauf="${myId}"` : `data-swreiter="${ziel}"`} ${ab ? "" : "disabled"}>
+    <span class="swcIcon">${icon}</span><b>${t(name)}</b><em>${x ? (x.version >= 1 ? "v" + x.version : t("in Arbeit")) : t("noch nicht")}</em><small>${x ? zahl : t(ab ? "anlegen →" : "später")}</small></button>`;
+  return `<div class="swCockpit">
+    <div class="swcZahlen">
+      <div><span>${t("Einnahmen 10 min")}</span><b style="color:var(--up)">${fmt(summe)}</b></div>
+      <div><span>${t("Kunden gesamt")}</span><b>${kunden}</b></div>
+      <div><span>${t("EP-Vorrat")}</span><b>${me.swEp || 0}</b><small>${dev ? `${escapeHtml(rohText(dev.name))} v${dev.entwicklung.version}: ${Math.round(dev.entwicklung.ep / dev.entwicklung.ziel * 100)} %` : t("keine Entwicklung")}</small></div>
+      ${state.stadt ? `<div><span>${t("Rechenzentren")}</span><b>${am.length}${racks.length > am.length ? ` <small>+${racks.length - am.length} ${t("im Bau")}</small>` : ""}</b><small class="${stromMin < 6 ? "swcWarn" : ""}">${racks.length ? (stromMin === Infinity ? "—" : `⚡ ${stromMin} min ${t("Strom")}`) : t("keins")}</small></div>` : ""}
+    </div>
+    ${state.stadt ? `<section class="swcBox"><div class="swcBoxKopf"><b>🛠 ${t("Website-Aufträge")}</b><small>${web ? `${escapeHtml(rohText(web.name))} v${web.version} · ${web.kunden}/${web.plaetze} ${t("Kunden")}` : t("noch kein Website-Baukasten")}</small></div>
+      ${auftraege.length ? `<div class="swcAuftraege">${auftraege.map(k => { const p = state.players[k.id];
+        return `<div class="swcAuftrag"><span class="swName"><i style="background:${p?.color || "#64748b"}"></i><span><b>${escapeHtml(rohText(k.name))}</b><small>${t(BRANCHE_NAME[p?.industry] || "")} · ${t(state.websiteCfg?.MODULE[k.modul]?.name || "")}</small></span></span>
+          <span class="mono swcFrist${k.rest < 60 ? " knapp" : ""}">⏱ ${zeit(k.rest)}</span><b class="mono">+${fmt(k.honorar)}</b><button type="button" class="buyb" data-genauf="${k.id}">${t("Gestalten")}</button></div>`; }).join("")}</div>
+        <small class="swcFuss">${t("Läuft die Frist ab, geht die Standard-Vorlage online und du bekommst nur das halbe Honorar.")}</small>`
+      : `<small class="swcLeer">${web ? t("Gerade kein offener Auftrag. Neue Bestellungen erscheinen hier — mit Frist und Honorar.") : t("Mit einem Website-Baukasten (auf deiner Statusseite) bestellen Firmen bei dir Websites, die du selbst gestaltest.")}</small>`}
+      ${(web?.liste || []).some(k => k.auftrag !== "offen") ? `<div class="swcKunden">${web.liste.filter(k => k.auftrag !== "offen").map(k => `<button type="button" data-genauf="${k.id}" title="${t("Website überarbeiten")}">${escapeHtml(rohText(k.name))} <span class="mono">${Math.round((k.qualitaet || 0) * 100)} %</span></button>`).join("")}</div>` : ""}
+    </section>` : ""}
+    <div class="swcProdukte">
+      ${produkt("🛒", "Shop-System", eigene, `${eigene?.kunden || 0}/${eigene?.plaetze ?? 0} ${t("Kunden")} · ${fmt(eigene?.einnahmen10 || 0)}`, eigene ? "system" : "system")}
+      ${state.stadt ? produkt("🌐", "Website-Baukasten", web, `${web?.kunden || 0} ${t("Kunden")} · ${fmt(web?.einnahmen10 || 0)}`, "rz", !!eigene) : ""}
+      ${state.stadt ? produkt("📱", "Bürger-App", app, `${app?.nutzer || 0} ${t("Nutzer")} · ${fmt(app?.einnahmen10 || 0)}`, "produkte", !!eigene) : ""}
+      ${state.stadt ? produkt("👷", "Jobbörse", job, `${job?.abonnenten || 0} ${t("Abos")} · ${fmt(job?.einnahmen10 || 0)}`, "produkte", !!eigene) : ""}
+      ${produkt("📈", "Börsen-App", ba, fmt(ba?.einnahmen10 || 0), "produkte", !!eigene)}
+      ${produkt("🎨", "Malprogramm", mp, `${mp?.verkauft ?? 0} ${t("verkauft")}`, "produkte", !!eigene)}
+    </div>
+    ${tipps.length ? `<section class="swcBox"><div class="swcBoxKopf"><b>💡 ${t("Was jetzt?")}</b></div><div class="swcTipps">${tipps.slice(0, 4).map(([i, txt, ziel, knopf]) => `<div class="swcTipp"><span>${i}</span><p>${txt}</p>${ziel ? `<button type="button" class="swcKnopf" ${ziel === "rz" ? `data-rzauf="${myId}"` : `data-swreiter="${ziel}"`}>${knopf} →</button>` : ""}</div>`).join("")}</div></section>` : ""}
+    ${state.stadt ? `<div class="swcLinks"><button type="button" class="swcKnopf" data-rzauf="${myId}">🌐 ${t("Meine Statusseite")}</button><button type="button" class="swcKnopf" data-swnetz>🔎 ${t("Stadtnetz")}</button></div>` : ""}
+  </div>`;
+}
 function swUeberblick(state, me, myId, eigene) {
   const eig = arr => (arr || []).find(x => x.ownerId === myId);
   const app = eig(state.buergerApp), job = eig(state.jobboerse), ba = eig(state.boerseApp), mp = eig(state.paint);
@@ -7723,12 +7961,13 @@ function softwareRendern(state, me, myId) {
    * Glanz-Animation der Vorschau jede Sekunde von vorn. */
   /* Reiter: Markt für alle; für Software-Firmen zusätzlich die eigenen Werkzeuge.
    * Vorher stand alles untereinander auf einer sehr langen Seite. */
-  const reiter = [["markt", "Markt"], ...(bau ? [["system", "Mein System"], ["entwicklung", "Entwicklung"], ["design", "Design"], ["produkte", "Produkte"]] : [])];
-  if (!reiter.some(([k]) => k === SW_REITER)) SW_REITER = "markt";
+  const reiter = [...(bau ? [["uebersicht", "Übersicht"]] : []), ["markt", "Markt"], ...(bau ? [["system", "Mein System"], ["entwicklung", "Entwicklung"], ["design", "Design"], ["produkte", "Produkte"]] : [])];
+  if (!reiter.some(([k]) => k === SW_REITER)) SW_REITER = reiter[0][0];
   const leiste = reiter.length > 1 ? `<div class="swReiterLeiste" role="tablist">${reiter.map(([k, n]) =>
     `<button type="button" role="tab" class="${k === SW_REITER ? "on" : ""}" data-swreiter="${k}" aria-selected="${k === SW_REITER}">${t(n)}${k === "entwicklung" && eigene?.entwicklung ? " ●" : ""}</button>`).join("")}</div>` : "";
-  const ueberblick = bau ? swUeberblick(state, me, myId, eigene) : "";
-  const inhalt = SW_REITER === "markt"
+  const ueberblick = bau && SW_REITER !== "uebersicht" ? swUeberblick(state, me, myId, eigene) : "";
+  const inhalt = SW_REITER === "uebersicht" ? swCockpit(state, me, myId, eigene)
+    : SW_REITER === "markt"
     ? tabelle + rzMarktHtml(state, myId) + stadtSoftwareMarktHtml(state, me, myId) + werbenetzHtml(state, myId, binSoftware)
     : bau[SW_REITER];
   const body = document.getElementById("softwarebody"), html = ueberblick + leiste + `<div class="swReiterInhalt">${inhalt}</div>`;
@@ -7773,6 +8012,9 @@ document.getElementById("p-software").addEventListener("click", e => {
   if (ja) return act("jobAbo", { id: ja.dataset.jobabo || null });
   const ra = e.target.closest("[data-rzauf]");
   if (ra) return rzOeffnen(ra.dataset.rzauf);
+  const ga = e.target.closest("[data-genauf]");
+  if (ga) return genOeffnen(ga.dataset.genauf);
+  if (e.target.closest("[data-swnetz]")) return netzOeffnen(null);
   for (const [knopf, ev, felder, entwurf, ok] of [
     ["#appSpeichern", "appEinstellen", () => ({ name: document.getElementById("appName")?.value, preis: +document.getElementById("appPreis")?.value }), appEntwurf, "Bürger-App gespeichert"],
     ["#jobSpeichern", "jobEinstellen", () => ({ name: document.getElementById("jobName")?.value, gebuehr: +document.getElementById("jobGeb")?.value }), jobEntwurf, "Jobbörse gespeichert"]])
@@ -11560,6 +11802,8 @@ function render({ state, me, myId, chat, room }) {
     const db = document.getElementById("dockBoerse"); if (db && state.stadt) db.style.display = "none"; }   // Börse steht im Stadtnetz
   if (state.stadt) KURIER.merken(state);
   if (NETZ.offen && !(document.activeElement && document.getElementById("netzFenster").contains(document.activeElement) && document.activeElement.tagName === "INPUT" && document.activeElement.type === "number")) netzZeichnen();
+  if (GEN.offen) { const a = state?.rechenzentren?.websites?.[GEN.kunde]?.auftrag, f = document.querySelector("#genFenster .genFrist");
+    if (f && a?.status === "offen") f.textContent = `${Math.floor(a.rest / 60)}:${String(a.rest % 60).padStart(2, "0")}`; }
 
   /* Stadtbank: Kurstafel, Angebote und Depot — der gesamte Anteilshandel */
   if (document.getElementById("p-bank").classList.contains("open") &&

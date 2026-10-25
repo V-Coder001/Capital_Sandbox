@@ -4263,6 +4263,52 @@ const WEBSITE = {
   STADTPORTAL: { preis: 45, einrichtung: 600 },   // Notlösung: nur die Grundseite
 };
 const WEB_STADTPORTAL = "stadtportal";
+/* Website-Generator: Die Software-Firma gestaltet jede bestellte Website selbst
+ * (Vorlage, Farbe, Titel, Slogan, Abschnitte). Die Gestaltung bestimmt die
+ * Qualität und damit, wie stark die Reichweite wirkt. Das Einrichtungshonorar
+ * liegt bis zur Auslieferung beim Auftrag; liefert ein Mensch nicht binnen
+ * FRIST, geht die Standard-Vorlage live und nur die Hälfte wird bezahlt. */
+const WEB_DESIGN = {
+  ABSCHNITTE: ["produkte", "betriebe", "angebot", "bewertungen", "ueber", "aktie", "galerie"],
+  VORLAGEN: ["klar", "elegant", "bunt"],
+  FARBEN: ["#0f766e", "#1d4ed8", "#7c3aed", "#be123c", "#b45309", "#15803d", "#0e7490", "#334155"],
+  MAX_ABSCHNITTE: 6, FRIST: 300, BOT_DAUER: 45, OHNE: 0.6,
+};
+/* Qualität 0,6 (ungestaltet) bis 1,0: Grundwert 0,7, je Abschnitt 0,05 (bis 4),
+ * Slogan 0,05, „Über uns“ mit Inhalt 0,05 */
+function webQualitaet(d) {
+  if (!d) return WEB_DESIGN.OHNE;
+  const n = Math.min(4, (d.abschnitte || []).length);
+  return Math.min(1, 0.7 + 0.05 * n + (d.slogan ? 0.05 : 0) + ((d.abschnitte || []).includes("ueber") && (d.ueber || "").length >= 40 ? 0.05 : 0));
+}
+function webDesignPruefen(d, kunde) {
+  d = d || {};
+  const ab = [...new Set((Array.isArray(d.abschnitte) ? d.abschnitte : []).filter(a => WEB_DESIGN.ABSCHNITTE.includes(a)))].slice(0, WEB_DESIGN.MAX_ABSCHNITTE);
+  return {
+    vorlage: WEB_DESIGN.VORLAGEN.includes(d.vorlage) ? d.vorlage : "klar",
+    farbe: WEB_DESIGN.FARBEN.includes(d.farbe) ? d.farbe : (kunde?.color || WEB_DESIGN.FARBEN[0]),
+    titel: sicherText(String(d.titel || kunde?.name || "").trim().slice(0, 30)) || kunde?.name || "",
+    slogan: sicherText(String(d.slogan || "").trim().slice(0, 60)),
+    ueber: sicherText(String(d.ueber || "").trim().slice(0, 220)),
+    abschnitte: ab,
+  };
+}
+/* Standard-Vorlage (Frist abgelaufen) und Bot-Entwürfe */
+const webStandard = kunde => webDesignPruefen({ vorlage: "klar", titel: kunde.name, abschnitte: ["produkte", "betriebe"] }, kunde);
+function webBotDesign(kunde) {
+  const ind = kunde.industry, SLOGAN = { agrar: "Frisch vom Hof in die Stadt", rohstoff: "Wir bauen die Stadt", versorger: "Strom und Wasser, rund um die Uhr", tech: "Elektronik für jeden Ausbau", touristik: "Urlaub direkt am Meer", ruestung: "Sicherheit für die Stadt", software: "Software, die läuft" };
+  return webDesignPruefen({ vorlage: WEB_DESIGN.VORLAGEN[Math.floor(Math.random() * 3)], farbe: kunde.color, titel: kunde.name, slogan: SLOGAN[ind] || "",
+    abschnitte: ["produkte", "angebot", "bewertungen", "betriebe"], ueber: "" }, kunde);
+}
+function webAuftragAbschliessen(kunde, design, anteil = 1) {
+  const ws = kunde.website, a = ws?.auftrag; if (!a || a.status !== "offen") return;
+  ws.design = design; a.status = "fertig";
+  const w = G.website?.[ws.anbieter], o = w && G.players[w.ownerId];
+  const lohn = Math.round((a.honorar || 0) * anteil), zurueck = (a.honorar || 0) - lohn;
+  if (o && lohn > 0) { o.cash += lohn; addRevenue(o, lohn); (w.eb ??= [0])[0] += lohn; w.gesamt = (w.gesamt || 0) + lohn; logTx(o, "Software", `Website für ${kunde.name} ausgeliefert`, lohn); }
+  if (zurueck > 0) { kunde.cash += zurueck; logTx(kunde, "Software", "Website: halbes Honorar zurück (Standard-Vorlage)", zurueck); }
+  if (!kunde.bot) emitTo(kunde.id, "notice", { text: `Deine Website ist online${anteil < 1 ? " — mit der Standard-Vorlage" : ""} (Qualität ${Math.round(webQualitaet(design) * 100)} %).` });
+}
 /* Etappe 8: Branchenportale (Modul v2) mit echter Funktion und Aktionen (v3) */
 const PORTALE = {
   agrar:     { name: "Hofladen",             waren: ["obst", "honig", "saft", "gebaeck"] },
@@ -4300,9 +4346,10 @@ function webBonus(p) {
   if (!w || !stadtAktiv() || G.tick < (w.bis || 0)) return 0;
   const mod = WEBSITE.MODULE[w.modul];
   if (!mod) return 0;
-  if (w.anbieter === WEB_STADTPORTAL) return mod.bonus;
+  const q = webQualitaet(w.design);   // Gestaltung der Software-Firma (Website-Generator)
+  if (w.anbieter === WEB_STADTPORTAL) return mod.bonus * q;
   const anb = G.website?.[w.anbieter];
-  return anb ? (mod.bonus + (webAktionLaeuft(p) ? WEB_AKTION.boost : 0)) * (anb.faktor ?? 1) : 0;
+  return anb ? (mod.bonus + (webAktionLaeuft(p) ? WEB_AKTION.boost : 0)) * (anb.faktor ?? 1) * q : 0;
 }
 const webPreis = (w, modul) => w === WEB_STADTPORTAL ? WEBSITE.STADTPORTAL.preis : Math.round(w.preis * WEBSITE.MODULE[modul].faktor * 100) / 100;
 /* Alle 10 s: Plätze und Auslastung der Website-Anbieter */
@@ -4312,6 +4359,14 @@ function websiteTick() {
   for (const w of Object.values(G.website || {})) {
     const n = webKunden(w).length, plaetze = webPlaetze(w);
     w.faktor = n ? Math.min(1, plaetze / n) : (plaetze > 0 ? 1 : 0); w.kunden = n; w.plaetze = plaetze;
+  }
+  /* Website-Aufträge: Bot-Firmen gestalten nach BOT_DAUER, Menschen haben FRIST */
+  for (const k of Object.values(G.players)) {
+    const a = k.website?.auftrag; if (a?.status !== "offen") continue;
+    const w = G.website?.[k.website.anbieter], o = w && G.players[w.ownerId];
+    if (!o) continue;
+    if (o.bot && G.tick - a.seit >= WEB_DESIGN.BOT_DAUER) webAuftragAbschliessen(k, webBotDesign(k));
+    else if (!o.bot && G.tick - a.seit >= WEB_DESIGN.FRIST) { webAuftragAbschliessen(k, webStandard(k), 0.5); emitTo(o.id, "notice", { text: `Frist verpasst: Die Website von ${k.name} ging mit der Standard-Vorlage online — nur das halbe Honorar.` }); }
   }
   /* Besucher je Minute (Etappe 8): Reichweite der Website, bei Hotels plus Gäste */
   for (const p of Object.values(G.players)) {
@@ -4359,7 +4414,9 @@ function rzVerfuegbarkeit() {
 const websitePublic = () => stadtAktiv() ? Object.values(G.website || {}).map(w => ({ id: w.id, ownerId: w.ownerId, anbieter: G.players[w.ownerId]?.name ?? "—",
   farbe: G.players[w.ownerId]?.color || "#64748b", name: w.name, version: w.version || 0, preis: w.preis, kunden: w.kunden || 0, plaetze: w.plaetze || 0,
   faktor: Math.round((w.faktor ?? 1) * 100) / 100, einnahmen10: Math.round((w.eb || []).reduce((a, b) => a + b, 0)), gesamt: Math.round(w.gesamt || 0),
-  liste: webKunden(w).map(k => ({ id: k.id, name: k.name, modul: k.website.modul, online: G.tick >= (k.website.bis || 0) })),
+  liste: webKunden(w).map(k => ({ id: k.id, name: k.name, modul: k.website.modul, online: G.tick >= (k.website.bis || 0),
+    auftrag: k.website.auftrag?.status || null, rest: k.website.auftrag?.status === "offen" ? Math.max(0, WEB_DESIGN.FRIST - (G.tick - k.website.auftrag.seit)) : 0,
+    honorar: k.website.auftrag?.honorar || 0, qualitaet: Math.round(webQualitaet(k.website.design) * 100) / 100 })),
   entwicklung: w.entwicklung ? { version: w.entwicklung.version, ep: Math.floor(w.entwicklung.ep), ziel: w.entwicklung.ziel } : null })) : [];
 function rechenzentrenPublic() {
   if (!stadtAktiv()) return null;
@@ -4370,11 +4427,13 @@ function rechenzentrenPublic() {
     const ind = p.industry, portal = PORTALE[ind];
     return [p.id, { anbieter: p.website.anbieter, modul: p.website.modul, online: G.tick >= (p.website.bis || 0), bonus: Math.round(webBonus(p) * 1000) / 1000,
       stufe: webStufe(p), besucher: p.webBesucher || 0, portal: portal?.name || null, seit: p.website.seit ?? 0,
+      design: p.website.design || null, qualitaet: Math.round(webQualitaet(p.website.design) * 100) / 100,
+      auftrag: p.website.auftrag ? { status: p.website.auftrag.status, rest: Math.max(0, WEB_DESIGN.FRIST - (G.tick - p.website.auftrag.seit)), honorar: p.website.auftrag.honorar || 0 } : null,
       angebot: hatPortal(p) && portal ? portal.waren.map(g => ({ g, preis: Math.round(MM[g].price * DIREKT.AUFSCHLAG * 100) / 100, menge: Math.floor((p.inv[g] || 0) * DIREKT.ANTEIL) })) : [],
       aktion: webAktionLaeuft(p) ? { name: WEB_AKTION.namen[ind] || "Aktion", rest: p.webAktion.bis - G.tick } : null,
       aktionPause: p.webAktion && p.webAktion.pause > G.tick ? p.webAktion.pause - G.tick : 0 }];
   }));
-  return { firmen: out, websites: kunden, aktion: { kosten: WEB_AKTION.kosten, dauer: WEB_AKTION.dauer, pause: WEB_AKTION.pause, boost: WEB_AKTION.boost, namen: WEB_AKTION.namen }, portale: PORTALE, direkt: DIREKT };
+  return { firmen: out, websites: kunden, design: WEB_DESIGN, aktion: { kosten: WEB_AKTION.kosten, dauer: WEB_AKTION.dauer, pause: WEB_AKTION.pause, boost: WEB_AKTION.boost, namen: WEB_AKTION.namen }, portale: PORTALE, direkt: DIREKT };
 }
 /* ---------- Touristik: Gäste, Sterne, Stadtfeste (Stadtwachstum, Etappe 6) ----------
  * Bis hierher verkaufte die Touristik nur Übernachtungen über den Markt, und
@@ -9016,8 +9075,11 @@ io.on("connection", socket => {
     if (p.cash < einr) return ack?.({ error: `Die Einrichtung kostet ${einr.toLocaleString("de-DE")} $` });
     p.cash -= einr; p.stats.ausgaben += einr;
     if (portal) G.stadtkasse += einr;
-    else if (einr) { const o = G.players[w.ownerId]; o.cash += einr; addRevenue(o, einr); (w.eb ??= [0])[0] += einr; w.gesamt = (w.gesamt || 0) + einr; logTx(o, "Software", `Website für ${p.name} eingerichtet`, einr); }
-    p.website = { anbieter, modul, bis: G.tick + (gleich ? 0 : WEBSITE.INSTALL), seit: gleich ? (p.website.seit ?? G.tick) : G.tick };
+    const altesDesign = gleich ? p.website.design : null, alterAuftrag = gleich ? p.website.auftrag : null;
+    p.website = { anbieter, modul, bis: G.tick + (gleich ? 0 : WEBSITE.INSTALL), seit: gleich ? (p.website.seit ?? G.tick) : G.tick,
+      design: portal ? webDesignPruefen({ vorlage: "klar", titel: p.name, abschnitte: ["produkte"] }, p) : altesDesign,
+      /* Neuer Anbieter: Auftrag mit Honorar im Treuhandkonto, bis die Website gestaltet ist */
+      auftrag: portal ? null : gleich ? alterAuftrag : { status: "offen", seit: G.tick, honorar: einr } };
     logTx(p, "Software", `Website ${mod.name} bei ${portal ? "Stadtportal" : w.name}`, -einr);
     if (!portal && !p.bot) marktLog("software", `${p.name} lässt die Website von ${w.name} bauen`, { firmaId: p.id });
     if (!portal) emitTo(w.ownerId, "notice", { text: `${p.name} bestellt eine Website (${mod.name}) bei ${w.name}.` });
@@ -9051,6 +9113,18 @@ io.on("connection", socket => {
     logTx(p, "Software", `Website-Aktion: ${name}`, -WEB_AKTION.kosten);
     marktLog("software", `${p.name} startet eine Aktion: ${name}`, { firmaId: p.id });
     ack?.({ ok: true, name }); pushState();
+  }));
+  /* Website-Generator: Die Software-Firma gestaltet die Website eines Kunden */
+  socket.on("websiteGestalten", guard((p, { kundeId, design } = {}, ack) => {
+    const k = G.players[kundeId], ws = k?.website;
+    const w = ws && G.website?.[ws.anbieter];
+    if (!w || w.ownerId !== p.id) return ack?.({ error: "Diese Website baust nicht du" });
+    const d = webDesignPruefen(design, k);
+    if (!d.abschnitte.length) return ack?.({ error: "Mindestens ein Abschnitt" });
+    if (ws.auftrag?.status === "offen") webAuftragAbschliessen(k, d);
+    else { ws.design = d; if (!k.bot) emitTo(k.id, "notice", { text: `${w.name} hat deine Website überarbeitet.` }); }
+    marktLog("software", `${p.name} gestaltet die Website von ${k.name}`, { firmaId: k.id });
+    ack?.({ ok: true, qualitaet: webQualitaet(d) }); pushState();
   }));
   socket.on("websiteKuendigen", guard((p, _d, ack) => { p.website = null; ack?.({ ok: true }); pushState(); }));
   socket.on("rzVerteilung", guard((p, d = {}, ack) => {
