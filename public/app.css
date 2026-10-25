@@ -1606,3 +1606,7 @@ em.auf,.bankZeile em.auf{color:#15803d}em.ab,.bankZeile em.ab{color:#b91c1c}
 .anlVorschau span{display:flex;justify-content:space-between}.anlVorschau b{font-family:var(--mono);color:#111827}
 .anlForm .sfKaufen{background:#7c3aed}
 @media (max-width:860px){.anlLayout{grid-template-columns:1fr}}
+/* Tutorial: Schritt auslassen */
+#tutWait button{border:1px solid var(--line);background:transparent;color:var(--dim);border-radius:6px;padding:2px 7px;font:500 11px var(--font);cursor:pointer;margin-left:4px}
+#tutWait button:hover{color:var(--text);border-color:var(--accent)}
+#tutWait{flex-wrap:wrap}
