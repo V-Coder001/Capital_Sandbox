@@ -5,6 +5,22 @@
  * `art`: "neu" (neue Funktion), "besser" (Verbesserung), "fix" (Fehler behoben). */
 window.UPDATES = [
   {
+    id: "2026-10-25c", datum: "2026-10-25",
+    titel: { de: "Rüstungsaufträge: Ausschreibungen von Polizei, Stadtwache und Co.", en: "Arms contracts: tenders from the police, city guard and more" },
+    punkte: [
+      { art: "neu", de: "Polizei, Stadtwache, Schützenverein und Grenzschutz schreiben regelmäßig Lieferungen aus. Rüstungsfirmen bieten 60 s lang verdeckt in Prozent des Listenpreises (80–140 %), das günstigste Gebot bekommt den Zuschlag. Zu finden im Firma-Fenster.",
+        en: "The police, city guard, shooting club and border guard regularly put deliveries out to tender. Arms companies bid secretly for 60 s as a percentage of the list price (80–140 %); the cheapest bid wins. Found in the company window." },
+      { art: "neu", de: "Der Gewinner liefert innerhalb von 5 Minuten und wird je Lieferung bezahlt. Fehlt am Ende etwas, kostet das 20 % des fehlenden Werts als Vertragsstrafe und 25 Punkte Lieferruf. Mit schlechtem Ruf muss man günstiger bieten, vollständige Lieferungen bringen Ruf zurück.",
+        en: "The winner delivers within 5 minutes and is paid per delivery. Anything missing at the end costs 20 % of its value as a penalty and 25 points of delivery reputation. With a poor reputation you have to bid lower; complete deliveries restore it." },
+      { art: "besser", de: "Touristik: Campingplätze bringen 20 % mehr Übernachtungen, und viel Absatz drückt den Kurs weniger.",
+        en: "Tourism: campgrounds produce 20 % more overnight stays, and high sales push down the price less." },
+      { art: "fix", de: "Bots verkaufen in Geldnot eigene Aktien nur noch bis genau 50 %. Bisher ging ein ganzes 25er-Paket raus, und sie fielen von 51 % auf 26 % Eigenanteil.",
+        en: "Bots short of money now sell their own shares only down to exactly 50 %. Previously a whole package of 25 went, dropping them from 51 % to 26 % ownership." },
+      { art: "fix", de: "Die Touristik hält genug Wasser und Strom für ihre Strandhotels vor und baut über vier Gebäude hinaus. Der Ölförderer baut keine weiteren Pumpen, solange sich unverkauftes Öl stapelt.",
+        en: "Tourism keeps enough water and power for its beach hotels and builds beyond four buildings. The oil producer stops building pumps while unsold oil piles up." },
+    ]
+  },
+  {
     id: "2026-10-25b", datum: "2026-10-25",
     titel: { de: "Balancing: Die Rüstung ist zurück im Geschäft", en: "Balancing: the arms industry is back in business" },
     punkte: [
