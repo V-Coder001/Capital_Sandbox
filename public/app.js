@@ -2032,6 +2032,103 @@ const EN = {
   "30 % der Löhne gehen als Lohnsteuer und Miete an die Stadt, 20 % ins Bürgerdepot.": "30 % of wages go to the city as wage tax and rent, 20 % into the citizens' depot.",
   "höchstens": "at most", "Schulden": "debt", "Bürger-Apps und Jobbörse": "Citizen apps and job board",
   "Bürger-App: bis 85 % der Einwohner zahlen ein Abo je Minute, 200 Nutzer je Rechenzentrums-Stufe des Anbieters. Jobbörse: Vorrang wie +0,3 bis +0,7 Lohnstufen gegen eine Gebühr je Arbeiter, 3 Abos je Rechenzentrums-Stufe.": "Citizen app: up to 85 % of residents pay a subscription per minute, 200 users per data-centre level of the provider. Job board: priority like +0.3 to +0.7 wage levels for a fee per worker, 3 subscriptions per data-centre level.",
+  /* Stadtkurier */
+  "für Verkäufer": "for sellers",
+  "Versorgung": "Utilities",
+  "Rohwaren": "Raw goods",
+  "Verarbeitet": "Processed",
+  "Baumaterial": "Building materials",
+  "Fahrzeuge": "Vehicles",
+  "Motorsport": "Motorsport",
+  "Ø · Trend · Orders": "avg · trend · orders",
+  "Ø-Kurs": "avg price",
+  "Bestes Angebot": "Best offer",
+  "Bestes Gesuch": "Best bid",
+  "verfügbar": "available",
+  "niemand verkauft": "no one is selling",
+  "gesucht": "wanted",
+  "niemand sucht": "no one is buying",
+  "Dein Lager": "Your stock",
+  "Wert": "Value",
+  "Kaufen": "Buy",
+  "Verkaufen": "Sell",
+  "Preis je Stück": "Price per unit",
+  "Kauforder platzieren": "Place buy order",
+  "Verkaufsorder platzieren": "Place sell order",
+  "Liegt ein Angebot zu diesem Preis oder billiger, wird sofort gekauft. Sonst bleibt die Order stehen; das Geld liegt so lange treuhänderisch fest.": "If an offer at this price or cheaper exists, you buy at once. Otherwise the order stays; the money is held in escrow meanwhile.",
+  "Liegt ein Gesuch zu diesem Preis oder teurer, wird sofort verkauft. Sonst bleibt die Order stehen.": "If a bid at this price or higher exists, you sell at once. Otherwise the order stays.",
+  "Angebote": "Offers",
+  "Gesuche": "Bids",
+  "jemand verkauft — du kaufst": "someone sells — you buy",
+  "jemand kauft — du lieferst": "someone buys — you deliver",
+  "Keine Angebote": "No offers",
+  "Keine Gesuche": "No bids",
+  "Kauf": "Buy",
+  "Verkauf": "Sell",
+  "Menge und Preis eingeben": "Enter quantity and price",
+  "Order platziert": "Order placed",
+  "Warenbörse": "Goods exchange",
+  "Orders von Firmen und dem Stadtnetz": "Orders from companies and the city grid",
+  "offene Orders": "open orders",
+  "Börsengebühr": "Exchange fee",
+  "Kurse": "Prices",
+  "Die Warenbörse wird von der Stadt betrieben · Ware und Geld liegen bis zum Handel treuhänderisch fest": "The goods exchange is run by the city · goods and money are held in escrow until traded",
+  "Nachrichten alle zwei Minuten": "news every two minutes",
+  " und ": " and ",
+  "AKTION LÄUFT": "CAMPAIGN ON",
+  "ANZEIGE": "AD",
+  "Alle": "All",
+  "Alle Nachrichten": "All news",
+  "Alles, was die Stadt online anbietet": "Everything the city offers online",
+  "Archiv": "Archive",
+  "Aufträge suchen Baumaterial": "orders need building materials",
+  "Ausgabe": "Issue",
+  "Beliebte Seiten": "Popular sites",
+  "Besuchen": "Visit",
+  "Den Zuschlag hat": "The contract went to",
+  "Die Frist läuft noch": "Time left:",
+  "Die Stadt hat jetzt": "The city now has",
+  "Direkt kaufen, sofort im Lager.": "Buy directly, instantly in stock.",
+  "EILMELDUNG": "BREAKING",
+  "Eilmeldung": "Breaking",
+  "Einwohner, die Zufriedenheit liegt bei": "residents, satisfaction is at",
+  "Erste Ausgabe nach zwei Minuten": "First issue after two minutes",
+  "Firma, Ware oder Branche — z. B. Obst, Strom, Hotel": "Company, goods or industry — e.g. fruit, power, hotel",
+  "Großauftrag aus": "Group order from",
+  "Hotels und Camping — Zimmer direkt buchen.": "Hotels and camping — book rooms directly.",
+  "Im Topf liegen rund": "The pot holds about",
+  "In diesem Ressort gibt es noch nichts Neues.": "Nothing new in this section yet.",
+  "Jede Firma kann einzahlen; abgerechnet wird zum doppelten Ø-Kurs.": "Any company can contribute; paid at twice the average price.",
+  "Kurse in 2 Minuten": "Prices over 2 minutes",
+  "Minuten lang kommen mehr Gäste in die Stadt; alle Hotels profitieren, der Veranstalter am meisten.": "minutes more guests come to the city; all hotels benefit, the organiser most.",
+  "Neu im Stadtnetz": "New in the city network",
+  "Nichts gefunden. Versuch es mit einer Ware wie „Strom“ oder „Obst“.": "Nothing found. Try a good like “power” or “fruit”.",
+  "Noch": "For another",
+  "Noch gibt es nichts zu berichten.": "Nothing to report yet.",
+  "Noch zu früh — die Kurse vergleicht der Kurier nach zwei Minuten.": "Too early — the courier compares prices after two minutes.",
+  "Rüstungsfirmen geben jetzt ein verdecktes Gebot zwischen 80 und 140 % des Listenpreises ab. Mit Ausschreibungsportal zählen Gebote 5 % günstiger.": "Defence companies now place a sealed bid between 80 and 140 % of list price. With a tender portal bids count 5 % cheaper.",
+  "Stadtkurier": "City Courier",
+  "Stadtkurier · erscheint alle zwei Minuten · Anzeigen aus dem Werbenetz": "City Courier · published every two minutes · ads from the ad network",
+  "Treffer": "results",
+  "Wirtschaft": "Economy",
+  "Zu den Ausschreibungen": "To the tenders",
+  "Zum Artikel": "Read article",
+  "Zum Großauftrag": "To the group order",
+  "Zur Buchungsseite": "To the booking page",
+  "Zur Börse": "To the exchange",
+  "Zur Stadt": "To the city",
+  "Zur Stadtbank": "To the city bank",
+  "Zur Website": "To the website",
+  "Zurück zur Übersicht": "Back to overview",
+  "bekommen.": ".",
+  "betrieben von der Stadt": "run by the city",
+  "braucht": "needs",
+  "gerade eben": "just now",
+  "im Topf, noch": "in the pot,",
+  "lädt zum": "invites to the",
+  "schreibt aus": "tenders",
+  "sortiert nach Besuchern": "sorted by visitors",
+  "zu": "at",
   /* Stadtnetz (Etappe 8) */
   "Ab Website-Modul „Aktionen“ (v3): 5 Minuten +25 % Reichweite.": "From website module “Campaigns” (v3): +25 % reach for 5 minutes.",
   "Aktie an der Stadtbank": "Shares at the city bank",
@@ -6049,6 +6146,8 @@ function openPanel(pid, stumm = false) {
     toast("Im Kartell gibt es keine Börse — gehandelt wird über Hehler, Markthalle und Frachtdepot.");
     return;
   }
+  /* Im Sandkasten ist die Warenbörse eine Website im Stadtnetz (boerse.cs) */
+  if (pid === "boerse" && store.get()?.state?.stadt) return netzOeffnen("boerse");
   TUT_GESEHEN.add(pid);
   if (!stumm) SFX.spiel("klick");
   document.querySelectorAll(".panel").forEach(p => p.classList.remove("open"));
@@ -6727,12 +6826,68 @@ document.getElementById("rzFenster").addEventListener("click", e => {
   const ha = e.target.closest("[data-hotelauf]");
   if (ha) { rzSchliessen(); return hotelOeffnen(ha.dataset.hotelauf); }
 });
+/* ---- Stadtkurier (ersetzt die Nachrichtenzentrale im Sandkasten) ----
+ * Die Artikel stellt der Client aus dem zusammen, was der Spielstand ohnehin
+ * kennt: Marktberichte (Wirtschaft), Aktienkäufe und Ausschüttungen (Börse),
+ * das Stadt-Log (Stadt), Software-Neuheiten, Bauten, Feste und Ausschreibungen
+ * (Firmen). Großauftrag und offene Ausschreibung laufen als Eilmeldung. */
+const KURIER = { gelesen: 0, kurse: [],
+  nr: st => Math.max(1, Math.floor((st.news?.[0]?.min || 0) / 2)),
+  /* Kurse: alle zwei Spielminuten einen Schnappschuss merken und damit vergleichen */
+  merken(st) {
+    const l = this.kurse[this.kurse.length - 1];
+    if (!st?.avg || (l && st.tick - l.tick < 120 && st.tick >= l.tick)) return;
+    if (l && st.tick < l.tick) this.kurse = [];
+    this.kurse.push({ tick: st.tick, avg: { ...st.avg } }); if (this.kurse.length > 3) this.kurse.shift();
+  },
+  veraenderung(st) {
+    const alt = this.kurse.length >= 2 ? this.kurse[this.kurse.length - 2] : null;
+    if (!alt) return [];
+    return Object.keys(st.avg || {}).map(g => ({ g, d: alt.avg[g] ? Math.round((st.avg[g] / alt.avg[g] - 1) * 100) : 0 }))
+      .filter(x => x.d).sort((a, b) => Math.abs(b.d) - Math.abs(a.d)).slice(0, 6).sort((a, b) => b.d - a.d);
+  } };
+function kurierArtikel(st) {
+  const out = [], vor = tick => { const m = Math.max(0, Math.round((st.tick - tick) / 60)); return m < 1 ? t("gerade eben") : `${t("vor")} ${m} min`; };
+  const go = st.groupOrder;
+  if (go) { const txt = Object.entries(go.needs).map(([g, n]) => `${n.req}× ${gname(g)}`).join(t(" und "));
+    const topf = Object.values(go.needs).reduce((a, n) => a + n.req * (n.pay || 0), 0);
+    out.push({ id: "grossauftrag-" + go.id, ressort: "Eilmeldung", eil: true, titel: `${t("Großauftrag aus")} ${go.city}: ${txt}`, zusatz: `${fmt(topf)} ${t("im Topf, noch")} ${Math.floor(go.ttl / 60)}:${String(go.ttl % 60).padStart(2, "0")}`,
+      absaetze: [`${go.city} ${t("braucht")} ${txt}. ${t("Jede Firma kann einzahlen; abgerechnet wird zum doppelten Ø-Kurs.")}`, `${t("Im Topf liegen rund")} ${fmt(topf)}. ${t("Die Frist läuft noch")} ${Math.ceil(go.ttl / 60)} min.`],
+      link: ["panel", "lager", "Zum Großauftrag"], tick: st.tick + 1 }); }
+  for (const a of st.stadt?.ruest?.auftraege || []) {
+    const txt = Object.entries(a.needs).map(([g, n]) => `${n.req}× ${gname(g)}`).join(t(" und "));
+    out.push({ id: "ruest-" + a.id, ressort: a.phase === "bieten" ? "Eilmeldung" : "Firmen", eil: a.phase === "bieten", titel: `${a.name} ${t("schreibt aus")}: ${txt}`,
+      zusatz: a.phase === "bieten" ? `${t("Gebote noch")} ${Math.max(0, a.bisBieten - st.tick)} s` : "",
+      absaetze: [a.phase === "bieten" ? `${t("Rüstungsfirmen geben jetzt ein verdecktes Gebot zwischen 80 und 140 % des Listenpreises ab. Mit Ausschreibungsportal zählen Gebote 5 % günstiger.")}` : `${t("Den Zuschlag hat")} ${rohText(a.gewinnerName || "—")} ${t("zu")} ${a.prozent} % ${t("bekommen.")}`],
+      link: ["panel", "firma", "Zu den Ausschreibungen"], tick: st.tick }); }
+  if (st.touristik?.fest) { const f = st.touristik.fest;
+    out.push({ id: "fest", ressort: "Firmen", titel: `${rohText(f.veranstalter)} ${t("lädt zum")} ${t(f.name)}`, absaetze: [`${t("Noch")} ${Math.ceil(f.rest / 60)} ${t("Minuten lang kommen mehr Gäste in die Stadt; alle Hotels profitieren, der Veranstalter am meisten.")}`],
+      link: ["hotel", f.ownerId, "Zur Buchungsseite"], tick: st.tick - 1 }); }
+  for (const b0 of st.news || []) { const b = (SPRACHE === "en" && b0.en) ? { ...b0.en, min: b0.min } : b0;
+    out.push({ id: "markt-" + b.min, ressort: "Wirtschaft", titel: b.schlagzeile, absaetze: b.absaetze, tick: b.min * 60, link: ["panel", "boerse", "Zur Börse"] }); }
+  const boerse = ["kauf", "verkauf", "ausschuettung", "panik"], firma = ["software", "bau", "flaute"];
+  for (const e of st.marktLog || []) {
+    if (!boerse.includes(e.art) && !firma.includes(e.art)) continue;
+    const w = e.firmaId && st.rechenzentren?.websites?.[e.firmaId]?.stufe;
+    out.push({ id: `log-${e.tick}-${e.art}-${(e.text || "").length}`, ressort: boerse.includes(e.art) ? "Börse" : "Firmen", titel: e.text, absaetze: [e.text],
+      link: boerse.includes(e.art) ? ["panel", "bank", "Zur Stadtbank"] : w ? ["firma", e.firmaId, "Zur Website"] : null, tick: e.tick });
+  }
+  for (const e of st.stadt?.log || []) out.push({ id: `stadt-${e.tick}-${(e.text || "").length}`, ressort: "Stadt", titel: e.text, absaetze: [e.text, `${t("Die Stadt hat jetzt")} ${st.stadt.einwohner.toLocaleString("de-DE")} ${t("Einwohner, die Zufriedenheit liegt bei")} ${Math.round((st.stadt.zufr || 1) * 100)} %.`],
+    link: ["panel", "finanzamt", "Zur Stadt"], tick: e.tick });
+  return out.sort((a, b) => b.tick - a.tick).slice(0, 40).map(a => ({ ...a, zeit: a.eil ? t("Eilmeldung") : vor(a.tick), anriss: (a.absaetze.find(x => x && x !== a.titel) || "").slice(0, 160) }));
+}
+/* Kasten mit den drei neuesten Schlagzeilen auf der Startseite */
+function kurierKasten(artikel) {
+  const drei = artikel.filter(a => !a.eil).slice(0, 3);
+  return `<section class="netzKurier"><div class="netzKurierKopf"><span><b>${t("Stadtkurier")}</b><small>${drei[0] ? drei[0].zeit : t("Erste Ausgabe nach zwei Minuten")}</small></span><button type="button" data-kurierauf="">${t("Alle Nachrichten")} →</button></div>
+    ${drei.length ? `<div class="netzKurierSchlag">${drei.map(a => `<button type="button" data-kurierauf="${a.id}"><span class="kurierRessort r-${a.ressort === "Börse" ? "boerse" : a.ressort.toLowerCase()}">${t(a.ressort)}</span><b>${escapeHtml(rohText(a.titel))}</b><small>${a.zeit}</small></button>`).join("")}</div>` : `<div class="netzLeer">${t("Noch gibt es nichts zu berichten.")}</div>`}</section>`;
+}
 /* ---- Stadtnetz und Firmen-Websites (Etappe 8) ----
  * Startseite mit allen Websites der Stadt, sortiert nach Besuchern, und je
  * Firma eine eigene Seite: Grundseite für alle, Branchenportal mit Direktkauf
  * (Hofladen, Großhandel, Baustoff-Portal, Kundenportal) oder Ausschreibungen,
  * Aktionen ab Modul v3. Touristik öffnet die Buchungsseite, Software die Statusseite. */
-const NETZ = { offen: false, seite: null, suche: "", menge: {}, sig: {} };
+const NETZ = { offen: false, seite: null, suche: "", menge: {}, sig: {}, kat: "alle", ressort: "alle", artikel: null };
 function netzOeffnen(pid = null) {
   const st = store.get().state;
   if (pid && st.players?.[pid]?.industry === "touristik") return hotelOeffnen(pid);
@@ -6743,6 +6898,7 @@ function netzOeffnen(pid = null) {
     el.innerHTML = `<div class="sfBrowser hfBrowser netzBrowser" role="dialog" aria-label="${t("Stadtnetz")}">
       <div class="sfLeiste"><button type="button" class="sfZu" data-netzzurueck aria-label="${t("Zurück zum Stadtnetz")}">←</button>
         <span class="sfUrl"></span><button type="button" class="sfZu" data-netzzu aria-label="${t("Schließen")}">✕</button></div>
+      <div class="netzEil" hidden></div>
       <header class="sfKopf"></header>
       <div class="sfBanner" hidden></div>
       <div class="sfHinweis" hidden></div>
@@ -6751,10 +6907,18 @@ function netzOeffnen(pid = null) {
     </div>`;
     SFX.spiel("klick");
   }
-  Object.assign(NETZ, { offen: true, seite: pid, sig: {} });
+  if (pid === "kurier") TUT_GESEHEN.add("kurier");
+  if (pid === "boerse") TUT_GESEHEN.add("boerse");
+  if (pid !== "boerse") boerseHeimholen();
+  Object.assign(NETZ, { offen: true, seite: pid, sig: {}, artikel: pid === "kurier" ? NETZ.artikel : null });
   netzZeichnen();
 }
+/* Warenbörse als Website: Formular und Orderbuch des bisherigen Panels werden
+ * in das Stadtnetz-Fenster gehängt — alle IDs und Klick-Handler bleiben gleich. */
+const BOERSE_BODY = document.querySelector("#p-boerse .pbody");
+function boerseHeimholen() { const p = document.getElementById("p-boerse"); if (BOERSE_BODY.parentElement !== p) p.appendChild(BOERSE_BODY); }
 function netzSchliessen() {
+  boerseHeimholen();
   NETZ.offen = false;
   const el = document.getElementById("netzFenster");
   el.hidden = true; el.innerHTML = "";
@@ -6770,40 +6934,180 @@ function netzZeichnen() {
   const fenster = document.getElementById("netzFenster");
   const W = state.rechenzentren?.websites || {}, cfg = state.websiteCfg;
   fenster.querySelector("[data-netzzurueck]").style.visibility = NETZ.seite ? "visible" : "hidden";
+  const fk = fenster.querySelector(".sfKopf");
+  fk.classList.toggle("netzHero", !NETZ.seite);
+  fk.classList.toggle("netzZeitung", NETZ.seite === "kurier");
+  /* Eilmeldung oben im Stadtnetz: Großauftrag oder offene Ausschreibung */
+  const artikel = kurierArtikel(state);
+  const eil = artikel.find(a => a.eil);
+  const eilEl = fenster.querySelector(".netzEil");
+  eilEl.hidden = !eil;
+  netzSetze(".netzEil", eil ? `<button type="button" data-kurierauf="${eil.id}"><span class="netzEilMarke">${t("EILMELDUNG")}</span><span class="netzEilText">${escapeHtml(rohText(eil.titel))}${eil.zusatz ? ` — ${escapeHtml(rohText(eil.zusatz))}` : ""}</span><span class="netzEilLink">${t("Zum Artikel")} →</span></button>` : "", "eil");
   if (!NETZ.seite) {
     fenster.querySelector(".sfBrowser").style.setProperty("--sys", "#0f766e");
     netzSetze(".sfUrl", "🔒 stadtnetz.cs", "url");
-    netzSetze(".sfKopf", `<div class="sfMarke"><span class="sfLogo" style="background:#0f766e">S</span><div><b>${t("Stadtnetz")}</b><small>${t("Alle Websites der Stadt")} · ${state.stadt.einwohner} ${t("Einwohner online")}</small></div></div>
-      <label class="netzSuche"><span class="sr">${t("Suchen")}</span><input id="netzSuche" type="search" placeholder="${t("Firma oder Ware suchen …")}" value="${escapeHtml(NETZ.suche)}"></label>`, "kopfStart");
+    /* Kopf einmal aufbauen; Suchfeld, Zahlen und Treffer werden einzeln
+     * nachgezogen, sonst verlöre das Suchfeld bei jedem Tick den Fokus. */
+    netzSetze(".sfKopf", `<svg class="netzSkyline" width="520" height="220" viewBox="0 0 520 220" fill="none" stroke="rgba(255,255,255,.12)" stroke-width="2" aria-hidden="true"><rect x="20" y="120" width="60" height="100"></rect><rect x="90" y="70" width="70" height="150"></rect><rect x="170" y="100" width="50" height="120"></rect><rect x="230" y="40" width="80" height="180"></rect><rect x="320" y="90" width="60" height="130"></rect><rect x="390" y="60" width="70" height="160"></rect><path d="M0 219 H520"></path></svg>
+      <div class="netzMarke"><span class="netzMarkeS">S</span><div><b>${t("Stadtnetz")}</b><small>${t("Alles, was die Stadt online anbietet")}</small></div></div>
+      <label class="netzSuchfeld"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#4b5563" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="M20 20l-3.5-3.5"></path></svg>
+        <span class="sr">${t("Suchen")}</span><input id="netzSuche" type="search" placeholder="${t("Firma, Ware oder Branche — z. B. Obst, Strom, Hotel")}"><span class="netzTreffer"></span></label>
+      <div class="netzStats"></div>`, "kopfStart");
+    const inp = document.getElementById("netzSuche");
+    if (inp && inp.value !== NETZ.suche && document.activeElement !== inp) inp.value = NETZ.suche;
+    const S = state.stadt, T = state.touristik;
+    const mitSeite = Object.entries(W).filter(([pid, w]) => state.players[pid] && w.stufe > 0);
+    netzSetze(".netzStats", `<span><b>${S.einwohner.toLocaleString("de-DE")}</b> ${t("Einwohner online")}</span><span><b>${mitSeite.length}</b> ${t("Websites")}</span><span><b>${Math.round((S.zufr || 1) * 100)} %</b> ${t("Zufriedenheit")}</span>${T ? `<span><b>${T.gaeste}</b> ${t("Gäste je Minute")}</span>` : ""}`, "stats");
     fenster.querySelector(".sfBanner").hidden = true;
-    const meineSeite = W[myId];
-    fenster.querySelector(".sfHinweis").hidden = !!meineSeite || state.players?.[myId]?.industry === "software";
+    fenster.querySelector(".sfHinweis").hidden = !!W[myId]?.stufe || state.players?.[myId]?.industry === "software";
     netzSetze(".sfHinweis", `${t("Deine Firma ist im Stadtnetz nicht zu finden — ohne Website sehen dich Kunden nicht.")} <button type="button" class="hfKarte" data-netzanbieter>${t("Anbieter vergleichen")}</button>`, "hinweisStart");
-    /* Läuft gerade: Fest, Ausschreibung, Wohnbau, Aktionen */
-    const chips = [];
-    if (state.touristik?.fest) chips.push(`<button type="button" class="netzChip" data-netzauf="${state.touristik.fest.ownerId}">🎉 ${t(state.touristik.fest.name)} · ${escapeHtml(rohText(state.touristik.fest.veranstalter))}</button>`);
-    for (const a of state.stadt.ruest?.auftraege || []) chips.push(`<span class="netzChip">🛡 ${t("Ausschreibung")} ${a.name} · ${a.phase === "bieten" ? t("Gebote offen") : `${t("Zuschlag")}: ${escapeHtml(rohText(a.gewinnerName || ""))}`}</span>`);
-    if (state.stadt.auftraege?.length) chips.push(`<span class="netzChip">🧱 ${state.stadt.auftraege.length} ${t("Wohnbau-Aufträge suchen Baumaterial")}</span>`);
-    for (const [pid, w] of Object.entries(W)) if (w.aktion && state.players[pid]) chips.push(`<button type="button" class="netzChip" data-netzauf="${pid}">⚡ ${t(w.aktion.name)} · ${escapeHtml(rohText(state.players[pid].name))}</button>`);
+    /* Firmen: Suche und Branchen-Filter */
     const q = NETZ.suche.trim().toLowerCase();
-    const passt = (pid, w) => { if (!q) return true; const p = state.players[pid]; return rohText(p.name).toLowerCase().includes(q) || (BRANCHE_NAME[p.industry] || "").toLowerCase().includes(q) || (w?.angebot || []).some(a => gname(a.g).toLowerCase().includes(q)) || (w?.portal || "").toLowerCase().includes(q); };
-    const firmen = Object.entries(W).filter(([pid, w]) => state.players[pid] && w.stufe > 0 && passt(pid, w)).sort((a, b) => b[1].besucher - a[1].besucher);
-    const karte = ([pid, w]) => { const p = state.players[pid];
-      return `<button type="button" class="netzEintrag" data-netzauf="${pid}">
-        <span class="netzEintragKopf">${logoHtml(pid, "netzLogo", p.color)}<span><b>${escapeHtml(rohText(p.name))}</b><small class="mono">${shopSlug(p.name)}.cs</small></span></span>
-        <span class="netzEintragInfo">${t(BRANCHE_NAME[p.industry] || "")} · ${t(cfg?.MODULE[w.modul]?.name || "")}${w.stufe >= 2 && w.portal ? ` · ${t(w.portal)}` : ""}</span>
-        <span class="netzEintragFuss"><span class="mono">${w.besucher} ${t("Besucher/min")}</span>${w.aktion ? `<em>⚡ ${t(w.aktion.name)}</em>` : ""}</span></button>`; };
-    const rzFirmen = Object.keys(state.rechenzentren?.firmen || {}).filter(pid => state.players[pid] && (!q || rohText(state.players[pid].name).toLowerCase().includes(q) || "rechenzentrum software hosting".includes(q)));
-    const anz = (state.anzeigen || []).slice(0, 3);
-    netzSetze(".netzInhalt", `${chips.length ? `<section class="rzBox"><b>${t("Läuft gerade")}</b><div class="netzChips">${chips.join("")}</div></section>` : ""}
-      ${anz.length ? `<div class="netzAnzeigen">${anz.map(a => `<button type="button" class="netzAnz" data-netzauf="${a.firmaId}"><small>${t("Anzeige")}</small><b>${escapeHtml(rohText(a.firma))}</b><span>${escapeHtml(rohText(a.text))}</span></button>`).join("")}</div>` : ""}
-      <section class="rzBox"><div class="rzBoxKopf"><b>${t("Firmen")}</b><small>${firmen.length} ${t("Websites")} · ${t("nach Besuchern")}</small></div>
-        <div class="netzGrid">${firmen.map(karte).join("") || `<div class="sfLeer">${q ? t("Nichts gefunden.") : t("Noch hat keine Firma eine Website.")}</div>`}</div></section>
-      <section class="rzBox"><b>${t("Rechenzentren und Software")}</b>
-        <div class="netzGrid">${rzFirmen.map(pid => { const p = state.players[pid], up = state.rechenzentren.firmen[pid].uptime || [], qu = up.length ? Math.round(up.reduce((a, b) => a + b, 0) / up.length * 100) : 100;
-          return `<button type="button" class="netzEintrag" data-rzauf="${pid}"><span class="netzEintragKopf">${logoHtml(pid, "netzLogo", p.color)}<span><b>${escapeHtml(rohText(p.name))}</b><small class="mono">status.cs/${shopSlug(p.name)}</small></span></span>
-            <span class="netzEintragInfo">${t("Hosting für Shops, Apps und Websites")}</span><span class="netzEintragFuss"><span class="mono">${qu} % ${t("online")}</span></span></button>`; }).join("") || `<div class="sfLeer">${t("Noch keine Software-Firma mit Rechenzentrum.")}</div>`}</div></section>`, "inhaltStart" + q);
-    netzSetze(".sfFuss", `<span class="sfFussLogo">🏛</span><span>${t("Das Stadtnetz wird von der Stadt betrieben")} · ${firmen.length + rzFirmen.length} ${t("Seiten")}</span>`, "fussStart");
+    const waren = pid => [...new Set(state.map.filter(x => x.owner === pid && x.btype).map(x => BTYPES()[x.btype]?.proc?.out || BTYPES()[x.btype]?.out).filter(Boolean))];
+    const passt = (pid, w) => { if (!q) return true; const p = state.players[pid];
+      return [rohText(p.name), BRANCHE_NAME[p.industry] || "", w.portal || "", ...waren(pid).map(gname), ...(p.industry === "touristik" ? ["hotel", "zimmer", "übernachtung"] : [])].join(" ").toLowerCase().includes(q); };
+    const branchen = [...new Set(mitSeite.map(([pid]) => state.players[pid].industry))];
+    if (NETZ.kat !== "alle" && !branchen.includes(NETZ.kat)) NETZ.kat = "alle";
+    const firmen = mitSeite.filter(([pid, w]) => (NETZ.kat === "alle" || state.players[pid].industry === NETZ.kat) && passt(pid, w)).sort((a, b) => b[1].besucher - a[1].besucher);
+    netzSetze(".netzTreffer", `${firmen.length} ${t("Treffer")}`, "treffer");
+    const chips = [["alle", t("Alle")], ...branchen.map(b => [b, t(BRANCHE_NAME[b] || b)])].map(([k, n]) => `<button type="button" class="netzKat${NETZ.kat === k ? " on" : ""}" data-netzkat="${k}">${n}</button>`).join("");
+    const bew = (pid, w) => state.players[pid].industry === "touristik" ? (T?.firmen || []).find(f => f.id === pid)?.bewertung || 0 : null;
+    const karte = ([pid, w]) => { const p = state.players[pid], b = bew(pid, w), tags = [];
+      if (w.stufe >= 2 && w.portal) tags.push(t(w.portal));
+      for (const g of waren(pid).slice(0, 3)) tags.push(gname(g));
+      const text = p.industry === "touristik" ? t("Hotels und Camping — Zimmer direkt buchen.") : w.stufe >= 2 && w.angebot?.some(a => a.menge > 0) ? t("Direkt kaufen, sofort im Lager.") : `${t(BRANCHE_NAME[p.industry] || "")} · ${t(cfg?.MODULE[w.modul]?.name || "")}`;
+      return `<button type="button" class="netzKarte" data-netzauf="${pid}">
+        <span class="netzKarteBand" style="background:${p.color}">${logoHtml(pid, "netzKarteLogo", p.color)}${w.aktion ? `<em>${t("AKTION LÄUFT")}</em>` : ""}</span>
+        <span class="netzKarteInhalt">
+          <span class="netzKarteName"><b>${escapeHtml(rohText(p.name))}</b>${b ? `<i>${"★".repeat(Math.round(b))}${"☆".repeat(5 - Math.round(b))}</i>` : ""}</span>
+          <small class="mono">${shopSlug(p.name)}.cs</small>
+          <span class="netzKarteText">${text}</span>
+          <span class="netzTags">${tags.map(x => `<span>${x}</span>`).join("")}</span>
+          <span class="netzKarteFuss"><span class="mono">${w.besucher} ${t("Besucher/min")}</span><span>${t("Besuchen")} →</span></span>
+        </span></button>`; };
+    /* Seitenleiste */
+    const laeuft = [];
+    if (T?.fest) laeuft.push(["F", "#0d9488", t(T.fest.name), `${escapeHtml(rohText(T.fest.veranstalter))} · ${t("noch")} ${Math.floor(T.fest.rest / 60)}:${String(T.fest.rest % 60).padStart(2, "0")}`, T.fest.ownerId]);
+    for (const a of S.ruest?.auftraege || []) laeuft.push(["A", "#e11d48", `${t("Ausschreibung")} ${a.name}`, a.phase === "bieten" ? t("Gebote offen") : `${t("Zuschlag")}: ${escapeHtml(rohText(a.gewinnerName || ""))}`, null]);
+    if (S.auftraege?.length) laeuft.push(["W", "#b45309", t("Wohnbau"), `${S.auftraege.length} ${t("Aufträge suchen Baumaterial")}`, null]);
+    for (const [pid, w] of mitSeite) if (w.aktion) laeuft.push(["⚡", "#d97706", t(w.aktion.name), escapeHtml(rohText(state.players[pid].name)), pid]);
+    const neu = mitSeite.slice().sort((a, b) => (b[1].seit || 0) - (a[1].seit || 0)).slice(0, 3);
+    const rz = Object.entries(state.rechenzentren?.firmen || {}).filter(([pid]) => state.players[pid]);
+    const anz = (state.anzeigen || [])[0];
+    netzSetze(".netzInhalt", `<div class="netzKats">${chips}</div>
+      <div class="netzSpalten"><div class="netzHaupt">
+        <div class="netzDienste">
+          <button type="button" class="netzDienst" data-kurierauf=""><span class="netzDienstIcon" style="background:#111827">📰</span><span><b>${t("Stadtkurier")}</b><small>kurier.cs · ${t("Nachrichten alle zwei Minuten")}</small></span></button>
+          <button type="button" class="netzDienst" data-netzauf="boerse"><span class="netzDienstIcon" style="background:#1d4ed8">📈</span><span><b>${t("Warenbörse")}</b><small>boerse.cs · ${state.orders.length} ${t("offene Orders")}</small></span></button>
+        </div>
+        ${kurierKasten(artikel)}
+        <section class="netzAbschnitt"><div class="netzAbschnittKopf"><b>${NETZ.kat === "alle" ? t("Beliebte Seiten") : t(BRANCHE_NAME[NETZ.kat] || "")}</b><small>${t("sortiert nach Besuchern")}</small></div>
+          ${firmen.length ? `<div class="netzKarten">${firmen.map(karte).join("")}</div>` : `<div class="netzLeer">${q ? t("Nichts gefunden. Versuch es mit einer Ware wie „Strom“ oder „Obst“.") : t("Noch hat keine Firma eine Website.")}</div>`}</section>
+      </div><aside class="netzSeite">
+        ${laeuft.length ? `<section class="netzBox"><b>${t("Läuft gerade")}</b>${laeuft.map(([k, c, ti, tx, pid]) => `<${pid ? `button type="button" data-netzauf="${pid}"` : "div"} class="netzLaeuft"><span style="background:${c}">${k}</span><span><b>${ti}</b><small>${tx}</small></span></${pid ? "button" : "div"}>`).join("")}</section>` : ""}
+        ${neu.length ? `<section class="netzBox"><b>${t("Neu im Stadtnetz")}</b>${neu.map(([pid, w]) => `<button type="button" class="netzNeu" data-netzauf="${pid}"><span>${escapeHtml(rohText(state.players[pid].name))} · ${t(w.stufe >= 2 && w.portal ? w.portal : cfg?.MODULE[w.modul]?.name || "")}</span><small>${t("vor")} ${Math.max(0, Math.round((state.tick - (w.seit || 0)) / 60))} min</small></button>`).join("")}</section>` : ""}
+        ${rz.length ? `<section class="netzBox"><b>${t("Rechenzentren")}</b>${rz.map(([pid, f]) => { const up = f.uptime || [], qu = up.length ? Math.round(up.reduce((a, b) => a + b, 0) / up.length * 100) : 100, web = (state.website || []).find(x => x.ownerId === pid);
+          return `<button type="button" class="netzRz" data-rzauf="${pid}"><span class="netzRzKopf"><span>${escapeHtml(rohText(state.players[pid].name))}</span><b class="mono">${qu} % ${t("online")}</b></span><span class="netzRzBalken"><i style="width:${web?.plaetze ? Math.min(100, Math.round(web.kunden / web.plaetze * 100)) : 0}%"></i></span></button>`; }).join("")}</section>` : ""}
+        ${anz ? `<button type="button" class="netzBox netzAnzeige" data-netzauf="${anz.firmaId}"><small>${t("ANZEIGE")}</small><b>${escapeHtml(rohText(anz.firma))}</b><span>${escapeHtml(rohText(anz.text))}</span></button>` : ""}
+      </aside></div>`, "inhaltStart");
+    netzSetze(".sfFuss", `<span class="sfFussLogo">🏛</span><span>${t("Das Stadtnetz wird von der Stadt betrieben")} · ${mitSeite.length + rz.length + 1} ${t("Seiten")}</span>`, "fussStart");
+    return;
+  }
+  /* ---- Warenbörse (boerse.cs) ----
+   * Übersichtlich in drei Teilen: links die Kursliste nach Warengruppen, oben
+   * die gewählte Ware mit Kurs, Verlauf und bestem Angebot/Gesuch, darunter
+   * Formular und Orderbuch NUR dieser Ware in zwei Spalten. */
+  if (NETZ.seite === "boerse") {
+    fenster.querySelector(".sfBrowser").style.setProperty("--sys", "#1d4ed8");
+    const F = state.finanzamt, avg = state.avg || {}, G0 = GOODS();
+    const waren = Object.keys(avg).filter(g => G0[g]);
+    if (!NETZ.ware || !waren.includes(NETZ.ware)) NETZ.ware = waren.slice().sort((x, y) => state.orders.filter(o => o.good === y).length - state.orders.filter(o => o.good === x).length)[0] || waren[0];
+    const g = NETZ.ware;
+    netzSetze(".sfUrl", `🔒 boerse.cs/${shopSlug(gname(g))}`, "url" + g);
+    netzSetze(".sfKopf", `<div class="sfMarke"><span class="sfLogo" style="background:#1e40af">B</span><div><b>${t("Warenbörse")}</b><small>${state.orders.length} ${t("offene Orders")}${F?.aktiv && F.boerse > 0 ? ` · ${t("Börsengebühr")} ${Math.round(F.boerse * 1000) / 10} % ${t("für Verkäufer")}` : ""}</small></div></div>`, "kopfBoerse" + state.orders.length);
+    fenster.querySelector(".sfBanner").hidden = true;
+    fenster.querySelector(".sfHinweis").hidden = true;
+    /* Kursliste nach Gruppen */
+    const GRUPPEN = [["Enabler", "Versorgung"], ["Erzeugnisse", "Rohwaren"], ["Verarbeitet", "Verarbeitet"], ["Baumaterial", "Baumaterial"], ["Fahrzeuge", "Fahrzeuge"], ["Rüstung", "Rüstung"], ["Motorsport", "Motorsport"]];
+    const anz = x => state.orders.filter(o => o.good === x && o.playerId !== myId).length;
+    const liste = GRUPPEN.map(([cat, name]) => { const ws = waren.filter(x => G0[x].cat === cat); if (!ws.length) return "";
+      return `<div class="bwGruppe">${t(name)}</div>` + ws.map(x => `<button type="button" class="bwZeile${x === g ? " on" : ""}" data-boersewahl="${x}"><span class="bwName">${gname(x)}</span><b class="mono">${fp(avg[x])}</b><span class="bwTrend">${trendLabel(x)}</span><span class="bwAnz">${anz(x) || ""}</span></button>`).join(""); }).join("");
+    /* Gewählte Ware */
+    const fremd = state.orders.filter(o => o.good === g && o.playerId !== myId);
+    const angebote = fremd.filter(o => o.side === "sell").sort((x, y) => x.price - y.price);
+    const gesuche = fremd.filter(o => o.side === "buy").sort((x, y) => y.price - x.price);
+    const meine = state.orders.filter(o => o.playerId === myId);
+    const lager = Math.floor(me.inv?.[g] || 0);
+    const seite = NETZ.bwSeite || "buy";
+    /* Kaufen/Beliefern nimmt die Menge aus dem Formular (Standard 10) — vorher
+     * das ganze Angebot: ein Klick kaufte 3.356 Strom für rund 8.000 $. */
+    const menge = NETZ.bwMenge || 10;
+    const zeile = (o, art) => { const n = Math.min(o.qty, art === "liefer" ? Math.min(menge, lager) : menge);
+      return `<div class="bwOrder"><span class="mono"><b>${o.qty}×</b> ${fp(o.price)}</span><span class="bwWer">${escapeHtml(rohText(o.player || ""))}</span>
+      <button type="button" class="${art === "kauf" ? "buyb" : "sellb"}" data-bwtake="${o.id}" data-bwn="${n}" ${n < 1 || (art === "kauf" && me.cash < o.price) ? "disabled" : ""}>${art === "kauf" ? t("Kaufen") : t("Beliefern")} ${n}× · ${fmt(n * o.price)}</button></div>`; };
+    const ruhig = document.activeElement && fenster.contains(document.activeElement) && document.activeElement.tagName === "INPUT";
+    netzSetze(".netzInhalt", `<div class="bwLayout"><aside class="bwListe"><div class="bwListeKopf"><b>${t("Kurse")}</b><small>${t("Ø · Trend · Orders")}</small></div><div class="bwListeInhalt"></div></aside><div class="bwHaupt"></div></div>`, "inhaltBoerse");
+    { const el = fenster.querySelector(".bwListeInhalt"), y = el?.scrollTop || 0;   // Scrollposition über Kurs-Updates halten
+      netzSetze(".bwListeInhalt", liste, "liste" + g + state.orders.length + JSON.stringify(avg)); if (el) el.scrollTop = y; }
+    if (!ruhig) netzSetze(".bwHaupt", `<section class="bwDetail">
+        <div class="bwDetailKopf"><div><span class="bwKat">${t((GRUPPEN.find(x => x[0] === G0[g].cat) || [])[1] || "")}</span><h3>${gname(g)}</h3></div>
+          <div class="bwPreis"><b class="mono">${fp(avg[g])}</b><span>${t("Ø-Kurs")} ${trendLabel(g)}</span></div></div>
+        <div class="bwKennzahlen">
+          <div><small>${t("Bestes Angebot")}</small><b class="mono">${angebote[0] ? fp(angebote[0].price) : "—"}</b><span>${angebote[0] ? `${angebote[0].qty}× ${t("verfügbar")}` : t("niemand verkauft")}</span></div>
+          <div><small>${t("Bestes Gesuch")}</small><b class="mono">${gesuche[0] ? fp(gesuche[0].price) : "—"}</b><span>${gesuche[0] ? `${gesuche[0].qty}× ${t("gesucht")}` : t("niemand sucht")}</span></div>
+          <div><small>${t("Dein Lager")}</small><b class="mono">${lager}</b><span>${t("Wert")} ${fmt(lager * (avg[g] || 0))}</span></div>
+        </div>
+        <div class="bwChart">${kursChart(g)}</div>
+      </section>
+      <section class="bwForm">
+        <div class="bwSeiten"><button type="button" class="${seite === "buy" ? "on kauf" : ""}" data-bwseite="buy">${t("Kaufen")}</button><button type="button" class="${seite === "sell" ? "on verkauf" : ""}" data-bwseite="sell">${t("Verkaufen")}</button></div>
+        <label><span>${t("Menge")}</span><input id="bwMenge" type="number" min="1" step="1" value="${NETZ.bwMenge || 10}"></label>
+        <label><span>${t("Preis je Stück")}</span><input id="bwPreis" type="number" min="0.01" step="0.01" value="${NETZ.bwPreis ?? (Math.round((avg[g] || 1) * 100) / 100)}"></label>
+        <button type="button" class="${seite === "buy" ? "buyb" : "sellb"} bwSenden" data-bwsenden>${seite === "buy" ? t("Kauforder platzieren") : t("Verkaufsorder platzieren")}</button>
+        <small>${seite === "buy" ? t("Liegt ein Angebot zu diesem Preis oder billiger, wird sofort gekauft. Sonst bleibt die Order stehen; das Geld liegt so lange treuhänderisch fest.") : `${t("Liegt ein Gesuch zu diesem Preis oder teurer, wird sofort verkauft. Sonst bleibt die Order stehen.")}${F?.aktiv && F.boerse > 0 ? ` ${t("Börsengebühr")} ${Math.round(F.boerse * 1000) / 10} %.` : ""}`}</small>
+      </section>
+      <div class="bwBuch">
+        <section><div class="bwBuchKopf verkauf"><b>${t("Angebote")}</b><small>${t("jemand verkauft — du kaufst")}</small></div>${angebote.map(o => zeile(o, "kauf")).join("") || `<div class="bwLeer">${t("Keine Angebote")}</div>`}</section>
+        <section><div class="bwBuchKopf kauf"><b>${t("Gesuche")}</b><small>${t("jemand kauft — du lieferst")}</small></div>${gesuche.map(o => zeile(o, "liefer")).join("") || `<div class="bwLeer">${t("Keine Gesuche")}</div>`}</section>
+      </div>
+      ${meine.length ? `<section class="bwMeine"><b>${t("Meine Orders")}</b>${meine.map(o => `<div class="bwOrder"><span class="${o.side === "buy" ? "bwK" : "bwV"}">${o.side === "buy" ? t("Kauf") : t("Verkauf")}</span><span class="mono"><b>${o.qty}×</b> ${gname(o.good)} · ${fp(o.price)}</span><button type="button" class="mini" data-bwstorno="${o.id}">${t("Storno")}</button></div>`).join("")}</section>` : ""}`, "haupt");
+    netzSetze(".sfFuss", `<span class="sfFussLogo">📈</span><span>${t("Die Warenbörse wird von der Stadt betrieben · Ware und Geld liegen bis zum Handel treuhänderisch fest")}</span>`, "fussBoerse");
+    return;
+  }
+  /* ---- Stadtkurier ---- */
+  if (NETZ.seite === "kurier") {
+    KURIER.gelesen = Math.max(KURIER.gelesen, (state.news || [])[0]?.ts || 0);
+    fenster.querySelector(".sfBrowser").style.setProperty("--sys", "#111827");
+    const offen = NETZ.artikel && artikel.find(a => a.id === NETZ.artikel);
+    netzSetze(".sfUrl", `🔒 kurier.cs${offen ? "/" + offen.id : ""}`, "url");
+    const ausgabe = (state.news || []).length ? `${t("Ausgabe")} ${KURIER.nr(state)} · ${t("Minute")} ${state.news[0].min}` : t("Erste Ausgabe nach zwei Minuten");
+    netzSetze(".sfKopf", `<b class="netzZeitungTitel">${t("Stadtkurier")}</b><small>${ausgabe} · ${t("betrieben von der Stadt")} · ${state.stadt.einwohner.toLocaleString("de-DE")} ${t("Einwohner")}</small>`, "kopfKurier" + ausgabe);
+    fenster.querySelector(".sfBanner").hidden = true;
+    fenster.querySelector(".sfHinweis").hidden = true;
+    const sicht = artikel.filter(a => NETZ.ressort === "alle" || a.ressort === NETZ.ressort || (NETZ.ressort === "Firmen" && a.ressort === "Eilmeldung"));
+    const reiter = [["alle", "Alle"], ["Wirtschaft", "Wirtschaft"], ["Börse", "Börse"], ["Stadt", "Stadt"], ["Firmen", "Firmen"]]
+      .map(([k, n]) => `<button type="button" class="${NETZ.ressort === k ? "on" : ""}" data-kurierressort="${k}">${t(n)}</button>`).join("");
+    const marke = a => `<span class="kurierRessort r-${a.ressort === "Börse" ? "boerse" : a.ressort.toLowerCase()}">${t(a.ressort)}</span>`;
+    const link = a => a.link ? `<button type="button" class="sfKaufen" data-kurierlink="${a.link[0]}:${a.link[1] ?? ""}">${t(a.link[2])}</button>` : "";
+    let haupt;
+    if (offen) haupt = `<article class="kurierArtikel">${marke(offen)}<h2>${escapeHtml(rohText(offen.titel))}</h2><small>${offen.zeit}</small>
+        ${offen.absaetze.map(x => `<p>${escapeHtml(rohText(x))}</p>`).join("")}
+        <div class="kurierKnoepfe">${link(offen)}<button type="button" class="hfKarte" data-kurierauf="">${t("Zurück zur Übersicht")}</button></div></article>`;
+    else if (!sicht.length) haupt = `<div class="netzLeer">${t("In diesem Ressort gibt es noch nichts Neues.")}</div>`;
+    else { const auf = sicht.find(a => a.ressort === "Wirtschaft") || sicht[0], rest = sicht.filter(a => a !== auf);   // Aufmacher: der aktuelle Marktbericht
+      haupt = `<button type="button" class="kurierAufmacher" data-kurierauf="${auf.id}"><span class="kurierBild r-${auf.ressort === "Börse" ? "boerse" : auf.ressort.toLowerCase()}"><svg width="96" height="64" viewBox="0 0 96 64" fill="none" stroke="#ffffff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 56 L28 30 L44 42 L66 14 L90 30"></path><path d="M78 14 H90 V26"></path></svg></span>
+          <span class="kurierAufText">${marke(auf)}<b>${escapeHtml(rohText(auf.titel))}</b><span>${escapeHtml(rohText(auf.anriss))}</span><small>${auf.zeit}</small></span></button>
+        <div class="kurierListe">${rest.slice(0, 12).map(a => `<button type="button" class="kurierKarte" data-kurierauf="${a.id}">${marke(a)}<b>${escapeHtml(rohText(a.titel))}</b><span>${escapeHtml(rohText(a.anriss))}</span><small>${a.zeit}</small></button>`).join("")}</div>`; }
+    const kurse = KURIER.veraenderung(state);
+    const anz = (state.anzeigen || [])[0];
+    const archiv = (state.news || []).map((b, i) => `<button type="button" class="kurierArchiv" data-kurierauf="markt-${b.min}"><span>${t("Ausgabe")} ${KURIER.nr(state) - i}</span><small class="mono">${t("Minute")} ${b.min}</small></button>`).join("");
+    netzSetze(".netzInhalt", `<nav class="kurierReiter">${reiter}</nav>
+      <div class="netzSpalten"><div class="netzHaupt">${haupt}</div><aside class="netzSeite">
+        <section class="netzBox"><b>${t("Kurse in 2 Minuten")}</b>${kurse.length ? kurse.map(k => `<span class="kurierKurs"><span>${gname(k.g)}</span><b class="mono ${k.d >= 0 ? "auf" : "ab"}">${k.d >= 0 ? "+" : "−"}${Math.abs(k.d)} %</b></span>`).join("") : `<small>${t("Noch zu früh — die Kurse vergleicht der Kurier nach zwei Minuten.")}</small>`}</section>
+        ${anz ? `<button type="button" class="netzBox netzAnzeige" data-netzauf="${anz.firmaId}"><small>${t("ANZEIGE")}</small><b>${escapeHtml(rohText(anz.firma))}</b><span>${escapeHtml(rohText(anz.text))}</span></button>` : ""}
+        ${archiv ? `<section class="netzBox"><b>${t("Archiv")}</b>${archiv}</section>` : ""}
+      </aside></div>`, "inhaltKurier");
+    netzSetze(".sfFuss", `<span class="sfFussLogo">📰</span><span>${t("Stadtkurier · erscheint alle zwei Minuten · Anzeigen aus dem Werbenetz")}</span>`, "fussKurier");
     return;
   }
   /* ---- Seite einer Firma ---- */
@@ -6867,11 +7171,39 @@ function netzZeichnen() {
 }
 document.getElementById("netzFenster").addEventListener("input", e => {
   if (e.target.id === "netzSuche") { NETZ.suche = e.target.value; netzZeichnen(); }
+  if (e.target.id === "bwMenge") { NETZ.bwMenge = Math.max(1, Math.floor(+e.target.value) || 1); NETZ.sig.haupt = null; }
+  if (e.target.id === "bwPreis") NETZ.bwPreis = +e.target.value || null;
   const n = e.target.closest?.("[data-netzn]"); if (n) NETZ.menge[n.dataset.netzn] = Math.max(1, Math.floor(+n.value) || 1);
 });
 document.getElementById("netzFenster").addEventListener("click", e => {
   if (e.target.closest("[data-netzzu]") || e.target.id === "netzFenster") return netzSchliessen();
-  if (e.target.closest("[data-netzzurueck]")) return netzOeffnen(null);
+  if (e.target.closest("[data-netzzurueck]")) { if (NETZ.seite === "kurier" && NETZ.artikel) { NETZ.artikel = null; NETZ.sig = {}; return netzZeichnen(); } return netzOeffnen(null); }
+  const bw = e.target.closest("[data-boersewahl]");
+  if (bw) { NETZ.ware = bw.dataset.boersewahl; NETZ.bwPreis = null; return netzZeichnen(); }
+  const bs = e.target.closest("[data-bwseite]");
+  if (bs) { NETZ.bwSeite = bs.dataset.bwseite; return netzZeichnen(); }
+  const bt = e.target.closest("[data-bwtake]");
+  if (bt) return socket.emit("takeOrder", { orderId: +bt.dataset.bwtake, qty: +bt.dataset.bwn || 10 }, r => { if (r?.error) return toast(r.error, true); SFX.spiel("kasse"); render(store.get()); });
+  const bst = e.target.closest("[data-bwstorno]");
+  if (bst) return act("cancelOrder", { orderId: +bst.dataset.bwstorno });
+  if (e.target.closest("[data-bwsenden]")) {
+    const qty = Math.floor(+document.getElementById("bwMenge")?.value || 0), price = +document.getElementById("bwPreis")?.value || 0;
+    if (!(qty > 0) || !(price > 0)) return toast(t("Menge und Preis eingeben"), true);
+    return socket.emit("placeOrder", { side: NETZ.bwSeite || "buy", good: NETZ.ware, qty, price }, r => { if (r?.error) return toast(r.error, true); toast(t("Order platziert")); NETZ.bwPreis = null; render(store.get()); });
+  }
+  const kat = e.target.closest("[data-netzkat]");
+  if (kat) { NETZ.kat = kat.dataset.netzkat; return netzZeichnen(); }
+  const ka = e.target.closest("[data-kurierauf]");
+  if (ka) { NETZ.artikel = ka.dataset.kurierauf || null; if (NETZ.seite !== "kurier") return netzOeffnen("kurier"); NETZ.sig = {}; return netzZeichnen(); }
+  const kr = e.target.closest("[data-kurierressort]");
+  if (kr) { NETZ.ressort = kr.dataset.kurierressort; NETZ.artikel = null; return netzZeichnen(); }
+  const kl = e.target.closest("[data-kurierlink]");
+  if (kl) { const [art, wert] = kl.dataset.kurierlink.split(":");
+    if (art === "firma") return netzOeffnen(wert);
+    netzSchliessen();
+    if (art === "hotel") return hotelOeffnen(wert);
+    if (art === "panel") return openPanel(wert);
+    return; }
   const auf = e.target.closest("[data-netzauf]");
   if (auf) { const pid = auf.dataset.netzauf, ind = store.get().state.players?.[pid]?.industry; if (ind === "touristik" || (ind === "software" && !store.get().state.rechenzentren?.websites?.[pid])) netzSchliessen(); return netzOeffnen(pid); }
   const rz = e.target.closest("[data-rzauf]");
@@ -6879,8 +7211,9 @@ document.getElementById("netzFenster").addEventListener("click", e => {
   if (e.target.closest("[data-netzanbieter]")) { netzSchliessen(); SW_REITER = "markt"; return openPanel("software"); }
   const pn = e.target.closest("[data-netzpanel]");
   if (pn) { netzSchliessen(); return openPanel(pn.dataset.netzpanel); }
-  /* Shop öffnet der allgemeine Klick-Handler am Dokument; hier nur schließen */
-  if (e.target.closest("[data-shopauf]")) return netzSchliessen();
+  /* Online-Shop direkt öffnen — der Handler für data-shopauf hängt nur am Firma-Panel */
+  const sa = e.target.closest("[data-shopauf]");
+  if (sa) { const [x, y] = sa.dataset.shopauf.split(",").map(Number); netzSchliessen(); return shopOeffnen(x, y); }
   const m = e.target.closest("[data-netzm]");
   if (m) { const g = m.dataset.netzm, inp = document.querySelector(`#netzFenster [data-netzn="${g}"]`); const v = Math.max(1, Math.min(+inp.max || 1, (+inp.value || 1) + +m.dataset.d)); inp.value = v; NETZ.menge[g] = v; NETZ.sig.inhalt = null; return netzZeichnen(); }
   const k = e.target.closest("[data-netzkauf]");
@@ -8541,7 +8874,7 @@ const TUT_EINSTEIGER = [
 
   { t: "Schritt 4 — Lies den Kursticker",
     warte: () => TUT_GESEHEN.has("boerse"),
-    p: `Öffne die <b>Börse</b> unten in der Leiste.<br><br>Oben im Ticker steht zu jeder Ware ein Ø-Kurs mit Trendpfeil. Der Wert steht bewusst <b>30 Sekunden still</b>, bevor er nachzieht — eine Zahl, die im Sekundentakt zappelt, taugt nicht, um den eigenen Preis danach zu setzen. Der Pfeil vergleicht deshalb 30 Sekunden gegen 30 Sekunden.` },
+    p: `Öffne die <b>Börse</b> — im Sandkasten die Website <b>boerse.cs</b> im Stadtnetz (Knopf unten).<br><br>Oben im Ticker steht zu jeder Ware ein Ø-Kurs mit Trendpfeil. Der Wert steht bewusst <b>30 Sekunden still</b>, bevor er nachzieht — eine Zahl, die im Sekundentakt zappelt, taugt nicht, um den eigenen Preis danach zu setzen. Der Pfeil vergleicht deshalb 30 Sekunden gegen 30 Sekunden.` },
 
   { t: "Schritt 5 — Kauf etwas an der Börse",
     /* Nur Wasser oder Strom zaehlen, nicht "irgendein Einkauf": Ziegel kauft
@@ -8564,8 +8897,8 @@ const TUT_EINSTEIGER = [
     p: `Öffne das <b>Lager</b>.<br><br>Hier steht jede Ware mit Bestand — und hier findest du die <b>Großaufträge</b> der Städte: feste Mengen zum doppelten Ø-Kurs, an denen sich alle Spieler gemeinsam beteiligen. Der Preis ist bei Auftragsvergabe fixiert, egal wohin der Markt danach läuft.` },
 
   { t: "Schritt 8 — Lies die Nachrichten",
-    warte: () => TUT_GESEHEN.has("news"),
-    p: `Öffne die <b>Nachrichten</b>.<br><br>Dort laufen Marktberichte und Ereignisse: welche Ware knapp wird, wo Preise anziehen, was die anderen Firmen treiben. Wer den Bericht liest, bevor er den Ladenpreis setzt, verdient schlicht mehr.` },
+    warte: () => TUT_GESEHEN.has("news") || TUT_GESEHEN.has("kurier"),
+    p: `Öffne die <b>Nachrichten</b> — im Sandkasten den <b>Stadtkurier</b> im Stadtnetz (Knopf unten).<br><br>Dort laufen Marktberichte und Ereignisse: welche Ware knapp wird, wo Preise anziehen, was die anderen Firmen treiben. Wer den Bericht liest, bevor er den Ladenpreis setzt, verdient schlicht mehr.` },
 
   { t: "Schritt 9 — Kauf Anteile an einer Firma",
     warte: (st, me, id) => (me.portfolio || []).length > 0 || (me.balance?.holdings || 0) > 0,
@@ -9844,7 +10177,7 @@ function planRendern(state, myId) {
    * die Starter-Aufgaben sind Marktinstrumente — in der Planwirtschaft weg. */
   const planAktiv = state.mode === "plan";
   const boerseKnopf = document.querySelector('.dockbtn[data-p="boerse"]');
-  if (boerseKnopf) boerseKnopf.style.display = planAktiv ? "none" : "";
+  if (boerseKnopf) boerseKnopf.style.display = planAktiv || state.stadt ? "none" : "";   // Sandkasten: Börse im Stadtnetz
   const bondsKnopf = document.querySelector('.dockbtn[data-p="bonds"]');
   if (bondsKnopf) bondsKnopf.style.display = planAktiv ? "none" : "";
   const ctrbar = document.getElementById("ctrbar");
@@ -10861,7 +11194,9 @@ function render({ state, me, myId, chat, room }) {
   if (!typingIn(document.getElementById("p-touristik"))) touristikRendern(state, me, myId);
   if (HOTEL.offen && !typingIn(document.getElementById("hotelFenster"))) hotelZeichnen();
   if (RZW.offen && !typingIn(document.getElementById("rzFenster"))) rzZeichnen();
-  { const dn = document.getElementById("dockNetz"); if (dn) dn.style.display = state.stadt ? "" : "none"; }
+  { const dn = document.getElementById("dockNetz"); if (dn) { dn.style.display = state.stadt ? "" : "none"; dn.classList.toggle("neu", ((state.news || [])[0]?.ts || 0) > KURIER.gelesen); }
+    const db = document.getElementById("dockBoerse"); if (db && state.stadt) db.style.display = "none"; }   // Börse steht im Stadtnetz
+  if (state.stadt) KURIER.merken(state);
   if (NETZ.offen && !(document.activeElement && document.getElementById("netzFenster").contains(document.activeElement) && document.activeElement.tagName === "INPUT" && document.activeElement.type === "number")) netzZeichnen();
 
   /* Stadtbank: Kurstafel, Angebote und Depot — der gesamte Anteilshandel */
@@ -12014,10 +12349,10 @@ const TUT_BUCH = [
       <p>Jede Handlung bringt <b>Erfahrung</b>. Mit steigendem Level wächst nichts an deiner
       Produktion, es ist ein Fortschrittsmaß, kein Vorteil — die Wirtschaft soll durch
       Entscheidungen gewonnen werden, nicht durch Spielzeit.</p>
-      <div class="kasten"><div class="t">Die Nachrichtenzentrale</div>
-      Sie steht im Zentrum der Karte und schickt regelmäßig einen <b>Marktbericht</b> in den
-      Chat: welche Ware knapp ist, welche im Überfluss liegt. Wer nicht ständig auf die
-      Kursleiste schaut, erfährt hier, wo gerade etwas zu holen ist.</div>
+      <div class="kasten"><div class="t">Der Stadtkurier</div>
+      Die Nachrichten der Stadt stehen im <b>Stadtnetz</b> (Knopf unten): Alle zwei Minuten
+      erscheint ein <b>Marktbericht</b> — welche Ware knapp ist, welche im Überfluss liegt —,
+      dazu Börse, Stadt und Firmen. Großaufträge und Ausschreibungen laufen als Eilmeldung.</div>
       <p>Fällt dir etwas auf, das nicht stimmt, gibt es unten den Knopf <b>Fehler melden</b>
       — die Meldung landet direkt beim Server, mitsamt dem, was gerade auf dem Bildschirm
       war.</p>`,
