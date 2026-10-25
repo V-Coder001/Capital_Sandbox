@@ -4093,15 +4093,17 @@ const swEigenes = p => Object.values(G.software || {}).find(s => s.ownerId === p
 /* Markenwert des eigenen Systems (siehe SW.MARKENWERT) — Teil der Substanz. */
 const swMarkenwert = p => {
   const prod = G.software && swEigenes(p), mp = G.paint && paintEigenes(p);
+  /* Website-Abos (Etappe 7) zählen bewusst nicht: Mit ihnen zog Software in
+   * schweren Runden wieder davon (gemessen 157k → 193k, davon gut die Hälfte Markenwert). */
   const app = G.buergerApp && appEigenes(p), jb = G.jobboerse && jobEigenes(p);
   const summe = [prod, mp, app, jb].reduce((s2, x) => s2 + (x?.eb || []).reduce((a, b) => a + b, 0), 0);
   return summe * SW.MARKENWERT;
 };
 const swKunden = prod => G.map.filter(t => t.system?.produktId === prod.id || t.steuerung?.produktId === prod.id).length;
 const steuerKunden = prod => G.map.filter(t => t.steuerung?.produktId === prod.id).length;
-const swPlaetze = prod => prod.portal ? Infinity : G.map
+const swPlaetze = prod => prod.portal ? Infinity : Math.floor(G.map
   .filter(t => t.owner === prod.ownerId && BTYPES[t.btype]?.rz && t.rzAktiv && !imBau(t))
-  .reduce((a, t) => a + BTYPES[t.btype].rz.plaetze * (t.level || 1), 0);
+  .reduce((a, t) => a + BTYPES[t.btype].rz.plaetze * (t.level || 1), 0) * rzAnteil(prod.ownerId, "shops"));   // Platzverteilung (Etappe 7)
 const swTempo = prod => swTempoBranche(prod, null);   // nur die allgemeinen Module
 const swOffen = t => !!(t.system && G.tick >= t.system.bis);
 /* Steuerungssoftware: Darf auf diesem Gebäude laufen? (Produktion einer
@@ -4185,7 +4187,7 @@ function softwareStadtTick() {
   let nutzer = 0;
   for (const a of Object.values(G.buergerApp || {})) {
     if (!(a.version >= 1)) { a.nutzer = 0; a.kapazitaet = 0; continue; }
-    a.kapazitaet = rzStufen(a.ownerId) * BUERGER_APP.NUTZER_JE_STUFE;
+    a.kapazitaet = Math.floor(rzStufen(a.ownerId) * BUERGER_APP.NUTZER_JE_STUFE * rzAnteil(a.ownerId, "apps"));
     a.wunsch = Math.floor(gesamt * score(a) / summe);
     a.nutzer = Math.min(a.kapazitaet, a.wunsch);
     nutzer += a.nutzer;
@@ -4220,9 +4222,9 @@ function jobboerseGebuehr(p, arbeiter) {
 }
 function stadtSoftwareVeroeffentlichen(x, p, art) {
   x.version = x.entwicklung.version; x.entwicklung = null;
-  const text = art === "app" ? `Bürger-App ${x.name} v${x.version}` : `Jobbörse ${x.name} v${x.version}`;
-  marktLog("software", `${p.name} veröffentlicht die ${text}`, { firmaId: p.id });
-  io.emit("notice", { text: `Neu: ${text} von ${p.name}${art === "job" ? " — abonnieren im Firma-Panel" : ""}.` });
+  const text = art === "app" ? `Bürger-App ${x.name} v${x.version}` : art === "web" ? `Website-Baukasten ${x.name} v${x.version}` : `Jobbörse ${x.name} v${x.version}`;
+  marktLog("software", `${p.name} veröffentlicht ${art === "web" ? "den" : "die"} ${text}`, { firmaId: p.id });
+  io.emit("notice", { text: `Neu: ${text} von ${p.name}${art === "job" ? " — abonnieren im Firma-Panel" : art === "web" ? " — Websites bestellen auf der Statusseite" : ""}.` });
 }
 const buergerAppPublic = () => stadtAktiv() ? Object.values(G.buergerApp || {}).map(a => ({ id: a.id, ownerId: a.ownerId, anbieter: G.players[a.ownerId]?.name ?? "—",
   farbe: G.players[a.ownerId]?.color || "#64748b", name: a.name, version: a.version || 0, preis: a.preis, nutzer: a.nutzer || 0, wunsch: a.wunsch || 0,
@@ -4233,6 +4235,103 @@ const jobboersePublic = () => stadtAktiv() ? Object.values(G.jobboerse || {}).ma
   faktor: Math.round((jb.faktor ?? 1) * 100) / 100, plaetze: jb.plaetze || 0, vorrang: jb.version >= 1 ? JOBBOERSE.STUFEN[jb.version - 1].vorrang : 0,
   einnahmen10: Math.round((jb.eb || []).reduce((x, y) => x + y, 0)), gesamt: Math.round(jb.gesamt || 0),
   entwicklung: jb.entwicklung ? { version: jb.entwicklung.version, ep: Math.floor(jb.entwicklung.ep), ziel: jb.entwicklung.ziel } : null })) : [];
+/* ---------- Website-Baukasten und Rechenzentren (Stadtwachstum, Etappe 7) ----------
+ * Websites baut die Software-Branche: Ein Website-Baukasten wird im Studio
+ * entwickelt wie die Bürger-App, andere Firmen bestellen eine Website (Einrichtung
+ * plus Abo je Minute). Sie bringt Reichweite: mehr Ladenverkauf, mehr Gäste, mehr
+ * Anteil am Grundbedarf. Die Plätze kommen aus den Rechenzentren des Anbieters;
+ * wie er sie auf Shops, Apps und Websites verteilt, stellt er selbst ein. Ohne
+ * Software-Firma gibt es die teure Grundseite des Stadtportals. */
+const WEBSITE = {
+  AB_SYSTEM: 2,
+  STUFEN: [{ ep: 160 }, { ep: 220 }, { ep: 300 }],   // v1 Grundseite, v2 Branchenportal, v3 Aktionen
+  MODULE: {
+    grund:  { name: "Grundseite",     ab: 1, faktor: 1,   bonus: 0.05 },
+    portal: { name: "Branchenportal", ab: 2, faktor: 1.6, bonus: 0.10 },
+    aktion: { name: "Aktionen",       ab: 3, faktor: 2.4, bonus: 0.15 },
+  },
+  PREIS_MIN: 5, PREIS_MAX: 80, PREIS_START: 25, EINRICHTUNG: 400, INSTALL: 45,
+  PLAETZE_JE_STUFE: 2,
+  STADTPORTAL: { preis: 45, einrichtung: 600 },   // Notlösung: nur die Grundseite
+};
+const WEB_STADTPORTAL = "stadtportal";
+/* Platzverteilung der Rechenzentren; die Standardwerte lassen alle Kapazitäten wie bisher */
+const RZ_VERTEILUNG = { shops: 50, apps: 30, web: 20 };
+const RZ_UPTIME_MIN = 30;
+const rzAnteil = (pid, k) => ((G.players[pid]?.rzVerteilung?.[k]) ?? RZ_VERTEILUNG[k]) / RZ_VERTEILUNG[k];
+const webEigenes = p => Object.values(G.website || {}).find(x => x.ownerId === p.id) || null;
+const webKunden = w => Object.values(G.players).filter(k => k.website?.anbieter === w.id && k.id !== w.ownerId);
+const webPlaetze = w => Math.floor(rzStufen(w.ownerId) * WEBSITE.PLAETZE_JE_STUFE * rzAnteil(w.ownerId, "web"));
+/* Reichweite der eigenen Website: Modul-Bonus, solange sie online ist */
+function webBonus(p) {
+  const w = p?.website;
+  if (!w || !stadtAktiv() || G.tick < (w.bis || 0)) return 0;
+  const mod = WEBSITE.MODULE[w.modul];
+  if (!mod) return 0;
+  if (w.anbieter === WEB_STADTPORTAL) return mod.bonus;
+  const anb = G.website?.[w.anbieter];
+  return anb ? mod.bonus * (anb.faktor ?? 1) : 0;
+}
+const webPreis = (w, modul) => w === WEB_STADTPORTAL ? WEBSITE.STADTPORTAL.preis : Math.round(w.preis * WEBSITE.MODULE[modul].faktor * 100) / 100;
+/* Alle 10 s: Plätze und Auslastung der Website-Anbieter */
+function websiteTick() {
+  for (const w of Object.values(G.website || {})) if (!G.players[w.ownerId]) delete G.website[w.id];
+  for (const p of Object.values(G.players)) if (p.website && p.website.anbieter !== WEB_STADTPORTAL && !G.website?.[p.website.anbieter]) p.website = null;
+  for (const w of Object.values(G.website || {})) {
+    const n = webKunden(w).length, plaetze = webPlaetze(w);
+    w.faktor = n ? Math.min(1, plaetze / n) : (plaetze > 0 ? 1 : 0); w.kunden = n; w.plaetze = plaetze;
+  }
+}
+/* Jede Minute: Abos der Websites; wer nicht zahlen kann, verliert die Seite */
+function websiteZahlen() {
+  for (const w of Object.values(G.website || {})) { (w.eb ??= [0]).unshift(0); if (w.eb.length > 10) w.eb.length = 10; }
+  for (const p of Object.values(G.players)) {
+    const ws = p.website;
+    if (!ws || G.tick < (ws.bis || 0)) continue;
+    const portal = ws.anbieter === WEB_STADTPORTAL, anb = portal ? null : G.website?.[ws.anbieter];
+    if (!portal && (!anb || anb.ownerId === p.id)) continue;
+    const betrag = portal ? WEBSITE.STADTPORTAL.preis : webPreis(anb, ws.modul);
+    if (p.cash < betrag) {
+      p.website = null;
+      if (!p.bot) emitTo(p.id, "notice", { text: "Deine Website ist abgeschaltet — das Abo war nicht gedeckt." });
+      continue;
+    }
+    p.cash -= betrag; p.stats.ausgaben += betrag;
+    if (portal) { G.stadtkasse += betrag; logTx(p, "Software", "Website beim Stadtportal", -betrag); continue; }
+    const owner = G.players[anb.ownerId];
+    owner.cash += betrag; addRevenue(owner, betrag); anb.eb[0] += betrag; anb.gesamt = (anb.gesamt || 0) + betrag;
+    logTx(p, "Software", `Website bei ${anb.name} (${WEBSITE.MODULE[ws.modul].name})`, -betrag);
+  }
+}
+/* Verfügbarkeit: Eine Minute zählt als Ausfall, wenn ein fertiges eigenes
+ * Rechenzentrum in ihr ohne Strom war. */
+function rzVerfuegbarkeit() {
+  G.rzStoer ??= {}; G.rzUptime ??= {};
+  for (const t of G.map) if (t.owner && BTYPES[t.btype]?.rz && !imBau(t)) {
+    G.rzUptime[t.owner] ??= [];
+    if (!t.rzAktiv) G.rzStoer[t.owner] = true;
+  }
+  if (G.tick % 60 !== 0) return;
+  for (const pid of Object.keys(G.rzUptime)) {
+    if (!G.players[pid]) { delete G.rzUptime[pid]; continue; }
+    const u = G.rzUptime[pid];
+    u.push(G.rzStoer[pid] ? 0 : 1); if (u.length > RZ_UPTIME_MIN) u.shift();
+  }
+  G.rzStoer = {};
+}
+const websitePublic = () => stadtAktiv() ? Object.values(G.website || {}).map(w => ({ id: w.id, ownerId: w.ownerId, anbieter: G.players[w.ownerId]?.name ?? "—",
+  farbe: G.players[w.ownerId]?.color || "#64748b", name: w.name, version: w.version || 0, preis: w.preis, kunden: w.kunden || 0, plaetze: w.plaetze || 0,
+  faktor: Math.round((w.faktor ?? 1) * 100) / 100, einnahmen10: Math.round((w.eb || []).reduce((a, b) => a + b, 0)), gesamt: Math.round(w.gesamt || 0),
+  liste: webKunden(w).map(k => ({ id: k.id, name: k.name, modul: k.website.modul, online: G.tick >= (k.website.bis || 0) })),
+  entwicklung: w.entwicklung ? { version: w.entwicklung.version, ep: Math.floor(w.entwicklung.ep), ziel: w.entwicklung.ziel } : null })) : [];
+function rechenzentrenPublic() {
+  if (!stadtAktiv()) return null;
+  const out = {};
+  for (const [pid, u] of Object.entries(G.rzUptime || {})) if (G.players[pid]) out[pid] = { uptime: u, verteilung: { ...RZ_VERTEILUNG, ...(G.players[pid].rzVerteilung || {}) } };
+  for (const p of Object.values(G.players)) if (istSoftwareFirma(p) && !out[p.id]) out[p.id] = { uptime: [], verteilung: { ...RZ_VERTEILUNG, ...(p.rzVerteilung || {}) } };
+  const kunden = Object.fromEntries(Object.values(G.players).filter(p => p.website).map(p => [p.id, { anbieter: p.website.anbieter, modul: p.website.modul, online: G.tick >= (p.website.bis || 0), bonus: Math.round(webBonus(p) * 1000) / 1000 }]));
+  return { firmen: out, websites: kunden };
+}
 /* ---------- Touristik: Gäste, Sterne, Stadtfeste (Stadtwachstum, Etappe 6) ----------
  * Bis hierher verkaufte die Touristik nur Übernachtungen über den Markt, und
  * jeder Verkauf drückte den eigenen Kurs — Tabellenende in jeder Messreihe.
@@ -4289,7 +4388,8 @@ function touristikTick() {
     (k.f.eb ??= [0]).unshift(0); if (k.f.eb.length > 10) k.f.eb.length = 10;
     Object.assign(k.f, { gaeste: 0, abgewiesen: 0, zimmer: Math.round(k.zimmer), bewertung: Math.round(k.bewertung * 10) / 10, sterne: Math.round(k.sterne * 10) / 10 });
     if (!(k.zimmer > 0)) continue;
-    const score = tourQuali(k.bewertung) / Math.pow(k.f.preis / TOURISTIK.PREIS_REF, TOURISTIK.ELASTIZITAET) * (fest?.ownerId === p.id ? TOURISTIK.VERANSTALTER : 1);
+    const score = tourQuali(k.bewertung) / Math.pow(k.f.preis / TOURISTIK.PREIS_REF, TOURISTIK.ELASTIZITAET) * (fest?.ownerId === p.id ? TOURISTIK.VERANSTALTER : 1)
+      * (1 + 2 * webBonus(p));   // Website: doppelte Reichweite bei Gästen
     anbieter.push({ p, k, score, frei: Math.floor(p.inv.uebernachtung || 0), bekommt: 0 });
   }
   const summe = anbieter.reduce((a, x) => a + x.score, 0);
@@ -4513,13 +4613,13 @@ function swBetrieb(t, p, bt, sperr = 1) {
     else tempo = 0.5;
   }
   const ep = bt.studio.ep * lvl * frac * tempo;
-  const prod = swEigenes(p), mp = paintEigenes(p), ba = boerseEigenes(p), app = appEigenes(p), jb = jobEigenes(p);
+  const prod = swEigenes(p), mp = paintEigenes(p), ba = boerseEigenes(p), app = appEigenes(p), jb = jobEigenes(p), wb = webEigenes(p);
   /* Laufen mehrere Entwicklungen gleichzeitig (Shop-System, Malprogramm,
    * Börsen-App), teilt das Studio seine EP gleichmäßig — sonst käme ein
    * Zweitprodukt bei Firmen, die ständig am System weiterbauen, nie voran.
    * Die Börsen-App fehlte hier anfangs: Sie bekam nur den EP-Vorrat beim
    * Start und blieb danach für immer stehen. */
-  const laufend = [prod, mp, ba, app, jb].filter(x => x?.entwicklung).length;
+  const laufend = [prod, mp, ba, app, jb, wb].filter(x => x?.entwicklung).length;
   if (prod?.entwicklung) {
     prod.entwicklung.ep += ep / laufend;
     if (prod.entwicklung.ep >= prod.entwicklung.ziel) swVeroeffentlichen(prod, p);
@@ -4532,7 +4632,7 @@ function swBetrieb(t, p, bt, sperr = 1) {
     ba.entwicklung.ep += ep / laufend;
     if (ba.entwicklung.ep >= ba.entwicklung.ziel) boerseVeroeffentlichen(ba, p);
   }
-  for (const [x, art] of [[app, "app"], [jb, "job"]]) if (x?.entwicklung) {
+  for (const [x, art] of [[app, "app"], [jb, "job"], [wb, "web"]]) if (x?.entwicklung) {
     x.entwicklung.ep += ep / laufend;
     if (x.entwicklung.ep >= x.entwicklung.ziel) stadtSoftwareVeroeffentlichen(x, p, art);
   }
@@ -5601,12 +5701,13 @@ function grundbedarfKaufen() {
   const S = G.stadt, ergebnis = {};
   for (const [g, je100] of Object.entries(STADT.BEDARF)) {
     let rest = Math.floor(S.einwohner / 100 * je100 * 10) / 10;
-    const verkaeufer = Object.values(G.players).map(p => ({ p, frei: Math.floor((p.inv[g] || 0) * STADT.BEDARF_ANTEIL_MAX) })).filter(x => x.frei > 0);
-    const summe = verkaeufer.reduce((a, x) => a + x.frei, 0);
+    /* Website (Etappe 7): doppelte Reichweite als Gewicht beim Verteilen */
+    const verkaeufer = Object.values(G.players).map(p => ({ p, frei: Math.floor((p.inv[g] || 0) * STADT.BEDARF_ANTEIL_MAX), w: 1 + 2 * webBonus(p) })).filter(x => x.frei > 0);
+    const summe = verkaeufer.reduce((a, x) => a + x.frei * x.w, 0);
     let menge = 0, umsatz = 0;
     for (const x of verkaeufer) {
       if (!(rest > 0)) break;
-      const q = Math.min(x.frei, Math.ceil(rest * x.frei / summe), rest);
+      const q = Math.min(x.frei, Math.ceil(rest * x.frei * x.w / summe), rest);
       if (!(q > 0)) continue;
       /* Mindestens 70 % des Grundpreises: Übernachtungen fielen auf ~15 statt 38 $,
        * weil die Hotels sie in den Läden verramschten — die Touristik verdiente kaum. */
@@ -5653,7 +5754,8 @@ function stadtTick() {
   for (const t of G.map) if (t.wohnblock?.bis && t.wohnblock.bis <= G.tick) t.wohnblock = { stufe: t.wohnblock.stufe };
   wohnAuftraegePruefen();
   ruestTick();
-  if (G.tick % STADT.VERTEILUNG_TAKT === 0) { softwareStadtTick(); arbeitVerteilen(); }
+  rzVerfuegbarkeit();
+  if (G.tick % STADT.VERTEILUNG_TAKT === 0) { softwareStadtTick(); websiteTick(); arbeitVerteilen(); }
   if (G.tick % 10 === 0) {
     const da = versorgungPruefen();
     for (const g of Object.keys(VERSORGUNG)) S.fehlt[g] = da[g] ? 0 : (S.fehlt[g] || 0) + 10;
@@ -5661,6 +5763,7 @@ function stadtTick() {
   if (G.tick % STADT.TAKT !== 30) return;   // versetzt zu Steuern und Markttag
   loehneZahlen();
   buergerAppZahlen();
+  websiteZahlen();
   grundbedarfKaufen();
   touristikTick();
   const z = stadtZufriedenheit();
@@ -6324,7 +6427,7 @@ function snapshot() {
     steuerung: STEUERUNG, steuerStufe: STEUER_STUFE, steuerAboCfg: STEUER_ABO,
     leitDesign: LEIT_DESIGN, leitDesignAb: LEIT_DESIGN_AB, leitFunktion: LEIT_FUNKTION, turbo: TURBO,
     anzeigen: anzeigenPublic(), anzeigeCfg: { preisMin: ANZEIGE.PREIS_MIN, preisMax: ANZEIGE.PREIS_MAX, dauer: ANZEIGE.DAUER, text: ANZEIGE.TEXT, maxJe: ANZEIGE.MAX_JE, max: ANZEIGE.MAX },
-    buergerApp: buergerAppPublic(), buergerAppCfg: BUERGER_APP, touristik: touristikPublic(), touristikCfg: TOURISTIK, jobboerse: jobboersePublic(), jobboerseCfg: JOBBOERSE,
+    buergerApp: buergerAppPublic(), buergerAppCfg: BUERGER_APP, touristik: touristikPublic(), touristikCfg: TOURISTIK, website: websitePublic(), websiteCfg: WEBSITE, rechenzentren: rechenzentrenPublic(), rzVerteilungStd: RZ_VERTEILUNG, jobboerse: jobboersePublic(), jobboerseCfg: JOBBOERSE,
     boerseApp: boersePublic(), boerseAppCfg: { stufen: BOERSE_APP.STUFEN, abSystem: BOERSE_APP.AB_SYSTEM, preisMin: BOERSE_APP.PREIS_MIN, preisMax: BOERSE_APP.PREIS_MAX },
     logoV: Object.fromEntries(Object.values(G.players).filter(p => p.logo).map(p => [p.id, p.logo.v])), swDesign: SW_DESIGN, swDesignAb: SW_DESIGN_AB, swCfg: { install: SW.INSTALL, portalInstall: SW.PORTAL_INSTALL, versionEp: SW.VERSION_EP, werbeBoost: SW.WERBE_BOOST, gebMin: SW.GEB_MIN, gebMax: SW.GEB_MAX, einrMax: SW.EINR_MAX, aboMin: SW.ABO_MIN, aboMax: SW.ABO_MAX, handelssteuer: Math.round(satzBoerse() * SW.HANDELSSTEUER * 1000) / 10, markenwert: SW.MARKENWERT },
     marktLog: (G.marktLog || []).slice(0, 20), marktCfg: { aktien: AKTIEN, tag: MARKT.TAG, beta: MARKT.BETA, bauDauer: MARKT.BAU_DAUER, afaDauer: MARKT.AFA_DAUER },
@@ -8780,11 +8883,11 @@ io.on("connection", socket => {
     G.nextDividendIn = DIVIDEND_INTERVAL;
     G.wettrunde = { nr: 1, phase: "annahme", rest: WETT_ANNAHME, start: {} }; G.wetten = []; G.wettLetzte = []; G.wettReserve = WETT_RESERVE;
     G.markt = {}; G.marktLog = []; G.panikTag = null; G.panikErledigt = false; G.fonds = {}; G.etfHist = {}; G.faEtf = {}; G.software = {}; G.paint = {}; G.swFaktor = {}; G.werbeAktiv = new Set();
-    G.boerseApp = {}; G.buergerApp = {}; G.jobboerse = {}; G.tour = { firmen: {} }; G.depot = depotLeer(); G.bstat = {}; G.anzeigen = [];
+    G.boerseApp = {}; G.buergerApp = {}; G.jobboerse = {}; G.tour = { firmen: {} }; G.website = {}; G.rzUptime = {}; G.rzStoer = {}; G.depot = depotLeer(); G.bstat = {}; G.anzeigen = [];
     G.stadtkasse = STADT_GRUNDSTOCK; G.steuerStufe = 2; G.boerseGebuehren = 0; G.steuernGesamt = 0; G.stadtprojekt = null; G.projektPause = 120; G.stadtprojekteFertig = [];
     stadtInit();
     for (const pl of Object.values(G.players)) { pl.steuerStand = undefined; pl.steuerSchuld = 0; pl.steuerLetzter = null; }
-    for (const pl of Object.values(G.players)) { pl.wettOffen = 0; pl.wettLog = []; }
+    for (const pl of Object.values(G.players)) { pl.wettOffen = 0; pl.wettLog = []; pl.website = null; }
     /* Preisanker zurücksetzen — sonst startet die neue Runde mit den
      * verzerrten Kursen der alten (z. B. dauerhaft gedrücktem Ölpreis). */
     for (const k of Object.keys(GOODS)) Object.assign(MM[k], { price: BASEP[k], anchor: BASEP[k], sold: 0 });
@@ -8824,7 +8927,7 @@ io.on("connection", socket => {
     const version = (x.version || 0) + 1, ep = cfgX.STUFEN[version - 1].ep, vorrat = Math.min(ep, p.swEp || 0);
     p.swEp = (p.swEp || 0) - vorrat;
     x.entwicklung = { version, ziel: ep, ep: vorrat };
-    marktLog("software", `${p.name} entwickelt ${art === "app" ? "die Bürger-App" : "die Jobbörse"} ${x.name} v${version}`, { firmaId: p.id });
+    marktLog("software", `${p.name} entwickelt ${art === "app" ? "die Bürger-App" : art === "web" ? "den Website-Baukasten" : "die Jobbörse"} ${x.name} v${version}`, { firmaId: p.id });
     if (x.entwicklung.ep >= ep) stadtSoftwareVeroeffentlichen(x, p, art);
     return { ok: true, ep };
   };
@@ -8837,6 +8940,50 @@ io.on("connection", socket => {
     if (!x) { x = { id: "app_" + id(), ownerId: p.id, name: n.name, version: 0, preis, nutzer: 0, eb: [0], entwicklung: null }; G.buergerApp[x.id] = x; }
     x.name = n.name; x.preis = preis;
     ack?.({ ok: true, id: x.id }); pushState();
+  }));
+  /* --- Website-Baukasten und Rechenzentren (Etappe 7) --- */
+  socket.on("webEinstellen", guard((p, d = {}, ack) => {
+    const f = stadtSwPruefen(p, WEBSITE, "Website-Baukästen"); if (f) return ack?.({ error: f });
+    G.website ??= {};
+    let x = webEigenes(p);
+    const n = stadtSwName(d, x, G.website); if (n.error) return ack?.(n);
+    const preis = Math.round(Math.min(WEBSITE.PREIS_MAX, Math.max(WEBSITE.PREIS_MIN, +d.preis || x?.preis || WEBSITE.PREIS_START)));
+    if (!x) { x = { id: "web_" + id(), ownerId: p.id, name: n.name, version: 0, preis, eb: [0], entwicklung: null }; G.website[x.id] = x; }
+    x.name = n.name; x.preis = preis;
+    ack?.({ ok: true, id: x.id, preis }); pushState();
+  }));
+  socket.on("webEntwickeln", guard((p, _d, ack) => { ack?.(stadtSwEntwickeln(p, istSoftwareFirma(p) && webEigenes(p), WEBSITE, "web")); pushState(); }));
+  socket.on("websiteBestellen", guard((p, { anbieter, modul } = {}, ack) => {
+    if (!stadtAktiv()) return ack?.({ error: "Websites gibt es nur mit wachsender Stadt" });
+    const mod = WEBSITE.MODULE[modul];
+    if (!mod) return ack?.({ error: "Unbekanntes Modul" });
+    const portal = anbieter === WEB_STADTPORTAL, w = portal ? null : G.website?.[anbieter];
+    if (!portal && !(w?.version >= 1)) return ack?.({ error: "Dieser Website-Baukasten ist noch nicht fertig" });
+    if (portal && modul !== "grund") return ack?.({ error: "Das Stadtportal baut nur die Grundseite" });
+    if (!portal && w.version < mod.ab) return ack?.({ error: `${mod.name} gibt es erst ab ${w.name} v${mod.ab}` });
+    if (!portal && w.ownerId === p.id) return ack?.({ error: "Deine eigene Website baust du selbst — bestellen musst du sie nicht" });
+    const gleich = p.website?.anbieter === anbieter;
+    if (gleich && p.website.modul === modul) return ack?.({ error: "Diese Website läuft schon" });
+    if (!portal && !gleich && webKunden(w).length >= webPlaetze(w)) return ack?.({ error: `${w.name} ist ausgebucht — dem Anbieter fehlen Plätze im Rechenzentrum` });
+    const einr = gleich ? 0 : portal ? WEBSITE.STADTPORTAL.einrichtung : WEBSITE.EINRICHTUNG;   // Modulwechsel beim selben Anbieter: keine neue Einrichtung
+    if (p.cash < einr) return ack?.({ error: `Die Einrichtung kostet ${einr.toLocaleString("de-DE")} $` });
+    p.cash -= einr; p.stats.ausgaben += einr;
+    if (portal) G.stadtkasse += einr;
+    else if (einr) { const o = G.players[w.ownerId]; o.cash += einr; addRevenue(o, einr); (w.eb ??= [0])[0] += einr; w.gesamt = (w.gesamt || 0) + einr; logTx(o, "Software", `Website für ${p.name} eingerichtet`, einr); }
+    p.website = { anbieter, modul, bis: G.tick + (gleich ? 0 : WEBSITE.INSTALL) };
+    logTx(p, "Software", `Website ${mod.name} bei ${portal ? "Stadtportal" : w.name}`, -einr);
+    if (!portal && !p.bot) marktLog("software", `${p.name} lässt die Website von ${w.name} bauen`, { firmaId: p.id });
+    if (!portal) emitTo(w.ownerId, "notice", { text: `${p.name} bestellt eine Website (${mod.name}) bei ${w.name}.` });
+    ack?.({ ok: true, dauer: gleich ? 0 : WEBSITE.INSTALL }); pushState();
+  }));
+  socket.on("websiteKuendigen", guard((p, _d, ack) => { p.website = null; ack?.({ ok: true }); pushState(); }));
+  socket.on("rzVerteilung", guard((p, d = {}, ack) => {
+    if (!istSoftwareFirma(p)) return ack?.({ error: "Nur Software-Firmen verteilen Rechenzentrums-Plätze" });
+    const v = {};
+    for (const k of Object.keys(RZ_VERTEILUNG)) { const n = Math.round((+d[k] || 0) / 5) * 5; if (!(n >= 0 && n <= 100)) return ack?.({ error: "Ungültige Verteilung" }); v[k] = n; }
+    if (Object.values(v).reduce((a, b) => a + b, 0) !== 100) return ack?.({ error: "Die Anteile müssen zusammen 100 % ergeben" });
+    p.rzVerteilung = v;
+    ack?.({ ok: true, verteilung: v }); pushState();
   }));
   /* --- Touristik (Etappe 6): Zimmerpreis, Renovieren, Stadtfest --- */
   socket.on("zimmerpreis", guard((p, d, ack) => {
@@ -9871,7 +10018,7 @@ function runTick() {
          * wirkt genauso, aber nur auf die Waren dieser Branche. */
         const swF = swProd ? swKap * swTempoFuer(swProd, slot.good) : 1;
         const bezug = MM[slot.good].price * adBoost(p) * (swProd ? swPreisFuer(swProd, slot.good) : 1);
-        let q = Math.min(p.inv[slot.good], bt.retail.base * swF * retailFlow(slot.good) * shopSpeed(slot.good, slot.price, bezug) * (1 + konsumBoost()) * stadtNachfrage() * SPERR);
+        let q = Math.min(p.inv[slot.good], bt.retail.base * swF * retailFlow(slot.good) * shopSpeed(slot.good, slot.price, bezug) * (1 + konsumBoost()) * stadtNachfrage() * (1 + webBonus(p)) * SPERR);
         if (slot.qty != null) q = Math.min(q, slot.qty);   // begrenzte Verkaufsmenge
         if (q <= 0) return;
         p.inv[slot.good] -= q;
@@ -10894,6 +11041,11 @@ async function spawnBot(cfg, lvl = BOT_LEVELS[BOT_LEVEL_DEFAULT]) {
           }
           if (!job) await em("jobEinstellen", { name: cfg.sw.job, gebuehr: JOBBOERSE.GEB_START });
           else if (!job.entwicklung && job.version < JOBBOERSE.STUFEN.length && me.cash > 1500 && app?.version >= 1) await em("jobEntwickeln", {});
+          /* Etappe 7: Website-Baukasten nach der Bürger-App; ausgebucht → teurer */
+          const web = (st.website || []).find(x => x.ownerId === myId);
+          if (!web) await em("webEinstellen", { name: `${cfg.name} Web`.slice(0, 20), preis: WEBSITE.PREIS_START });
+          else if (!web.entwicklung && web.version < WEBSITE.STUFEN.length && me.cash > 1500 && app?.version >= 1) await em("webEntwickeln", {});
+          else if (web.version >= 1 && web.kunden > web.plaetze && web.preis < WEBSITE.PREIS_MAX && Math.random() < .2) await em("webEinstellen", { name: web.name, preis: web.preis + 5 });
         }
       }
       /* --- Touristik (Etappe 6): Zimmerpreis nachführen, Hotels renovieren,
@@ -10920,6 +11072,26 @@ async function spawnBot(cfg, lvl = BOT_LEVELS[BOT_LEVEL_DEFAULT]) {
         if (tf?.zimmer > 0 && !st.touristik.fest && !st.touristik.pause?.[myId] && Math.random() < .1) {
           const typ = me.cash > 15000 ? "festival" : me.cash > 8000 ? "konzert" : me.cash > 4000 ? "strandfest" : null;
           if (typ && (me.inv.uebernachtung || 0) >= Math.max(20, tf.gaeste * 2)) await em("festStarten", { typ });
+        }
+      }
+      /* --- Website (Etappe 7): mit Polster die Website mit dem meisten Bonus je
+       * Dollar bestellen, später aufwerten. Ohne Software-Anbieter notfalls die
+       * teure Grundseite des Stadtportals. --- */
+      if (st.stadt && st.website && cfg.industry !== "software" && Math.random() < .1) {
+        const meine = st.rechenzentren?.websites?.[myId];
+        const modulFuer = w => ["aktion", "portal", "grund"].find(m => WEBSITE.MODULE[m].ab <= w.version);
+        const angebote = (st.website || []).filter(w => w.version >= 1 && w.ownerId !== myId && (w.kunden < w.plaetze || meine?.anbieter === w.id));
+        if (!meine && me.cash > 6000) {
+          const best = angebote.map(w => { const m = me.cash > 12000 ? modulFuer(w) : "grund"; return { w, m, wert: WEBSITE.MODULE[m].bonus / (w.preis * WEBSITE.MODULE[m].faktor) }; })
+            .sort((a, b) => b.wert - a.wert)[0];
+          if (best) await em("websiteBestellen", { anbieter: best.w.id, modul: best.m });
+          else if (me.cash > 10000) await em("websiteBestellen", { anbieter: WEB_STADTPORTAL, modul: "grund" });
+        } else if (meine?.anbieter === WEB_STADTPORTAL && angebote.length) {
+          const billig = angebote.sort((a, b) => a.preis - b.preis)[0];
+          if (billig.preis < WEBSITE.STADTPORTAL.preis) await em("websiteBestellen", { anbieter: billig.id, modul: "grund" });
+        } else if (meine && me.cash > 15000) {
+          const w = angebote.find(x => x.id === meine.anbieter), m = w && modulFuer(w);
+          if (m && WEBSITE.MODULE[m].ab > WEBSITE.MODULE[meine.modul].ab) await em("websiteBestellen", { anbieter: w.id, modul: m });
         }
       }
       /* --- Werbenetz: mit Polster ab und zu eine Anzeige bei dem System buchen,

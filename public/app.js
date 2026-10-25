@@ -2032,6 +2032,112 @@ const EN = {
   "30 % der Löhne gehen als Lohnsteuer und Miete an die Stadt, 20 % ins Bürgerdepot.": "30 % of wages go to the city as wage tax and rent, 20 % into the citizens' depot.",
   "höchstens": "at most", "Schulden": "debt", "Bürger-Apps und Jobbörse": "Citizen apps and job board",
   "Bürger-App: bis 85 % der Einwohner zahlen ein Abo je Minute, 200 Nutzer je Rechenzentrums-Stufe des Anbieters. Jobbörse: Vorrang wie +0,3 bis +0,7 Lohnstufen gegen eine Gebühr je Arbeiter, 3 Abos je Rechenzentrums-Stufe.": "Citizen app: up to 85 % of residents pay a subscription per minute, 200 users per data-centre level of the provider. Job board: priority like +0.3 to +0.7 wage levels for a fee per worker, 3 subscriptions per data-centre level.",
+  /* Rechenzentren und Websites (Etappe 7) */
+  "200 Strom kaufen": "Buy 200 power",
+  "Aktionen": "Campaigns",
+  "Ansehen": "View",
+  "Auf Stufe": "To level",
+  "Ausbau, Preise, Platzverteilung, Websites": "Expansion, prices, capacity split, websites",
+  "Ausfall – Strom fehlte": "Outage – no power",
+  "Ausfälle": "outages",
+  "Ausfall": "outage",
+  "Ausgebucht — dem Anbieter fehlen Plätze im Rechenzentrum.": "Fully booked — the provider lacks data-centre slots.",
+  "Bezahlen im Online-Marktplatz": "Payments in the online marketplace",
+  "Branchenportal": "Industry portal",
+  "Buchungsseite, Baustoff-Portal, Kundenportal oder Ausschreibungen — je nach Branche.": "Booking page, building-materials portal, customer portal or tenders — depending on industry.",
+  "Bürger-App-Nutzer": "Citizen-app users",
+  "Dein Preis": "Your price",
+  "Deine Statusseite: So sehen Kunden und Mitspieler deine Rechenzentren. Ausbau, Preise und Platzverteilung stellst du hier direkt ein.": "Your status page: this is how customers and other players see your data centres. Set expansion, prices and capacity split right here.",
+  "Deine Website läuft hier": "Your website runs here",
+  "Diese Seite läuft mit": "This page runs on",
+  "Du hast keinen Online-Marktplatz": "You have no online marketplace",
+  "Einnahmen aus Websites": "Website income",
+  "Einrichtung": "Setup",
+  "Firmen-Website": "Company website",
+  "Gebaut von": "Built by",
+  "Gebäude gesteuert": "buildings controlled",
+  "Gemüsekisten-Abo, Launch-Events, Feste online buchen.": "Veg-box subscriptions, launch events, book festivals online.",
+  "Grundseite": "Basic site",
+  "Grundseite beim Stadtportal": "Basic site from the city portal",
+  "Grundseite beim Stadtportal bestellt": "Basic site ordered from the city portal",
+  "Hosting & Preise": "Hosting & prices",
+  "Hosting für Shops, Apps und Websites": "Hosting for shops, apps and websites",
+  "Kauforder": "Buy order",
+  "Kein passender Anbieter?": "No suitable provider?",
+  "Keine Ausfälle": "No outages",
+  "Keine passende Fabrik — ": "No suitable factory — ",
+  "Leitstand für Fabriken": "Control room for factories",
+  "Logo, Häuser oder Produkte, Bewertungen und Kontakt.": "Logo, venues or products, reviews and contact.",
+  "Mehr Ausstoß oder weniger Rohstoffe, je nach Branchenbaum": "More output or fewer inputs, depending on the industry tree",
+  "Mehr Reichweite: Läden, Gäste und Grundbedarf": "More reach: shops, guests and basic needs",
+  "Mehr für Websites heißt weniger für Shops und Apps": "More for websites means less for shops and apps",
+  "Minuten Vorrat. Fällt er aus, gehen Shops, Apps und Websites deiner Kunden offline.": "minutes of supply left. If it runs out, your customers' shops, apps and websites go offline.",
+  "Name deines Baukastens": "Name of your builder",
+  "Noch kein Rechenzentrum gebaut.": "No data centre built yet.",
+  "Noch kein Shop-System fertig": "No shop system finished yet",
+  "Noch kein System": "No system yet",
+  "Noch keine Kunden.": "No customers yet.",
+  "Noch keine Software-Firma mit Rechenzentrum.": "No software company with a data centre yet.",
+  "Noch keine volle Minute gemessen.": "No full minute measured yet.",
+  "Platzverteilung": "Capacity split",
+  "Plätze frei": "slots free",
+  "Rechenzentren": "Data centres",
+  "Rechenzentren und Websites": "Data centres and websites",
+  "Rechenzentrum": "Data centre",
+  "Rechenzentrum ausgebaut": "Data centre upgraded",
+  "Shop-Systeme und Steuerungen": "Shop systems and controls",
+  "Shops und Steuerungen": "Shops and controls",
+  "Software-Baukasten öffnen": "Open software builder",
+  "Software-Firmen entwickeln einen Website-Baukasten (Grundseite, Branchenportal, Aktionen). Andere Firmen zahlen 400 $ Einrichtung und ein Abo je Minute und bekommen +5 / +10 / +15 % Reichweite: schneller verkaufen, mehr Gäste, mehr Grundbedarf. Je Rechenzentrums-Stufe 2 Websites; der Anbieter verteilt seine Plätze selbst. Ohne Anbieter: Stadtportal-Grundseite für 600 $ und 45 $/min.": "Software companies develop a website builder (basic site, industry portal, campaigns). Other companies pay 400 $ setup plus a subscription per minute and get +5 / +10 / +15 % reach: faster sales, more guests, more basic needs. 2 websites per data-centre level; the provider splits its capacity. Without a provider: city-portal basic site for 600 $ and 45 $/min.",
+  "Stadtportal": "City portal",
+  "Status": "Status",
+  "Statusseite": "Status page",
+  "Statusseite öffnen": "Open status page",
+  "Steuern": "Control",
+  "Steuerung": "Control",
+  "Strom fehlte": "no power",
+  "Strom wird knapp": "Power running low",
+  "Strom/min": "power/min",
+  "Verfügbarkeit": "Availability",
+  "Verfügbarkeit, Hosting, Websites bestellen": "Availability, hosting, order websites",
+  "Was hier läuft": "What runs here",
+  "Website": "Website",
+  "Website ansehen und bestellen": "View and order website",
+  "Website bestellt": "Website ordered",
+  "Website gekündigt": "Website cancelled",
+  "Website kündigen": "Cancel website",
+  "Website-Baukasten": "Website builder",
+  "Website-Baukasten angelegt": "Website builder created",
+  "Website-Baukasten anlegen": "Create website builder",
+  "Websites": "Websites",
+  "Websites und Rechenzentren": "Websites and data centres",
+  "Zum Baukasten": "To the builder",
+  "am Netz": "online",
+  "aus – Strom fehlt": "off – no power",
+  "ausbauen": "upgrade",
+  "ausgelastet": "utilised",
+  "bei": "at",
+  "bestellen": "order",
+  "braucht einen Baum für deine Branche": "needs a tree for your industry",
+  "deine Website": "your website",
+  "du hast noch keine Website": "you have no website yet",
+  "hat noch keinen Website-Baukasten.": "has no website builder yet.",
+  "in 10 Minuten": "in 10 minutes",
+  "installieren": "install",
+  "je Minute ab Grundseite": "per minute from basic site",
+  "je Minute und Gebäude": "per minute and building",
+  "je Verkauf": "per sale",
+  "letzte": "last",
+  "läuft hier": "runs here",
+  "mehr": "more",
+  "online": "online",
+  "vor": "",
+  "wechseln": "switch",
+  "weniger": "less",
+  "wird eingerichtet": "being set up",
+  "wird installiert": "is being installed",
+  "Eine Website für deine Firma": "A website for your company",
+  "Software-Firmen bauen jetzt Websites. Eine eigene Website bringt mehr Reichweite: Deine Läden verkaufen schneller, Hotels bekommen mehr Gäste. Bestellen kannst du sie auf der Statusseite eines Rechenzentrums.": "Software companies now build websites. Your own website brings more reach: your shops sell faster, hotels get more guests. Order one on a data centre's status page.",
   /* Touristik (Etappe 6) */
   "Auf der Karte zeigen": "Show on map",
   "Ausgebucht — wir mussten woanders schlafen.": "Fully booked — we had to sleep elsewhere.",
@@ -5499,7 +5605,9 @@ function clickTile(e) {
         meins ? `${meins.name}: <b>${meins.kunden}</b> Kunden auf <b>${meins.plaetze ?? 0}</b> Plätzen` : "Noch kein Shop-System");
       if (bt.studio) zeilen.push(meins?.entwicklung ? `Entwickelt ${meins.name} v${meins.entwicklung.version}: <b>${meins.entwicklung.ep}/${meins.entwicklung.ziel} EP</b>`
         : meins ? `${meins.name} v${meins.version} · ${swChips(meins)}` : "Noch kein Shop-System angelegt");
-      swHtml = `<div class="tmHinweis">${zeilen.join("<br>")}</div>` + (mine ? `<button class="tmHaupt" id="swPanel"><span>Software-Baukasten öffnen</span><small>Name, Preise, neue Versionen</small></button>` : "");
+      swHtml = `<div class="tmHinweis">${zeilen.join("<br>")}</div>`
+        + (bt.rz && store.get().state.stadt ? `<button class="tmHaupt" id="rzAuf"><span>🌐 ${tUe("Statusseite öffnen")}</span><small>${mine ? tUe("Ausbau, Preise, Platzverteilung, Websites") : tUe("Verfügbarkeit, Hosting, Websites bestellen")}</small></button>` : "")
+        + (mine ? `<button class="${bt.rz && store.get().state.stadt ? "tmKlein" : "tmHaupt"}" id="swPanel" style="margin-top:4px">${bt.rz && store.get().state.stadt ? tUe("Software-Baukasten öffnen") : "<span>Software-Baukasten öffnen</span><small>Name, Preise, neue Versionen</small>"}</button>` : "");
     }
     /* Steuerungssoftware auf Produktionsgebäuden: Systeme mit einem Baum für
      * die Branche dieses Gebäudes, Wirkung je nach Stufe, Abo je Minute. */
@@ -5624,6 +5732,7 @@ function clickTile(e) {
     tm.querySelector("#swPanel")?.addEventListener("click", () => { tm.style.display = "none"; openPanel("software"); });
     tm.querySelector("#tourPanel")?.addEventListener("click", () => { tm.style.display = "none"; openPanel("touristik"); });
     tm.querySelector("#hotelAuf")?.addEventListener("click", () => { tm.style.display = "none"; hotelOeffnen(t.owner); });
+    tm.querySelector("#rzAuf")?.addEventListener("click", () => { tm.style.display = "none"; rzOeffnen(t.owner); });
     tm.querySelector("#renov")?.addEventListener("click", () => { act("renovieren", { x: t.x, y: t.y }); tm.style.display = "none"; });
     tm.querySelector("#shopAuf")?.addEventListener("click", () => { tm.style.display = "none"; shopOeffnen(t.x, t.y); });
     tm.querySelector("#upgrade")?.addEventListener("click", () => { act("upgradeBuilding", { x: t.x, y: t.y }); tm.style.display = "none"; });
@@ -6326,6 +6435,228 @@ document.getElementById("hotelFenster").addEventListener("click", e => {
     cam.y = -(x + y) * TH / 2 * cam.z + innerHeight / 2 - 120;
   }
 });
+/* ---- Statusseite einer Software-Firma (Etappe 7): Rechenzentren, Hosting, Website-Baukasten ----
+ * Ein Browserfenster wie Shop- und Buchungsseite, mit drei Reitern. Besucher
+ * installieren Shop-System und Steuerung direkt und bestellen Websites; der
+ * Inhaber baut aus, stellt Preise ein und verteilt seine Plätze. */
+const RZW = { offen: false, pid: null, reiter: "status", modul: "grund", sig: {} };
+const rzLvl = l => 1 + 0.3 * ((l || 1) - 1);
+function rzOeffnen(pid, reiter) {
+  Object.assign(RZW, { offen: true, pid, reiter: reiter || "status", sig: {} });
+  const el = document.getElementById("rzFenster");
+  el.hidden = false;
+  el.innerHTML = `<div class="sfBrowser hfBrowser rzBrowser" role="dialog" aria-label="${t("Statusseite")}">
+    <div class="sfLeiste"><span class="sfPunkte"><i></i><i></i><i></i></span>
+      <span class="sfUrl"></span><button type="button" class="sfZu" data-rzzu aria-label="${t("Schließen")}">✕</button></div>
+    <header class="sfKopf"></header>
+    <nav class="rzReiter"></nav>
+    <div class="sfHinweis" hidden></div>
+    <div class="rzWarn" hidden></div>
+    <div class="rzInhalt"></div>
+    <footer class="sfFuss"></footer>
+  </div>`;
+  SFX.spiel("klick");
+  rzZeichnen();
+}
+function rzSchliessen() {
+  RZW.offen = false;
+  const el = document.getElementById("rzFenster");
+  el.hidden = true; el.innerHTML = "";
+}
+const rzSetze = (sel, html, key) => {
+  if (RZW.sig[key] === html) return;
+  RZW.sig[key] = html;
+  const el = document.querySelector("#rzFenster " + sel); if (el) el.innerHTML = html;
+};
+function rzZeichnen() {
+  const { state, me, myId } = store.get();
+  const owner = state?.players?.[RZW.pid];
+  if (!state?.stadt || !owner) return rzSchliessen();
+  const fenster = document.getElementById("rzFenster"), meins = RZW.pid === myId, tick = state.tick;
+  const sys = (state.software || []).find(x => x.ownerId === RZW.pid && !x.portal);
+  const app = (state.buergerApp || []).find(x => x.ownerId === RZW.pid);
+  const web = (state.website || []).find(x => x.ownerId === RZW.pid), wcfg = state.websiteCfg;
+  const rz = state.rechenzentren?.firmen?.[RZW.pid] || { uptime: [], verteilung: state.rzVerteilungStd || { shops: 50, apps: 30, web: 20 } };
+  const B = BTYPES(), farbe = sys?.farbe || owner.color || "#1d4ed8";
+  fenster.querySelector(".sfBrowser").style.setProperty("--sys", farbe);
+  const racks = state.map.filter(x => x.owner === RZW.pid && B[x.btype]?.rz);
+  const up = rz.uptime || [], upQuote = up.length ? Math.round(up.reduce((a, b) => a + b, 0) / up.length * 100) : 100;
+  const belegt = { shops: sys?.kunden || 0, apps: app?.nutzer || 0, web: web?.kunden || 0 };
+  const kap = { shops: sys?.plaetze || 0, apps: app?.kapazitaet || 0, web: web?.plaetze || 0 };
+  const frei = Math.max(0, kap.shops - belegt.shops) + Math.max(0, kap.web - belegt.web);
+  rzSetze(".sfUrl", `🔒 status.cs/${shopSlug(owner.name || "rz")}${RZW.reiter === "status" ? "" : RZW.reiter === "hosting" ? "/hosting" : "/websites"}`, "url");
+  rzSetze(".sfKopf", `<div class="sfMarke">${logoHtml(RZW.pid, "sfLogo", farbe)}
+      <div><b>${escapeHtml(rohText(owner.name))} ${t("Rechenzentren")}</b><small>${t("Hosting für Shops, Apps und Websites")}${sys?.version ? ` · ${escapeHtml(rohText(sys.name))} v${sys.version}` : ""}</small></div></div>
+    <span class="rzBadges"><span class="sfBadge">${upQuote} % ${t("online")} · ${up.length || 0} min</span><span class="sfBadge">${frei} ${t("Plätze frei")}</span></span>`, "kopf" + (logoBild(RZW.pid) || "").length);
+  rzSetze(".rzReiter", [["status", "Status"], ["hosting", "Hosting & Preise"], ["websites", "Website-Baukasten"]].map(([k, n]) =>
+    `<button type="button" data-rzreiter="${k}" class="${RZW.reiter === k ? "on" : ""}">${t(n)}</button>`).join(""), "reiter" + RZW.reiter);
+  fenster.querySelector(".sfHinweis").hidden = !meins;
+  rzSetze(".sfHinweis", t("Deine Statusseite: So sehen Kunden und Mitspieler deine Rechenzentren. Ausbau, Preise und Platzverteilung stellst du hier direkt ein."), "hinweis");
+  /* Strom: nur der Inhaber sieht, wie lange der Vorrat für die Rechenzentren reicht */
+  const stromJeMin = racks.filter(x => !(x.bauBis > tick)).reduce((a, x) => a + B[x.btype].rz.in.strom * rzLvl(x.level) * 60, 0);
+  const stromMin = stromJeMin ? Math.floor((me.inv?.strom || 0) / stromJeMin) : Infinity;
+  const warn = fenster.querySelector(".rzWarn");
+  warn.hidden = !(meins && stromMin < 6);
+  rzSetze(".rzWarn", meins && stromMin < 6 ? `<span><b>${t("Strom wird knapp")}:</b> ${t("noch")} ${stromMin} ${t("Minuten Vorrat. Fällt er aus, gehen Shops, Apps und Websites deiner Kunden offline.")}</span>
+    <button type="button" class="sfKaufen" data-rzstrom>${t("200 Strom kaufen")}</button>` : "", "warn" + stromMin);
+  let html = "";
+  if (RZW.reiter === "status") {
+    const n = Math.max(up.length, 1);
+    const balken = up.length ? up.map((u, i) => `<span class="rzUp ${u ? "an" : "aus"}" title="${t("vor")} ${up.length - i} min: ${u ? t("online") : t("Ausfall – Strom fehlte")}"></span>`).join("") : `<span class="meta">${t("Noch keine volle Minute gemessen.")}</span>`;
+    const ausfaelle = up.filter(u => !u).length;
+    const karten = racks.map(x => {
+      const lvl = x.level || 1, imBau = x.bauBis && tick < x.bauBis, an = x.rzAktiv && !imBau;
+      const plaetze = B[x.btype].rz.plaetze * lvl, ausl = kap.shops ? Math.min(100, Math.round(belegt.shops / Math.max(1, kap.shops) * 100)) : 0;
+      const kosten = { el: Math.ceil(B[x.btype].cost / 2500 * lvl), cash: Math.round(B[x.btype].cost * 0.35 * lvl) };
+      return `<article class="rzKarte">
+        <div class="rzKarteKopf"><b>${t("Rechenzentrum")} ${x.x}·${x.y}</b><span class="rzStatus ${an ? "an" : "aus"}">${imBau ? t("im Bau") : an ? t("am Netz") : t("aus – Strom fehlt")}</span></div>
+        <small>${t("Stufe")} ${lvl} · ${plaetze} ${t("Plätze")} · ${Math.round(B[x.btype].rz.in.strom * rzLvl(lvl) * 60)} ${t("Strom/min")}</small>
+        <div class="rzBalken"><i style="width:${an ? ausl : 0}%"></i></div>
+        <small class="mono">${an ? ausl : 0} % ${t("ausgelastet")}</small>
+        ${meins && lvl < 5 ? `<button type="button" class="sfKaufen" data-rzausbau="${x.x},${x.y}" ${imBau || me.cash < kosten.cash || (me.inv?.elektronik || 0) < kosten.el ? "disabled" : ""}>${t("Auf Stufe")} ${lvl + 1} ${t("ausbauen")} · ${fmt(kosten.cash)} + ${kosten.el} ${gname("elektronik")}</button>` : ""}
+        <button type="button" class="hfKarte" data-rzkarte="${x.x},${x.y}">📍 ${t("Auf der Karte zeigen")}</button>
+      </article>`;
+    }).join("");
+    const zeile = (name, b, k) => `<div class="rzZeile"><span>${name}</span><div class="rzBalken"><i style="width:${k ? Math.min(100, Math.round(b / k * 100)) : 0}%"></i></div><b class="mono">${b} / ${k}</b></div>`;
+    html = `<section class="rzBox"><div class="rzBoxKopf"><b>${t("Verfügbarkeit")} · ${t("letzte")} ${RZ_UPTIME_ANZ} ${t("Minuten")}</b><span class="mono">${upQuote} %</span></div>
+        <div class="rzUptime" style="grid-template-columns:repeat(${n},minmax(0,1fr))">${balken}</div>
+        <small>${ausfaelle ? `${ausfaelle} ${ausfaelle === 1 ? t("Ausfall") : t("Ausfälle")}: ${t("Strom fehlte")}` : t("Keine Ausfälle")}</small></section>
+      <div class="sfGrid rzKarten">${karten || `<div class="sfLeer">${t("Noch kein Rechenzentrum gebaut.")}</div>`}</div>
+      <section class="rzBox"><b>${t("Was hier läuft")}</b>
+        ${zeile(t("Shop-Systeme und Steuerungen"), belegt.shops, kap.shops)}
+        ${zeile(t("Bürger-App-Nutzer"), belegt.apps, kap.apps)}
+        ${zeile(t("Websites"), belegt.web, kap.web)}</section>`;
+  } else if (RZW.reiter === "hosting") {
+    const pm = (key, minus, plus) => meins ? `<div class="rzPreisZeile"><span>${t("Dein Preis")}</span><span class="sfMenge"><button type="button" data-rzpreis="${key}" data-d="-1" aria-label="${t("weniger")}">−</button><b class="mono">${minus}</b><button type="button" data-rzpreis="${key}" data-d="1" aria-label="${t("mehr")}">+</button></span></div>` : "";
+    /* Besucher: direkt auf den eigenen Gebäuden installieren */
+    const laeden = state.map.filter(x => x.owner === myId && B[x.btype]?.online);
+    const fabriken = sys ? state.map.filter(x => x.owner === myId && state.steuerung?.[B[x.btype]?.industry] && (B[x.btype]?.proc || B[x.btype]?.out) && !B[x.btype]?.retail && !B[x.btype]?.studio && !B[x.btype]?.rz && (sys.stufen?.[B[x.btype].industry] || 0) >= 1) : [];
+    const sysKnoepfe = !sys?.version ? `<div class="sfEigen">${t("Noch kein Shop-System fertig")}</div>`
+      : meins ? "" : laeden.length ? laeden.map(x => x.system?.produktId === sys.id ? `<div class="sfEigen">${bname(x.btype)} ${x.x}·${x.y}: ${t("läuft hier")}</div>`
+        : `<button type="button" class="sfKaufen" data-rzsys="${x.x},${x.y}" ${me.cash < sys.einrichtung || (sys.plaetze != null && sys.kunden >= sys.plaetze) ? "disabled" : ""}>${t("Auf")} ${bname(x.btype)} ${x.x}·${x.y} ${t("installieren")}</button>`).join("")
+        : `<div class="sfEigen">${t("Du hast keinen Online-Marktplatz")}</div>`;
+    const stKnoepfe = !sys?.version ? "" : meins ? "" : fabriken.length ? fabriken.slice(0, 4).map(x => x.steuerung?.produktId === sys.id ? `<div class="sfEigen">${bname(x.btype)}: ${t("läuft hier")}</div>`
+        : `<button type="button" class="sfKaufen" data-rzsteuer="${x.x},${x.y}" ${me.cash < (sys.steuerAbo || 0) || (sys.plaetze != null && sys.kunden >= sys.plaetze) ? "disabled" : ""}>${t("Steuern")}: ${bname(x.btype)}</button>`).join("")
+        : `<div class="sfEigen">${t("Keine passende Fabrik — ")}${escapeHtml(rohText(sys?.name || ""))} ${t("braucht einen Baum für deine Branche")}</div>`;
+    const v = rz.verteilung;
+    const vZeile = (k, name) => `<div class="rzZeile rzVert"><span>${name}</span><div class="rzBalken"><i style="width:${v[k]}%"></i></div><b class="mono">${v[k]} % · ${kap[k]}</b>
+      <span class="rzPM"><button type="button" data-rzvert="${k}" data-d="-5" aria-label="${t("weniger")}">−</button><button type="button" data-rzvert="${k}" data-d="5" aria-label="${t("mehr")}">+</button></span></div>`;
+    html = `<div class="sfGrid rzAngebote">
+        <article class="sfProdukt"><span class="sfBand">${t("Shop-System")}</span><div class="sfBild"><span>🛒</span></div>
+          <h5>${sys ? `${escapeHtml(rohText(sys.name))} v${sys.version || 0}` : t("Noch kein System")}</h5>
+          <div class="sfPreis"><b>${sys ? String(sys.gebuehr).replace(".", ",") + " %" : "—"}</b><span>${t("je Verkauf")} · ${t("Einrichtung")} ${fmt(sys?.einrichtung || 0)}</span></div>
+          <div class="sfInfo">${t("Bezahlen im Online-Marktplatz")} · ${sys?.plaetze != null ? Math.max(0, sys.plaetze - sys.kunden) : 0} ${t("Plätze frei")}</div>
+          ${meins && sys ? pm("gebuehr", String(sys.gebuehr).replace(".", ",") + " %") + pm("einrichtung", fmt(sys.einrichtung)) : ""}
+          <div class="sfKauf">${sysKnoepfe}</div></article>
+        <article class="sfProdukt"><span class="sfBand">${t("Steuerung")}</span><div class="sfBild"><span>🎛️</span></div>
+          <h5>${t("Leitstand für Fabriken")}</h5>
+          <div class="sfPreis"><b>${fmt(sys?.steuerAbo || 0)}</b><span>${t("je Minute und Gebäude")}</span></div>
+          <div class="sfInfo">${t("Mehr Ausstoß oder weniger Rohstoffe, je nach Branchenbaum")}${sys ? ` · ${sys.steuerKunden || 0} ${t("Gebäude gesteuert")}` : ""}</div>
+          ${meins && sys ? pm("steuerAbo", fmt(sys.steuerAbo || 0)) : ""}
+          <div class="sfKauf">${stKnoepfe}</div></article>
+        <article class="sfProdukt"><span class="sfBand">${t("Website")}</span><div class="sfBild"><span>🌐</span></div>
+          <h5>${web ? escapeHtml(rohText(web.name)) : t("Firmen-Website")}</h5>
+          <div class="sfPreis"><b>${web ? fmt(web.preis) : "—"}</b><span>${t("je Minute ab Grundseite")} · ${t("Einrichtung")} ${fmt(wcfg?.EINRICHTUNG || 400)}</span></div>
+          <div class="sfInfo">${t("Mehr Reichweite: Läden, Gäste und Grundbedarf")} · ${web ? Math.max(0, web.plaetze - web.kunden) : 0} ${t("Plätze frei")}</div>
+          ${meins && web ? pm("web", fmt(web.preis)) : ""}
+          <div class="sfKauf"><button type="button" class="sfKaufen" data-rzreiter="websites">${meins ? t("Zum Baukasten") : t("Website ansehen und bestellen")}</button></div></article>
+      </div>
+      ${meins ? `<section class="rzBox"><div class="rzBoxKopf"><b>${t("Platzverteilung")}</b><small>${t("Mehr für Websites heißt weniger für Shops und Apps")}</small></div>
+        ${vZeile("shops", t("Shops und Steuerungen"))}${vZeile("apps", t("Bürger-Apps"))}${vZeile("web", t("Websites"))}</section>` : ""}`;
+  } else {
+    const meineSeite = state.rechenzentren?.websites?.[myId];
+    const ver = web?.version || 0;
+    const module = wcfg ? Object.entries(wcfg.MODULE).map(([k, m]) => {
+      const offen = ver >= m.ab, preis = web ? Math.round(web.preis * m.faktor * 100) / 100 : 0;
+      return `<button type="button" class="rzModul${RZW.modul === k ? " on" : ""}${offen ? "" : " zu"}" data-rzmodul="${k}" ${offen ? "" : "disabled"}>
+        <span class="rzModulKopf"><b>${t(m.name)}</b><span class="mono">${web ? fmt(preis) + "/min" : "—"}</span></span>
+        <small>${t({ grund: "Logo, Häuser oder Produkte, Bewertungen und Kontakt.", portal: "Buchungsseite, Baustoff-Portal, Kundenportal oder Ausschreibungen — je nach Branche.", aktion: "Gemüsekisten-Abo, Launch-Events, Feste online buchen." }[k])}</small>
+        <em>${offen ? `+${Math.round(m.bonus * 100)} % ${t("Reichweite")}` : `${t("ab")} v${m.ab}`}</em></button>`;
+    }).join("") : "";
+    const gew = wcfg?.MODULE[RZW.modul];
+    let bestellen = "";
+    if (!meins && web?.version >= 1) {
+      const laeuft = meineSeite?.anbieter === web.id;
+      bestellen = laeuft && meineSeite.modul === RZW.modul
+        ? `<div class="sfEigen">${t("Deine Website läuft hier")}: ${t(wcfg.MODULE[meineSeite.modul].name)}${meineSeite.online ? "" : ` · ${t("wird eingerichtet")}`} · +${Math.round((meineSeite.bonus || 0) * 100)} % ${t("Reichweite")}</div>
+           <button type="button" class="hfKarte" data-rzkuendigen>${t("Website kündigen")}</button>`
+        : `<button type="button" class="sfKaufen" data-rzbestellen ${ver < (gew?.ab || 9) || (!laeuft && web.kunden >= web.plaetze) ? "disabled" : ""}>${t(gew.name)} ${laeuft ? t("wechseln") : t("bestellen")} · ${fmt(Math.round(web.preis * gew.faktor))}/min${laeuft ? "" : ` + ${fmt(wcfg.EINRICHTUNG)} ${t("Einrichtung")}`}</button>
+           ${!laeuft && web.kunden >= web.plaetze ? `<small>${t("Ausgebucht — dem Anbieter fehlen Plätze im Rechenzentrum.")}</small>` : ""}`;
+    }
+    const entw = meins ? (web ? (web.entwicklung
+        ? `<div class="sfEigen">v${web.entwicklung.version} ${t("in Arbeit")}: ${web.entwicklung.ep} / ${web.entwicklung.ziel} EP</div>`
+        : ver < (wcfg?.STUFEN.length || 3) ? `<button type="button" class="sfKaufen" data-rzwebdev>${escapeHtml(rohText(web.name))} v${ver + 1} ${t("entwickeln")} · ${wcfg.STUFEN[ver].ep} EP</button>`
+        : `<div class="sfEigen">${t("Voll ausgebaut")}</div>`)
+      : (sys?.version || 0) >= (wcfg?.AB_SYSTEM || 2)
+        ? `<label class="rzNeu"><span>${t("Name deines Baukastens")}</span><input id="rzWebName" maxlength="20" placeholder="z. B. ${escapeHtml(rohText(owner.name)).slice(0, 12)} Web"></label><button type="button" class="sfKaufen" data-rzwebneu>${t("Website-Baukasten anlegen")}</button>`
+        : `<div class="sfEigen">${t("Ab Shop-System v")}${wcfg?.AB_SYSTEM || 2}</div>`) : "";
+    const kunden = (web?.liste || []).map(k => {
+      const hat = (state.touristik?.firmen || []).some(f => f.id === k.id && f.zimmer > 0);
+      return `<div class="rzKunde"><i class="${k.online ? "an" : "aus"}"></i><span><b>${escapeHtml(rohText(k.name))}</b><small class="mono">${shopSlug(k.name)}.cs · ${t(wcfg.MODULE[k.modul]?.name || "")}</small></span>
+        ${hat ? `<button type="button" class="hfKarte" data-hotelauf="${k.id}">${t("Ansehen")}</button>` : `<span class="rzOn ${k.online ? "an" : "aus"}">${k.online ? t("online") : t("wird eingerichtet")}</span>`}</div>`;
+    }).join("");
+    html = `<div class="rzZwei">
+      <section class="rzBox"><b>${t("Website-Baukasten")}${web ? ` · ${escapeHtml(rohText(web.name))} v${ver}` : ""}</b>
+        ${web || !meins ? (web ? module : `<div class="sfLeer">${escapeHtml(rohText(owner.name))} ${t("hat noch keinen Website-Baukasten.")}</div>`) : ""}
+        ${bestellen}${entw}</section>
+      <section class="rzBox"><b>${t("Gebaut von")} ${escapeHtml(rohText(owner.name))}</b>
+        ${kunden || `<div class="sfLeer">${t("Noch keine Kunden.")}</div>`}
+        ${meins && web ? `<small>${t("Einnahmen aus Websites")}: <b class="mono">${fmt(web.einnahmen10 || 0)}</b> ${t("in 10 Minuten")}</small>` : ""}</section>
+    </div>
+    ${!meins && !meineSeite ? `<div class="rzPortal">${t("Kein passender Anbieter?")} <button type="button" class="hfKarte" data-rzportal>${t("Grundseite beim Stadtportal")} · ${fmt(wcfg?.STADTPORTAL.einrichtung || 600)} + ${fmt(wcfg?.STADTPORTAL.preis || 45)}/min</button></div>` : ""}`;
+  }
+  rzSetze(".rzInhalt", html, "inhalt");
+  rzSetze(".sfFuss", `${sys && !sys.portal ? logoHtml(sys.ownerId, "sfFussLogo", sys.farbe) : `<span class="sfFussLogo">🏛</span>`}<span>${t("Diese Seite läuft mit")} <b>${sys ? escapeHtml(rohText(sys.name)) : t("Stadtportal")}</b>${sys?.version ? ` v${sys.version}` : ""}</span>`, "fuss");
+}
+const RZ_UPTIME_ANZ = 30;
+document.getElementById("rzFenster").addEventListener("click", e => {
+  if (e.target.closest("[data-rzzu]") || e.target.id === "rzFenster") return rzSchliessen();
+  const { state, me, myId } = store.get();
+  const em = (ev, d, ok) => socket.emit(ev, d, r => { if (r?.error) return toast(r.error, true); if (ok) toast(typeof ok === "function" ? ok(r) : ok); render(store.get()); });
+  const rt = e.target.closest("[data-rzreiter]");
+  if (rt) { RZW.reiter = rt.dataset.rzreiter; RZW.sig = {}; return rzZeichnen(); }
+  const md = e.target.closest("[data-rzmodul]");
+  if (md) { RZW.modul = md.dataset.rzmodul; RZW.sig.inhalt = null; return rzZeichnen(); }
+  const sys = (state.software || []).find(x => x.ownerId === RZW.pid && !x.portal), web = (state.website || []).find(x => x.ownerId === RZW.pid);
+  const xy = v => v.split(",").map(Number);
+  const a = e.target.closest("[data-rzausbau]");
+  if (a) { const [x, y] = xy(a.dataset.rzausbau); return em("upgradeBuilding", { x, y }, t("Rechenzentrum ausgebaut")); }
+  const k = e.target.closest("[data-rzkarte]");
+  if (k) { const [x, y] = xy(k.dataset.rzkarte); rzSchliessen(); openPanel("karte"); cam.z = Math.max(cam.z, 1.2); cam.x = -(x - y) * TW / 2 * cam.z; cam.y = -(x + y) * TH / 2 * cam.z + innerHeight / 2 - 120; return; }
+  if (e.target.closest("[data-rzstrom]")) {
+    const ask = (state.orders || []).filter(o => o.good === "strom" && o.side === "sell" && o.playerId !== myId).reduce((m, o) => Math.min(m, o.price), Infinity);
+    const preis = Number.isFinite(ask) ? ask : Math.round((state.avg?.strom || 2) * 1.1 * 100) / 100;
+    return em("placeOrder", { side: "buy", good: "strom", qty: 200, price: preis }, `${t("Kauforder")}: 200 ${gname("strom")} · ${fp(preis)}`);
+  }
+  const s = e.target.closest("[data-rzsys]");
+  if (s && sys) { const [x, y] = xy(s.dataset.rzsys); return em("installSystem", { x, y, produktId: sys.id }, `${sys.name} ${t("wird installiert")}`); }
+  const st = e.target.closest("[data-rzsteuer]");
+  if (st && sys) { const [x, y] = xy(st.dataset.rzsteuer); return em("installSteuerung", { x, y, produktId: sys.id }, `${t("Steuerung")} ${sys.name} ${t("wird installiert")}`); }
+  const pr = e.target.closest("[data-rzpreis]");
+  if (pr) {
+    const d = +pr.dataset.d, key = pr.dataset.rzpreis;
+    if (key === "web" && web) return em("webEinstellen", { name: web.name, preis: web.preis + d * 5 });
+    if (!sys) return;
+    const neu = { gebuehr: sys.gebuehr + d * 0.5, einrichtung: sys.einrichtung + d * 50, steuerAbo: (sys.steuerAbo || 0) + d * 2 }[key];
+    return em("softwareEinstellen", { name: sys.name, [key]: Math.max(0, neu) });
+  }
+  const vt = e.target.closest("[data-rzvert]");
+  if (vt) {
+    const v = { ...(state.rechenzentren?.firmen?.[myId]?.verteilung || state.rzVerteilungStd) }, key = vt.dataset.rzvert, d = +vt.dataset.d;
+    if (v[key] + d < 0 || v[key] + d > 100) return;
+    const ziel = Object.keys(v).filter(x => x !== key).sort((p1, p2) => d > 0 ? v[p2] - v[p1] : v[p1] - v[p2])[0];
+    if (v[ziel] - d < 0) return;
+    v[key] += d; v[ziel] -= d;
+    return em("rzVerteilung", v);
+  }
+  if (e.target.closest("[data-rzbestellen]") && web) return em("websiteBestellen", { anbieter: web.id, modul: RZW.modul }, r => `${t("Website bestellt")}${r.dauer ? ` · ${r.dauer} s ${t("Einrichtung")}` : ""}`);
+  if (e.target.closest("[data-rzportal]")) return em("websiteBestellen", { anbieter: "stadtportal", modul: "grund" }, t("Grundseite beim Stadtportal bestellt"));
+  if (e.target.closest("[data-rzkuendigen]")) return em("websiteKuendigen", {}, t("Website gekündigt"));
+  if (e.target.closest("[data-rzwebdev]")) return em("webEntwickeln", {}, r => `${t("Entwicklung gestartet")}: ${r.ep} EP`);
+  if (e.target.closest("[data-rzwebneu]")) return em("webEinstellen", { name: document.getElementById("rzWebName")?.value, preis: state.websiteCfg?.PREIS_START || 25 }, t("Website-Baukasten angelegt"));
+  const ha = e.target.closest("[data-hotelauf]");
+  if (ha) { rzSchliessen(); return hotelOeffnen(ha.dataset.hotelauf); }
+});
 /* ---- Software-Panel: Reiter, Überblick, Bürger-App und Jobbörse (Etappe 5) ---- */
 let SW_REITER = (() => { try { return localStorage.getItem("cs_swReiter") || "markt"; } catch { return "markt"; } })();
 const appEntwurf = {}, jobEntwurf = {};
@@ -6395,6 +6726,20 @@ function jobboerseHtml(state, me, eigene) {
       : `<div class="note">${t("Voll ausgebaut")}: ${text(cfg.STUFEN[cfg.STUFEN.length - 1])}.</div>`) : ""}`;
 }
 /* Markt-Reiter: alle Bürger-Apps und Jobbörsen der Stadt, Jobbörse abonnieren */
+/* Rechenzentren der Stadt und die eigene Website (Etappe 7) */
+function rzMarktHtml(state, myId) {
+  const firmen = Object.entries(state.rechenzentren?.firmen || {}).filter(([pid]) => state.players?.[pid]);
+  const meine = state.rechenzentren?.websites?.[myId], cfg = state.websiteCfg;
+  const anbieter = meine && (meine.anbieter === "stadtportal" ? t("Stadtportal") : (state.website || []).find(w => w.id === meine.anbieter)?.name);
+  return `<div class="sec" style="margin-top:16px">${t("Rechenzentren und Websites")} <span class="meta">· ${meine ? `${t("deine Website")}: ${t(cfg?.MODULE[meine.modul]?.name || "")} ${t("bei")} ${escapeHtml(rohText(anbieter || "—"))}, +${Math.round((meine.bonus || 0) * 100)} % ${t("Reichweite")}` : t("du hast noch keine Website")}</span></div>
+    ${firmen.length ? `<div class="swListe">${firmen.map(([pid, f]) => {
+      const p = state.players[pid], w = (state.website || []).find(x => x.ownerId === pid), up = f.uptime || [];
+      const q = up.length ? Math.round(up.reduce((a, b) => a + b, 0) / up.length * 100) : 100;
+      return `<button type="button" class="swListeZeile tourHotel${pid === myId ? " meins" : ""}" data-rzauf="${pid}">
+        <span class="swName"><i style="background:${p.color}"></i><span><b>${escapeHtml(rohText(p.name))}</b><small>🌐 status.cs/${shopSlug(p.name)}</small></span></span>
+        <span class="mono">${q} % ${t("online")}</span><span class="mono">${w?.version ? `${t("Websites")} v${w.version}` : "—"}</span><span class="mono">${w ? `${w.kunden}/${w.plaetze}` : ""}</span></button>`; }).join("")}</div>`
+      : `<div class="note">${t("Noch keine Software-Firma mit Rechenzentrum.")}</div>`}`;
+}
 function stadtSoftwareMarktHtml(state, me, myId) {
   if (!state.stadt) return "";
   const apps = (state.buergerApp || []).filter(a => a.version >= 1), jobs = (state.jobboerse || []).filter(j => j.version >= 1);
@@ -6532,7 +6877,7 @@ function softwareRendern(state, me, myId) {
     `<button type="button" role="tab" class="${k === SW_REITER ? "on" : ""}" data-swreiter="${k}" aria-selected="${k === SW_REITER}">${t(n)}${k === "entwicklung" && eigene?.entwicklung ? " ●" : ""}</button>`).join("")}</div>` : "";
   const ueberblick = bau ? swUeberblick(state, me, myId, eigene) : "";
   const inhalt = SW_REITER === "markt"
-    ? tabelle + stadtSoftwareMarktHtml(state, me, myId) + werbenetzHtml(state, myId, binSoftware)
+    ? tabelle + rzMarktHtml(state, myId) + stadtSoftwareMarktHtml(state, me, myId) + werbenetzHtml(state, myId, binSoftware)
     : bau[SW_REITER];
   const body = document.getElementById("softwarebody"), html = ueberblick + leiste + `<div class="swReiterInhalt">${inhalt}</div>`;
   if (body._sig !== html) { body._sig = html; body.innerHTML = html; }
@@ -6574,6 +6919,8 @@ document.getElementById("p-software").addEventListener("click", e => {
   if (rt) { SW_REITER = rt.dataset.swreiter; try { localStorage.setItem("cs_swReiter", SW_REITER); } catch {} const S = store.get(); softwareRendern(S.state, S.me, S.myId); return; }
   const ja = e.target.closest("[data-jobabo]");
   if (ja) return act("jobAbo", { id: ja.dataset.jobabo || null });
+  const ra = e.target.closest("[data-rzauf]");
+  if (ra) return rzOeffnen(ra.dataset.rzauf);
   for (const [knopf, ev, felder, entwurf, ok] of [
     ["#appSpeichern", "appEinstellen", () => ({ name: document.getElementById("appName")?.value, preis: +document.getElementById("appPreis")?.value }), appEntwurf, "Bürger-App gespeichert"],
     ["#jobSpeichern", "jobEinstellen", () => ({ name: document.getElementById("jobName")?.value, gebuehr: +document.getElementById("jobGeb")?.value }), jobEntwurf, "Jobbörse gespeichert"]])
@@ -7389,7 +7736,7 @@ function ruestHtml(me, state, my) {
 function stadtLexikon() {
   const S = store.get().state?.stadt;
   if (!S) return "";
-  return `<details class="lexGruppe" data-lex="lex-stadt" ${LEX_OFFEN.has("lex-stadt") ? "open" : ""}><summary>${t("Stadt & Arbeit")}<span>6</span></summary>
+  return `<details class="lexGruppe" data-lex="lex-stadt" ${LEX_OFFEN.has("lex-stadt") ? "open" : ""}><summary>${t("Stadt & Arbeit")}<span>7</span></summary>
     <div class="sec">${t("Wohnblöcke der Stadt")}</div>
     <table><tr><th>${t("Stufe")}</th><th>${t("Plätze")}</th><th>${t("Kosten")}</th><th>${t("ab Einwohnern")}</th></tr>
     ${S.stufen.map(x => `<tr><td>${t(x.name)}</td><td>${x.plaetze}</td><td>${fmt(x.kosten)}</td><td>${x.ab || "—"}</td></tr>`).join("")}</table>
@@ -7402,6 +7749,8 @@ function stadtLexikon() {
     <p class="meta">${t("Bürger-App: bis 85 % der Einwohner zahlen ein Abo je Minute, 200 Nutzer je Rechenzentrums-Stufe des Anbieters. Jobbörse: Vorrang wie +0,3 bis +0,7 Lohnstufen gegen eine Gebühr je Arbeiter, 3 Abos je Rechenzentrums-Stufe.")}</p>
     <div class="sec">${t("Gäste und Hotels")}</div>
     <p class="meta">${t("Jede Minute 10 Gäste plus 4 je 100 Einwohner, mal Zufriedenheit. Sie wählen nach Bewertung und Zimmerpreis; wer zu teuer ist, verliert Gäste an andere Urlaubsorte. Strandhotel 2 bis 5 Sterne (Renovieren 1.500 / 3.000 / 5.000 $), ab 3 Sternen Frühstück für 3 / 5 / 8 $ je Gast. Stadtfeste: +60 bis +150 % Gäste für 5 bis 8 Minuten.")}</p>
+    <div class="sec">${t("Websites und Rechenzentren")}</div>
+    <p class="meta">${t("Software-Firmen entwickeln einen Website-Baukasten (Grundseite, Branchenportal, Aktionen). Andere Firmen zahlen 400 $ Einrichtung und ein Abo je Minute und bekommen +5 / +10 / +15 % Reichweite: schneller verkaufen, mehr Gäste, mehr Grundbedarf. Je Rechenzentrums-Stufe 2 Websites; der Anbieter verteilt seine Plätze selbst. Ohne Anbieter: Stadtportal-Grundseite für 600 $ und 45 $/min.")}</p>
     <div class="sec">${t("Stadtanleihen")}</div>
     <p class="meta">${fmt(S.anleihe.betrag)} · ${String(S.anleihe.zins * 100).replace(".", ",")} %/min · ${S.anleihe.laufzeit / 60} min · ${t("höchstens")} ${fmt(S.anleihe.max)} ${t("Schulden")}</p>
   </details>`;
@@ -8110,6 +8459,8 @@ const HINWEISE = [
     text: "Als Software-Firma baust du Shop-Systeme, Bürger-Apps und Jobbörsen für die anderen. Alles liegt im Software-Panel in Reitern: Markt, Mein System, Entwicklung, Design und Produkte.", panel: ["software", "Software"] },
   { id: "touristik", wann: (st, me, id) => !!st.touristik && (st.map || []).some(x => x.owner === id && (x.btype === "campingplatz" || x.btype === "strandhotel") && !(x.bauBis > st.tick)), titel: "Gäste für deine Hotels",
     text: "Jede Minute kommen Gäste in die Stadt und wählen ein Hotel nach Bewertung und Zimmerpreis. Renovierte Strandhotels bekommen mehr Sterne (ab 3 Sternen mit Frühstück), und ein Stadtfest lockt viele Gäste auf einmal.", panel: ["touristik", "Touristik"] },
+  { id: "website", wann: (st, me, id) => (st.website || []).some(w => w.version >= 1 && w.ownerId !== id) && !st.rechenzentren?.websites?.[id], titel: "Eine Website für deine Firma",
+    text: "Software-Firmen bauen jetzt Websites. Eine eigene Website bringt mehr Reichweite: Deine Läden verkaufen schneller, Hotels bekommen mehr Gäste. Bestellen kannst du sie auf der Statusseite eines Rechenzentrums.", panel: ["software", "Software"] },
   { id: "aktien", wann: st => st.tick > 900, titel: "Aktien und Übernahmen",
     text: "Jede Firma hat 100 Aktien. An der Stadtbank kaufst du Anteile anderer Firmen und kassierst Dividende — oder übernimmst eine Firma ganz. Behalte die Mehrheit an deiner eigenen.", panel: ["bank", "Stadtbank"] },
   { id: "ziel", wann: st => st.tick > 1500, titel: "Auf dem Weg zum Ziel",
@@ -10274,6 +10625,7 @@ function render({ state, me, myId, chat, room }) {
   /* Touristik: Dock-Knopf immer, das Panel nur offen und ohne Eingabe */
   if (!typingIn(document.getElementById("p-touristik"))) touristikRendern(state, me, myId);
   if (HOTEL.offen && !typingIn(document.getElementById("hotelFenster"))) hotelZeichnen();
+  if (RZW.offen && !typingIn(document.getElementById("rzFenster"))) rzZeichnen();
 
   /* Stadtbank: Kurstafel, Angebote und Depot — der gesamte Anteilshandel */
   if (document.getElementById("p-bank").classList.contains("open") &&
