@@ -5,6 +5,20 @@
  * `art`: "neu" (neue Funktion), "besser" (Verbesserung), "fix" (Fehler behoben). */
 window.UPDATES = [
   {
+    id: "2026-10-25n", datum: "2026-10-25",
+    titel: { de: "Website-Generator und Software-Cockpit", en: "Website generator and software cockpit" },
+    punkte: [
+      { art: "neu", de: "Bestellt eine Firma eine Website, gestaltet die Software-Firma sie selbst im Website-Generator: drei Vorlagen (Klar, Elegant, Bunt), acht Farben, Titel, Slogan und bis zu sechs Abschnitte in eigener Reihenfolge — Produkte, Betriebe, Direktkauf, Bewertungen, Über uns, Aktie und Galerie. Rechts läuft die Vorschau live mit.",
+        en: "When a company orders a website, the software company designs it itself in the website generator: three templates (Clean, Elegant, Colourful), eight colours, title, slogan and up to six sections in any order — products, facilities, direct purchase, reviews, about us, share and gallery. A live preview runs alongside." },
+      { art: "neu", de: "Die Einrichtung ist jetzt ein Honorar: Der Kunde zahlt bei der Bestellung, die Software-Firma bekommt es bei Lieferung. Nach 5 Minuten ohne Design geht die Standard-Vorlage online, dann gibt es nur das halbe Honorar. Bots liefern nach einer knappen Minute.",
+        en: "The setup fee is now a commission: the client pays on ordering, the software company receives it on delivery. After 5 minutes without a design the standard template goes online and only half the fee is paid. Bots deliver after just under a minute." },
+      { art: "neu", de: "Gute Websites wirken stärker: Mehr Abschnitte, ein Slogan und ein Text „Über uns“ heben die Qualität bis 100 % — und damit die Reichweite des Kunden. Die Standard-Vorlage schafft 80 %.",
+        en: "Good websites work better: more sections, a slogan and an “About us” text raise the quality up to 100 % — and with it the client's reach. The standard template reaches 80 %." },
+      { art: "besser", de: "Software-Firmen starten im neuen Reiter „Übersicht“: Einnahmen, Kunden, EP und Strom auf einen Blick, offene Website-Aufträge mit Frist und Honorar, alle Produkte als Kacheln mit dem nächsten Schritt und Hinweise, was gerade fehlt.",
+        en: "Software companies now start in the new “Overview” tab: revenue, customers, DP and power at a glance, open website orders with deadline and fee, all products as tiles with the next step, and hints about what is missing." },
+    ]
+  },
+  {
     id: "2026-10-25m", datum: "2026-10-25",
     titel: { de: "Neues Tutorial für jede Branche", en: "New tutorial for every industry" },
     punkte: [
