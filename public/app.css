@@ -1235,3 +1235,57 @@ td:first-child{font-family:var(--font)}
 button.swListeZeile.tourHotel{width:100%;text-align:left;background:transparent;color:inherit;font:inherit;cursor:pointer}
 button.swListeZeile.tourHotel:hover{border-color:var(--accent);background:rgba(125,211,252,.06)}
 @media (max-width:640px){.hfZahlen{grid-template-columns:repeat(2,minmax(0,1fr))}.hfPreis{grid-template-columns:1fr}}
+/* Statusseite der Rechenzentren (Etappe 7): Rahmen wie Shop- und Buchungsseite */
+#rzFenster{position:fixed;inset:0;z-index:240;display:grid;place-items:center;padding:16px;background:rgba(3,6,12,.62);backdrop-filter:blur(3px)}
+#rzFenster[hidden]{display:none}
+.rzBadges{display:flex;gap:8px;flex-wrap:wrap}
+.rzReiter{display:flex;gap:4px;padding:8px 20px 0;background:#fff;border-bottom:1px solid #e3e6ee;flex-wrap:wrap}
+.rzReiter button{border:0;border-bottom:3px solid transparent;background:none;padding:10px 14px;font:500 14px var(--font);color:#374151;cursor:pointer}
+.rzReiter button.on{border-bottom-color:var(--sys);color:#111827;font-weight:700}
+.rzWarn{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 20px;background:#fef3c7;color:#78350f;font-size:13px;border-bottom:1px solid #fde68a}
+.rzWarn[hidden]{display:none}
+.rzWarn .sfKaufen{background:#b45309;flex:none}
+.rzInhalt{display:flex;flex-direction:column;gap:14px;padding:16px 20px 20px;overflow:auto;min-height:0}
+.rzBox{background:#fff;border:1px solid #e3e6ee;border-radius:12px;padding:12px 14px;display:flex;flex-direction:column;gap:9px;font-size:13px;color:#18202e}
+.rzBox>b{font-size:14.5px;color:#111827}
+.rzBox small{color:#4b5563;font-size:11.5px}
+.rzBoxKopf{display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap}
+.rzBoxKopf b{font-size:14.5px;color:#111827}
+.rzUptime{display:grid;gap:3px}
+.rzUp{height:24px;border-radius:3px}
+.rzUp.an{background:#16a34a}.rzUp.aus{background:#dc2626}
+.rzKarten{grid-template-columns:repeat(auto-fill,minmax(220px,1fr))}
+.rzKarte{display:flex;flex-direction:column;gap:7px;padding:12px;background:#fff;border:1px solid #e3e6ee;border-radius:12px;color:#18202e}
+.rzKarte small{font-size:11.5px;color:#4b5563}
+.rzKarteKopf{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.rzKarteKopf b{font-size:14.5px}
+.rzStatus{font-size:11px;font-weight:700;padding:3px 8px;border-radius:999px}
+.rzStatus.an{background:#dcfce7;color:#166534}.rzStatus.aus{background:#fee2e2;color:#991b1b}
+.rzBalken{height:9px;border-radius:5px;background:#e5e7eb;overflow:hidden}
+.rzBalken i{display:block;height:100%;background:var(--sys)}
+.rzZeile{display:grid;grid-template-columns:200px minmax(0,1fr) 90px;gap:12px;align-items:center}
+.rzZeile b{text-align:right;font-size:12px;color:#111827}
+.rzVert{grid-template-columns:170px minmax(0,1fr) 90px 72px}
+.rzPM{display:flex;gap:4px;justify-content:flex-end}
+.rzPM button,.rzPreisZeile .sfMenge button{width:30px;height:30px;border-radius:8px;border:1px solid #d4d8e2;background:#f3f4f6;color:#111827;cursor:pointer}
+.rzPreisZeile{display:flex;align-items:center;justify-content:space-between;gap:8px;border:1px dashed #cfd4de;border-radius:9px;padding:5px 8px;font-size:12px;color:#374151}
+.rzPreisZeile .sfMenge{display:flex;align-items:center;gap:6px;border:0}
+.rzPreisZeile .sfMenge b{min-width:52px;text-align:center;font-size:12.5px;color:#111827}
+.rzAngebote{grid-template-columns:repeat(auto-fill,minmax(230px,1fr))}
+.rzAngebote .sfKauf{gap:5px}
+.rzZwei{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);gap:14px;align-items:start}
+.rzModul{display:flex;flex-direction:column;gap:4px;align-items:flex-start;text-align:left;padding:10px 12px;border-radius:10px;border:1px solid #e3e6ee;background:#fff;color:#18202e;cursor:pointer;font:inherit}
+.rzModul.on{border:2px solid var(--sys);background:color-mix(in srgb,var(--sys) 7%,#fff)}
+.rzModul.zu{opacity:.55;cursor:default}
+.rzModulKopf{display:flex;justify-content:space-between;gap:8px;width:100%}
+.rzModul small{font-size:12px;color:#4b5563}
+.rzModul em{font-style:normal;font-size:11.5px;color:#1e3a8a}
+.rzNeu{display:flex;flex-direction:column;gap:4px;font-size:12px;color:#374151}
+.rzNeu input{border:1px solid #d4d8e2;border-radius:8px;padding:8px 10px;font:inherit;color:#111827;background:#fff}
+.rzKunde{display:grid;grid-template-columns:10px minmax(0,1fr) auto;gap:10px;align-items:center;padding:8px;border-radius:9px;background:#f8fafc}
+.rzKunde i{width:10px;height:10px;border-radius:50%}
+.rzKunde i.an{background:#16a34a}.rzKunde i.aus{background:#d97706}
+.rzKunde b{display:block;font-size:13px;color:#111827}.rzKunde small{font-size:11px;color:#4b5563}
+.rzOn{font-size:11.5px;font-weight:700}.rzOn.an{color:#166534}.rzOn.aus{color:#92400e}
+.rzPortal{font-size:12.5px;color:#374151;text-align:center}
+@media (max-width:720px){.rzZwei{grid-template-columns:1fr}.rzZeile{grid-template-columns:120px minmax(0,1fr) 80px}.rzVert{grid-template-columns:110px minmax(0,1fr) 80px 70px}}

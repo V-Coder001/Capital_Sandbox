@@ -5,6 +5,18 @@
  * `art`: "neu" (neue Funktion), "besser" (Verbesserung), "fix" (Fehler behoben). */
 window.UPDATES = [
   {
+    id: "2026-10-25g", datum: "2026-10-25",
+    titel: { de: "Rechenzentren mit Statusseite und Websites von der Software-Branche", en: "Data centres with status pages and websites from the software industry" },
+    punkte: [
+      { art: "neu", de: "Jede Software-Firma hat eine Statusseite (status.cs/…): Verfügbarkeit der letzten 30 Minuten, Rechenzentren mit Auslastung und alles, was darauf läuft. Zu öffnen über die Gebäudekarte eines Rechenzentrums oder im Software-Panel.",
+        en: "Every software company has a status page (status.cs/…): availability over the last 30 minutes, data centres with utilisation and everything that runs on them. Open it from a data centre's building card or in the software panel." },
+      { art: "neu", de: "Hosting direkt auf der Seite: Shop-System und Steuerung installierst du dort auf deinen eigenen Gebäuden. Als Inhaber stellst du Preise mit −/+ ein, baust aus und verteilst deine Plätze auf Shops, Apps und Websites.",
+        en: "Hosting right on the page: install the shop system and control software on your own buildings there. As the owner you set prices with −/+, expand and split your capacity between shops, apps and websites." },
+      { art: "neu", de: "Website-Baukasten: Software-Firmen entwickeln Grundseite, Branchenportal und Aktionen. Andere Firmen bestellen eine Website und bekommen +5 bis +15 % Reichweite — schneller verkaufen, mehr Gäste, mehr Grundbedarf. Ohne Anbieter gibt es die teure Grundseite des Stadtportals.",
+        en: "Website builder: software companies develop a basic site, industry portal and campaigns. Other companies order a website and get +5 to +15 % reach — faster sales, more guests, more basic needs. Without a provider there is the city portal's expensive basic site." },
+    ]
+  },
+  {
     id: "2026-10-25f", datum: "2026-10-25",
     titel: { de: "Buchungsseiten für Hotels", en: "Booking pages for hotels" },
     punkte: [
