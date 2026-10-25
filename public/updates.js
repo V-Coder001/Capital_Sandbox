@@ -5,6 +5,18 @@
  * `art`: "neu" (neue Funktion), "besser" (Verbesserung), "fix" (Fehler behoben). */
 window.UPDATES = [
   {
+    id: "2026-10-25o", datum: "2026-10-25",
+    titel: { de: "Mehr Auswahl im Website-Generator", en: "More choice in the website generator" },
+    punkte: [
+      { art: "neu", de: "Sieben Vorlagen statt drei (neu: Dunkel, Retro, Natur, Modern) und zwölf Farben.",
+        en: "Seven templates instead of three (new: Dark, Retro, Nature, Modern) and twelve colours." },
+      { art: "neu", de: "Feinschliff: Schrift (Modern, Serif, Rund, Kraftvoll, Handschrift, Pixel), Kopf (Verlauf, Flach, Zentriert, Groß), Ecken und ein Muster im Kopf (Punkte, Streifen, Wellen, Raster).",
+        en: "Fine-tuning: font (Modern, Serif, Round, Bold, Handwriting, Pixel), header (Gradient, Flat, Centered, Large), corners and a header pattern (Dots, Stripes, Waves, Grid)." },
+      { art: "neu", de: "Fünf neue Abschnitte: Zahlen, Team, Kontakt, Fragen zum Aufklappen und Neuigkeiten aus dem Stadtkurier — bis zu acht pro Seite. Dazu ein Knopf „Überrasch mich“.",
+        en: "Five new sections: numbers, team, contact, expandable FAQ and news from the City Courier — up to eight per page. Plus a “Surprise me” button." },
+    ]
+  },
+  {
     id: "2026-10-25n", datum: "2026-10-25",
     titel: { de: "Website-Generator und Software-Cockpit", en: "Website generator and software cockpit" },
     punkte: [

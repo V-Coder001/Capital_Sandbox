@@ -2607,6 +2607,19 @@ const EN = {
   "Gerade läuft keine Entwicklung — deine EP sammeln sich nur an.": "No development running — your DP are just piling up.",
   "Leg einen Website-Baukasten an: Firmen bestellen Websites, du gestaltest sie und kassierst das Honorar.": "Create a website builder: companies order websites, you design them and collect the fee.",
   "wird gestaltet": "being designed",
+  "Überrasch mich": "Surprise me", "Feinschliff": "Fine-tuning", "Schrift, Kopf, Ecken, Muster": "font, header, corners, pattern", "Schrift": "Font", "Kopf": "Header", "Ecken": "Corners", "Muster": "Pattern",
+  "Dunkel": "Dark", "Retro": "Retro", "Natur": "Nature", "Modern": "Modern", "Serif": "Serif", "Rund": "Round", "Kraftvoll": "Bold", "Handschrift": "Handwriting", "Pixel": "Pixel",
+  "Verlauf": "Gradient", "Flach": "Flat", "Zentriert": "Centered", "Groß": "Large", "Eckig": "Square", "Normal": "Normal", "Ohne": "None", "Punkte": "Dots", "Streifen": "Stripes", "Wellen": "Waves", "Raster": "Grid",
+  "Zahlen": "Numbers", "Team": "Team", "Kontakt": "Contact", "Fragen": "FAQ", "Neuigkeiten": "News", "In Zahlen": "In numbers", "Unser Team": "Our team", "Häufige Fragen": "Frequently asked questions",
+  "Adresse": "Address", "Öffnungszeiten": "Opening hours", "E-Mail": "Email", "Block": "Block", "Noch keine Meldungen.": "No news yet.", "Aktienkurs": "Share price", "Waren": "Goods",
+  "Große Kennzahlen: Betriebe, Waren, Besucher": "Big numbers: facilities, goods, visitors", "Die Menschen hinter der Firma": "The people behind the company", "Adresse, Öffnungszeiten, E-Mail": "Address, opening hours, email",
+  "Häufige Fragen zum Aufklappen": "Expandable FAQ", "Meldungen aus dem Stadtkurier": "Reports from the City Courier",
+  "Liefert ihr in die ganze Stadt?": "Do you deliver across the whole city?", "Ja — über den Markt und unseren Online-Shop erreichen wir jeden Block.": "Yes — through the market and our online shop we reach every block.",
+  "Wie kommen die Preise zustande?": "How are prices set?", "Wir orientieren uns am Ø-Kurs der Börse und geben gute Ernten und Großaufträge weiter.": "We follow the average exchange price and pass on good harvests and big orders.",
+  "Kann man bei euch Aktien kaufen?": "Can I buy your shares?", "Ja, an der Stadtbank. Bei Gewinn schütten wir regelmäßig aus.": "Yes, at the city bank. When we make a profit we pay dividends regularly.",
+  "Hofleitung": "Farm management", "Ernte & Lager": "Harvest & storage", "Hofladen": "Farm shop", "Bauleitung": "Site management", "Steinbruch": "Quarry", "Logistik": "Logistics", "Netzleitung": "Grid control", "Kraftwerk": "Power plant", "Kundendienst": "Customer service",
+  "Geschäftsführung": "Management", "Fertigung": "Production", "Vertrieb": "Sales", "Direktion": "Management", "Rezeption": "Reception", "Küche": "Kitchen", "Gründung": "Founders", "Entwicklung": "Development", "Support": "Support", "Behörden": "Government relations",
+  "Mo–Sa 6–18 Uhr": "Mon–Sat 6am–6pm", "Mo–Fr 7–17 Uhr": "Mon–Fri 7am–5pm", "rund um die Uhr": "around the clock", "Mo–Fr 8–18 Uhr": "Mon–Fri 8am–6pm", "Rezeption 24 h": "Reception 24 h", "Mo–Fr 9–19 Uhr": "Mon–Fri 9am–7pm", "nach Vereinbarung": "by appointment", "Mo–Fr 9–17 Uhr": "Mon–Fri 9am–5pm",
   "Die Website ist gerade offline — dem Rechenzentrum des Anbieters fehlt Strom oder Platz.": "The website is offline right now — the provider's data center lacks power or space.",
   "Die Software-Firma gestaltet deine Startseite individuell — Vorlage, Farben, Abschnitte. Die Einrichtung bekommt sie erst bei Lieferung.": "The software company designs your homepage individually — template, colours, sections. It only receives the setup fee on delivery."
 };
@@ -7010,9 +7023,26 @@ function bankChart(h, fmtW) {
  * hat: Vorlage (klar/elegant/bunt), Farbe, Titel, Slogan und die Abschnitte in
  * gewählter Reihenfolge. Das Stadtnetz zeigt sie, der Generator nutzt sie als
  * Live-Vorschau (vorschau = true: Knöpfe ohne Wirkung). */
-const FW_ABSCHNITT = { produkte: "Produkte", betriebe: "Betriebe", angebot: "Direktkauf", bewertungen: "Bewertungen", ueber: "Über uns", aktie: "Aktie", galerie: "Galerie" };
+const FW_ABSCHNITT = { produkte: "Produkte", betriebe: "Betriebe", angebot: "Direktkauf", bewertungen: "Bewertungen", ueber: "Über uns", aktie: "Aktie", galerie: "Galerie",
+  zahlen: "Zahlen", team: "Team", kontakt: "Kontakt", faq: "Fragen", news: "Neuigkeiten" };
 const FW_BESCHREIBUNG = { produkte: "Waren mit Ø-Kurs und Link zum Shop", betriebe: "Alle Gebäude der Firma", angebot: "Hofladen, Großhandel … (ab Branchenportal)",
-  bewertungen: "Stimmen von Kunden", ueber: "Eigener Text über die Firma", aktie: "Kurs und Verlauf der Aktie", galerie: "Große Bilder der Gebäude" };
+  bewertungen: "Stimmen von Kunden", ueber: "Eigener Text über die Firma", aktie: "Kurs und Verlauf der Aktie", galerie: "Große Bilder der Gebäude",
+  zahlen: "Große Kennzahlen: Betriebe, Waren, Besucher", team: "Die Menschen hinter der Firma", kontakt: "Adresse, Öffnungszeiten, E-Mail",
+  faq: "Häufige Fragen zum Aufklappen", news: "Meldungen aus dem Stadtkurier" };
+/* Feinschliff im Generator: "" = wie die Vorlage */
+const FW_OPTIONEN = {
+  schrift: { "": "Vorlage", modern: "Modern", serif: "Serif", rund: "Rund", kraft: "Kraftvoll", hand: "Handschrift", pixel: "Pixel" },
+  kopf: { "": "Vorlage", verlauf: "Verlauf", flach: "Flach", zentriert: "Zentriert", gross: "Groß" },
+  ecken: { "": "Vorlage", eckig: "Eckig", normal: "Normal", rund: "Rund" },
+  muster: { "": "Ohne", punkte: "Punkte", streifen: "Streifen", wellen: "Wellen", raster: "Raster" },
+};
+const FW_VORLAGE = { klar: "Klar", elegant: "Elegant", bunt: "Bunt", dunkel: "Dunkel", retro: "Retro", natur: "Natur", modern: "Modern" };
+const FW_TEAM = { agrar: ["Hofleitung", "Ernte & Lager", "Hofladen"], rohstoff: ["Bauleitung", "Steinbruch", "Logistik"], versorger: ["Netzleitung", "Kraftwerk", "Kundendienst"],
+  tech: ["Geschäftsführung", "Fertigung", "Vertrieb"], touristik: ["Direktion", "Rezeption", "Küche"], software: ["Gründung", "Entwicklung", "Support"], ruestung: ["Geschäftsführung", "Fertigung", "Behörden"] };
+const FW_ZEITEN = { agrar: "Mo–Sa 6–18 Uhr", rohstoff: "Mo–Fr 7–17 Uhr", versorger: "rund um die Uhr", tech: "Mo–Fr 8–18 Uhr", touristik: "Rezeption 24 h", software: "Mo–Fr 9–19 Uhr", ruestung: "nach Vereinbarung" };
+const FW_FAQ = [["Liefert ihr in die ganze Stadt?", "Ja — über den Markt und unseren Online-Shop erreichen wir jeden Block."],
+  ["Wie kommen die Preise zustande?", "Wir orientieren uns am Ø-Kurs der Börse und geben gute Ernten und Großaufträge weiter."],
+  ["Kann man bei euch Aktien kaufen?", "Ja, an der Stadtbank. Bei Gewinn schütten wir regelmäßig aus."]];
 const FW_STIMMEN = {
   agrar: ["Das Obst schmeckt wie früher.", "Bester Honig der Stadt!", "Pünktlich geliefert, frisch wie versprochen."],
   rohstoff: ["Ziegel in Top-Qualität, schnell da.", "Unser Wohnblock steht dank euch.", "Fairer Preis für Beton."],
@@ -7044,6 +7074,16 @@ function firmenSeiteHtml(state, me, myId, pid, design, vorschau = false) {
       return `<section class="fwAbschnitt"><h2>${t("Bewertungen")}</h2><div class="fwStimmen">${st.map((x, i) => `<blockquote><span>${"★".repeat(i === 2 ? 4 : 5)}${i === 2 ? "☆" : ""}</span><p>„${t(x)}“</p><cite>${FW_NAMEN[(n0 + i * 3) % FW_NAMEN.length]}</cite></blockquote>`).join("")}</div></section>`; }
     if (typ === "aktie") { const h = firmHist[pid] || [], dd = h.length > 1 && h[0] ? (h[h.length - 1] / h[0] - 1) * 100 : 0;
       return `<section class="fwAbschnitt"><h2>${t("Unsere Aktie")}</h2><div class="fwAktie"><b class="mono">${fk(p.kurs || 0)}</b><em class="${dd >= 0 ? "auf" : "ab"}">${dd >= 0 ? "+" : "−"}${Math.abs(dd).toFixed(1).replace(".", ",")} %</em>${h.length > 1 ? sparklineVon(h, 120, 32) : ""}${knopf(`data-netzaktie="${pid}"`, t("An der Stadtbank"))}</div></section>`; }
+    if (typ === "zahlen") { const anz = Object.values(geb).reduce((a, n) => a + n, 0);
+      return `<section class="fwAbschnitt"><h2>${t("In Zahlen")}</h2><div class="fwZahlen"><div><b>${anz}</b><span>${t("Betriebe")}</span></div><div><b>${waren.length}</b><span>${t("Waren")}</span></div><div><b>${w?.besucher || 0}</b><span>${t("Besucher/min")}</span></div><div><b>${fk(p.kurs || 0)}</b><span>${t("Aktienkurs")}</span></div></div></section>`; }
+    if (typ === "team") { const n0 = rohText(p.name).length, rollen = FW_TEAM[ind] || FW_TEAM.tech, gesichter = ["👩‍🌾", "👨‍🔧", "👩‍💼", "🧑‍🍳", "👨‍💻", "👩‍🔬", "🧔", "👵"];
+      return `<section class="fwAbschnitt"><h2>${t("Unser Team")}</h2><div class="fwTeam">${rollen.map((r, i) => `<div><span>${gesichter[(n0 + i * 3) % gesichter.length]}</span><b>${FW_NAMEN[(n0 + i * 5 + 1) % FW_NAMEN.length]}</b><small>${t(r)}</small></div>`).join("")}</div></section>`; }
+    if (typ === "kontakt") { const g = state.map.find(x => x.owner === pid && x.btype), slug = shopSlug(p.name);
+      return `<section class="fwAbschnitt"><h2>${t("Kontakt")}</h2><div class="fwKontakt"><div><span>📍</span><b>${t("Adresse")}</b><small>${g ? `${t("Block")} ${g.x}·${g.y}` : t("Capital City")}</small></div><div><span>🕘</span><b>${t("Öffnungszeiten")}</b><small>${t(FW_ZEITEN[ind] || "Mo–Fr 9–17 Uhr")}</small></div><div><span>✉️</span><b>${t("E-Mail")}</b><small class="mono">info@${slug}.cs</small></div></div></section>`; }
+    if (typ === "faq") return `<section class="fwAbschnitt"><h2>${t("Häufige Fragen")}</h2><div class="fwFaq">${FW_FAQ.map(([f, a]) => `<details><summary>${t(f)}</summary><p>${t(a)}</p></details>`).join("")}</div></section>`;
+    if (typ === "news") { const name = rohText(p.name), alle = typeof kurierArtikel === "function" ? kurierArtikel(state) : [];
+      const eigene = alle.filter(a => rohText(a.titel).includes(name)), liste = (eigene.length ? eigene : alle).slice(0, 3);
+      return `<section class="fwAbschnitt"><h2>${t("Neuigkeiten")}</h2><div class="fwNews">${liste.map(a => `<div><small>${t(a.ressort)}</small><b>${escapeHtml(rohText(a.titel))}</b></div>`).join("") || `<small>${t("Noch keine Meldungen.")}</small>`}</div></section>`; }
     if (typ === "angebot") {
       const name = state.rechenzentren?.portale?.[ind]?.name || "Branchenportal";
       if (!(w?.stufe >= 2)) return vorschau || meins ? `<section class="fwAbschnitt"><h2>${t(name)}</h2><small class="fwHinweis">${t("Erscheint, sobald die Firma das Modul „Branchenportal“ hat.")}</small></section>` : "";
@@ -7058,7 +7098,8 @@ function firmenSeiteHtml(state, me, myId, pid, design, vorschau = false) {
     }
     return "";
   };
-  return `<div class="fw fw-${d.vorlage || "klar"}" style="--fw:${d.farbe || p.color || "#0f766e"}">${hero}${(d.abschnitte || []).map(abschnitt).join("")}</div>`;
+  const extra = ["schrift", "kopf", "ecken", "muster"].filter(k => d[k]).map(k => ` fw${k[0].toUpperCase()}-${d[k]}`).join("");
+  return `<div class="fw fw-${d.vorlage || "klar"}${extra}" style="--fw:${d.farbe || p.color || "#0f766e"}">${hero}${(d.abschnitte || []).map(abschnitt).join("")}</div>`;
 }
 /* ---- Website-Generator (Software-Firmen) ----
  * Bestellt eine Firma eine Website, gestaltet die Software-Firma sie hier:
@@ -7093,8 +7134,13 @@ function genEditor() {
     <div class="genKopf"><b>${t("Website für")} ${escapeHtml(rohText(k.name))}</b><small>${t(BRANCHE_NAME[k.industry] || "")} · ${t(st.websiteCfg?.MODULE[w?.modul]?.name || "")}${auftrag ? ` · ${t("Honorar")} ${fmt(auftrag.honorar)} · ${t("noch")} <span class="genFrist">${Math.floor(auftrag.rest / 60)}:${String(auftrag.rest % 60).padStart(2, "0")}</span>` : ""}</small></div>
     <div class="genQualitaet"><span>${t("Qualität")}</span><div class="genBalken"><i style="width:${Math.round(q * 100)}%"></i></div><b class="mono">${Math.round(q * 100)} %</b></div>
     <small class="genTipp">${t("Mehr Abschnitte (bis 4), ein Slogan und ein Text „Über uns“ heben die Qualität — und damit die Reichweite deines Kunden.")}</small>
-    <div class="genGruppe"><span>${t("Vorlage")}</span><div class="genVorlagen">${D.VORLAGEN.map(v => `<button type="button" class="${e.vorlage === v ? "on" : ""}" data-genvorlage="${v}">${t({ klar: "Klar", elegant: "Elegant", bunt: "Bunt" }[v])}</button>`).join("")}</div></div>
+    <button type="button" class="genZufall" data-genzufall>🎲 ${t("Überrasch mich")}</button>
+    <div class="genGruppe"><span>${t("Vorlage")}</span><div class="genVorlagen viele">${D.VORLAGEN.map(v => `<button type="button" class="${e.vorlage === v ? "on" : ""}" data-genvorlage="${v}">${t(FW_VORLAGE[v] || v)}</button>`).join("")}</div></div>
     <div class="genGruppe"><span>${t("Farbe")}</span><div class="genFarben">${D.FARBEN.map(f => `<button type="button" class="${e.farbe === f ? "on" : ""}" style="background:${f}" data-genfarbe="${f}" aria-label="${f}"></button>`).join("")}</div></div>
+    <details class="genMehr" ${GEN.mehr ? "open" : ""}><summary>${t("Feinschliff")} · ${t("Schrift, Kopf, Ecken, Muster")}</summary>
+      ${[["schrift", "Schrift", D.SCHRIFTEN], ["kopf", "Kopf", D.KOEPFE], ["ecken", "Ecken", D.ECKEN], ["muster", "Muster", D.MUSTER]].filter(([, , l]) => l).map(([k, n, l]) =>
+        `<div class="genGruppe"><span>${t(n)}</span><div class="genChips">${l.map(v => `<button type="button" class="${(e[k] || "") === v ? "on" : ""}" data-gens="${k}:${v}">${t(FW_OPTIONEN[k][v] || v)}</button>`).join("")}</div></div>`).join("")}
+    </details>
     <label class="genFeld"><span>${t("Titel")}</span><input id="genTitel" maxlength="30" value="${escapeHtml(e.titel)}"></label>
     <label class="genFeld"><span>${t("Slogan")}</span><input id="genSlogan" maxlength="60" placeholder="${t("z. B. Frisch vom Hof in die Stadt")}" value="${escapeHtml(e.slogan)}"></label>
     <div class="genGruppe"><span>${t("Abschnitte")} (${e.abschnitte.length}/${D.MAX_ABSCHNITTE})</span>
@@ -7117,6 +7163,7 @@ document.getElementById("genFenster").addEventListener("input", e => {
   if (b) { b.querySelector("i").style.width = Math.round(q * 100) + "%"; b.querySelector("b").textContent = Math.round(q * 100) + " %"; }
   genVorschau();
 });
+document.getElementById("genFenster").addEventListener("toggle", e => { if (e.target.classList?.contains("genMehr")) GEN.mehr = e.target.open; }, true);
 document.getElementById("genFenster").addEventListener("click", e => {
   if (e.target.closest("[data-genzu]") || e.target.id === "genFenster") return genSchliessen();
   const E = GEN.e; let neu = true;
@@ -7127,6 +7174,11 @@ document.getElementById("genFenster").addEventListener("click", e => {
   else if (r) { const i = +r.dataset.genrunter; [E.abschnitte[i + 1], E.abschnitte[i]] = [E.abschnitte[i], E.abschnitte[i + 1]]; }
   else if (w) E.abschnitte.splice(+w.dataset.genweg, 1);
   else if (n) E.abschnitte.push(n.dataset.genneu);
+  else if (e.target.closest("[data-gens]")) { const [k, v] = e.target.closest("[data-gens]").dataset.gens.split(":"); E[k] = v; }
+  else if (e.target.closest("[data-genzufall]")) {
+    const D = store.get().state.rechenzentren?.design, z = l => l[Math.floor(Math.random() * l.length)];
+    Object.assign(E, { vorlage: z(D.VORLAGEN), farbe: z(D.FARBEN), schrift: z(D.SCHRIFTEN || [""]), kopf: z(D.KOEPFE || [""]), ecken: z(D.ECKEN || [""]), muster: z(D.MUSTER || [""]) });
+  }
   else neu = false;
   if (neu) { SFX.spiel("klick"); genEditor(); genVorschau(); return; }
   if (e.target.closest("[data-gensenden]")) socket.emit("websiteGestalten", { kundeId: GEN.kunde, design: E }, res => {
@@ -7585,7 +7637,7 @@ function netzZeichnen() {
   fenster.querySelector(".sfBrowser").style.setProperty("--sys", p.color || "#0f766e");
   netzSetze(".sfUrl", `🔒 ${shopSlug(p.name)}.cs`, "url" + pid);
   kopfEl.style.display = w?.stufe ? "none" : "";   // mit Website zeigt der Hero der Seite Name und Logo
-  if (w?.design?.vorlage === "bunt") sfSchriftenLaden();
+  if (w?.design) sfSchriftenLaden();   // Vorlagen und Schriften brauchen die Shop-Schriften
   netzSetze(".sfKopf", `<div class="sfMarke">${logoHtml(pid, "sfLogo", p.color)}<div><b>${escapeHtml(rohText(p.name))}</b><small>${t(BRANCHE_NAME[ind] || "")}${w ? ` · ${t(cfg?.MODULE[w.modul]?.name || "")}` : ""}</small></div></div>
     <span class="rzBadges">${w ? `<span class="sfBadge">${w.besucher} ${t("Besucher/min")}</span><span class="sfBadge">+${Math.round((w.bonus || 0) * 100)} % ${t("Reichweite")}</span>` : `<span class="sfBadge">${t("keine Website")}</span>`}</span>`, "kopf" + pid + (logoBild(pid) || "").length);
   const banner = fenster.querySelector(".sfBanner");
