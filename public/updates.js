@@ -5,6 +5,24 @@
  * `art`: "neu" (neue Funktion), "besser" (Verbesserung), "fix" (Fehler behoben). */
 window.UPDATES = [
   {
+    id: "2026-10-25d", datum: "2026-10-25",
+    titel: { de: "Ein Modus, faire Branchen, Zeitlimit und Hinweise", en: "One mode, fair industries, time limit and hints" },
+    punkte: [
+      { art: "besser", de: "Vorerst wird nur der Sandkasten gespielt. Planwirtschaft, Einsteiger, Race Day und Kartell sind gesperrt.",
+        en: "For now only sandbox is played. Planned economy, beginner, Race Day and cartel are locked." },
+      { art: "neu", de: "Grundbedarf der Bewohner: Je 100 Einwohner kauft die Stadt jede Minute Strom, Wasser und Übernachtungen bei den Firmen (mindestens 70 % des Grundpreises). Versorger und Touristik wachsen jetzt mit der Stadt.",
+        en: "Residents' basic needs: per 100 residents the city buys power, water and lodging from companies every minute (at least 70 % of base price). Utilities and tourism now grow with the city." },
+      { art: "besser", de: "Balancing: Bürger-Apps höchstens 0,50 $ je Nutzer, Nutzerquote 35/50/70 %, Markenwert der Software-Firmen fünffach. Strandhotel braucht 40 % weniger Wasser und Strom. In großen Städten zog Software sonst allen davon.",
+        en: "Balancing: citizen apps at most 0.50 $ per user, adoption 35/50/70 %, software brand value five times. Beach hotels need 40 % less water and power. Software otherwise ran away in large cities." },
+      { art: "neu", de: "Zeitlimit im Warteraum (30, 45, 60 oder 90 Minuten): Ist die Zeit um, gewinnt das höchste Vermögen. Die Restzeit läuft oben neben dem Ziel mit. Die Zeitangaben beim Vermögensziel stimmen wieder.",
+        en: "Time limit in the lobby (30, 45, 60 or 90 minutes): when time is up the highest net worth wins. The remaining time runs next to the goal. The duration hints for the net-worth goal are accurate again." },
+      { art: "neu", de: "Hinweise im Spiel: Jedes System wird kurz erklärt, wenn es zum ersten Mal wichtig wird — Stadt, Arbeiter, Löhne, Baumaterial, Versorgung, Finanzamt, Stadtanleihen, Aktien. Abschaltbar unter Einstellungen → Steuerung.",
+        en: "In-game hints: each system is briefly explained when it first matters — city, workers, wages, building materials, supply, tax office, city bonds, shares. Can be switched off under Settings → Controls." },
+      { art: "fix", de: "Firmennamen mit „&“ erscheinen in Meldungen, im Warteraum und bei den Rennen wieder richtig (vorher „&amp;“).",
+        en: "Company names with “&” show correctly again in notices, the lobby and races (previously “&amp;”)." },
+    ]
+  },
+  {
     id: "2026-10-25c", datum: "2026-10-25",
     titel: { de: "Flüssigeres Spiel: Glas-Effekt, automatische Grafik, Bildraten-Anzeige", en: "Smoother game: glass effect, automatic graphics, frame-rate display" },
     punkte: [
