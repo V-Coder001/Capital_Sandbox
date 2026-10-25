@@ -2033,6 +2033,46 @@ const EN = {
   "höchstens": "at most", "Schulden": "debt", "Bürger-Apps und Jobbörse": "Citizen apps and job board",
   "Bürger-App: bis 85 % der Einwohner zahlen ein Abo je Minute, 200 Nutzer je Rechenzentrums-Stufe des Anbieters. Jobbörse: Vorrang wie +0,3 bis +0,7 Lohnstufen gegen eine Gebühr je Arbeiter, 3 Abos je Rechenzentrums-Stufe.": "Citizen app: up to 85 % of residents pay a subscription per minute, 200 users per data-centre level of the provider. Job board: priority like +0.3 to +0.7 wage levels for a fee per worker, 3 subscriptions per data-centre level.",
   /* Stadtkurier */
+  "Anleihenmarkt": "Bond market",
+  "Geld leihen und verleihen — mit Zins je Minute": "Borrow and lend money — with interest per minute",
+  "am Markt": "on the market",
+  "angelegt": "invested",
+  "Schulden": "debt",
+  "Stadtanleihe für den Wohnbau": "City bond for housing",
+  "Firmenanleihe": "Corporate bond",
+  "Nennwert": "Face value",
+  "Zins": "Interest",
+  "Laufzeit": "Term",
+  "Zinsen bis zum Ende": "Interest until maturity",
+  "im Verzug": "in default",
+  "noch nicht verkauft": "not sold yet",
+  "Verzug": "default",
+  "Anleihen am Markt": "Bonds on the market",
+  "Stadtanleihen zuerst, dann nach Zins": "city bonds first, then by interest",
+  "Gerade wird keine Anleihe angeboten. Ratings entstehen aus Vermögen und Schulden der Firmen.": "No bond is on offer right now. Ratings come from companies' assets and debt.",
+  "Vertragsangebote an dich": "Contract offers to you",
+  "Annehmen": "Accept",
+  "Ablehnen": "Decline",
+  "Zwangsversteigerungen": "Foreclosure auctions",
+  "gepfändete Gebäude von Firmen im Verzug": "seized buildings of defaulting companies",
+  "Mindestgebot": "Minimum bid",
+  "Höchstgebot": "Highest bid",
+  "Bieten": "Bid",
+  "Keine laufenden Auktionen.": "No running auctions.",
+  "Anleihe ausgeben": "Issue bond",
+  "Du bekommst den Nennwert sofort und zahlst jede Minute Zins. Am Ende zahlst du den Nennwert zurück — bei Verzug wird gepfändet.": "You receive the face value at once and pay interest every minute. At maturity you repay the face value — default leads to seizure.",
+  "Nennwert $": "Face value $",
+  "Zins % je Minute": "Interest % per minute",
+  "Laufzeit in Minuten": "Term in minutes",
+  "Zins je Minute": "Interest per minute",
+  "Zinsen gesamt": "Total interest",
+  "Rückzahlung am Ende": "Repayment at maturity",
+  "Deine Anlagen": "Your investments",
+  "Du hältst keine Anleihen.": "You hold no bonds.",
+  "Deine Schulden": "Your debts",
+  "Keine eigenen Anleihen offen.": "No own bonds outstanding.",
+  "Der Anleihenmarkt wird von der Stadt betrieben · Firmenanteile handelst du auf bank.cs": "The bond market is run by the city · trade company shares on bank.cs",
+  "Nennwert, Zins und Laufzeit eingeben": "Enter face value, interest and term",
   "Kurse, Fonds und Aktien der Stadt": "Prices, funds and shares of the city",
   "Marktübersicht": "Market overview",
   "Aktien": "Shares",
@@ -6192,6 +6232,7 @@ function openPanel(pid, stumm = false) {
   /* Im Sandkasten sind Warenbörse und Stadtbank Websites im Stadtnetz */
   if (pid === "boerse" && store.get()?.state?.stadt) return netzOeffnen("boerse");
   if (pid === "bank" && store.get()?.state?.stadt) return netzOeffnen("bank");
+  if (pid === "bonds" && store.get()?.state?.stadt) return netzOeffnen("anleihen");
   TUT_GESEHEN.add(pid);
   if (!stumm) SFX.spiel("klick");
   document.querySelectorAll(".panel").forEach(p => p.classList.remove("open"));
@@ -6974,6 +7015,7 @@ function netzOeffnen(pid = null) {
   if (pid !== "boerse") boerseHeimholen();
   if (pid !== "bank") bankHeimholen();
   if (pid === "bank") TUT_GESEHEN.add("bank");
+  if (pid === "anleihen") TUT_GESEHEN.add("bonds");
   Object.assign(NETZ, { offen: true, seite: pid, sig: {}, artikel: pid === "kurier" ? NETZ.artikel : null });
   netzZeichnen();
 }
@@ -7074,6 +7116,7 @@ function netzZeichnen() {
         <div class="netzDienste">
           <button type="button" class="netzDienst" data-kurierauf=""><span class="netzDienstIcon" style="background:#111827">📰</span><span><b>${t("Stadtkurier")}</b><small>kurier.cs · ${t("Nachrichten alle zwei Minuten")}</small></span></button>
           <button type="button" class="netzDienst" data-netzauf="boerse"><span class="netzDienstIcon" style="background:#1d4ed8">📈</span><span><b>${t("Warenbörse")}</b><small>boerse.cs · ${state.orders.length} ${t("offene Orders")}</small></span></button>
+          <button type="button" class="netzDienst" data-netzauf="anleihen"><span class="netzDienstIcon" style="background:#7c3aed">%</span><span><b>${t("Anleihenmarkt")}</b><small>anleihen.cs · ${(state.bonds || []).filter(b => !b.holderId).length} ${t("am Markt")}</small></span></button>
           <button type="button" class="netzDienst" data-netzauf="bank"><span class="netzDienstIcon" style="background:#0e7490">🏦</span><span><b>${t("Stadtbank")}</b><small>bank.cs · ${t("Aktien, Übernahmen, Kurswetten")}</small></span></button>
         </div>
         ${kurierKasten(artikel)}
@@ -7245,6 +7288,52 @@ function netzZeichnen() {
       <aside class="bankRand">${anzeige}</aside></div>`, "inhaltAktien" + q);
     return;
   }
+  /* ---- Anleihenmarkt (anleihen.cs) ----
+   * Eigene Website statt des dunklen Finanzen-Panels: Anleihen am Markt als
+   * Karten (mit Zinsen bis zum Ende), eigene Anleihen und Schulden, ein
+   * Formular mit Vorschau, Zwangsversteigerungen und Vertragsangebote. */
+  if (NETZ.seite === "anleihen") {
+    fenster.querySelector(".sfBrowser").style.setProperty("--sys", "#7c3aed");
+    netzSetze(".sfUrl", "🔒 anleihen.cs", "url");
+    const bonds = state.bonds || [], meinName = state.players[myId]?.name;
+    const markt = bonds.filter(b => !b.holderId && b.issuerId !== myId).sort((a, b) => (b.issuerId === "__stadt") - (a.issuerId === "__stadt") || b.rate - a.rate);
+    const meine = bonds.filter(b => b.holderId === myId), schulden = bonds.filter(b => b.issuerId === myId);
+    const zinsen = b => Math.round(b.principal * b.rate * b.termLeft / 60);
+    const summe = arr => arr.reduce((a, b) => a + b.principal, 0);
+    netzSetze(".sfKopf", `<div class="sfMarke"><span class="sfLogo" style="background:#6d28d9">%</span><div><b>${t("Anleihenmarkt")}</b><small>${t("Geld leihen und verleihen — mit Zins je Minute")}</small></div></div>
+      <span class="rzBadges"><span class="sfBadge">${markt.length} ${t("am Markt")}</span><span class="sfBadge">${t("angelegt")} ${fmt(summe(meine))}</span><span class="sfBadge">${t("Schulden")} ${fmt(summe(schulden))}</span></span>`, "kopfAnl" + markt.length + summe(meine) + summe(schulden));
+    fenster.querySelector(".sfBanner").hidden = true;
+    fenster.querySelector(".sfHinweis").hidden = true;
+    const badge = r => `<span class="anlRating" style="background:${RCOL[r]}22;color:${RCOL[r]}">${r}</span>`;
+    const karte = b => { const stadt = b.issuerId === "__stadt";
+      return `<article class="anlKarte${stadt ? " stadt" : ""}"><div class="anlKarteKopf">${stadt ? `<span class="anlStadt">🏛</span>` : logoHtml(b.issuerId, "anlLogo", state.players[b.issuerId]?.color)}<span><b>${escapeHtml(rohText(b.issuer))}</b><small>${stadt ? t("Stadtanleihe für den Wohnbau") : t("Firmenanleihe")}</small></span>${badge(b.issuerRating)}</div>
+        <div class="anlZahlen"><div><small>${t("Nennwert")}</small><b>${fmt(b.principal)}</b></div><div><small>${t("Zins")}</small><b>${(b.rate * 100).toFixed(1).replace(".", ",")} %/min</b></div><div><small>${t("Laufzeit")}</small><b>${Math.ceil(b.termLeft / 60)} min</b></div></div>
+        <div class="anlErtrag">${t("Zinsen bis zum Ende")} ≈ <b>${fmt(zinsen(b))}</b>${b.strikes > 0 ? ` · <em>${t("im Verzug")}</em>` : ""}</div>
+        <button type="button" class="sfKaufen" data-anlkauf="${b.id}" ${me.cash < b.principal ? "disabled" : ""}>${t("Kaufen")} · ${fmt(b.principal)}</button></article>`; };
+    const zeile = (b, art) => `<div class="anlZeile"><span><b>${escapeHtml(rohText(art === "meine" ? b.issuer : (b.holder || t("noch nicht verkauft"))))}</b><small>${fmt(b.principal)} · ${(b.rate * 100).toFixed(1).replace(".", ",")} %/min · ${t("noch")} ${Math.ceil(b.termLeft / 60)} min</small></span><span class="mono ${art === "meine" ? "auf" : "ab"}">${art === "meine" ? "+" : "−"}${fmt(Math.round(b.principal * b.rate))}/min</span>${b.strikes > 0 ? `<em class="anlVerzug">${t("Verzug")}</em>` : ""}</div>`;
+    const verträge = (state.contracts || []).filter(c => c.toId === myId);
+    const auktionen = state.auctions || [];
+    const ruhig = document.activeElement && fenster.contains(document.activeElement) && document.activeElement.tagName === "INPUT";
+    const nw = NETZ.anlNenn ?? 3000, zs = NETZ.anlZins ?? 8, lz = NETZ.anlLauf ?? 3;
+    if (!ruhig) netzSetze(".netzInhalt", `<div class="anlLayout"><div class="anlHaupt">
+        <section class="anlBox"><div class="anlBoxKopf"><b>${t("Anleihen am Markt")}</b><small>${t("Stadtanleihen zuerst, dann nach Zins")}</small></div>
+          ${markt.length ? `<div class="anlKarten">${markt.map(karte).join("")}</div>` : `<div class="netzLeer">${t("Gerade wird keine Anleihe angeboten. Ratings entstehen aus Vermögen und Schulden der Firmen.")}</div>`}</section>
+        ${verträge.length ? `<section class="anlBox"><div class="anlBoxKopf"><b>${t("Vertragsangebote an dich")}</b></div>${verträge.map(c => `<div class="anlZeile"><span><b>${escapeHtml(rohText(c.from))}</b><small>${c.qty}× ${gname(c.good)} · ${fmt(c.price)}/Stk = ${fmt(c.qty * c.price)}</small></span><span class="anlKnoepfe"><button type="button" class="buyb" data-anlvertrag="${c.id}">${t("Annehmen")}</button><button type="button" class="mini" data-anlablehnen="${c.id}">${t("Ablehnen")}</button></span></div>`).join("")}</section>` : ""}
+        <section class="anlBox"><div class="anlBoxKopf"><b>${t("Zwangsversteigerungen")}</b><small>${t("gepfändete Gebäude von Firmen im Verzug")}</small></div>
+          ${auktionen.length ? auktionen.map(a => `<div class="anlZeile"><span><b>${bname(a.btype)}</b><small>${t("Mindestgebot")} ${fmt(a.minBid)} · ${t("Höchstgebot")} ${a.bestBid ? fmt(a.bestBid) : "—"} · ${a.tLeft}s</small></span><span class="anlKnoepfe"><input type="number" id="anlGebot-${a.id}" placeholder="${Math.max(a.minBid, (a.bestBid || 0) + 1)}"><button type="button" class="buyb" data-anlbieten="${a.id}">${t("Bieten")}</button></span></div>`).join("") : `<small class="anlLeer">${t("Keine laufenden Auktionen.")}</small>`}</section>
+      </div><aside class="anlSeite">
+        <section class="anlBox anlForm"><b>${t("Anleihe ausgeben")}</b><small>${t("Du bekommst den Nennwert sofort und zahlst jede Minute Zins. Am Ende zahlst du den Nennwert zurück — bei Verzug wird gepfändet.")}</small>
+          <label><span>${t("Nennwert $")}</span><input id="anlNenn" type="number" min="100" step="100" value="${nw}"></label>
+          <label><span>${t("Zins % je Minute")}</span><input id="anlZins" type="number" min="1" max="50" step="0.5" value="${zs}"></label>
+          <label><span>${t("Laufzeit in Minuten")}</span><input id="anlLauf" type="number" min="1" step="1" value="${lz}"></label>
+          <div class="anlVorschau"><span>${t("Zins je Minute")}<b>${fmt(nw * zs / 100)}</b></span><span>${t("Zinsen gesamt")}<b>${fmt(nw * zs / 100 * lz)}</b></span><span>${t("Rückzahlung am Ende")}<b>${fmt(nw)}</b></span></div>
+          <button type="button" class="sfKaufen" data-anlausgeben>${t("Anleihe ausgeben")}</button></section>
+        <section class="anlBox"><b>${t("Deine Anlagen")}</b>${meine.map(b => zeile(b, "meine")).join("") || `<small class="anlLeer">${t("Du hältst keine Anleihen.")}</small>`}</section>
+        <section class="anlBox"><b>${t("Deine Schulden")}</b>${schulden.map(b => zeile(b, "schuld")).join("") || `<small class="anlLeer">${t("Keine eigenen Anleihen offen.")}</small>`}</section>
+      </aside></div>`, "inhaltAnl");
+    netzSetze(".sfFuss", `<span class="sfFussLogo">%</span><span>${t("Der Anleihenmarkt wird von der Stadt betrieben · Firmenanteile handelst du auf bank.cs")}</span>`, "fussAnl");
+    return;
+  }
   /* ---- Stadtkurier ---- */
   if (NETZ.seite === "kurier") {
     KURIER.gelesen = Math.max(KURIER.gelesen, (state.news || [])[0]?.ts || 0);
@@ -7342,6 +7431,8 @@ function netzZeichnen() {
 }
 document.getElementById("netzFenster").addEventListener("input", e => {
   if (e.target.id === "netzSuche") { NETZ.suche = e.target.value; netzZeichnen(); }
+  if (["anlNenn", "anlZins", "anlLauf"].includes(e.target.id)) { const k = { anlNenn: "anlNenn", anlZins: "anlZins", anlLauf: "anlLauf" }[e.target.id]; NETZ[k] = +e.target.value || 0;
+    const v = document.querySelector("#netzFenster .anlVorschau"); if (v) { const nw = NETZ.anlNenn ?? 3000, zs = NETZ.anlZins ?? 8, lz = NETZ.anlLauf ?? 3; const b = v.querySelectorAll("b"); b[0].textContent = fmt(nw * zs / 100); b[1].textContent = fmt(nw * zs / 100 * lz); b[2].textContent = fmt(nw); } }
   if (e.target.id === "bankSuche") { NETZ.bankSuche = e.target.value; NETZ.bankTab = "aktien"; NETZ.bankAktie = null; netzZeichnen(); }
   if (e.target.id === "bwMenge") { NETZ.bwMenge = Math.max(1, Math.floor(+e.target.value) || 1); NETZ.sig.haupt = null; }
   if (e.target.id === "bwPreis") NETZ.bwPreis = +e.target.value || null;
@@ -7350,6 +7441,20 @@ document.getElementById("netzFenster").addEventListener("input", e => {
 document.getElementById("netzFenster").addEventListener("click", e => {
   if (e.target.closest("[data-netzzu]") || e.target.id === "netzFenster") return netzSchliessen();
   if (e.target.closest("[data-netzzurueck]")) { if (NETZ.seite === "kurier" && NETZ.artikel) { NETZ.artikel = null; NETZ.sig = {}; return netzZeichnen(); } return netzOeffnen(null); }
+  /* Anleihenmarkt */
+  const ak = e.target.closest("[data-anlkauf]");
+  if (ak) return act("buyBond", { bondId: +ak.dataset.anlkauf });
+  const av = e.target.closest("[data-anlvertrag]");
+  if (av) return act("acceptContract", { contractId: +av.dataset.anlvertrag });
+  const aa = e.target.closest("[data-anlablehnen]");
+  if (aa) return act("declineContract", { contractId: +aa.dataset.anlablehnen });
+  const ab = e.target.closest("[data-anlbieten]");
+  if (ab) return act("bid", { auctionId: +ab.dataset.anlbieten, amount: document.getElementById("anlGebot-" + ab.dataset.anlbieten)?.value });
+  if (e.target.closest("[data-anlausgeben]")) {
+    const nenn = +document.getElementById("anlNenn")?.value, zins = +document.getElementById("anlZins")?.value, lauf = +document.getElementById("anlLauf")?.value;
+    if (!(nenn > 0 && zins > 0 && lauf > 0)) return toast(t("Nennwert, Zins und Laufzeit eingeben"), true);
+    return act("issueBond", { principal: nenn, rate: zins / 100, term: Math.round(lauf * 60) });
+  }
   /* Stadtbank-Portal */
   const btab = e.target.closest("[data-banktab]");
   if (btab) { NETZ.bankTab = btab.dataset.banktab; if (NETZ.bankTab === "aktien") NETZ.bankAktie = null; NETZ.sig = {}; return netzZeichnen(); }
@@ -9087,7 +9192,7 @@ const TUT_EINSTEIGER = [
 
   { t: "Schritt 10 — Wirf einen Blick auf die Finanzen",
     warte: () => TUT_GESEHEN.has("bonds"),
-    p: `Öffne <b>Finanzen</b>.<br><br>Hier gibst du <b>Anleihen</b> aus: Geld sofort, Rückzahlung mit Zins über die Laufzeit. Nützlich, um schneller zu wachsen — aber bei Verzug wird gepfändet. Ich sage nicht, dass du eine aufnehmen sollst. Du sollst nur wissen, dass es sie gibt.` },
+    p: `Öffne <b>Finanzen</b> — im Sandkasten die Website <b>anleihen.cs</b> im Stadtnetz.<br><br>Hier gibst du <b>Anleihen</b> aus: Geld sofort, Rückzahlung mit Zins über die Laufzeit. Nützlich, um schneller zu wachsen — aber bei Verzug wird gepfändet. Ich sage nicht, dass du eine aufnehmen sollst. Du sollst nur wissen, dass es sie gibt.` },
 
   { t: "Schritt 11 — Bau ein Gebäude aus",
     warte: (st, me, id) => st.map.some(t => t.owner === id && (t.level || 1) >= 2),
@@ -9201,7 +9306,7 @@ const HINWEISE = [
   { id: "steuer", wann: (st, me) => (me.steuer?.steuer || 0) > 0, titel: "Das Finanzamt",
     text: "Alle 10 Minuten zahlst du Gewinnsteuer. Bauen und Ausbauen senken den Gewinn nach und nach (Abschreibung). Die Steuer geht an die Stadt.", panel: ["finanzamt", "Finanzamt"] },
   { id: "stadtanleihe", wann: st => (st.bonds || []).some(b => !b.holderId && String(b.issuer).startsWith("Stadt")), titel: "Die Stadt leiht sich Geld",
-    text: "Für neue Wohnungen gibt die Stadt eine Anleihe aus. Wer sie zeichnet, bekommt jede Minute Zinsen und das Geld nach 15 Minuten zurück — zu finden an der Stadtbank.", panel: ["bank", "Stadtbank"] },
+    text: "Für neue Wohnungen gibt die Stadt eine Anleihe aus. Wer sie zeichnet, bekommt jede Minute Zinsen und das Geld nach 15 Minuten zurück — zu finden auf anleihen.cs im Stadtnetz.", panel: ["bonds", "Anleihenmarkt"] },
   { id: "software", wann: (st, me, id) => st.players?.[id]?.industry === "software" && st.tick > 30, titel: "Dein Software-Panel",
     text: "Als Software-Firma baust du Shop-Systeme, Bürger-Apps und Jobbörsen für die anderen. Alles liegt im Software-Panel in Reitern: Markt, Mein System, Entwicklung, Design und Produkte.", panel: ["software", "Software"] },
   { id: "touristik", wann: (st, me, id) => !!st.touristik && (st.map || []).some(x => x.owner === id && (x.btype === "campingplatz" || x.btype === "strandhotel") && !(x.bauBis > st.tick)), titel: "Gäste für deine Hotels",
@@ -10360,7 +10465,7 @@ function planRendern(state, myId) {
   const boerseKnopf = document.querySelector('.dockbtn[data-p="boerse"]');
   if (boerseKnopf) boerseKnopf.style.display = planAktiv || state.stadt ? "none" : "";   // Sandkasten: Börse im Stadtnetz
   const bondsKnopf = document.querySelector('.dockbtn[data-p="bonds"]');
-  if (bondsKnopf) bondsKnopf.style.display = planAktiv ? "none" : "";
+  if (bondsKnopf) bondsKnopf.style.display = planAktiv || state.stadt ? "none" : "";   // Sandkasten: Anleihen im Stadtnetz
   const ctrbar = document.getElementById("ctrbar");
   if (ctrbar) ctrbar.style.display = planAktiv ? "none" : "";
   if (planAktiv) document.getElementById("quests").style.display = "none";
