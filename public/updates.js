@@ -5,6 +5,18 @@
  * `art`: "neu" (neue Funktion), "besser" (Verbesserung), "fix" (Fehler behoben). */
 window.UPDATES = [
   {
+    id: "2026-10-25h", datum: "2026-10-25",
+    titel: { de: "Stadtnetz und Firmen-Websites", en: "City network and company websites" },
+    punkte: [
+      { art: "neu", de: "Stadtnetz (Knopf unten): Startseite mit allen Firmen-Websites, sortiert nach Besuchern, Suche, laufenden Festen, Ausschreibungen und Aktionen sowie den Anzeigen aus dem Werbenetz. Wer keine Website hat, steht nicht drin.",
+        en: "City network (button at the bottom): home page with every company website sorted by visitors, search, running festivals, tenders and campaigns plus ads from the ad network. Companies without a website are not listed." },
+      { art: "neu", de: "Jede bestellte Website ist jetzt eine echte Seite mit Betrieben, Produkten, Shop und Aktie. Das Branchenportal macht sie zum Laden: Hofladen (Agrar), Großhandel (Technik), Baustoff-Portal (Rohstoff, +5 % auf Wohnbau-Lieferungen), Kundenportal (Versorger) — Mitspieler kaufen dort sofort zum Ø-Kurs plus 5 %.",
+        en: "Every ordered website is now a real page with venues, products, shop and shares. The industry portal turns it into a shop: farm shop (agriculture), wholesale (tech), building-materials portal (raw materials, +5 % on housing deliveries), customer portal (utilities) — other players buy instantly at average price plus 5 %." },
+      { art: "neu", de: "Rüstung bekommt das Ausschreibungsportal: Gebote zählen 5 % günstiger, jede Lieferung bringt 15 % mehr, und Ausschreibungen kommen häufiger (alle 2½ statt 4 Minuten). Mit dem Modul „Aktionen“ startet jede Branche ihre eigene Aktion (5 Minuten +25 % Reichweite).",
+        en: "Defence gets the tender portal: bids count 5 % cheaper, every delivery pays 15 % more, and tenders come more often (every 2½ instead of 4 minutes). With the “Campaigns” module every industry starts its own campaign (+25 % reach for 5 minutes)." },
+    ]
+  },
+  {
     id: "2026-10-25g", datum: "2026-10-25",
     titel: { de: "Rechenzentren mit Statusseite und Websites von der Software-Branche", en: "Data centres with status pages and websites from the software industry" },
     punkte: [

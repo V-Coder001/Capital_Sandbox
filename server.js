@@ -4255,6 +4255,30 @@ const WEBSITE = {
   STADTPORTAL: { preis: 45, einrichtung: 600 },   // Notlösung: nur die Grundseite
 };
 const WEB_STADTPORTAL = "stadtportal";
+/* Etappe 8: Branchenportale (Modul v2) mit echter Funktion und Aktionen (v3) */
+const PORTALE = {
+  agrar:     { name: "Hofladen",             waren: ["obst", "honig", "saft", "gebaeck"] },
+  tech:      { name: "Großhandel",           waren: ["elektronik", "silizium"] },
+  rohstoff:  { name: "Baustoff-Portal",      waren: ["ziegel", "beton", "stahl"], wohnbau: 0.05 },
+  versorger: { name: "Kundenportal",         waren: ["strom", "wasser"] },
+  /* Rüstung lag auch mit Portal am Ende (gemessen 69k/57k): Ausschreibungen kommen
+   * dann alle 150 statt 240 s, Lieferungen bringen 15 % mehr. */
+  ruestung:  { name: "Ausschreibungsportal", waren: [], gebot: 0.95, lieferung: 0.15, abstand: 150 },
+  touristik: { name: "Buchungsseite",        waren: [] },
+  software:  { name: "Statusseite",          waren: [] },
+};
+const DIREKT = { AUFSCHLAG: 1.05, ANTEIL: 0.5 };
+const WEB_AKTION = { kosten: 600, dauer: 300, pause: 900, boost: 0.25,
+  namen: { agrar: "Erntefest-Rabatt", tech: "Produkt-Launch", rohstoff: "Baustoff-Woche", versorger: "Wechselprämie", ruestung: "Messeauftritt", touristik: "Frühbucher-Aktion", software: "Gratis-Monat" } };
+/* Welche Modul-Stufe einer Firma gerade online ist (0 = keine Website) */
+function webStufe(p) {
+  const w = p?.website;
+  if (!w || G.tick < (w.bis || 0)) return 0;
+  if (w.anbieter !== WEB_STADTPORTAL && !((G.website?.[w.anbieter]?.faktor ?? 0) > 0)) return 0;
+  return WEBSITE.MODULE[w.modul]?.ab || 0;
+}
+const hatPortal = p => webStufe(p) >= 2;
+const webAktionLaeuft = p => !!(p?.webAktion && p.webAktion.bis > G.tick);
 /* Platzverteilung der Rechenzentren; die Standardwerte lassen alle Kapazitäten wie bisher */
 const RZ_VERTEILUNG = { shops: 50, apps: 30, web: 20 };
 const RZ_UPTIME_MIN = 30;
@@ -4270,7 +4294,7 @@ function webBonus(p) {
   if (!mod) return 0;
   if (w.anbieter === WEB_STADTPORTAL) return mod.bonus;
   const anb = G.website?.[w.anbieter];
-  return anb ? mod.bonus * (anb.faktor ?? 1) : 0;
+  return anb ? (mod.bonus + (webAktionLaeuft(p) ? WEB_AKTION.boost : 0)) * (anb.faktor ?? 1) : 0;
 }
 const webPreis = (w, modul) => w === WEB_STADTPORTAL ? WEBSITE.STADTPORTAL.preis : Math.round(w.preis * WEBSITE.MODULE[modul].faktor * 100) / 100;
 /* Alle 10 s: Plätze und Auslastung der Website-Anbieter */
@@ -4280,6 +4304,11 @@ function websiteTick() {
   for (const w of Object.values(G.website || {})) {
     const n = webKunden(w).length, plaetze = webPlaetze(w);
     w.faktor = n ? Math.min(1, plaetze / n) : (plaetze > 0 ? 1 : 0); w.kunden = n; w.plaetze = plaetze;
+  }
+  /* Besucher je Minute (Etappe 8): Reichweite der Website, bei Hotels plus Gäste */
+  for (const p of Object.values(G.players)) {
+    const b = webStufe(p) ? webBonus(p) : 0;
+    p.webBesucher = webStufe(p) ? Math.round(G.stadt.einwohner / 100 * (3 + 40 * b) + (G.tour?.firmen?.[p.id]?.gaeste || 0)) : 0;
   }
 }
 /* Jede Minute: Abos der Websites; wer nicht zahlen kann, verliert die Seite */
@@ -4329,8 +4358,15 @@ function rechenzentrenPublic() {
   const out = {};
   for (const [pid, u] of Object.entries(G.rzUptime || {})) if (G.players[pid]) out[pid] = { uptime: u, verteilung: { ...RZ_VERTEILUNG, ...(G.players[pid].rzVerteilung || {}) } };
   for (const p of Object.values(G.players)) if (istSoftwareFirma(p) && !out[p.id]) out[p.id] = { uptime: [], verteilung: { ...RZ_VERTEILUNG, ...(p.rzVerteilung || {}) } };
-  const kunden = Object.fromEntries(Object.values(G.players).filter(p => p.website).map(p => [p.id, { anbieter: p.website.anbieter, modul: p.website.modul, online: G.tick >= (p.website.bis || 0), bonus: Math.round(webBonus(p) * 1000) / 1000 }]));
-  return { firmen: out, websites: kunden };
+  const kunden = Object.fromEntries(Object.values(G.players).filter(p => p.website).map(p => {
+    const ind = p.industry, portal = PORTALE[ind];
+    return [p.id, { anbieter: p.website.anbieter, modul: p.website.modul, online: G.tick >= (p.website.bis || 0), bonus: Math.round(webBonus(p) * 1000) / 1000,
+      stufe: webStufe(p), besucher: p.webBesucher || 0, portal: portal?.name || null,
+      angebot: hatPortal(p) && portal ? portal.waren.map(g => ({ g, preis: Math.round(MM[g].price * DIREKT.AUFSCHLAG * 100) / 100, menge: Math.floor((p.inv[g] || 0) * DIREKT.ANTEIL) })) : [],
+      aktion: webAktionLaeuft(p) ? { name: WEB_AKTION.namen[ind] || "Aktion", rest: p.webAktion.bis - G.tick } : null,
+      aktionPause: p.webAktion && p.webAktion.pause > G.tick ? p.webAktion.pause - G.tick : 0 }];
+  }));
+  return { firmen: out, websites: kunden, aktion: { kosten: WEB_AKTION.kosten, dauer: WEB_AKTION.dauer, pause: WEB_AKTION.pause, boost: WEB_AKTION.boost, namen: WEB_AKTION.namen }, portale: PORTALE, direkt: DIREKT };
 }
 /* ---------- Touristik: Gäste, Sterne, Stadtfeste (Stadtwachstum, Etappe 6) ----------
  * Bis hierher verkaufte die Touristik nur Übernachtungen über den Markt, und
@@ -5564,7 +5600,8 @@ function wohnbauLiefern(p, { id: aid, good, qty } = {}) {
   if (!n) return { error: "Diese Ware braucht der Bau nicht" };
   qty = Math.min(Math.floor(+qty), n.req - n.have, Math.floor(p.inv[good] || 0));
   if (!(qty > 0)) return { error: "Menge ungültig, Lager leer oder Bedarf gedeckt" };
-  const summe = Math.round(qty * n.pay * 100) / 100;
+  /* Baustoff-Portal (Etappe 8): +5 % auf Lieferungen an den Wohnbau */
+  const summe = Math.round(qty * n.pay * (1 + (hatPortal(p) ? PORTALE.rohstoff.wohnbau : 0)) * 100) / 100;
   const ausBudget = Math.min(a.budget, summe);
   a.budget -= ausBudget; G.stadtkasse -= summe - ausBudget;
   p.inv[good] -= qty; n.have += qty;
@@ -5618,16 +5655,18 @@ function ruestAusschreiben() {
 function ruestEnde(a) {
   const R = G.stadt.ruest;
   R.auftraege = R.auftraege.filter(x => x !== a);
-  R.naechste = G.tick + RUEST.ABSTAND;
+  const portal = Object.values(G.players).some(p => ruestFirma(p) && hatPortal(p));
+  R.naechste = G.tick + (portal ? PORTALE.ruestung.abstand : RUEST.ABSTAND);
 }
 function ruestZuschlag(a) {
   /* Ruf 100 zählt das Gebot wie abgegeben, Ruf 0 wie um 50 % teurer */
-  const wert = ([pid, g]) => g.prozent * (1 + (100 - ruestRuf(pid)) / 200);
+  /* Ausschreibungsportal (Etappe 8): Gebote mit eigenem Portal zählen 5 % günstiger */
+  const wert = ([pid, g]) => g.prozent * (1 + (100 - ruestRuf(pid)) / 200) * (hatPortal(G.players[pid]) ? PORTALE.ruestung.gebot : 1);
   const liste = Object.entries(a.gebote).filter(([pid]) => G.players[pid]).sort((x, y) => wert(x) - wert(y) || x[1].t - y[1].t);
   if (!liste.length) { ruestLog(`${a.name}: kein Gebot — Auftrag ging nach außerhalb`); return ruestEnde(a); }
   const [pid, g] = liste[0], p = G.players[pid];
   Object.assign(a, { phase: "liefern", gewinner: pid, prozent: g.prozent, frist: G.tick + RUEST.FRIST, bieter: liste.length,
-    preise: Object.fromEntries(Object.keys(a.needs).map(k => [k, Math.round(BASEP[k] * g.prozent) / 100])) });
+    preise: Object.fromEntries(Object.keys(a.needs).map(k => [k, Math.round(BASEP[k] * g.prozent * (1 + (hatPortal(p) ? PORTALE.ruestung.lieferung : 0))) / 100])) });
   ruestLog(`${a.name}: Zuschlag an ${p.name} zu ${g.prozent} % (${liste.length} ${liste.length === 1 ? "Gebot" : "Gebote"})`);
   emitTo(pid, "notice", { text: `Zuschlag! ${a.name}: Du lieferst zu ${g.prozent} % des Listenpreises, Frist ${Math.round(RUEST.FRIST / 60)} min.` });
   for (const [anderer] of liste.slice(1)) emitTo(anderer, "notice", { text: `${a.name}: Der Zuschlag ging an ${p.name} (${g.prozent} %).` });
@@ -8887,7 +8926,7 @@ io.on("connection", socket => {
     G.stadtkasse = STADT_GRUNDSTOCK; G.steuerStufe = 2; G.boerseGebuehren = 0; G.steuernGesamt = 0; G.stadtprojekt = null; G.projektPause = 120; G.stadtprojekteFertig = [];
     stadtInit();
     for (const pl of Object.values(G.players)) { pl.steuerStand = undefined; pl.steuerSchuld = 0; pl.steuerLetzter = null; }
-    for (const pl of Object.values(G.players)) { pl.wettOffen = 0; pl.wettLog = []; pl.website = null; }
+    for (const pl of Object.values(G.players)) { pl.wettOffen = 0; pl.wettLog = []; pl.website = null; pl.webAktion = null; }
     /* Preisanker zurücksetzen — sonst startet die neue Runde mit den
      * verzerrten Kursen der alten (z. B. dauerhaft gedrücktem Ölpreis). */
     for (const k of Object.keys(GOODS)) Object.assign(MM[k], { price: BASEP[k], anchor: BASEP[k], sold: 0 });
@@ -8975,6 +9014,35 @@ io.on("connection", socket => {
     if (!portal && !p.bot) marktLog("software", `${p.name} lässt die Website von ${w.name} bauen`, { firmaId: p.id });
     if (!portal) emitTo(w.ownerId, "notice", { text: `${p.name} bestellt eine Website (${mod.name}) bei ${w.name}.` });
     ack?.({ ok: true, dauer: gleich ? 0 : WEBSITE.INSTALL }); pushState();
+  }));
+  /* Direktkauf im Branchenportal einer anderen Firma (Etappe 8) */
+  socket.on("direktKaufen", guard((p, { firmaId, good, qty } = {}, ack) => {
+    const v = G.players[firmaId];
+    if (!v || v.id === p.id) return ack?.({ error: "Bei dir selbst kaufst du nicht ein" });
+    const portal = PORTALE[v.industry];
+    if (!hatPortal(v) || !portal?.waren.includes(good)) return ack?.({ error: "Diese Firma verkauft das nicht direkt" });
+    const preis = Math.round(MM[good].price * DIREKT.AUFSCHLAG * 100) / 100;
+    qty = Math.min(Math.floor(+qty), Math.floor((v.inv[good] || 0) * DIREKT.ANTEIL), Math.floor(p.cash / preis));
+    if (!(qty > 0)) return ack?.({ error: "Nichts verfügbar oder zu wenig Kapital" });
+    const summe = Math.round(qty * preis * 100) / 100;
+    p.cash -= summe; p.stats.ausgaben += summe; p.inv[good] = (p.inv[good] || 0) + qty;
+    v.cash += summe; v.inv[good] -= qty; addRevenue(v, summe);
+    logTx(p, "Einkauf", `${qty}× ${GOODS[good].name} im ${portal.name} von ${v.name}`, -summe);
+    logTx(v, "Verkauf", `${qty}× ${GOODS[good].name} im ${portal.name} an ${p.name}`, summe);
+    if (!v.bot) emitTo(v.id, "notice", { text: `${p.name} kauft ${qty}× ${GOODS[good].name} in deinem ${portal.name} (+${summe.toLocaleString("de-DE")} $).` });
+    ack?.({ ok: true, qty, summe }); pushState();
+  }));
+  socket.on("webAktionStarten", guard((p, _d, ack) => {
+    if (webStufe(p) < 3) return ack?.({ error: "Aktionen gibt es nur mit dem Website-Modul „Aktionen“" });
+    if (webAktionLaeuft(p)) return ack?.({ error: "Deine Aktion läuft schon" });
+    if ((p.webAktion?.pause || 0) > G.tick) return ack?.({ error: `Nächste Aktion in ${Math.ceil((p.webAktion.pause - G.tick) / 60)} min` });
+    if (p.cash < WEB_AKTION.kosten) return ack?.({ error: `Eine Aktion kostet ${WEB_AKTION.kosten} $` });
+    p.cash -= WEB_AKTION.kosten; p.stats.ausgaben += WEB_AKTION.kosten;
+    p.webAktion = { bis: G.tick + WEB_AKTION.dauer, pause: G.tick + WEB_AKTION.dauer + WEB_AKTION.pause };
+    const name = WEB_AKTION.namen[p.industry] || "Aktion";
+    logTx(p, "Software", `Website-Aktion: ${name}`, -WEB_AKTION.kosten);
+    marktLog("software", `${p.name} startet eine Aktion: ${name}`, { firmaId: p.id });
+    ack?.({ ok: true, name }); pushState();
   }));
   socket.on("websiteKuendigen", guard((p, _d, ack) => { p.website = null; ack?.({ ok: true }); pushState(); }));
   socket.on("rzVerteilung", guard((p, d = {}, ack) => {
@@ -11093,6 +11161,14 @@ async function spawnBot(cfg, lvl = BOT_LEVELS[BOT_LEVEL_DEFAULT]) {
           const w = angebote.find(x => x.id === meine.anbieter), m = w && modulFuer(w);
           if (m && WEBSITE.MODULE[m].ab > WEBSITE.MODULE[meine.modul].ab) await em("websiteBestellen", { anbieter: w.id, modul: m });
         }
+      }
+      /* Etappe 8: Website-Aktion mit Polster; Touristik holt Frühstück notfalls im Hofladen */
+      const meineWeb = st.rechenzentren?.websites?.[myId];
+      if (meineWeb?.stufe >= 3 && !meineWeb.aktion && !meineWeb.aktionPause && me.cash > 4000 && Math.random() < .15) await em("webAktionStarten", {});
+      if (cfg.industry === "touristik" && (me.inv.obst || 0) < 15 && st.map.some(t2 => t2.owner === myId && (t2.sterne || 0) >= 3)) {
+        const laden = Object.entries(st.rechenzentren?.websites || {}).map(([fid, w]) => ({ fid, o: (w.angebot || []).find(a => a.g === "obst" && a.menge >= 10) }))
+          .filter(x => x.o && x.fid !== myId).sort((a, b) => a.o.preis - b.o.preis)[0];
+        if (laden && me.cash > 1000) await em("direktKaufen", { firmaId: laden.fid, good: "obst", qty: Math.min(40, laden.o.menge) });
       }
       /* --- Werbenetz: mit Polster ab und zu eine Anzeige bei dem System buchen,
        * das je Dollar die meiste Wirkung bringt (Reichweite ÷ Preis). Nur wer
