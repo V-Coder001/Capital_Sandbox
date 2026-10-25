@@ -2033,6 +2033,57 @@ const EN = {
   "höchstens": "at most", "Schulden": "debt", "Bürger-Apps und Jobbörse": "Citizen apps and job board",
   "Bürger-App: bis 85 % der Einwohner zahlen ein Abo je Minute, 200 Nutzer je Rechenzentrums-Stufe des Anbieters. Jobbörse: Vorrang wie +0,3 bis +0,7 Lohnstufen gegen eine Gebühr je Arbeiter, 3 Abos je Rechenzentrums-Stufe.": "Citizen app: up to 85 % of residents pay a subscription per minute, 200 users per data-centre level of the provider. Job board: priority like +0.3 to +0.7 wage levels for a fee per worker, 3 subscriptions per data-centre level.",
   /* Touristik (Etappe 6) */
+  "Auf der Karte zeigen": "Show on map",
+  "Ausgebucht — wir mussten woanders schlafen.": "Fully booked — we had to sleep elsewhere.",
+  "Buchen": "Book",
+  "Buchungsseite": "Booking page",
+  "Buchungsseite öffnen": "Open booking page",
+  "Campingplatz · fest 1 Stern": "Campground · fixed 1 star",
+  "Deine Buchungsseite öffnen": "Open your booking page",
+  "Deine Buchungsseite: So sehen Gäste und Mitspieler deine Häuser. Preis, Renovierung und Feste stellst du hier direkt ein.": "Your booking page: this is how guests and other players see your venues. Set price, renovation and festivals right here.",
+  "Frühstück inklusive": "Breakfast included",
+  "Frühstück? Fehlanzeige. Für so viele Sterne enttäuschend.": "Breakfast? None. Disappointing for so many stars.",
+  "Gebucht über das Stadtportal": "Booked via the city portal",
+  "Gäste diese Minute": "guests this minute",
+  "Gäste kommen gerade je Minute in die Stadt": "guests are arriving in the city per minute",
+  "Gästebewertungen": "Guest reviews",
+  "Haus": "venue",
+  "Hotels & Camping": "Hotels & camping",
+  "Häuser": "venues",
+  "Häuser, Preis, Renovieren und Feste wie auf einer Website": "Venues, price, renovation and festivals like a website",
+  "Häuser, Preise und Bewertungen": "Venues, prices and reviews",
+  "Höchste Stufe erreicht": "Top level reached",
+  "Küste": "coast",
+  "Minuten": "minutes",
+  "Noch kein Haus fertig.": "No venue finished yet.",
+  "Noch keine Gäste.": "No guests yet.",
+  "Ordentlich für eine Nacht.": "Fine for one night.",
+  "Preis übernehmen": "Apply price",
+  "Preis, Renovieren, Feste": "Price, renovation, festivals",
+  "Richtwert bei deiner Bewertung": "Guide price at your rating",
+  "Sauber, freundlich, gutes Frühstück.": "Clean, friendly, good breakfast.",
+  "Schön, aber für das Gebotene ganz schön teuer.": "Nice, but pricey for what you get.",
+  "Stadt": "City",
+  "Stadtfest buchen": "Book a city festival",
+  "Stern": "star",
+  "Traumhafter Blick aufs Meer, das Personal war super.": "Dreamy sea view, the staff were great.",
+  "Unschlagbarer Preis, wir kommen wieder!": "Unbeatable price, we'll be back!",
+  "Wegen des Stadtfests hier — tolle Stimmung in der Stadt!": "Here for the city festival — great atmosphere in town!",
+  "Zelten direkt im Grünen, einfach aber herzlich.": "Camping in the green, simple but warm.",
+  "Das Frühstücksbuffet allein ist die Reise wert.": "The breakfast buffet alone is worth the trip.",
+  "Gerne wieder, nur der Pool war voll.": "Happy to return, only the pool was crowded.",
+  "Die Duschen könnten neuer sein.": "The showers could be newer.",
+  "Zentral gelegen, nette Leute.": "Central location, nice people.",
+  "Etwas in die Jahre gekommen.": "A bit dated.",
+  "Zimmerpreis je Nacht": "Room price per night",
+  "ab": "from",
+  "im Grünen": "in the green",
+  "in der Stadt": "in town",
+  "ohne Zimmer": "without a room",
+  "renovieren": "renovate",
+  "seit Rundenbeginn": "since round start",
+  "veranstaltet von": "hosted by",
+  "veranstaltet von uns!": "hosted by us!",
   "Auf": "To",
   "Bewertung": "Rating",
   "Deine Betriebe": "Your venues",
@@ -5485,7 +5536,8 @@ function clickTile(e) {
       const firma = store.get().state.touristik.firmen.find(f => f.id === t.owner);
       tourHtml = `<div class="tmHinweis">${sterneHtml(s)} ${s} ${tUe("Sterne")}${s >= 3 ? ` · ${tUe("mit Frühstück")}` : ""}${firma ? `<br>${tUe("Firma")}: ${firma.gaeste} ${tUe("Gäste je Minute")} · ${fmt(firma.preis)} ${tUe("je Nacht")}` : ""}</div>`
         + (mine && t.btype === "strandhotel" && s < tCfg.MAX_STERNE ? `<button class="tmKlein" id="renov" style="margin-top:4px" ${me.cash < kosten ? "disabled" : ""}>${tUe("Auf")} ${s + 1} ${tUe("Sterne renovieren")} · ${fmt(kosten)}</button>` : "")
-        + (mine ? `<button class="tmHaupt" id="tourPanel" style="margin-top:6px"><span>🏨 ${tUe("Touristik-Panel öffnen")}</span><small>${tUe("Zimmerpreis, Gäste, Stadtfeste")}</small></button>` : "");
+        + `<button class="tmHaupt" id="hotelAuf" style="margin-top:6px"><span>🌐 ${tUe("Buchungsseite öffnen")}</span><small>${mine ? tUe("Preis, Renovieren, Feste") : tUe("Häuser, Preise und Bewertungen")}</small></button>`
+        + (mine ? `<button class="tmKlein" id="tourPanel" style="margin-top:4px">🏨 ${tUe("Touristik-Panel öffnen")}</button>` : "");
     }
     /* Übersichtliche Gebäudekarte: Kopf (Bild, Name, Stufe, Besitzer, Status),
      * zwei bis drei Kennzahlen, EIN Hauptknopf, kleine Nebenknöpfe. Die
@@ -5571,6 +5623,7 @@ function clickTile(e) {
     });
     tm.querySelector("#swPanel")?.addEventListener("click", () => { tm.style.display = "none"; openPanel("software"); });
     tm.querySelector("#tourPanel")?.addEventListener("click", () => { tm.style.display = "none"; openPanel("touristik"); });
+    tm.querySelector("#hotelAuf")?.addEventListener("click", () => { tm.style.display = "none"; hotelOeffnen(t.owner); });
     tm.querySelector("#renov")?.addEventListener("click", () => { act("renovieren", { x: t.x, y: t.y }); tm.style.display = "none"; });
     tm.querySelector("#shopAuf")?.addEventListener("click", () => { tm.style.display = "none"; shopOeffnen(t.x, t.y); });
     tm.querySelector("#upgrade")?.addEventListener("click", () => { act("upgradeBuilding", { x: t.x, y: t.y }); tm.style.display = "none"; });
@@ -6090,6 +6143,7 @@ function touristikRendern(state, me, myId) {
         <small>+${Math.round(f.gaeste * 100)} % ${t("Gäste")} · +${Math.round(f.zufr * 100)} % ${t("Zufriedenheit")}${f.laeden ? ` · +${Math.round(f.laeden * 100)} % ${t("in den Läden")}` : ""}</small></button>`;
     }).join("");
     eigen = `<div class="sec" style="margin-top:16px">${t("Deine Touristik")}</div>
+      <button type="button" class="tmHaupt" data-hotelauf="${myId}" style="margin:0 0 12px"><span>🌐 ${t("Deine Buchungsseite öffnen")}</span><small>${t("Häuser, Preis, Renovieren und Feste wie auf einer Website")}</small></button>
       <div class="swZahlen">
         <div><b>${meine?.gaeste ?? 0}</b><span>${t("Gäste je Minute")}</span></div>
         <div><b>${sterneHtml(meine?.bewertung || 0)}</b><span>${t("Bewertung")} ${String(meine?.bewertung ?? 0).replace(".", ",")}</span></div>
@@ -6110,9 +6164,9 @@ function touristikRendern(state, me, myId) {
   } else eigen = `<div class="note" style="margin-top:12px">${t("Gäste übernachten bei Touristik-Firmen auf Campingplätzen und in Strandhotels.")}</div>`;
   const rang = T.firmen.filter(f => f.zimmer > 0).sort((a, b) => b.gaeste - a.gaeste);
   const liste = `<div class="sec" style="margin-top:16px">${t("Hotels der Stadt")}</div>
-    ${rang.length ? `<div class="swListe">${rang.map(f => `<div class="swListeZeile${f.id === myId ? " meins" : ""}">
-      <span class="swName"><i style="background:${f.farbe}"></i><span><b>${escapeHtml(rohText(f.name))}</b><small>${f.zimmer} ${t("Zimmer je Minute")}</small></span></span>
-      ${sterneHtml(f.bewertung)}<span class="mono">${fmt(f.preis)}</span><span class="mono">${f.gaeste} ${t("Gäste")}</span></div>`).join("")}</div>`
+    ${rang.length ? `<div class="swListe">${rang.map(f => `<button type="button" class="swListeZeile tourHotel${f.id === myId ? " meins" : ""}" data-hotelauf="${f.id}" title="${t("Buchungsseite öffnen")}">
+      <span class="swName"><i style="background:${f.farbe}"></i><span><b>${escapeHtml(rohText(f.name))}</b><small>${f.zimmer} ${t("Zimmer je Minute")} · 🌐 ${t("Buchungsseite")}</small></span></span>
+      ${sterneHtml(f.bewertung)}<span class="mono">${fmt(f.preis)}</span><span class="mono">${f.gaeste} ${t("Gäste")}</span></button>`).join("")}</div>`
       : `<div class="note">${t("Noch kein Hotel fertig.")}</div>`}`;
   const html = festBanner + stadt + eigen + liste;
   if (body._sig !== html) { body._sig = html; body.innerHTML = html; }
@@ -6125,8 +6179,152 @@ document.getElementById("p-touristik").addEventListener("click", e => {
   });
   const rv = e.target.closest("[data-renov]");
   if (rv) { const [x, y] = rv.dataset.renov.split(",").map(Number); return socket.emit("renovieren", { x, y }, r => { if (r?.error) return toast(r.error, true); toast(`${t("Renoviert")}: ${r.sterne} ★`); render(store.get()); }); }
+  const ha = e.target.closest("[data-hotelauf]");
+  if (ha) return hotelOeffnen(ha.dataset.hotelauf);
   const fe = e.target.closest("[data-fest]");
   if (fe) return socket.emit("festStarten", { typ: fe.dataset.fest }, r => { if (r?.error) return toast(r.error, true); render(store.get()); });
+});
+/* ---- Buchungsseite einer Touristik-Firma: wie die Shop-Seiten ein Browserfenster ----
+ * Jede Firma mit Campingplatz oder Strandhotel hat eine Seite: ihre Häuser als
+ * Karten, Zimmerpreis, Gästebewertungen. Auf der eigenen Seite stellt man Preis,
+ * Renovierung und Stadtfeste direkt ein. Geöffnet aus dem Touristik-Panel und
+ * über die Gebäudekarte. */
+const HOTEL = { offen: false, pid: null, sig: {} };
+const HOTEL_ICON = { campingplatz: "🏕️", strandhotel: "🏖️" };
+const HOTEL_GAESTE = ["Lena aus Bergstadt", "Familie Okafor", "Jonas, 34", "Mira & Tom", "Herr Brandt", "Aylin", "Reisegruppe Nord", "Pia mit Hund", "Kenji", "Oma Hilde"];
+function hotelOeffnen(pid) {
+  Object.assign(HOTEL, { offen: true, pid, sig: {} });
+  const el = document.getElementById("hotelFenster");
+  el.hidden = false;
+  el.innerHTML = `<div class="sfBrowser hfBrowser" role="dialog" aria-label="${t("Buchungsseite")}">
+    <div class="sfLeiste"><span class="sfPunkte"><i></i><i></i><i></i></span>
+      <span class="sfUrl"></span><button type="button" class="sfZu" data-hfzu aria-label="${t("Schließen")}">✕</button></div>
+    <header class="sfKopf"></header>
+    <div class="sfBanner" hidden></div>
+    <div class="sfHinweis" hidden></div>
+    <div class="sfInhalt"><div class="hfHaupt"></div>
+      <aside class="sfFeed"><h4><span class="sfLive"></span>${t("Gästebewertungen")}</h4><ul class="hfBewertungen"></ul></aside></div>
+    <footer class="sfFuss"></footer>
+  </div>`;
+  SFX.spiel("klick");
+  hotelZeichnen();
+}
+function hotelSchliessen() {
+  HOTEL.offen = false;
+  const el = document.getElementById("hotelFenster");
+  el.hidden = true; el.innerHTML = "";
+}
+const hotelSetze = (sel, html, key) => {
+  if (HOTEL.sig[key] === html) return;
+  HOTEL.sig[key] = html;
+  const el = document.querySelector("#hotelFenster " + sel); if (el) el.innerHTML = html;
+};
+/* Drei Bewertungen, abgeleitet aus Lage, Preis und Frühstück; sie wechseln jede Spielminute */
+function hotelBewertungen(f, cfg, fest, richt, nurCamping) {
+  const pool = [];
+  if (f.abgewiesen > 0) pool.push([1, "Ausgebucht — wir mussten woanders schlafen."]);
+  if (f.fruehSoll && f.fruehOk < .95) pool.push([2, "Frühstück? Fehlanzeige. Für so viele Sterne enttäuschend."]);
+  if (f.preis > richt * 1.2) pool.push([3, "Schön, aber für das Gebotene ganz schön teuer."]);
+  if (f.preis < richt * .8) pool.push([5, "Unschlagbarer Preis, wir kommen wieder!"]);
+  if (fest) pool.push([5, "Wegen des Stadtfests hier — tolle Stimmung in der Stadt!"]);
+  if (f.bewertung >= 4) pool.push([5, "Traumhafter Blick aufs Meer, das Personal war super."], [5, "Das Frühstücksbuffet allein ist die Reise wert."]);
+  else if (f.bewertung >= 3) pool.push([4, "Sauber, freundlich, gutes Frühstück."], [4, "Gerne wieder, nur der Pool war voll."]);
+  else if (nurCamping) pool.push([4, "Zelten direkt im Grünen, einfach aber herzlich."], [3, "Die Duschen könnten neuer sein."]);
+  else pool.push([3, "Ordentlich für eine Nacht."], [4, "Zentral gelegen, nette Leute."], [3, "Etwas in die Jahre gekommen."]);
+  const seed = Math.floor((store.get().state.tick || 0) / 60) + rohText(f.name).length;
+  const out = [];
+  for (let i = 0; i < Math.min(3, pool.length); i++) out.push([...pool[(seed + i) % pool.length], HOTEL_GAESTE[(seed * 3 + i * 7) % HOTEL_GAESTE.length]]);
+  return out;
+}
+function hotelZeichnen() {
+  const { state, me, myId } = store.get();
+  const T = state?.touristik, cfg = state?.touristikCfg;
+  const f = T?.firmen.find(x => x.id === HOTEL.pid), owner = state?.players?.[HOTEL.pid];
+  if (!T || !cfg || !owner) return hotelSchliessen();
+  const fenster = document.getElementById("hotelFenster"), meins = HOTEL.pid === myId, fest = T.fest, tick = state.tick;
+  const farbe = owner.color || "#0ea5e9";
+  fenster.querySelector(".sfBrowser").style.setProperty("--sys", farbe);
+  const haeuser = state.map.filter(x => x.owner === HOTEL.pid && HOTEL_ICON[x.btype]);
+  const richt = Math.round(cfg.PREIS_REF * Math.sqrt(2 * tourQualiC(cfg, f?.bewertung || 1)));
+  const schnitt = T.firmen.filter(x => x.zimmer > 0);
+  const stadtPreis = schnitt.length ? schnitt.reduce((a, x) => a + x.preis, 0) / schnitt.length : cfg.PREIS_REF;
+  hotelSetze(".sfUrl", `🔒 buchen.cs/${shopSlug(owner.name || "hotel")}`, "url");
+  hotelSetze(".sfKopf", `<div class="sfMarke">${logoHtml(HOTEL.pid, "sfLogo", farbe)}
+      <div><b>${escapeHtml(rohText(owner.name))}</b><small>${t("Hotels & Camping")} · ${haeuser.length} ${haeuser.length === 1 ? t("Haus") : t("Häuser")}${f?.zimmer ? ` · ${f.zimmer} ${t("Zimmer je Minute")}` : ""}</small></div></div>
+    <span class="sfBadge">${sterneHtml(f?.bewertung || 0)} ${String(f?.bewertung ?? 0).replace(".", ",")} · ${t("ab")} <b>${fmt(f?.preis ?? cfg.PREIS_REF)}</b> ${t("je Nacht")}</span>`, "kopf" + (logoBild(HOTEL.pid) || "").length);
+  const banner = fenster.querySelector(".sfBanner");
+  banner.hidden = !fest;
+  hotelSetze(".sfBanner", fest ? `<b>🎉</b><span>${t(fest.name)} ${t("in der Stadt")} — ${t("Restzeit")} ${Math.floor(fest.rest / 60)}:${String(fest.rest % 60).padStart(2, "0")} · ${fest.ownerId === HOTEL.pid ? t("veranstaltet von uns!") : `${t("veranstaltet von")} ${escapeHtml(rohText(fest.veranstalter))}`}</span>` : "", "banner");
+  fenster.querySelector(".sfHinweis").hidden = !meins;
+  hotelSetze(".sfHinweis", t("Deine Buchungsseite: So sehen Gäste und Mitspieler deine Häuser. Preis, Renovierung und Feste stellst du hier direkt ein."), "hinweis");
+  const karten = haeuser.map(x => {
+    const s = x.btype === "campingplatz" ? 1 : (x.sterne || cfg.START_STERNE), imBau = x.bauBis && tick < x.bauBis;
+    const bt = BTYPES()[x.btype], zimmer = Math.round((bt.proc ? bt.proc.rate : bt.rate) * (1 + 0.3 * ((x.level || 1) - 1)) * 60);
+    const kosten = cfg.RENOVIEREN[s], bild = spriteUrl(x.btype, x.x, x.y);
+    const aktion = meins && x.btype === "strandhotel" && s < cfg.MAX_STERNE
+      ? `<button type="button" class="sfKaufen" data-hfrenov="${x.x},${x.y}" ${imBau || me.cash < kosten ? "disabled" : ""}>${t("Auf")} ${s + 1} ★ ${t("renovieren")} · ${fmt(kosten)}</button>`
+      : meins ? `<div class="sfEigen">${x.btype === "campingplatz" ? t("Campingplatz · fest 1 Stern") : t("Höchste Stufe erreicht")}</div>` : "";
+    return `<article class="sfProdukt">
+      ${imBau ? `<span class="sfBand grau">${t("im Bau")}</span>` : s >= 3 ? `<span class="sfBand">☕ ${t("Frühstück inklusive")}</span>` : ""}
+      <div class="sfBild">${bild ? `<img src="${bild}" alt="" class="hfBild">` : `<span>${HOTEL_ICON[x.btype]}</span>`}</div>
+      <h5>${bname(x.btype)}</h5>
+      <div class="sfSterne">${"★".repeat(s)}${"☆".repeat(5 - s)}<em>${s} ${s === 1 ? t("Stern") : t("Sterne")}</em></div>
+      <div class="sfPreis"><b>${fmt(f?.preis ?? cfg.PREIS_REF)}</b><span>${t("je Nacht")} · ${t("Stadt")} Ø ${fmt(stadtPreis)}</span></div>
+      <div class="sfInfo">🛏️ ${zimmer} ${t("Zimmer je Minute")} · ${t("Stufe")} ${x.level || 1}${x.btype === "strandhotel" ? " · 🌊 " + t("Küste") : " · 🌳 " + t("im Grünen")}</div>
+      <div class="sfKauf">${aktion}<button type="button" class="hfKarte" data-hfkarte="${x.x},${x.y}">📍 ${t("Auf der Karte zeigen")}</button></div>
+    </article>`;
+  }).join("");
+  const zahlen = `<div class="hfZahlen">
+      <div><b>${f?.gaeste ?? 0}</b><span>${t("Gäste diese Minute")}</span></div>
+      <div><b>${f?.abgewiesen ?? 0}</b><span>${t("ohne Zimmer")}</span></div>
+      <div><b>${fmt(f?.einnahmen10 || 0)}</b><span>${t("Einnahmen 10 min")}</span></div>
+      <div><b>${fmt(f?.gesamt || 0)}</b><span>${t("seit Rundenbeginn")}</span></div></div>`;
+  let verwalten = "";
+  if (meins) {
+    const pause = T.pause?.[myId] || 0;
+    const preis = tourEntwurf.preis ?? f?.preis ?? cfg.PREIS_REF;
+    verwalten = `<div class="hfVerwalten">
+      <div class="hfPreis"><label><span>${t("Zimmerpreis je Nacht")}</span>
+        <span class="sfMenge"><button type="button" data-hfpm="-5">−</button><input type="number" id="hfPreis" min="${cfg.PREIS_MIN}" max="${cfg.PREIS_MAX}" step="1" value="${preis}"><button type="button" data-hfpm="5">+</button></span></label>
+        <button type="button" class="sfKaufen" data-hfpreis>${t("Preis übernehmen")}</button>
+        <small>${t("Richtwert bei deiner Bewertung")}: <b>${fmt(richt)}</b> · ${t("Stadt")} Ø ${fmt(stadtPreis)}</small></div>
+      <h4 class="hfTitel">🎪 ${t("Stadtfest buchen")} <small>${fest ? t("gerade läuft eins") : pause > 0 ? `${t("nächstes in")} ${Math.ceil(pause / 60)} min` : t("lockt Gäste für alle Hotels, du bekommst mehr davon")}</small></h4>
+      <div class="sfGrid hfFeste">${Object.entries(cfg.FESTE).map(([k, fd]) => `<article class="sfProdukt">
+        <div class="sfBild"><span>${{ strandfest: "🏐", konzert: "🎸", festival: "🎡" }[k] || "🎉"}</span></div>
+        <h5>${t(fd.name)}</h5>
+        <div class="sfPreis"><b>${fmt(fd.kosten)}</b><span>${fd.dauer / 60} ${t("Minuten")}</span></div>
+        <div class="sfInfo">+${Math.round(fd.gaeste * 100)} % ${t("Gäste")} · +${Math.round(fd.zufr * 100)} % ${t("Zufriedenheit")}${fd.laeden ? ` · +${Math.round(fd.laeden * 100)} % ${t("in den Läden")}` : ""}</div>
+        <div class="sfKauf"><button type="button" class="sfKaufen" data-hffest="${k}" ${fest || pause > 0 || me.cash < fd.kosten || !f?.zimmer ? "disabled" : ""}>${t("Buchen")} · ${fmt(fd.kosten)}</button></div>
+      </article>`).join("")}</div></div>`;
+  }
+  hotelSetze(".hfHaupt", zahlen + `<div class="sfGrid">${karten || `<div class="sfLeer">${t("Noch kein Haus fertig.")}</div>`}</div>` + verwalten, "haupt");
+  const bew = f ? hotelBewertungen(f, cfg, fest, richt, haeuser.every(x => x.btype === "campingplatz")) : [];
+  hotelSetze(".hfBewertungen", bew.map(([n, text, wer]) => `<li><span class="sfFeedIcon">${n >= 4 ? "😊" : n === 3 ? "🙂" : "😕"}</span>
+      <span><b class="hfSterneKlein">${"★".repeat(n)}${"☆".repeat(5 - n)}</b><small>„${t(text)}“ — ${wer}</small></span><span></span></li>`).join("")
+    || `<li class="sfLeerFeed">${t("Noch keine Gäste.")}</li>`, "bew");
+  hotelSetze(".sfFuss", `<span class="sfFussLogo">🏨</span><span>${t("Gebucht über das Stadtportal")} · ${T.gaeste} ${t("Gäste kommen gerade je Minute in die Stadt")}</span>`, "fuss");
+}
+document.getElementById("hotelFenster").addEventListener("input", e => { if (e.target.id === "hfPreis") tourEntwurf.preis = e.target.value; });
+document.getElementById("hotelFenster").addEventListener("click", e => {
+  if (e.target.closest("[data-hfzu]") || e.target.id === "hotelFenster") return hotelSchliessen();
+  const pm = e.target.closest("[data-hfpm]");
+  if (pm) { const inp = document.getElementById("hfPreis"); inp.value = Math.max(+inp.min, Math.min(+inp.max, (+inp.value || 0) + +pm.dataset.hfpm)); tourEntwurf.preis = inp.value; return; }
+  if (e.target.closest("[data-hfpreis]")) return socket.emit("zimmerpreis", { preis: +document.getElementById("hfPreis")?.value }, r => {
+    if (r?.error) return toast(r.error, true);
+    delete tourEntwurf.preis; toast(`${t("Zimmerpreis")}: ${fmt(r.preis)}`); render(store.get());
+  });
+  const rv = e.target.closest("[data-hfrenov]");
+  if (rv) { const [x, y] = rv.dataset.hfrenov.split(",").map(Number); return socket.emit("renovieren", { x, y }, r => { if (r?.error) return toast(r.error, true); toast(`${t("Renoviert")}: ${r.sterne} ★`); render(store.get()); }); }
+  const fe = e.target.closest("[data-hffest]");
+  if (fe) return socket.emit("festStarten", { typ: fe.dataset.hffest }, r => { if (r?.error) return toast(r.error, true); render(store.get()); });
+  const ka = e.target.closest("[data-hfkarte]");
+  if (ka) {
+    const [x, y] = ka.dataset.hfkarte.split(",").map(Number);
+    hotelSchliessen(); openPanel("karte");
+    cam.z = Math.max(cam.z, 1.2);
+    cam.x = -(x - y) * TW / 2 * cam.z;
+    cam.y = -(x + y) * TH / 2 * cam.z + innerHeight / 2 - 120;
+  }
 });
 /* ---- Software-Panel: Reiter, Überblick, Bürger-App und Jobbörse (Etappe 5) ---- */
 let SW_REITER = (() => { try { return localStorage.getItem("cs_swReiter") || "markt"; } catch { return "markt"; } })();
@@ -10075,6 +10273,7 @@ function render({ state, me, myId, chat, room }) {
       !typingIn(document.getElementById("p-software"))) softwareRendern(state, me, myId);
   /* Touristik: Dock-Knopf immer, das Panel nur offen und ohne Eingabe */
   if (!typingIn(document.getElementById("p-touristik"))) touristikRendern(state, me, myId);
+  if (HOTEL.offen && !typingIn(document.getElementById("hotelFenster"))) hotelZeichnen();
 
   /* Stadtbank: Kurstafel, Angebote und Depot — der gesamte Anteilshandel */
   if (document.getElementById("p-bank").classList.contains("open") &&
