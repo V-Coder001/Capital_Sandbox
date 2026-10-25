@@ -2589,8 +2589,8 @@ function buildStadtMap({ w = 32, h = 32, seed = 0, ufer = "ecke",
     .sort((a, b) => Math.hypot(a.x-mx, a.y-my) - Math.hypot(b.x-mx, b.y-my));
   if (!zentral.length) return tiles;
   Object.assign(zentral[0], { bank: true, park: false, field: false, locked: false, unlockCost: 0 });
-  const news = zentral.find(t => !t.bank && Math.hypot(t.x - zentral[0].x, t.y - zentral[0].y) > 4.5);
-  if (news) Object.assign(news, { news: true, park: false, field: false, locked: false, unlockCost: 0 });
+  /* Keine Nachrichtenzentrale mehr im Sandkasten: Die Nachrichten stehen als
+   * Stadtkurier im Stadtnetz, der Platz im Zentrum bleibt ein Bauplatz. */
   /* Hochhaeuser als reine Kulisse: Sie geben der Innenstadt eine Skyline,
    * gehoeren aber niemandem und lassen sich nicht bebauen. Verteilt statt
    * nebeneinander — ein Block aus Tuermen sieht aus wie ein Zaun. */
@@ -4369,7 +4369,7 @@ function rechenzentrenPublic() {
   const kunden = Object.fromEntries(Object.values(G.players).filter(p => p.website).map(p => {
     const ind = p.industry, portal = PORTALE[ind];
     return [p.id, { anbieter: p.website.anbieter, modul: p.website.modul, online: G.tick >= (p.website.bis || 0), bonus: Math.round(webBonus(p) * 1000) / 1000,
-      stufe: webStufe(p), besucher: p.webBesucher || 0, portal: portal?.name || null,
+      stufe: webStufe(p), besucher: p.webBesucher || 0, portal: portal?.name || null, seit: p.website.seit ?? 0,
       angebot: hatPortal(p) && portal ? portal.waren.map(g => ({ g, preis: Math.round(MM[g].price * DIREKT.AUFSCHLAG * 100) / 100, menge: Math.floor((p.inv[g] || 0) * DIREKT.ANTEIL) })) : [],
       aktion: webAktionLaeuft(p) ? { name: WEB_AKTION.namen[ind] || "Aktion", rest: p.webAktion.bis - G.tick } : null,
       aktionPause: p.webAktion && p.webAktion.pause > G.tick ? p.webAktion.pause - G.tick : 0 }];
@@ -5012,7 +5012,7 @@ function sendeMarktbericht() {
    * die Entwicklung der letzten Viertelstunde am Stück. */
   G.news.unshift({ ...bericht, en: berichtEn, min: Math.round(G.tick / 60), ts: Date.now() });
   if (G.news.length > 8) G.news.pop();
-  io.emit("notice", { text: "Neuer Marktbericht der Nachrichtenzentrale" });
+  io.emit("notice", { text: stadtAktiv() ? "Neue Ausgabe des Stadtkuriers — im Stadtnetz" : "Neuer Marktbericht der Nachrichtenzentrale" });
   pushState();
 }
 
@@ -9017,7 +9017,7 @@ io.on("connection", socket => {
     p.cash -= einr; p.stats.ausgaben += einr;
     if (portal) G.stadtkasse += einr;
     else if (einr) { const o = G.players[w.ownerId]; o.cash += einr; addRevenue(o, einr); (w.eb ??= [0])[0] += einr; w.gesamt = (w.gesamt || 0) + einr; logTx(o, "Software", `Website für ${p.name} eingerichtet`, einr); }
-    p.website = { anbieter, modul, bis: G.tick + (gleich ? 0 : WEBSITE.INSTALL) };
+    p.website = { anbieter, modul, bis: G.tick + (gleich ? 0 : WEBSITE.INSTALL), seit: gleich ? (p.website.seit ?? G.tick) : G.tick };
     logTx(p, "Software", `Website ${mod.name} bei ${portal ? "Stadtportal" : w.name}`, -einr);
     if (!portal && !p.bot) marktLog("software", `${p.name} lässt die Website von ${w.name} bauen`, { firmaId: p.id });
     if (!portal) emitTo(w.ownerId, "notice", { text: `${p.name} bestellt eine Website (${mod.name}) bei ${w.name}.` });

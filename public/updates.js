@@ -5,6 +5,18 @@
  * `art`: "neu" (neue Funktion), "besser" (Verbesserung), "fix" (Fehler behoben). */
 window.UPDATES = [
   {
+    id: "2026-10-25j", datum: "2026-10-25",
+    titel: { de: "Stadtkurier im Stadtnetz", en: "City Courier in the city network" },
+    punkte: [
+      { art: "neu", de: "Die Nachrichtenzentrale ist weg — ihr Platz im Zentrum ist ein freier Bauplatz. Die Nachrichten stehen jetzt als Stadtkurier im Stadtnetz: Marktbericht alle zwei Minuten, dazu Börse, Stadt und Firmen, mit Aufmacher, Ressorts, Kursen und Archiv. Großaufträge und Ausschreibungen laufen als rote Eilmeldung.",
+        en: "The news centre is gone — its spot in the centre is a free building plot. The news now lives as the City Courier in the city network: market report every two minutes plus exchange, city and companies, with lead story, sections, prices and archive. Group orders and tenders run as a red breaking-news banner." },
+      { art: "neu", de: "Die Warenbörse ist jetzt die Website boerse.cs im Stadtnetz: links alle Waren nach Gruppen mit Kurs und Trend, rechts die gewählte Ware mit Kursverlauf, bestem Angebot und Gesuch, einem Formular mit Kaufen/Verkaufen-Umschalter und dem Orderbuch in zwei Spalten. Der Dock-Knopf „Börse“ entfällt im Sandkasten.",
+        en: "The goods exchange is now the website boerse.cs in the city network: goods by group with price and trend on the left, the selected good with price chart, best offer and bid, a buy/sell form and the order book in two columns on the right. The “Exchange” dock button is gone in the sandbox." },
+      { art: "besser", de: "Neue Stadtnetz-Startseite: großer Suchkopf mit den Zahlen der Stadt, Branchen-Filter, Firmenkarten mit Titelband und Schlagwörtern, „Läuft gerade“, „Neu im Stadtnetz“ und Rechenzentren in der Seitenleiste. Ein Punkt am Stadtnetz-Knopf zeigt eine neue Ausgabe.",
+        en: "New city-network home page: large search header with city figures, industry filter, company cards with banner and tags, “Happening now”, “New in the city network” and data centres in the sidebar. A dot on the city-network button marks a new issue." },
+    ]
+  },
+  {
     id: "2026-10-25i", datum: "2026-10-25",
     titel: { de: "Sandkasten ohne Mafia-Waren", en: "Sandbox without mafia goods" },
     punkte: [

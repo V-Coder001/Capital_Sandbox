@@ -1319,3 +1319,163 @@ button.netzChip{cursor:pointer}button.netzChip:hover{border-color:var(--sys)}
 .netzKnoepfe{display:flex;gap:12px;flex-wrap:wrap}
 .netzAuftrag{grid-template-columns:140px minmax(0,1fr) 110px;font-size:12.5px}
 .netzMitte{display:flex;justify-content:center}
+/* Stadtnetz-Startseite und Stadtkurier (neu gestaltet) */
+.netzBrowser .netzInhalt{background:#f4f6f8}
+.netzEil{flex-shrink:0}.netzEil[hidden]{display:none}
+.netzEil button{display:flex;align-items:center;gap:12px;width:100%;padding:9px 20px;background:#b91c1c;color:#fff;border:0;text-align:left;cursor:pointer;font:inherit;font-size:13.5px}
+.netzEilMarke{font:700 11px var(--mono);letter-spacing:.1em;padding:3px 7px;border-radius:5px;background:rgba(255,255,255,.2);flex:none}
+.netzEilText{flex:1;min-width:0}
+.netzEilLink{font-size:12px;opacity:.9;flex:none}
+.sfBrowser .sfKopf.netzHero{position:relative;overflow:hidden;display:flex;flex-direction:column;flex-wrap:nowrap;flex-shrink:0;align-items:stretch;gap:14px;padding:26px 24px 22px;background:#0f766e}
+.sfBrowser .sfKopf.netzHero>.netzSkyline{position:absolute;right:-40px;top:-20px;pointer-events:none;z-index:0}
+.netzMarke{display:flex;align-items:center;gap:12px;position:relative}
+.netzMarke b{display:block;font-size:23px;font-weight:700;letter-spacing:-.01em}
+.netzMarke small{display:block;font-size:13px;opacity:.9}
+.netzMarkeS{width:46px;height:46px;border-radius:13px;display:grid;place-items:center;font:800 22px var(--font);background:#fff;color:#0f766e}
+.netzSuchfeld{position:relative;display:flex;align-items:center;gap:10px;max-width:640px;background:#fff;border-radius:14px;padding:4px 6px 4px 16px;box-shadow:0 10px 30px rgba(0,0,0,.18)}
+.netzSuchfeld input{flex:1;min-width:0;border:0;outline:none;font:inherit;font-size:15px;padding:10px 0;color:#111827;background:transparent}
+.netzTreffer{font:600 12px var(--mono);color:#0f766e;padding:8px 12px;border-radius:10px;background:#ccfbf1;flex:none}
+.netzStats{display:flex;gap:22px;flex-wrap:wrap;position:relative;font-size:13px}
+.netzStats b{font:700 18px var(--mono)}
+.netzKats{display:flex;gap:8px;flex-wrap:wrap}
+.netzKat{border:1px solid #d9dee6;border-radius:999px;padding:8px 14px;font:600 13px var(--font);cursor:pointer;background:#fff;color:#334155}
+.netzKat.on{background:#0f766e;border-color:#0f766e;color:#fff}
+.netzSpalten{display:grid;grid-template-columns:minmax(0,1fr) 280px;gap:18px;align-items:start}
+.netzHaupt{display:flex;flex-direction:column;gap:16px;min-width:0}
+.netzSeite{display:flex;flex-direction:column;gap:14px}
+.netzKurier{background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 1px 2px rgba(16,24,40,.06),0 6px 18px rgba(16,24,40,.05)}
+.netzKurierKopf{display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-bottom:1px solid #eef0f4}
+.netzKurierKopf span{display:flex;align-items:baseline;gap:10px}
+.netzKurierKopf b{font:800 20px "Fraunces",Georgia,serif;color:#111827}
+.netzKurierKopf small{font-size:11.5px;color:#4b5563}
+.netzKurierKopf button{border:0;background:none;color:#0f766e;font:700 13px var(--font);cursor:pointer}
+.netzKurierSchlag{display:grid;grid-template-columns:1.4fr 1fr 1fr}
+.netzKurierSchlag button{display:flex;flex-direction:column;gap:6px;text-align:left;padding:14px 16px;border:0;border-right:1px solid #eef0f4;background:#fff;cursor:pointer;color:#18202e;font:inherit}
+.netzKurierSchlag button:last-child{border-right:0}
+.netzKurierSchlag b{font:600 15.5px "Fraunces",Georgia,serif;line-height:1.25;color:#111827}
+.netzKurierSchlag small{font-size:11.5px;color:#4b5563}
+.kurierRessort{align-self:flex-start;font:700 10.5px var(--mono);letter-spacing:.08em;text-transform:uppercase;padding:2px 7px;border-radius:5px;background:#e5e7eb;color:#111827}
+.kurierRessort.r-wirtschaft{background:#dbeafe;color:#1e3a8a}.kurierRessort.r-boerse{background:#ede9fe;color:#4c1d95}
+.kurierRessort.r-stadt{background:#dcfce7;color:#14532d}.kurierRessort.r-firmen{background:#ffedd5;color:#7c2d12}.kurierRessort.r-eilmeldung{background:#fee2e2;color:#991b1b}
+.netzAbschnitt{display:flex;flex-direction:column;gap:12px}
+.netzAbschnittKopf{display:flex;justify-content:space-between;align-items:baseline}
+.netzAbschnittKopf b{font-size:17px;color:#111827}.netzAbschnittKopf small{font-size:12px;color:#4b5563}
+.netzKarten{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:14px}
+.netzKarte{display:flex;flex-direction:column;padding:0;border:0;text-align:left;background:#fff;border-radius:16px;overflow:hidden;cursor:pointer;color:#18202e;font:inherit;box-shadow:0 1px 2px rgba(16,24,40,.06),0 6px 18px rgba(16,24,40,.05);transition:transform .15s,box-shadow .15s}
+.netzKarte:hover{transform:translateY(-2px);box-shadow:0 10px 24px rgba(16,24,40,.12)}
+.netzKarteBand{display:flex;justify-content:space-between;align-items:flex-end;height:60px;padding:0 14px}
+.netzKarteBand em{font:700 10.5px var(--mono);font-style:normal;letter-spacing:.06em;padding:3px 8px;border-radius:999px;background:#fef3c7;color:#92400e;align-self:center}
+.netzKarteLogo{width:44px;height:44px;margin-bottom:-18px;border-radius:12px;display:grid;place-items:center;font:800 19px var(--font);color:#fff;border:3px solid #fff;box-shadow:0 4px 10px rgba(0,0,0,.15);object-fit:cover}
+.netzKarteInhalt{display:flex;flex-direction:column;gap:6px;padding:12px 14px 14px}
+.netzKarteName{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.netzKarteName b{font-size:15px;color:#111827}.netzKarteName i{font-style:normal;font-size:12px;color:#b45309;letter-spacing:1px}
+.netzKarteInhalt>small{font-size:11.5px;color:#4b5563}
+.netzKarteText{font-size:12.5px;color:#374151;min-height:34px}
+.netzTags{display:flex;flex-wrap:wrap;gap:5px}
+.netzTags span{font-size:11px;padding:3px 8px;border-radius:999px;background:#f1f5f9;color:#334155}
+.netzKarteFuss{display:flex;justify-content:space-between;align-items:center;margin-top:4px;padding-top:10px;border-top:1px solid #f1f5f9;font-size:12px}
+.netzKarteFuss span:last-child{font-weight:700;color:#0f766e}
+.netzLeer{padding:26px;text-align:center;background:#fff;border-radius:16px;color:#4b5563;font-size:14px}
+.netzBox{display:flex;flex-direction:column;gap:9px;background:#fff;border-radius:16px;padding:14px 16px;box-shadow:0 1px 2px rgba(16,24,40,.06);color:#18202e;text-align:left;font:inherit;border:0}
+.netzBox>b{font-size:14.5px;color:#111827}.netzBox>small{font-size:12px;color:#4b5563}
+.netzLaeuft{display:grid;grid-template-columns:34px minmax(0,1fr);gap:10px;align-items:center;padding:0;border:0;background:none;text-align:left;font:inherit;color:inherit}
+button.netzLaeuft{cursor:pointer}
+.netzLaeuft>span:first-child{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;font-weight:800;color:#fff}
+.netzLaeuft b{display:block;font-size:13px;color:#111827}.netzLaeuft small{display:block;font-size:11.5px;color:#4b5563}
+.netzNeu{display:flex;justify-content:space-between;gap:8px;padding:0;border:0;background:none;font:inherit;font-size:12.5px;color:#111827;cursor:pointer;text-align:left}
+.netzNeu small{color:#4b5563;flex:none}
+.netzRz{display:flex;flex-direction:column;gap:5px;padding:0;border:0;background:none;font:inherit;cursor:pointer;text-align:left}
+.netzRzKopf{display:flex;justify-content:space-between;font-size:12.5px;color:#111827}.netzRzKopf b{font-size:12px;color:#166534}
+.netzRzBalken{height:6px;border-radius:3px;background:#e5e7eb;overflow:hidden}.netzRzBalken i{display:block;height:100%;background:#0f766e}
+.netzAnzeige{background:#fffbeb;border:1px dashed #d6a64b;cursor:pointer;gap:4px}
+.netzAnzeige small{font:600 10.5px var(--mono);letter-spacing:.08em;color:#92400e}.netzAnzeige span{font-size:12.5px;color:#374151}
+.sfBrowser .sfKopf.netzZeitung{flex-direction:column;flex-wrap:nowrap;flex-shrink:0;align-items:center;justify-content:center;gap:4px;padding:18px 20px 12px;background:#fff;color:#111827;border-bottom:3px double #111827}
+.netzZeitungTitel{font:800 40px "Fraunces",Georgia,serif;letter-spacing:-.01em}
+.sfBrowser .sfKopf.netzZeitung small{font-size:12px;color:#4b5563}
+.kurierReiter{display:flex;gap:4px;justify-content:center;flex-wrap:wrap;background:#fff;border-radius:12px;padding:4px}
+.kurierReiter button{border:0;border-bottom:3px solid transparent;background:none;padding:9px 14px;font:500 14px var(--font);color:#374151;cursor:pointer}
+.kurierReiter button.on{border-bottom-color:#111827;font-weight:700;color:#111827}
+.kurierArtikel{background:#fff;border-radius:16px;padding:18px 20px;display:flex;flex-direction:column;gap:10px;color:#1f2937}
+.kurierArtikel h2{margin:0;font:800 26px "Fraunces",Georgia,serif;line-height:1.2;color:#111827}
+.kurierArtikel small{font-size:12px;color:#4b5563}
+.kurierArtikel p{margin:0;font-size:14.5px;line-height:1.6}
+.kurierKnoepfe{display:flex;gap:12px;flex-wrap:wrap;align-items:center}
+.kurierAufmacher{display:grid;grid-template-columns:200px minmax(0,1fr);gap:16px;text-align:left;padding:0;border:0;border-radius:16px;background:#fff;overflow:hidden;cursor:pointer;color:#18202e;font:inherit}
+.kurierBild{display:grid;place-items:center;min-height:150px;background:#1e3a8a}
+.kurierBild.r-boerse{background:#4c1d95}.kurierBild.r-stadt{background:#14532d}.kurierBild.r-firmen{background:#7c2d12}.kurierBild.r-eilmeldung{background:#991b1b}
+.kurierAufText{display:flex;flex-direction:column;gap:6px;padding:14px 16px 14px 0}
+.kurierAufText b{font:800 22px "Fraunces",Georgia,serif;line-height:1.2;color:#111827}
+.kurierAufText span:not(.kurierRessort){font-size:13.5px;line-height:1.5;color:#374151}
+.kurierAufText small,.kurierKarte small{font-size:11.5px;color:#4b5563}
+.kurierListe{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.kurierKarte{display:flex;flex-direction:column;gap:6px;text-align:left;padding:13px 14px;border:0;border-radius:14px;background:#fff;cursor:pointer;color:#18202e;font:inherit}
+.kurierKarte b{font:600 16px "Fraunces",Georgia,serif;line-height:1.25;color:#111827}
+.kurierKarte span:not(.kurierRessort){font-size:12.5px;line-height:1.45;color:#374151}
+.kurierKurs{display:flex;justify-content:space-between;font-size:12.5px;color:#111827}
+.kurierKurs b{font-size:12.5px}.kurierKurs b.auf{color:#166534}.kurierKurs b.ab{color:#991b1b}
+.kurierArchiv{display:flex;justify-content:space-between;padding:0;border:0;background:none;font:inherit;font-size:12.5px;color:#374151;cursor:pointer}
+.kurierArchiv small{color:#4b5563}
+.dockbtn.neu{position:relative}
+.dockbtn.neu::after{content:"";position:absolute;top:6px;right:8px;width:8px;height:8px;border-radius:50%;background:#ef4444;box-shadow:0 0 0 2px rgba(0,0,0,.4)}
+@media (max-width:860px){.netzSpalten{grid-template-columns:1fr}.netzKurierSchlag{grid-template-columns:1fr}.kurierAufmacher{grid-template-columns:1fr}.kurierListe{grid-template-columns:1fr}}
+.netzKarteBand .netzKarteLogo:not(.hatBild){background:#fff!important;color:#0f172a}
+/* Warenbörse als Website (boerse.cs) */
+.netzDienste{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px}
+.netzDienst{display:flex;align-items:center;gap:12px;padding:12px 14px;border:0;border-radius:16px;background:#fff;cursor:pointer;text-align:left;font:inherit;color:#18202e;box-shadow:0 1px 2px rgba(16,24,40,.06),0 6px 18px rgba(16,24,40,.05)}
+.netzDienst:hover{box-shadow:0 10px 24px rgba(16,24,40,.12)}
+.netzDienstIcon{width:42px;height:42px;border-radius:12px;display:grid;place-items:center;font-size:20px;flex:none}
+.netzDienst b{display:block;font-size:14.5px;color:#111827}.netzDienst small{display:block;font-size:11.5px;color:#4b5563}
+.boerseLayout{display:grid;grid-template-columns:250px minmax(0,1fr);gap:16px;align-items:start}
+.boerseUebersicht{display:flex;flex-direction:column;gap:4px;background:#fff;border-radius:16px;padding:12px;box-shadow:0 1px 2px rgba(16,24,40,.06)}
+.boerseTitel{font-size:14.5px;color:#111827;padding:2px 6px 6px}
+.boerseWare{position:relative;display:flex;justify-content:space-between;align-items:center;gap:8px;padding:7px 8px;border:0;border-radius:9px;background:none;cursor:pointer;font:inherit;font-size:12.5px;color:#18202e;text-align:left}
+.boerseWare:hover{background:#f1f5f9}.boerseWare.on{background:#dbeafe}
+.boerseKurs{display:flex;align-items:center;gap:6px}.boerseKurs b{font-size:12px}
+.boerseWare em{flex:none;min-width:16px;height:16px;padding:0 4px;border-radius:8px;background:#1d4ed8;color:#fff;font:700 10px var(--mono);font-style:normal;display:grid;place-items:center}
+.netzBrowser .sfKopf{flex-shrink:0}
+.boerseSlot{background:var(--panel);color:var(--text);border-radius:16px;padding:14px;min-height:300px}
+.boerseSlot .pbody{padding:0;overflow:visible;max-height:none}
+@media (max-width:760px){.boerseLayout{grid-template-columns:1fr}.boerseUebersicht{max-height:230px;overflow:auto}}
+/* Warenbörse übersichtlich: Liste | Detail, Formular, Orderbuch */
+.bwLayout{display:grid;grid-template-columns:270px minmax(0,1fr);gap:16px;align-items:start}
+.bwListe{background:#fff;border-radius:16px;box-shadow:0 1px 2px rgba(16,24,40,.06);overflow:hidden}
+.bwListeKopf{display:flex;justify-content:space-between;align-items:baseline;padding:12px 14px;border-bottom:1px solid #eef0f4}
+.bwListeKopf b{font-size:14.5px;color:#111827}.bwListeKopf small{font-size:11px;color:#4b5563}
+.bwListeInhalt{display:flex;flex-direction:column;padding:6px;max-height:640px;overflow:auto}
+.bwGruppe{font:700 10.5px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:#4b5563;padding:10px 8px 4px}
+.bwZeile{display:grid;grid-template-columns:minmax(0,1fr) auto 52px 22px;gap:6px;align-items:center;padding:7px 8px;border:0;border-radius:9px;background:none;cursor:pointer;font:inherit;font-size:13px;color:#18202e;text-align:left}
+.bwZeile:hover{background:#f1f5f9}.bwZeile.on{background:#dbeafe}
+.bwZeile b{font-size:12.5px;color:#111827}
+.bwTrend{font-size:11.5px;text-align:right}
+.bwAnz{font:700 10px var(--mono);color:#1d4ed8;text-align:right}
+.bwHaupt{display:flex;flex-direction:column;gap:14px;min-width:0}
+.bwDetail{background:#fff;border-radius:16px;padding:16px 18px;box-shadow:0 1px 2px rgba(16,24,40,.06);display:flex;flex-direction:column;gap:14px;color:#18202e}
+.bwDetailKopf{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap}
+.bwKat{font:700 10.5px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:#1d4ed8}
+.bwDetailKopf h3{margin:2px 0 0;font-size:24px;color:#111827}
+.bwPreis{display:flex;flex-direction:column;align-items:flex-end}
+.bwPreis b{font-size:26px;color:#111827}.bwPreis span{font-size:12px;color:#4b5563}
+.bwKennzahlen{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.bwKennzahlen div{display:flex;flex-direction:column;gap:2px;padding:10px 12px;border-radius:12px;background:#f8fafc}
+.bwKennzahlen small{font-size:11px;color:#4b5563}.bwKennzahlen b{font-size:17px;color:#111827}.bwKennzahlen span{font-size:11.5px;color:#4b5563}
+.bwChart{border-radius:12px;background:#0f172a;padding:8px;color:#e6edf6}
+.bwForm{display:grid;grid-template-columns:auto minmax(0,1fr) minmax(0,1fr) auto;gap:10px 12px;align-items:end;background:#fff;border-radius:16px;padding:14px 16px;box-shadow:0 1px 2px rgba(16,24,40,.06);color:#18202e}
+.bwForm label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:#374151}
+.bwForm input{border:1px solid #d4d8e2;border-radius:9px;padding:9px 10px;font:600 14px var(--mono);color:#111827;background:#fff;min-width:0}
+.bwForm small{grid-column:1/-1;font-size:11.5px;color:#4b5563}
+.bwSeiten{display:flex;border:1px solid #d4d8e2;border-radius:10px;overflow:hidden;align-self:end}
+.bwSeiten button{border:0;background:#fff;padding:10px 14px;font:700 13px var(--font);color:#374151;cursor:pointer}
+.bwSeiten button.on.kauf{background:#16a34a;color:#fff}.bwSeiten button.on.verkauf{background:#dc2626;color:#fff}
+.bwSenden{padding:10px 14px;border-radius:10px}
+.bwBuch{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.bwBuch section,.bwMeine{display:flex;flex-direction:column;gap:6px;background:#fff;border-radius:16px;padding:12px 14px;box-shadow:0 1px 2px rgba(16,24,40,.06);color:#18202e}
+.bwBuchKopf{display:flex;justify-content:space-between;align-items:baseline;gap:8px;padding-bottom:6px;border-bottom:2px solid #e5e7eb}
+.bwBuchKopf.verkauf{border-bottom-color:#dc2626}.bwBuchKopf.kauf{border-bottom-color:#16a34a}
+.bwBuchKopf b{font-size:14px;color:#111827}.bwBuchKopf small{font-size:11px;color:#4b5563}
+.bwOrder{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:10px;align-items:center;padding:6px 2px;border-bottom:1px solid #f1f5f9;font-size:12.5px}
+.bwOrder:last-child{border-bottom:0}
+.bwWer{color:#4b5563;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bwK,.bwV{font:700 10.5px var(--mono);padding:2px 6px;border-radius:5px}.bwK{background:#dcfce7;color:#14532d}.bwV{background:#fee2e2;color:#7f1d1d}
+.bwMeine>b{font-size:14px;color:#111827}
+.bwLeer{font-size:12.5px;color:#4b5563;padding:8px 2px}
+@media (max-width:860px){.bwLayout{grid-template-columns:1fr}.bwListeInhalt{max-height:220px}.bwForm{grid-template-columns:1fr 1fr}.bwSeiten{grid-column:1/-1}.bwBuch{grid-template-columns:1fr}.bwKennzahlen{grid-template-columns:1fr 1fr 1fr}}
