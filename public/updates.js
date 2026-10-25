@@ -5,6 +5,16 @@
  * `art`: "neu" (neue Funktion), "besser" (Verbesserung), "fix" (Fehler behoben). */
 window.UPDATES = [
   {
+    id: "2026-10-25f", datum: "2026-10-25",
+    titel: { de: "Buchungsseiten für Hotels", en: "Booking pages for hotels" },
+    punkte: [
+      { art: "neu", de: "Jede Touristik-Firma hat eine Buchungsseite im Stil der Shop-Seiten: ihre Häuser mit Sternen, Zimmerpreis und Frühstück, Gästebewertungen und Live-Zahlen. Zu öffnen über „Hotels der Stadt“ im Touristik-Panel oder über die Gebäudekarte.",
+        en: "Every tourism company has a booking page styled like the shop pages: its venues with stars, room price and breakfast, guest reviews and live figures. Open it from “Hotels in the city” in the tourism panel or from the building card." },
+      { art: "neu", de: "Auf der eigenen Buchungsseite stellst du Zimmerpreis (mit +/−), Renovierung und Stadtfeste direkt ein; „Auf der Karte zeigen“ springt zum Haus.",
+        en: "On your own booking page you set the room price (with +/−), renovation and city festivals directly; “Show on map” jumps to the venue." },
+    ]
+  },
+  {
     id: "2026-10-25e", datum: "2026-10-25",
     titel: { de: "Touristik: Gäste, Sterne und Stadtfeste", en: "Tourism: guests, stars and city festivals" },
     punkte: [
