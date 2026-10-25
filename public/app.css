@@ -1187,3 +1187,12 @@ td:first-child{font-family:var(--font)}
 .fJobs button b{display:block;color:var(--text);font-size:12px}
 .fJobs button span{font-size:11px}
 .fJobs button.on{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
+
+/* Hinweise im Spielverlauf */
+#spielHinweis{position:fixed;left:16px;bottom:84px;z-index:70;width:min(340px,calc(100vw - 32px));background:rgba(12,18,28,.95);border:1px solid #2a3a52;border-radius:12px;padding:12px 14px;box-shadow:0 12px 40px rgba(0,0,0,.45);color:#e6edf6;font-size:12.5px;line-height:1.45}
+#spielHinweis .shKopf{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:6px}
+#spielHinweis .shKopf b{font-size:13.5px}
+#spielHinweis .shKopf button{background:none;border:0;color:#8695ab;font-size:18px;cursor:pointer;line-height:1}
+#spielHinweis p{margin:0 0 10px;color:#c4cfdd}
+#spielHinweis .shFuss{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+#spielHinweis .shAus{background:none;border:0;color:#8695ab;font-size:11px;cursor:pointer;margin-left:auto;text-decoration:underline}

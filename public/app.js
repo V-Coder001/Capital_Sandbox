@@ -157,8 +157,11 @@ const kursChart = g => verlaufChart(priceHist[g], "Kursverlauf");
 const fmt = n => "$" + Math.round(n).toLocaleString("de-DE");
 const fp = n => n < 10 ? "$" + (+n).toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : fmt(n);   // Preise: Cents bei billigen Waren
 const TOAST_MAX = 4;   // mehr passen ohne Überdecken der Karte nicht übereinander
+/* Firmennamen kommen vom Server maskiert an (&amp; …). Als textContent ist das
+ * ohnehin sicher — also zurückverwandeln, sonst stand „Montan &amp; Bau“ da. */
+const TOAST_ENT = { "&amp;": "&", "&lt;": "<", "&gt;": ">", "&quot;": '"', "&#39;": "'" };
 const toast = (msg, err) => { const d = document.createElement("div");
-  d.className = "toast" + (err ? " err" : ""); d.textContent = msg;
+  d.className = "toast" + (err ? " err" : ""); d.textContent = String(msg ?? "").replace(/&(?:amp|lt|gt|quot|#39);/g, e => TOAST_ENT[e]);
   const box = document.getElementById("toasts");
   box.append(d);
   /* Gedeckelt, weil jede Meldung 4 s stehen bleibt: Treffen mehrere Ereignisse
@@ -2051,6 +2054,30 @@ const EN = {
   "Glas-Effekt": "Glass effect", "Unschärfe hinter Leisten und Fenstern — kostet viel Grafikleistung": "Blur behind bars and windows — costs a lot of graphics power",
   "Automatisch anpassen": "Adjust automatically", "Ruckelt das Spiel, schaltet es die Grafik stufenweise herunter": "If the game stutters, graphics are lowered step by step",
   "Bildrate anzeigen": "Show frame rate", "Kleine Anzeige unten links: Bilder pro Sekunde": "Small display bottom left: frames per second",
+  "— vorerst wird nur der Sandkasten gespielt": "— for now only sandbox is played", "Freies Wirtschaften mit wachsender Stadt": "Free economy with a growing city",
+  "Planwirtschaft · gesperrt": "Planned economy · locked", "Einsteiger · gesperrt": "Beginner · locked", "Race Day · gesperrt": "Race Day · locked", "Kartell · gesperrt": "Cartel · locked",
+  "Zeitlimit": "Time limit", "kein Zeitlimit": "no time limit", "30 Minuten": "30 minutes", "45 Minuten": "45 minutes", "60 Minuten": "60 minutes", "90 Minuten": "90 minutes",
+  "$100.000 · etwa 30–40 Minuten": "$100,000 · about 30–40 minutes", "$250.000 · etwa 1 Stunde": "$250,000 · about 1 hour", "$500.000 · etwa 2 Stunden": "$500,000 · about 2 hours",
+  "Die Stadt wächst mit": "The city grows with you", "Stadtübersicht": "City overview", "Dir fehlen Arbeiter": "You are short of workers", "Firma-Panel": "Company panel",
+  "Oben neben deinem Geld steht, wie viele Einwohner die Stadt hat. Sie wohnen im Wohngebiet, arbeiten in euren Gebäuden und kaufen in euren Läden. Ein Klick auf die Einwohnerzahl öffnet die Stadtübersicht.": "Next to your money at the top you see how many residents the city has. They live in the residential ring, work in your buildings and buy in your shops. Click the population for the city overview.",
+  "Deine Gebäude sind nicht voll besetzt und stellen weniger her. Ein höherer Lohn holt Leute von anderen Firmen — günstiger ist oft eine Jobbörse. Beides findest du im Firma-Panel.": "Your buildings are not fully staffed and produce less. Higher wages draw people from other companies — a job board is often cheaper. Both are in the company panel.",
+  "Jede Minute zahlst du deinen Arbeitern Lohn. 30 % davon gehen als Steuer und Miete an die Stadt — damit baut sie neue Wohnungen, und es ziehen mehr Leute zu.": "Every minute you pay your workers. 30 % goes to the city as tax and rent — it builds new homes with that, and more people move in.",
+  "Die Stadt kauft Baumaterial": "The city buys building materials",
+  "Für neue Wohnblöcke bestellt die Stadt Ziegel, Beton, Stahl oder Elektronik und zahlt 15 % über Kurs. Liefern kannst du in der Stadtübersicht.": "For new housing the city orders bricks, concrete, steel or electronics and pays 15 % above market. Deliver in the city overview.",
+  "Der Stadt fehlt etwas": "The city is missing something",
+  "In keinem Online-Marktplatz gibt es gerade Strom, Wasser oder Lebensmittel. Dann ziehen weniger Leute zu. Wer das ins Regal stellt, hat sichere Kundschaft.": "No online marketplace currently sells power, water or food. Fewer people move in then. Whoever stocks it has guaranteed customers.",
+  "Das Finanzamt": "The tax office", "Finanzamt": "Tax office",
+  "Alle 10 Minuten zahlst du Gewinnsteuer. Bauen und Ausbauen senken den Gewinn nach und nach (Abschreibung). Die Steuer geht an die Stadt.": "Every 10 minutes you pay profit tax. Building and upgrading lower your profit over time (depreciation). The tax goes to the city.",
+  "Die Stadt leiht sich Geld": "The city borrows money", "Stadtbank": "City bank",
+  "Für neue Wohnungen gibt die Stadt eine Anleihe aus. Wer sie zeichnet, bekommt jede Minute Zinsen und das Geld nach 15 Minuten zurück — zu finden an der Stadtbank.": "For new homes the city issues a bond. Whoever buys it gets interest every minute and the money back after 15 minutes — at the city bank.",
+  "Dein Software-Panel": "Your software panel", "Software": "Software",
+  "Als Software-Firma baust du Shop-Systeme, Bürger-Apps und Jobbörsen für die anderen. Alles liegt im Software-Panel in Reitern: Markt, Mein System, Entwicklung, Design und Produkte.": "As a software company you build shop systems, citizen apps and job boards for the others. Everything is in the software panel's tabs: Market, My system, Development, Design and Products.",
+  "Aktien und Übernahmen": "Shares and takeovers",
+  "Jede Firma hat 100 Aktien. An der Stadtbank kaufst du Anteile anderer Firmen und kassierst Dividende — oder übernimmst eine Firma ganz. Behalte die Mehrheit an deiner eigenen.": "Every company has 100 shares. At the city bank you buy stakes in other companies and collect dividends — or take one over. Keep the majority of your own.",
+  "Auf dem Weg zum Ziel": "On the way to the goal",
+  "Es gewinnt, wer zuerst das Vermögensziel erreicht (oben links). Vermögen sind Geld, Lager, Gebäude und Beteiligungen — Ausbauen lohnt sich also, auch wenn dabei Geld aus der Kasse geht.": "Whoever first reaches the net-worth goal wins (top left). Net worth is cash, stock, buildings and holdings — so upgrading pays off even though cash goes down.",
+  "Verstanden": "Got it", "Keine Hinweise mehr": "No more hints", "Schließen": "Close", "Hinweise im Spiel": "In-game hints",
+  "Kurze Erklärung, wenn ein System zum ersten Mal wichtig wird": "Short explanation when a system first matters",
   "Grafik automatisch reduziert": "Graphics reduced automatically", "Glas-Effekt aus": "glass effect off", "Auflösung 75 %": "resolution 75 %",
   "Wolken aus": "clouds off", "animierter Hintergrund aus": "animated background off", "Auflösung 50 %": "resolution 50 %",
   "Ändern unter Einstellungen → Grafik.": "Change under Settings → Graphics.",
@@ -2264,7 +2291,7 @@ function lobbyWaitZeichnen() {
   document.getElementById("lwPlayers").innerHTML = spieler.map(p => `
     <div class="pl">
       <span class="dot" style="background:${p.color};color:${p.color}"></span>
-      <span>${escapeHtml(p.name)}</span>
+      <span>${escapeHtml(rohText(p.name))}</span>
       ${p.id === state.hostId ? '<span class="tag">Host</span>' : ""}
       ${p.id === myId ? '<span class="tag">du</span>' : ""}
       <!-- Im Kartell zählt die Familie, sonst die Branche — man sieht, was
@@ -2295,6 +2322,7 @@ function lobbyWaitZeichnen() {
    * selbst würde ein Überschreiben kurz nach dem eigenen Klick zurückspringen. */
   if (state.lobby && Date.now() - lwEigeneAenderung > 1500) {
     document.getElementById("lwGoal").value = String(state.lobby.winGoal);
+    if (state.lobby.zeitLimit != null) document.getElementById("lwZeit").value = String(state.lobby.zeitLimit);
     if (state.lobby.botLevel) lwBotLevel = state.lobby.botLevel;
     if (state.lobby.bots) lwBots = { ...lwBots, ...state.lobby.bots };
     if (state.lobby.mode) { lwMode = state.lobby.mode; lwModeSpiegeln(); }
@@ -2329,11 +2357,13 @@ function lwSettingsSenden() {
   lwEigeneAenderung = Date.now();
   socket.emit("lobbySettings", {
     winGoal: +document.getElementById("lwGoal").value,
+    zeitLimit: +document.getElementById("lwZeit").value,
     saison: +document.getElementById("lwSaison").value,
     bots: lwBots, botLevel: lwBotLevel, mode: lwMode,
   });
 }
 document.getElementById("lwGoal").addEventListener("change", lwSettingsSenden);
+document.getElementById("lwZeit").addEventListener("change", lwSettingsSenden);
 document.getElementById("lwSaison").addEventListener("change", lwSettingsSenden);
 let lwMode = "sandbox";
 function lwModeSpiegeln() {
@@ -7710,6 +7740,59 @@ function refAvg(live) {
  * nehmen. Beim ersten Zustand nach dem Beitritt wird nur der Ausgangsstand
  * gemerkt, sonst käme eine Salve für alles, was ohnehin schon dalag. */
 let bekannteAngebote = null;
+/* ---- Hinweise im Spielverlauf ----
+ * Der Sandkasten hat viele Systeme. Statt alles im Tutorial vorab zu erklären,
+ * erscheint je System ein kurzer Hinweis genau dann, wenn es zum ersten Mal
+ * wichtig wird — einmal, höchstens einer je 45 s, nie während des Tutorials.
+ * Abschaltbar unter Einstellungen → Steuerung („Hinweise im Spiel“). */
+const HINWEISE = [
+  { id: "stadt", wann: st => st.stadt && st.tick > 90, titel: "Die Stadt wächst mit",
+    text: "Oben neben deinem Geld steht, wie viele Einwohner die Stadt hat. Sie wohnen im Wohngebiet, arbeiten in euren Gebäuden und kaufen in euren Läden. Ein Klick auf die Einwohnerzahl öffnet die Stadtübersicht.", panel: ["finanzamt", "Stadtübersicht"] },
+  { id: "arbeiter", wann: (st, me) => me.lohn?.soll > 0 && me.lohn.arbeiter < me.lohn.soll, titel: "Dir fehlen Arbeiter",
+    text: "Deine Gebäude sind nicht voll besetzt und stellen weniger her. Ein höherer Lohn holt Leute von anderen Firmen — günstiger ist oft eine Jobbörse. Beides findest du im Firma-Panel.", panel: ["firma", "Firma-Panel"] },
+  { id: "loehne", wann: (st, me) => me.lohn?.letzt?.zahl > 0, titel: "Löhne",
+    text: "Jede Minute zahlst du deinen Arbeitern Lohn. 30 % davon gehen als Steuer und Miete an die Stadt — damit baut sie neue Wohnungen, und es ziehen mehr Leute zu.", panel: ["firma", "Firma-Panel"] },
+  { id: "baumaterial", wann: st => st.stadt?.auftraege?.length > 0, titel: "Die Stadt kauft Baumaterial",
+    text: "Für neue Wohnblöcke bestellt die Stadt Ziegel, Beton, Stahl oder Elektronik und zahlt 15 % über Kurs. Liefern kannst du in der Stadtübersicht.", panel: ["finanzamt", "Stadtübersicht"] },
+  { id: "versorgung", wann: st => st.stadt?.teile?.some(x => x.key === "versorgung" && x.wirkung < 0), titel: "Der Stadt fehlt etwas",
+    text: "In keinem Online-Marktplatz gibt es gerade Strom, Wasser oder Lebensmittel. Dann ziehen weniger Leute zu. Wer das ins Regal stellt, hat sichere Kundschaft.", panel: ["finanzamt", "Stadtübersicht"] },
+  { id: "steuer", wann: (st, me) => (me.steuer?.steuer || 0) > 0, titel: "Das Finanzamt",
+    text: "Alle 10 Minuten zahlst du Gewinnsteuer. Bauen und Ausbauen senken den Gewinn nach und nach (Abschreibung). Die Steuer geht an die Stadt.", panel: ["finanzamt", "Finanzamt"] },
+  { id: "stadtanleihe", wann: st => (st.bonds || []).some(b => !b.holderId && String(b.issuer).startsWith("Stadt")), titel: "Die Stadt leiht sich Geld",
+    text: "Für neue Wohnungen gibt die Stadt eine Anleihe aus. Wer sie zeichnet, bekommt jede Minute Zinsen und das Geld nach 15 Minuten zurück — zu finden an der Stadtbank.", panel: ["bank", "Stadtbank"] },
+  { id: "software", wann: (st, me, id) => st.players?.[id]?.industry === "software" && st.tick > 30, titel: "Dein Software-Panel",
+    text: "Als Software-Firma baust du Shop-Systeme, Bürger-Apps und Jobbörsen für die anderen. Alles liegt im Software-Panel in Reitern: Markt, Mein System, Entwicklung, Design und Produkte.", panel: ["software", "Software"] },
+  { id: "aktien", wann: st => st.tick > 900, titel: "Aktien und Übernahmen",
+    text: "Jede Firma hat 100 Aktien. An der Stadtbank kaufst du Anteile anderer Firmen und kassierst Dividende — oder übernimmst eine Firma ganz. Behalte die Mehrheit an deiner eigenen.", panel: ["bank", "Stadtbank"] },
+  { id: "ziel", wann: st => st.tick > 1500, titel: "Auf dem Weg zum Ziel",
+    text: "Es gewinnt, wer zuerst das Vermögensziel erreicht (oben links). Vermögen sind Geld, Lager, Gebäude und Beteiligungen — Ausbauen lohnt sich also, auch wenn dabei Geld aus der Kasse geht." },
+];
+const HINWEIS = { gesehen: (() => { try { return new Set(JSON.parse(localStorage.getItem("cs_hinweise") || "[]")); } catch { return new Set(); } })(), zuletzt: -Infinity, offen: null };
+function spielHinweise(state, me, myId) {
+  if (EINST.hinweise === false || tutIdx >= 0 || !state?.started || state.winner || !me) return;
+  if (HINWEIS.offen || performance.now() - HINWEIS.zuletzt < 45000) return;
+  const h = HINWEISE.find(x => !HINWEIS.gesehen.has(x.id) && (() => { try { return x.wann(state, me, myId); } catch { return false; } })());
+  if (!h) return;
+  HINWEIS.gesehen.add(h.id); HINWEIS.offen = h;
+  try { localStorage.setItem("cs_hinweise", JSON.stringify([...HINWEIS.gesehen])); } catch {}
+  let el = document.getElementById("spielHinweis");
+  if (!el) { el = document.createElement("div"); el.id = "spielHinweis"; el.setAttribute("role", "status"); document.body.append(el); }
+  el.innerHTML = `<div class="shKopf"><b>💡 ${t(h.titel)}</b><button type="button" data-sh="zu" aria-label="${t("Schließen")}">×</button></div>
+    <p>${t(h.text)}</p>
+    <div class="shFuss">${h.panel ? `<button type="button" class="buyb" data-sh="panel">${t(h.panel[1])}</button>` : ""}
+      <button type="button" class="mini" data-sh="zu">${t("Verstanden")}</button>
+      <button type="button" class="shAus" data-sh="aus">${t("Keine Hinweise mehr")}</button></div>`;
+  el.hidden = false;
+  SFX.spiel?.("hinweis");
+}
+document.addEventListener("click", e => {
+  const b = e.target.closest("#spielHinweis [data-sh]"); if (!b) return;
+  const h = HINWEIS.offen;
+  if (b.dataset.sh === "panel" && h?.panel) openPanel(h.panel[0]);
+  if (b.dataset.sh === "aus") EINST.setzen("hinweise", false);
+  document.getElementById("spielHinweis").hidden = true;
+  HINWEIS.offen = null; HINWEIS.zuletzt = performance.now();
+});
 function kapitalmarktHinweis(state, myId) {
   const offen = new Set();
   for (const b of state.bonds || [])
@@ -8337,7 +8420,7 @@ function rennenRendern(state, myId) {
               return eigenes + fremd;
             })()}
             ${r.sponsoren.length ? `<div class="lbl" style="margin-top:12px">${t("Sponsoren an Bord")}</div>` +
-              r.sponsoren.map(s => `<div class="gesuch" style="padding:6px 10px"><span class="was">${escapeHtml(s.name)} → <b>${escapeHtml(s.team || "?")}</b>${
+              r.sponsoren.map(s => `<div class="gesuch" style="padding:6px 10px"><span class="was">${escapeHtml(s.name)} → <b>${escapeHtml(rohText(s.team || "?"))}</b>${
                 s.was ? `<br><span class="meta">${escapeHtml(s.was)}</span>` : ""}</span><span class="quotepill">${fmt(s.betrag)}</span></div>`).join("") : ""}
           </div>
         </div>
@@ -8499,7 +8582,7 @@ function rennenRendern(state, myId) {
           const wmp = state.mode === "renntag" ? [10, 6, 4, 3, 2, 1][e.platz - 1] : 0;
           return `<div class="stufe p${e.platz}">
             <div class="krone">${medaille[e.platz - 1] || ""}</div>
-            <div class="wer2"><b>${escapeHtml(e.name)}</b><br><span class="meta">${escapeHtml(e.team)} · ${escapeHtml(e.fahrer)}</span>${
+            <div class="wer2"><b>${escapeHtml(e.name)}</b><br><span class="meta">${escapeHtml(rohText(e.team))} · ${escapeHtml(e.fahrer)}</span>${
               wmp && !e.ausgefallen ? `<br><span class="wmdelta">+${wmp} Punkte</span>` : ""}</div>
             <div class="sockel" style="height:${hoehe}px;--liv:${e.farbe}"><span class="nr">${e.platz}</span></div>
           </div>`; }).join("")}</div>
@@ -9568,6 +9651,7 @@ function render({ state, me, myId, chat, room }) {
   if (!state || !me) return;
   tutCheck(state, myId);
   kapitalmarktHinweis(state, myId);
+  spielHinweise(state, me, myId);
   planRendern(state, myId);
   kartellRendern(state, me, myId);
   kartellFremdeRendern(state, myId);
@@ -9590,7 +9674,11 @@ function render({ state, me, myId, chat, room }) {
     ml.style.background = mb ? `#fff url(${mb}) center/cover` : my.color;
     ml.style.imageRendering = mb ? "pixelated" : "";
     ml.textContent = mb ? "" : rohText(my.name)[0].toUpperCase(); }
-  if (state.winGoal) document.getElementById("goalv").textContent = fmt(state.winGoal);
+  if (state.winGoal) {
+    /* Mit Zeitlimit läuft die Restzeit neben dem Ziel mit */
+    const rest = state.zeitLimit && !state.winner ? Math.max(0, state.zeitLimit * 60 - state.tick) : null;
+    document.getElementById("goalv").textContent = fmt(state.winGoal) + (rest != null ? ` · ⏱ ${Math.floor(rest / 60)}:${String(rest % 60).padStart(2, "0")}` : "");
+  }
 
   /* Starter-Aufgaben-Widget: offene Aufgaben mit Fortschritt, fertig = ausgeblendet */
   const qdefs = state.questDefs || store.get().meta?.questDefs || [];

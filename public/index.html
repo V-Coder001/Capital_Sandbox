@@ -207,13 +207,13 @@
     </div>
 
     <div class="startModi">
-      <div class="flabel">Spielmodi <span class="meta">— im Warteraum wählbar</span></div>
+      <div class="flabel">Spielmodi <span class="meta">— vorerst wird nur der Sandkasten gespielt</span></div>
       <div class="modiReihe">
-        <div class="modusChip"><b>Sandbox</b><em>Freies Wirtschaften bis zum Vermögensziel</em></div>
-        <div class="modusChip"><b>Planwirtschaft</b><em>Plansolls erfüllen, Planpunkte sammeln</em></div>
-        <div class="modusChip"><b>Einsteiger</b><em>Geführte Runde zum Kennenlernen</em></div>
-        <div class="modusChip"><b>Race Day</b><em>Rennställe, Fahrer und Preisgeld</em></div>
-        <div class="modusChip neu"><b>Kartell <i>Neu</i></b><em>Familien, Schutzgeld und Razzien</em></div>
+        <div class="modusChip"><b>Sandbox</b><em>Freies Wirtschaften mit wachsender Stadt</em></div>
+        <div class="modusChip gesperrt"><b>Planwirtschaft <i>gesperrt</i></b><em>Plansolls erfüllen, Planpunkte sammeln</em></div>
+        <div class="modusChip gesperrt"><b>Einsteiger <i>gesperrt</i></b><em>Geführte Runde zum Kennenlernen</em></div>
+        <div class="modusChip gesperrt"><b>Race Day <i>gesperrt</i></b><em>Rennställe, Fahrer und Preisgeld</em></div>
+        <div class="modusChip gesperrt"><b>Kartell <i>gesperrt</i></b><em>Familien, Schutzgeld und Razzien</em></div>
       </div>
     </div>
 
@@ -312,14 +312,15 @@
       <div id="lwMode">
         <button type="button" data-mode="sandbox" class="on">
           <img src="assets/modi/sandbox.jpg" alt="" loading="lazy"><span>Sandbox</span></button>
-        <button type="button" data-mode="plan">
-          <img src="assets/modi/plan.jpg" alt="" loading="lazy"><span>Planwirtschaft</span></button>
-        <button type="button" data-mode="einsteiger">
-          <img src="assets/modi/einsteiger.jpg" alt="" loading="lazy"><span>Einsteiger</span></button>
-        <button type="button" data-mode="renntag">
-          <img src="assets/modi/renntag.jpg" alt="" loading="lazy"><span>Race Day</span></button>
-        <button type="button" data-mode="kartell">
-          <img src="assets/modi/kartell.jpg" alt="" loading="lazy"><span>Kartell</span></button>
+        <!-- Vorerst gesperrt: Gespielt wird nur der Sandkasten (siehe MODI_FREI im Server). -->
+        <button type="button" data-mode="plan" class="gesperrt" disabled title="Vorerst gesperrt">
+          <img src="assets/modi/plan.jpg" alt="" loading="lazy"><span>Planwirtschaft · gesperrt</span></button>
+        <button type="button" data-mode="einsteiger" class="gesperrt" disabled title="Vorerst gesperrt">
+          <img src="assets/modi/einsteiger.jpg" alt="" loading="lazy"><span>Einsteiger · gesperrt</span></button>
+        <button type="button" data-mode="renntag" class="gesperrt" disabled title="Vorerst gesperrt">
+          <img src="assets/modi/renntag.jpg" alt="" loading="lazy"><span>Race Day · gesperrt</span></button>
+        <button type="button" data-mode="kartell" class="gesperrt" disabled title="Vorerst gesperrt">
+          <img src="assets/modi/kartell.jpg" alt="" loading="lazy"><span>Kartell · gesperrt</span></button>
       </div>
     </div>
     <p id="lwModeHint" style="display:none;font-size:11.5px;color:#8695ab;margin:2px 0 6px">
@@ -371,11 +372,21 @@
     <div class="lwRow" id="lwGoalRow">
       <label for="lwGoal">Ziel</label>
       <select id="lwGoal">
-        <option value="100000">$100.000 · etwa 1 Stunde</option>
-        <option value="250000">$250.000 · etwa 2 Stunden</option>
-        <option value="500000">$500.000 · langer Abend</option>
+        <option value="100000">$100.000 · etwa 30–40 Minuten</option>
+        <option value="250000">$250.000 · etwa 1 Stunde</option>
+        <option value="500000">$500.000 · etwa 2 Stunden</option>
         <option value="1000000">$1 Mio. · für Ausdauernde</option>
         <option value="10000000">$10 Mio. · Marathon</option>
+      </select>
+    </div>
+    <div class="lwRow" id="lwZeitRow">
+      <label for="lwZeit">Zeitlimit</label>
+      <select id="lwZeit">
+        <option value="0">kein Zeitlimit</option>
+        <option value="30">30 Minuten</option>
+        <option value="45">45 Minuten</option>
+        <option value="60">60 Minuten</option>
+        <option value="90">90 Minuten</option>
       </select>
     </div>
     <div class="lwRow">
@@ -948,7 +959,7 @@ window.EINST = (() => {
   const STANDARD = Object.assign({ qualitaet: "hoch" }, STUFEN.hoch, {
     radEmpf: 1, zoomZumZeiger: true, trackpadSchiebt: true, tastatur: true,
     effekte: true, effekteVol: 60,
-    autoQualitaet: true, fpsAnzeige: false,
+    autoQualitaet: true, fpsAnzeige: false, hinweise: true,
   });
   let w = {};
   try { w = JSON.parse(localStorage.getItem("cs_einst") || "{}") || {}; } catch {}
@@ -1097,6 +1108,7 @@ document.addEventListener("click", e => {
       <label class="eSchalter"><span>Zum Mauszeiger zoomen<small>Aus: immer zur Bildmitte</small></span><input type="checkbox" data-einst="zoomZumZeiger"><i></i></label>
       <label class="eSchalter"><span>Trackpad-Wischen verschiebt die Karte<small>Aus: Wischen zoomt</small></span><input type="checkbox" data-einst="trackpadSchiebt"><i></i></label>
       <label class="eSchalter"><span>Tastatursteuerung<small>WASD / Pfeiltasten verschieben, + / − zoomen</small></span><input type="checkbox" data-einst="tastatur"><i></i></label>
+      <label class="eSchalter"><span>Hinweise im Spiel<small>Kurze Erklärung, wenn ein System zum ersten Mal wichtig wird</small></span><input type="checkbox" data-einst="hinweise"><i></i></label>
       <div class="eTasten">
         <div><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd><span>Karte verschieben</span></div>
         <div><kbd>+</kbd><kbd>−</kbd><span>Zoomen</span></div>

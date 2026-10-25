@@ -2094,7 +2094,9 @@ const BTYPES = {
    * am Tabellenende (rund 30–40k $ nach 60 Minuten). */
   campingplatz: { name: "Campingplatz", en: "Campground", cost: 1500, out: "uebernachtung", rate: 10/50, zone: "agrar", industry: "touristik", arbeiter: 3 },
   strandhotel:  { name: "Strandhotel", en: "Beach hotel",  cost: 2400, out: null, rate: 0, zone: "kueste", industry: "touristik", arbeiter: 5,
-                  proc: { in: { wasser: 2.5, strom: 1.25 }, out: "uebernachtung", rate: 10/30 } },
+                  /* 2,5 Wasser / 1,25 Strom → 1,5 / 0,75: Seit die Bewohner selbst Strom und
+                   * Wasser verbrauchen (Grundbedarf), verhungerten die Hotels an ihren Rohstoffen. */
+                  proc: { in: { wasser: 1.5, strom: 0.75 }, out: "uebernachtung", rate: 10/30 } },
   brunnen:    { name: "Brunnen", en: "Well",           cost: 800,  out: "wasser",   rate: 2.5,  zone: "agrar",     industry: "versorger" },
   windpark:   { name: "Windpark", en: "Wind farm",          cost: 2200, out: "strom",    rate: 5,    zone: "kueste",    industry: "versorger" },
   /* Agrarwirtschaft */
@@ -2358,6 +2360,10 @@ const sichereFarbe = c => /^#[0-9a-fA-F]{6}$/.test(String(c || "")) ? String(c) 
  * Beitreten fest (Auswahl im Join-Screen). Env-Override: WIN_NW=... npm start */
 let WIN_NW = +process.env.WIN_NW || 250_000;
 const WIN_CHOICES = [100_000, 250_000, 500_000, 1_000_000, 10_000_000];
+/* Zeitlimit (Minuten, 0 = keins): Ist die Zeit um, gewinnt das höchste
+ * Nettovermögen — Runden werden planbar, auch wenn niemand das Ziel knackt. */
+let ZEIT_LIMIT = 0;
+const ZEIT_CHOICES = [0, 30, 45, 60, 90];
 /* ---- Meisterschaft (Race Day) ----
  * Der Renntag-Modus hatte bisher dieselbe Siegbedingung wie der Sandkasten:
  * das hoechste Nettovermoegen. In einem Rennmodus soll aber gewinnen, wer
@@ -2378,6 +2384,7 @@ let SAISON_RENNEN = 5;
  * ausmachen, solange das Kartellamt ihnen nichts nachweisen kann.
  * Der Host wählt den Modus im Warteraum. */
 let MODE = "sandbox";
+const MODI_FREI = String(process.env.MODI_FREI || "sandbox").split(",").map(s => s.trim()).filter(Boolean);
 const PLAN_PHASEN = 5;
 const PLAN_DAUER = 8 * 60;      // Sekunden je Planphase
 const PLAN_ZIEL = 1000;         // Planpunkte für den vorzeitigen Sieg
@@ -3751,7 +3758,7 @@ const SW = {
    * 45 Minuten mit 11–13k $ da, die Produzenten mit 40–180k $, obwohl ihre
    * Systeme in der halben Stadt liefen. Darum zählt das Ertragswert-Prinzip:
    * die Einnahmen der letzten 10 Minuten × MARKENWERT gehen in den Firmenwert. */
-  MARKENWERT: 8,   // Software wird über ihre Erträge bewertet (Balancing: 2 → 8)
+  MARKENWERT: 5,   // Software wird über ihre Erträge bewertet (2 → 8 → 5: mit großen Städten zog Software sonst davon)
 };
 /* ---- Skill-Tree je Branche ----
  * Die allgemeinen Module oben wirken auf alle Waren. Daneben hat jede Branche
@@ -4135,11 +4142,11 @@ function swGebuehr(prod, betrag) {
 const BUERGER_APP = {
   AB_SYSTEM: 1,
   STUFEN: [
-    { ep: 180, quali: 1.0, quote: 0.40 },   // v1: bis 40 % der Einwohner nutzen Apps
-    { ep: 240, quali: 1.6, quote: 0.60 },
-    { ep: 320, quali: 2.4, quote: 0.85 },
+    { ep: 180, quali: 1.0, quote: 0.35 },   // v1: bis 35 % der Einwohner nutzen Apps
+    { ep: 240, quali: 1.6, quote: 0.50 },
+    { ep: 320, quali: 2.4, quote: 0.70 },
   ],
-  PREIS_MIN: 0.05, PREIS_MAX: 1, PREIS_START: 0.5, PREIS_REF: 0.5, ELASTIZITAET: 1.5,
+  PREIS_MIN: 0.05, PREIS_MAX: 0.5, PREIS_START: 0.3, PREIS_REF: 0.3, ELASTIZITAET: 1.5,
   NUTZER_JE_STUFE: 200, DIGITAL_ANTEIL: 0.5, DIGITAL_BONUS: 0.05,
 };
 const JOBBOERSE = {
@@ -5062,6 +5069,12 @@ const STADT = Object.assign({
   MAT_AUFSCHLAG: 1.15, AUFTRAG_FRIST: 90, AUSSEN_AUFSCHLAG: 2,
   ANLEIHE: { betrag: 2000, zins: 0.005, laufzeit: 900, max: 20000 },
   AUTOMATISIERUNG: 0.25,  // Steuerungssoftware spart ein Viertel der Arbeiter
+  /* Grundbedarf der Bewohner (Balancing): je 100 Einwohner und Minute kauft die
+   * Stadt bei den Firmen ein — Strom und Wasser für die Haushalte, Übernachtungen
+   * für Besucher. So wachsen Versorger und Touristik mit der Stadt, wie Software
+   * über die Bürger-Apps. Lebensmittel bewusst nicht: Agrar lag ohnehin vorn.
+   * Höchstens die Hälfte eines Lagers je Minute, damit keine Kette stehen bleibt. */
+  BEDARF: { strom: 12, wasser: 12, uebernachtung: 2 }, BEDARF_ANTEIL_MAX: 0.5, BEDARF_PREIS_MIN: 0.7,   // Stadt zahlt mindestens 70 % des Grundpreises
   /* Etappe 4: Fachkraefte. Labor, Studio und Chipfabrik brauchen zur Haelfte
    * Fachkraefte. 10 % der Arbeitenden sind welche, die Stadtbibliothek bildet
    * weitere 10 % aus, jedes andere fertige Stadtprojekt 2 %. */
@@ -5460,6 +5473,31 @@ function ruestPublic() {
     ruf: Object.fromEntries(Object.values(G.players).filter(ruestFirma).map(p => [p.id, ruestRuf(p.id)])),
     regeln: { min: RUEST.GEBOT_MIN, max: RUEST.GEBOT_MAX, strafe: RUEST.STRAFE, bieten: RUEST.BIETEN, frist: RUEST.FRIST } };
 }
+/* Grundbedarf der Bewohner: anteilig nach Lagerbestand bei allen Firmen, die
+ * die Ware haben, zum Ø-Kurs bezahlt (frisches Geld aus dem Konsum). */
+function grundbedarfKaufen() {
+  const S = G.stadt, ergebnis = {};
+  for (const [g, je100] of Object.entries(STADT.BEDARF)) {
+    let rest = Math.floor(S.einwohner / 100 * je100 * 10) / 10;
+    const verkaeufer = Object.values(G.players).map(p => ({ p, frei: Math.floor((p.inv[g] || 0) * STADT.BEDARF_ANTEIL_MAX) })).filter(x => x.frei > 0);
+    const summe = verkaeufer.reduce((a, x) => a + x.frei, 0);
+    let menge = 0, umsatz = 0;
+    for (const x of verkaeufer) {
+      if (!(rest > 0)) break;
+      const q = Math.min(x.frei, Math.ceil(rest * x.frei / summe), rest);
+      if (!(q > 0)) continue;
+      /* Mindestens 70 % des Grundpreises: Übernachtungen fielen auf ~15 statt 38 $,
+       * weil die Hotels sie in den Läden verramschten — die Touristik verdiente kaum. */
+      const betrag = Math.round(q * Math.max(MM[g].price, BASEP[g] * STADT.BEDARF_PREIS_MIN) * 100) / 100;
+      x.p.inv[g] -= q; x.p.cash += betrag; addRevenue(x.p, betrag);
+      logTx(x.p, "Stadt", `Grundbedarf der Bewohner: ${q}× ${GOODS[g].name}`, betrag);
+      menge += q; umsatz += betrag; rest -= q;
+    }
+    if (menge) noteSold(g, menge);
+    ergebnis[g] = { menge, umsatz: Math.round(umsatz), soll: Math.round(S.einwohner / 100 * je100) };
+  }
+  S.grundbedarf = ergebnis;
+}
 /* Stadtanleihe: nur bei Wohnungsnot, eine unverkaufte zur Zeit, Schulden gedeckelt.
  * Sie laeuft ueber das normale Anleihen-System, Spieler und Bots zeichnen sie. */
 function stadtAnleiheAusgeben() {
@@ -5501,6 +5539,7 @@ function stadtTick() {
   if (G.tick % STADT.TAKT !== 30) return;   // versetzt zu Steuern und Markttag
   loehneZahlen();
   buergerAppZahlen();
+  grundbedarfKaufen();
   const z = stadtZufriedenheit();
   S.zufr = z.wert; S.teile = z.teile;
   const kap = wohnKapazitaet();
@@ -5529,7 +5568,7 @@ function stadtPublic() {
     baustellen: G.map.filter(wohnImBau).length,
     auftraege: S.auftraege.map(a => ({ id: a.id, x: a.x, y: a.y, name: a.name, stufe: a.stufe, needs: a.needs, frist: a.frist,
       contrib: Object.fromEntries(Object.entries(a.contrib).map(([pid, g]) => [pid, { name: G.players[pid]?.name ?? "—", color: G.players[pid]?.color, goods: g }])) })),
-    schulden: stadtSchulden(), anleihe: STADT.ANLEIHE, fach: S.fach || null, appNutzer: S.appNutzer || 0, bloecke, platz: wohnKacheln().filter(t => !t.wohnblock && !t.park).length,
+    schulden: stadtSchulden(), anleihe: STADT.ANLEIHE, fach: S.fach || null, appNutzer: S.appNutzer || 0, grundbedarf: S.grundbedarf || null, bloecke, platz: wohnKacheln().filter(t => !t.wohnblock && !t.park).length,
     zufr: S.zufr, teile: S.teile, zuzug: S.zuzug, wegzug: S.wegzug, verlauf: S.verlauf,
     nachfrage: Math.round(stadtNachfrage() * 100) / 100, investiert: S.investiert, wartetAufGeld: S.wartetAufGeld || 0,
     log: S.log, stufen: STADT.STUFEN, kasseMin: STADT.KASSE_MIN, bauDauer: STADT.BAU_DAUER, takt: STADT.TAKT,
@@ -6175,6 +6214,7 @@ function snapshot() {
     saison: MODE === "renntag" ? { gefahren: G.saisonRennen, gesamt: SAISON_RENNEN } : null,
     tutorialEnde: !!G.tutorialEnde,
     winGrund: G.winGrund || null,
+    zeitLimit: ZEIT_LIMIT || null,
     /* Immer mitschicken: Die Aufgaben hängen am Modus, und der kann sich nach
      * der Registrierung noch ändern (Lobby-Wahl) — die Liste aus dem
      * Register-Ack wäre dann veraltet. */
@@ -6247,7 +6287,7 @@ function snapshot() {
     })) : null,
     hof: HOF,
     routes: MAP_ROUTES,
-    lobby: G.started ? null : { winGoal: WIN_NW, bots: botAuswahl, botLevel: botLevelKey, mode: MODE, saison: SAISON_RENNEN, saisonWahl: SAISON_CHOICES },
+    lobby: G.started ? null : { winGoal: WIN_NW, zeitLimit: ZEIT_LIMIT, bots: botAuswahl, botLevel: botLevelKey, mode: MODE, saison: SAISON_RENNEN, saisonWahl: SAISON_CHOICES },
     map: G.map.map(t => ({ x: t.x, y: t.y, zone: t.zone, road: t.road, water: t.water,
       park: t.park, field: t.field, sand: t.sand, deep: t.deep, rock: t.rock,
       piazza: t.piazza, fontana: t.fontana, pier: t.pier, leuchtturm: t.leuchtturm, questura: t.questura, gcasino: t.gcasino, wz: t.wz, famhaus: t.famhaus,
@@ -6685,12 +6725,17 @@ io.on("connection", socket => {
    * Solange die Runde nicht gestartet ist, darf der Host Ziel und Bots noch
    * ändern — anders als früher, wo beides beim Registrieren festgenagelt war
    * und Mitspieler, die später dazukamen, nichts mehr davon mitbekamen. */
-  socket.on("lobbySettings", ({ winGoal, bots, botLevel, mode, saison }, ack) => {
+  socket.on("lobbySettings", ({ winGoal, bots, botLevel, mode, saison, zeitLimit }, ack) => {
     const pid = G.socketToPid[socket.id];
     if (!pid || pid !== G.hostId) return ack?.({ error: "Das darf nur der Host" });
     if (G.started) return ack?.({ error: "Die Runde läuft schon" });
-    if (["sandbox", "plan", "einsteiger", "renntag", "kartell"].includes(mode)) MODE = mode;
+    /* Vorerst nur der Sandkasten (MODI_FREI). Die anderen Modi bleiben im Code,
+     * sind aber gesperrt und laufen nicht mit — per Umgebung MODI_FREI=
+     * "sandbox,kartell" lassen sie sich zum Testen freischalten. */
+    if (mode && mode !== MODE && !MODI_FREI.includes(mode)) return ack?.({ error: "Dieser Modus ist vorerst gesperrt — gespielt wird der Sandkasten." });
+    if (MODI_FREI.includes(mode)) MODE = mode;
     if (WIN_CHOICES.includes(+winGoal)) WIN_NW = +winGoal;
+    if (zeitLimit != null && ZEIT_CHOICES.includes(+zeitLimit)) ZEIT_LIMIT = +zeitLimit;
     if (SAISON_CHOICES.includes(+saison)) SAISON_RENNEN = +saison;
     if (bots && typeof bots === "object") botAuswahl = bots;
     if (BOT_LEVELS[botLevel]) botLevelKey = botLevel;
@@ -9984,6 +10029,16 @@ function runTick() {
        * wäre Verschwendung, sie ist nur am Rundenende interessant. */
       G.report = buildReport(p.id);
       io.emit("notice", { text: `${p.name} gewinnt mit ${WIN_NW.toLocaleString("de-DE")} $ Nettovermögen!` });
+    }
+  }
+  /* Zeitlimit abgelaufen: das höchste Nettovermögen gewinnt */
+  if (MODE !== "plan" && MODE !== "renntag" && MODE !== "kartell" && !G.winner && ZEIT_LIMIT && G.tick >= ZEIT_LIMIT * 60) {
+    const beste = Object.values(G.players).sort((a, b) => netWorth(b) - netWorth(a))[0];
+    if (beste) {
+      G.winner = beste.name;
+      G.winGrund = `Die Zeit ist um (${ZEIT_LIMIT} Minuten) — ${beste.name} hat das höchste Vermögen: ${Math.round(netWorth(beste)).toLocaleString("de-DE")} $`;
+      G.report = buildReport(beste.id);
+      io.emit("notice", { text: `Zeit abgelaufen! ${beste.name} gewinnt mit ${Math.round(netWorth(beste)).toLocaleString("de-DE")} $ Nettovermögen.` });
     }
   }
   /* Reconnect-Gnadenfrist abgelaufen → jetzt endgültig aufräumen (offene Orders
