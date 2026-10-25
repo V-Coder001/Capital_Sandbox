@@ -1546,3 +1546,31 @@ em.auf,.bankZeile em.auf{color:#15803d}em.ab,.bankZeile em.ab{color:#b91c1c}
 @media (max-width:980px){.bankPortal{grid-template-columns:1fr}.bankRand{position:static}.bankAnzeige{min-height:0;flex-direction:row;flex-wrap:wrap;text-align:left}.bankAnzLogo{margin-top:0;width:44px;height:44px;font-size:20px}.bankAnzeige em{margin-top:0}}
 @media (max-width:640px){.bankOben{grid-template-columns:1fr}}
 @media (max-width:820px){.bankKennzahlen{grid-template-columns:1fr 1fr}.bankZeile{grid-template-columns:minmax(0,1fr) 80px 70px}.bankZeile>*:nth-child(4),.bankZeile>*:nth-child(5){display:none}}
+/* Handeln & Depot im hellen Website-Stil von bank.cs */
+.panel.imNetz{--panel:#ffffff;--panel2:#f8fafc;--line:#e3e6ee;--text:#18202e;--dim:#4b5563;--accent:#0e7490;--accent2:#155e75;--up:#15803d;--down:#b91c1c;
+  --rand:1px solid #e3e6ee;--akzent-flaeche:#e0f2f7;--auf-akzent:#ffffff;--glass-strong:#ffffff;background:transparent;color:#18202e;box-shadow:none;border:0}
+.panel.imNetz .pbody{padding:0;color:#18202e}
+.panel.imNetz .bkopf{background:#fff;border:0;box-shadow:0 1px 2px rgba(16,24,40,.06),0 6px 18px rgba(16,24,40,.05);border-radius:16px}
+.panel.imNetz .bkopf-balken{background:#e5e7eb}
+.panel.imNetz .bReiter{background:#fff;border:0;box-shadow:0 1px 2px rgba(16,24,40,.06);border-radius:14px}
+.panel.imNetz .bReiter button{color:#374151}
+.panel.imNetz .bReiter button.on{background:#155e75;color:#fff}
+.panel.imNetz .bond,.panel.imNetz .auction,.panel.imNetz .contract{background:#fff;border:1px solid #eef0f4;box-shadow:0 1px 2px rgba(16,24,40,.05);border-radius:12px;color:#18202e}
+.panel.imNetz .firmdetail{background:#fff;border-color:#eef0f4}
+.panel.imNetz .kzrow{border-color:#f1f5f9}
+.panel.imNetz .vChart{background:#f8fafc!important;border-color:#e3e6ee!important}
+.panel.imNetz .sec{color:#155e75}
+.panel.imNetz .meta{color:#4b5563}
+.panel.imNetz input,.panel.imNetz select{background:#fff;border-color:#d4d8e2;color:#111827}
+.panel.imNetz .bseite{background:#fff;box-shadow:0 1px 2px rgba(16,24,40,.05)}
+.panel.imNetz .bseite.kauf{background:#f0fdf4;border-color:#bbf7d0}
+.panel.imNetz .bseite.verkauf{background:#fef2f2;border-color:#fecaca}
+.panel.imNetz .bknopf.kauf{background:#16a34a;color:#fff;border-color:#16a34a}
+.panel.imNetz .bknopf.verkauf{background:#dc2626;color:#fff;border-color:#dc2626}
+.panel.imNetz .bknopf:hover{filter:brightness(1.06)}
+.panel.imNetz .mlog{color:#374151;border-color:#f1f5f9}
+.panel.imNetz .buyb{background:#16a34a;color:#fff}
+.panel.imNetz .mini{background:#f1f5f9;color:#111827;border:1px solid #d4d8e2}
+.panel.imNetz .wRichtung button{background:#fff;border-color:#d4d8e2;color:#374151}
+.panel.imNetz .wRichtung button.on{background:#e0f2f7;border-color:#0e7490;color:#0f172a}
+.panel.imNetz .wSchnell button{background:#f1f5f9;color:#111827;border-color:#d4d8e2}
