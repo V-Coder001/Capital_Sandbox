@@ -2033,6 +2033,49 @@ const EN = {
   "höchstens": "at most", "Schulden": "debt", "Bürger-Apps und Jobbörse": "Citizen apps and job board",
   "Bürger-App: bis 85 % der Einwohner zahlen ein Abo je Minute, 200 Nutzer je Rechenzentrums-Stufe des Anbieters. Jobbörse: Vorrang wie +0,3 bis +0,7 Lohnstufen gegen eine Gebühr je Arbeiter, 3 Abos je Rechenzentrums-Stufe.": "Citizen app: up to 85 % of residents pay a subscription per minute, 200 users per data-centre level of the provider. Job board: priority like +0.3 to +0.7 wage levels for a fee per worker, 3 subscriptions per data-centre level.",
   /* Stadtkurier */
+  "Kurse, Fonds und Aktien der Stadt": "Prices, funds and shares of the city",
+  "Marktübersicht": "Market overview",
+  "Aktien": "Shares",
+  "Handeln & Depot": "Trading & portfolio",
+  "Aktie suchen": "Search share",
+  "Aktie suchen …": "Search share …",
+  "Stadtindex": "City index",
+  "Fonds": "fund",
+  "Veränderung in 2 Minuten": "Change over 2 minutes",
+  "steigt": "rising",
+  "gleich": "flat",
+  "fällt": "falling",
+  "Zur Aktie": "To share",
+  "Fonds kaufen": "Buy funds",
+  "Alle Aktien": "All shares",
+  "Analysen und Nachrichten": "Analyses and news",
+  "Noch keine Analysen.": "No analyses yet.",
+  "Website besuchen": "Visit website",
+  "Hier könnte Ihre Firma stehen": "Your company could be here",
+  "Anzeigen buchen Firmen über das Werbenetz der Software-Firmen.": "Companies book ads via the software companies' ad network.",
+  "du hältst": "you hold",
+  "Marktwert": "Market value",
+  "Wert je Aktie (F)": "Value per share (F)",
+  "Umsatz 10 min": "Revenue 10 min",
+  "Dividendenrendite": "Dividend yield",
+  "Angebote ansehen und kaufen": "offers — view and buy",
+  "Handeln: Kaufanfrage stellen": "Trade: place a bid",
+  "Website der Firma": "Company website",
+  "Suche": "Search",
+  "nach Marktwert": "by market value",
+  "Firma": "Company",
+  "Kurs": "Price",
+  "10 min": "10 min",
+  "Keine Aktie gefunden.": "No share found.",
+  "Der Verlauf erscheint nach den ersten Minuten.": "The chart appears after the first minutes.",
+  "Verlauf": "Chart",
+  "Start": "Start",
+  "jetzt": "now",
+  "Stadtbank": "City bank",
+  "Aktienhandel, Übernahmen, Kurswetten und Depot": "Share trading, takeovers, stock bets and portfolio",
+  "Firmen an der Börse": "listed companies",
+  "Aktien, Übernahmen, Kurswetten": "Shares, takeovers, stock bets",
+  "Die Stadtbank wird von der Stadt betrieben · das Gebäude im Zentrum führt hierher": "The city bank is run by the city · the building in the centre leads here",
   "für Verkäufer": "for sellers",
   "Versorgung": "Utilities",
   "Rohwaren": "Raw goods",
@@ -6146,8 +6189,9 @@ function openPanel(pid, stumm = false) {
     toast("Im Kartell gibt es keine Börse — gehandelt wird über Hehler, Markthalle und Frachtdepot.");
     return;
   }
-  /* Im Sandkasten ist die Warenbörse eine Website im Stadtnetz (boerse.cs) */
+  /* Im Sandkasten sind Warenbörse und Stadtbank Websites im Stadtnetz */
   if (pid === "boerse" && store.get()?.state?.stadt) return netzOeffnen("boerse");
+  if (pid === "bank" && store.get()?.state?.stadt) return netzOeffnen("bank");
   TUT_GESEHEN.add(pid);
   if (!stumm) SFX.spiel("klick");
   document.querySelectorAll(".panel").forEach(p => p.classList.remove("open"));
@@ -6826,6 +6870,24 @@ document.getElementById("rzFenster").addEventListener("click", e => {
   const ha = e.target.closest("[data-hotelauf]");
   if (ha) { rzSchliessen(); return hotelOeffnen(ha.dataset.hotelauf); }
 });
+/* Großer Verlauf für bank.cs: Fläche, gestrichelte Startlinie, Achse rechts */
+function bankChart(h, fmtW) {
+  if (!h || h.length < 2) return `<div class="bankChartLeer">${t("Der Verlauf erscheint nach den ersten Minuten.")}</div>`;
+  const W = 330, H = 230, min = Math.min(...h), max = Math.max(...h), span = max - min || 1;   // schmal, damit die Schrift lesbar bleibt
+  const x = i => i / (h.length - 1) * W, y = v => 10 + (1 - (v - min) / span) * (H - 20);
+  const auf = h[h.length - 1] >= h[0], c = auf ? "#16a34a" : "#dc2626";
+  const linie = h.map((v, i) => `${i ? "L" : "M"}${x(i).toFixed(1)} ${y(v).toFixed(1)}`).join(" ");
+  const minuten = Math.round(h.length * 10 / 60);
+  return `<div class="bankChart"><svg viewBox="0 0 ${W + 78} ${H + 24}" role="img" aria-label="${t("Verlauf")}">
+    <defs><linearGradient id="bankVerlauf" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${c}" stop-opacity=".35"></stop><stop offset="1" stop-color="${c}" stop-opacity=".02"></stop></linearGradient></defs>
+    ${[0, .5, 1].map(f => `<line x1="0" x2="${W}" y1="${10 + f * (H - 20)}" y2="${10 + f * (H - 20)}" stroke="#e5e7eb"></line><text x="${W + 6}" y="${14 + f * (H - 20)}" font-size="13" fill="#4b5563">${fmtW(max - f * span)}</text>`).join("")}
+    <line x1="0" x2="${W}" y1="${y(h[0])}" y2="${y(h[0])}" stroke="#374151" stroke-dasharray="4 4"></line>
+    <text x="6" y="${y(h[0]) - 6}" font-size="13" fill="#374151">${t("Start")}: ${fmtW(h[0])}</text>
+    <path d="${linie} L${W} ${H} L0 ${H} Z" fill="url(#bankVerlauf)"></path>
+    <path d="${linie}" fill="none" stroke="${c}" stroke-width="2"></path>
+    <text x="0" y="${H + 20}" font-size="13" fill="#4b5563">${t("vor")} ${minuten} min</text><text x="${W}" y="${H + 20}" font-size="13" fill="#4b5563" text-anchor="end">${t("jetzt")}</text>
+  </svg></div>`;
+}
 /* ---- Stadtkurier (ersetzt die Nachrichtenzentrale im Sandkasten) ----
  * Die Artikel stellt der Client aus dem zusammen, was der Spielstand ohnehin
  * kennt: Marktberichte (Wirtschaft), Aktienkäufe und Ausschüttungen (Börse),
@@ -6910,6 +6972,8 @@ function netzOeffnen(pid = null) {
   if (pid === "kurier") TUT_GESEHEN.add("kurier");
   if (pid === "boerse") TUT_GESEHEN.add("boerse");
   if (pid !== "boerse") boerseHeimholen();
+  if (pid !== "bank") bankHeimholen();
+  if (pid === "bank") TUT_GESEHEN.add("bank");
   Object.assign(NETZ, { offen: true, seite: pid, sig: {}, artikel: pid === "kurier" ? NETZ.artikel : null });
   netzZeichnen();
 }
@@ -6917,8 +6981,19 @@ function netzOeffnen(pid = null) {
  * in das Stadtnetz-Fenster gehängt — alle IDs und Klick-Handler bleiben gleich. */
 const BOERSE_BODY = document.querySelector("#p-boerse .pbody");
 function boerseHeimholen() { const p = document.getElementById("p-boerse"); if (BOERSE_BODY.parentElement !== p) p.appendChild(BOERSE_BODY); }
+/* Stadtbank als Website: Das ganze Bank-Panel wird in das Stadtnetz-Fenster
+ * gehängt — seine Klick-Handler hängen am Panel selbst, Reiter, Formulare und
+ * Kurswetten funktionieren dadurch unverändert. Beim Verlassen kehrt es zurück. */
+const BANK_EL = document.getElementById("p-bank");
+const BANK_HEIM = { parent: BANK_EL.parentElement, next: BANK_EL.nextSibling };
+function bankHeimholen() {
+  if (BANK_EL.parentElement === BANK_HEIM.parent) return;
+  BANK_HEIM.parent.insertBefore(BANK_EL, BANK_HEIM.next);
+  BANK_EL.classList.remove("imNetz", "open");
+}
 function netzSchliessen() {
   boerseHeimholen();
+  bankHeimholen();
   NETZ.offen = false;
   const el = document.getElementById("netzFenster");
   el.hidden = true; el.innerHTML = "";
@@ -6934,9 +7009,9 @@ function netzZeichnen() {
   const fenster = document.getElementById("netzFenster");
   const W = state.rechenzentren?.websites || {}, cfg = state.websiteCfg;
   fenster.querySelector("[data-netzzurueck]").style.visibility = NETZ.seite ? "visible" : "hidden";
-  const fk = fenster.querySelector(".sfKopf");
-  fk.classList.toggle("netzHero", !NETZ.seite);
-  fk.classList.toggle("netzZeitung", NETZ.seite === "kurier");
+  const kopfEl = fenster.querySelector(".sfKopf");
+  kopfEl.classList.toggle("netzHero", !NETZ.seite);
+  kopfEl.classList.toggle("netzZeitung", NETZ.seite === "kurier");
   /* Eilmeldung oben im Stadtnetz: Großauftrag oder offene Ausschreibung */
   const artikel = kurierArtikel(state);
   const eil = artikel.find(a => a.eil);
@@ -6999,6 +7074,7 @@ function netzZeichnen() {
         <div class="netzDienste">
           <button type="button" class="netzDienst" data-kurierauf=""><span class="netzDienstIcon" style="background:#111827">📰</span><span><b>${t("Stadtkurier")}</b><small>kurier.cs · ${t("Nachrichten alle zwei Minuten")}</small></span></button>
           <button type="button" class="netzDienst" data-netzauf="boerse"><span class="netzDienstIcon" style="background:#1d4ed8">📈</span><span><b>${t("Warenbörse")}</b><small>boerse.cs · ${state.orders.length} ${t("offene Orders")}</small></span></button>
+          <button type="button" class="netzDienst" data-netzauf="bank"><span class="netzDienstIcon" style="background:#0e7490">🏦</span><span><b>${t("Stadtbank")}</b><small>bank.cs · ${t("Aktien, Übernahmen, Kurswetten")}</small></span></button>
         </div>
         ${kurierKasten(artikel)}
         <section class="netzAbschnitt"><div class="netzAbschnittKopf"><b>${NETZ.kat === "alle" ? t("Beliebte Seiten") : t(BRANCHE_NAME[NETZ.kat] || "")}</b><small>${t("sortiert nach Besuchern")}</small></div>
@@ -7072,6 +7148,101 @@ function netzZeichnen() {
       </div>
       ${meine.length ? `<section class="bwMeine"><b>${t("Meine Orders")}</b>${meine.map(o => `<div class="bwOrder"><span class="${o.side === "buy" ? "bwK" : "bwV"}">${o.side === "buy" ? t("Kauf") : t("Verkauf")}</span><span class="mono"><b>${o.qty}×</b> ${gname(o.good)} · ${fp(o.price)}</span><button type="button" class="mini" data-bwstorno="${o.id}">${t("Storno")}</button></div>`).join("")}</section>` : ""}`, "haupt");
     netzSetze(".sfFuss", `<span class="sfFussLogo">📈</span><span>${t("Die Warenbörse wird von der Stadt betrieben · Ware und Geld liegen bis zum Handel treuhänderisch fest")}</span>`, "fussBoerse");
+    return;
+  }
+  /* ---- Stadtbank (bank.cs) als Finanzportal ----
+   * Marktübersicht mit Kacheln (grün/rot nach Veränderung über 10 Minuten),
+   * großer Verlauf der gewählten Kachel, Anzeige aus dem Werbenetz, Analysen
+   * aus dem Kurier; Aktien mit Suche und Detailseite; Handeln & Depot ist die
+   * bisherige Bank, eingebettet wie ein Terminal. */
+  if (NETZ.seite === "bank") {
+    fenster.querySelector(".sfBrowser").style.setProperty("--sys", "#0e7490");
+    const tab = NETZ.bankTab || "markt";
+    netzSetze(".sfUrl", `🔒 bank.cs${tab === "markt" ? "" : tab === "aktien" ? (NETZ.bankAktie ? "/aktie/" + shopSlug(state.players[NETZ.bankAktie]?.name || "") : "/aktien") : "/handeln"}`, "url" + tab + (NETZ.bankAktie || ""));
+    netzSetze(".sfKopf", `<div class="sfMarke"><span class="sfLogo" style="background:#155e75">€</span><div><b>${t("Stadtbank")}</b><small>${t("Kurse, Fonds und Aktien der Stadt")}</small></div></div>
+      <nav class="bankNav"><button type="button" data-banktab="markt">${t("Marktübersicht")}</button><button type="button" data-banktab="aktien">${t("Aktien")}</button><button type="button" data-banktab="handeln">${t("Handeln & Depot")}</button>
+        <label class="bankSuche"><span class="sr">${t("Aktie suchen")}</span><input id="bankSuche" type="search" placeholder="${t("Aktie suchen …")}"></label></nav>`, "kopfBank");
+    fenster.querySelectorAll(".bankNav [data-banktab]").forEach(b => b.classList.toggle("on", b.dataset.banktab === tab));
+    const si = document.getElementById("bankSuche"); if (si && document.activeElement !== si && si.value !== (NETZ.bankSuche || "")) si.value = NETZ.bankSuche || "";
+    fenster.querySelector(".sfBanner").hidden = true;
+    fenster.querySelector(".sfHinweis").hidden = true;
+    netzSetze(".sfFuss", `<span class="sfFussLogo">🏦</span><span>${t("Die Stadtbank wird von der Stadt betrieben · das Gebäude im Zentrum führt hierher")}</span>`, "fussBank");
+    if (tab === "handeln") {
+      netzSetze(".netzInhalt", `<div class="bankSlot"></div>`, "inhaltBankHandeln");
+      const slot = fenster.querySelector(".bankSlot");
+      if (slot && BANK_EL.parentElement !== slot) { slot.appendChild(BANK_EL); BANK_EL.classList.add("imNetz", "open"); render(store.get()); }
+      return;
+    }
+    bankHeimholen();
+    const firmen = Object.values(state.players || {});
+    const aend = h => h && h.length > 1 && h[0] ? (h[h.length - 1] / h[0] - 1) * 100 : 0;
+    /* Kacheln: Veränderung über 2 Minuten (12 Punkte à 10 s) — über 10 Minuten
+     * war am Rundenanfang jede Kachel tiefgrün */
+    const aend2 = h => { if (!h || h.length < 2) return 0; const a = h[Math.max(0, h.length - 13)]; return a ? (h[h.length - 1] / a - 1) * 100 : 0; };
+    const KURZ = { agrar: "Agrar", rohstoff: "Rohstoff", versorger: "Versorger", tech: "Technik", touristik: "Touristik", ruestung: "Rüstung", software: "Software" };
+    /* Stadtindex: Summe aller Firmenwerte, Punkt für Punkt von hinten ausgerichtet */
+    const laenge = Math.max(0, ...firmen.map(p => (firmHist[p.id] || []).length));
+    const index = Array.from({ length: laenge }, (_, i) => firmen.reduce((a, p) => { const h = firmHist[p.id] || []; const j = h.length - laenge + i; return a + (j >= 0 ? h[j] : (h[0] || 0)); }, 0));
+    const etfs = state.etf || [];
+    const kacheln = [
+      { id: "index", name: t("Stadtindex"), wert: index[index.length - 1] || 0, h: index, fmtW: v => Math.round(v).toLocaleString("de-DE") },
+      ...etfs.map(e => ({ id: "etf:" + e.branche, name: `${t("Fonds")} ${t(KURZ[e.branche] || e.name)}`, wert: e.preis || 0, h: e.verlauf || [], fmtW: v => v.toFixed(1).replace(".", ",") })),
+      ...firmen.slice().sort((a, b) => (b.marketValue || 0) - (a.marketValue || 0)).slice(0, 8).map(p => ({ id: "firma:" + p.id, name: rohText(p.name), wert: p.kurs || 0, h: firmHist[p.id] || [], fmtW: v => fk(v), firma: p.id })),
+    ];
+    if (!NETZ.bankWahl || !kacheln.some(k => k.id === NETZ.bankWahl)) NETZ.bankWahl = "index";
+    const farbe = d => d >= 2 ? "k-stark-auf" : d > 0.05 ? "k-auf" : d <= -2 ? "k-stark-ab" : d < -0.05 ? "k-ab" : "k-null";
+    const pz = d => `${d >= 0 ? "+" : "−"}${Math.abs(d).toFixed(2).replace(".", ",")} %`;
+    const wahl = kacheln.find(k => k.id === NETZ.bankWahl), dW = aend(wahl.h);
+    const chart = bankChart(wahl.h, wahl.fmtW);
+    /* Anzeige: Werbenetz, sonst Hinweis für Firmen */
+    const anz = (state.anzeigen || [])[Math.floor(state.tick / 20) % Math.max(1, (state.anzeigen || []).length)];
+    const anzFirma = anz && state.players[anz.firmaId];
+    const anzeige = anz ? `<button type="button" class="bankAnzeige" data-netzauf="${anz.firmaId}" style="--af:${anzFirma?.color || "#0e7490"}"><small>${t("ANZEIGE")}</small>${logoHtml(anz.firmaId, "bankAnzLogo", anzFirma?.color)}<b>${escapeHtml(rohText(anz.firma))}</b><span>${escapeHtml(rohText(anz.text))}</span><em>${t("Website besuchen")}</em></button>`
+      : `<div class="bankAnzeige leer"><small>${t("ANZEIGE")}</small><b>${t("Hier könnte Ihre Firma stehen")}</b><span>${t("Anzeigen buchen Firmen über das Werbenetz der Software-Firmen.")}</span></div>`;
+    if (tab === "markt") {
+      const analysen = kurierArtikel(state).filter(a => a.ressort === "Börse" || a.ressort === "Wirtschaft").slice(0, 3);
+      netzSetze(".netzInhalt", `<div class="bankPortal">
+        <div class="bankHaupt">
+          <div class="bankOben">
+            <section class="bankKarte"><div class="bankKarteKopf"><b>${t("Marktübersicht")}</b><small>${t("Veränderung in 2 Minuten")}</small></div>
+              <div class="bankKacheln">${kacheln.map(k => { const d = aend2(k.h); return `<button type="button" class="bankKachel ${farbe(d)}${k.id === NETZ.bankWahl ? " on" : ""}" data-bankwahl="${k.id}"><span>${escapeHtml(k.name)}</span><span class="bankKachelZahl"><b>${k.fmtW(k.wert)}</b><em>${pz(d)}</em></span></button>`; }).join("")}</div>
+              <div class="bankLegende"><span class="k-stark-auf"></span>+2 %<span class="k-auf"></span>${t("steigt")}<span class="k-null"></span>${t("gleich")}<span class="k-ab"></span>${t("fällt")}<span class="k-stark-ab"></span>−2 %</div></section>
+            <section class="bankKarte bankChartKarte"><div class="bankChartKopf"><div><b>${escapeHtml(wahl.name)}</b><span class="bankChartWert">${wahl.fmtW(wahl.wert)}</span></div><em class="${dW >= 0 ? "auf" : "ab"}">${pz(dW)}</em></div>
+              ${chart}
+              ${wahl.firma ? `<button type="button" class="bankLink" data-bankaktie="${wahl.firma}">${t("Zur Aktie")} ${escapeHtml(wahl.name)} ›</button>` : wahl.id.startsWith("etf:") ? `<button type="button" class="bankLink" data-banktab="handeln">${t("Fonds kaufen")} ›</button>` : `<button type="button" class="bankLink" data-banktab="aktien">${t("Alle Aktien")} ›</button>`}</section>
+          </div>
+          <section class="bankAnalysen"><h3>${t("Analysen und Nachrichten")}</h3><div class="bankAnalyseKarten">${analysen.map(a => `<button type="button" class="bankAnalyse" data-kurierauf="${a.id}"><span class="bankAnalyseBild r-${a.ressort === "Börse" ? "boerse" : "wirtschaft"}"><svg width="70" height="44" viewBox="0 0 96 64" fill="none" stroke="#ffffff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 56 L28 30 L44 42 L66 14 L90 30"></path></svg></span><span class="bankAnalyseText"><span class="kurierRessort r-${a.ressort === "Börse" ? "boerse" : "wirtschaft"}">${t(a.ressort)}</span><b>${escapeHtml(rohText(a.titel))}</b><small>${t("Stadtkurier")} · ${a.zeit}</small></span></button>`).join("") || `<div class="netzLeer">${t("Noch keine Analysen.")}</div>`}</div></section>
+        </div>
+        <aside class="bankRand">${anzeige}</aside></div>`, "inhaltMarkt");
+      return;
+    }
+    /* ---- Aktien: Suche, Liste, Detailseite ---- */
+    const q = (NETZ.bankSuche || "").trim().toLowerCase();
+    if (NETZ.bankAktie && state.players[NETZ.bankAktie]) {
+      const p = state.players[NETZ.bankAktie], h = firmHist[p.id] || [], d = aend(h), div = aktienDividende(p), rend = aktienRendite(p);
+      const held = p.id === myId ? (me.ownPct ?? 0) : ((me.portfolio || []).find(x => x.id === p.id)?.pct || 0);
+      const angebote = (state.shareListings || []).filter(l => l.companyId === p.id && l.sellerId !== myId && (!l.toId || l.toId === myId));
+      netzSetze(".netzInhalt", `<div class="bankPortal"><div class="bankHaupt">
+        <button type="button" class="bankLink zurueck" data-bankaktie="">‹ ${t("Alle Aktien")}</button>
+        <section class="bankKarte bankDetail"><div class="bankChartKopf"><div class="bankDetailName">${logoHtml(p.id, "bankDetailLogo", p.color)}<span><b>${escapeHtml(rohText(p.name))}</b><small>${t(BRANCHE_NAME[p.industry] || "")}${held ? ` · ${t("du hältst")} ${held} %` : ""}</small></span></div>
+          <div class="bankDetailKurs"><b class="mono">${fk(p.kurs || 0)}</b><em class="${d >= 0 ? "auf" : "ab"}">${pz(d)}</em></div></div>
+          ${bankChart(h, v => fmt(v))}
+          <div class="bankKennzahlen">
+            <div><small>${t("Marktwert")}</small><b>${fmt(p.marketValue || 0)}</b></div>
+            <div><small>${t("Wert je Aktie (F)")}</small><b>${fk(p.fundament || 0)}</b></div>
+            <div><small>${t("Umsatz 10 min")}</small><b>${fmt(p.rev10 || 0)}</b></div>
+            <div><small>${t("Dividendenrendite")}</small><b>${rend == null ? "—" : rend.toFixed(1).replace(".", ",") + " %"}</b></div>
+          </div>
+          <div class="bankDetailKnoepfe"><button type="button" class="sfKaufen" data-bankhandeln="${p.id}">${angebote.length ? `${angebote.length} ${t("Angebote ansehen und kaufen")}` : t("Handeln: Kaufanfrage stellen")}</button>${state.rechenzentren?.websites?.[p.id]?.stufe ? `<button type="button" class="hfKarte" data-netzauf="${p.id}">🌐 ${t("Website der Firma")}</button>` : ""}</div>
+        </section></div><aside class="bankRand">${anzeige}</aside></div>`, "inhaltAktie" + p.id);
+      return;
+    }
+    const liste = firmen.filter(p => !q || rohText(p.name).toLowerCase().includes(q) || (BRANCHE_NAME[p.industry] || "").toLowerCase().includes(q))
+      .sort((a, b) => (b.marketValue || 0) - (a.marketValue || 0));
+    netzSetze(".netzInhalt", `<div class="bankPortal"><div class="bankHaupt"><section class="bankKarte"><div class="bankKarteKopf"><b>${q ? `${t("Suche")}: „${escapeHtml(NETZ.bankSuche)}“` : t("Alle Aktien")}</b><small>${liste.length} ${t("Firmen")} · ${t("nach Marktwert")}</small></div>
+      <div class="bankTabelle"><div class="bankZeile kopf"><span>${t("Firma")}</span><span>${t("Kurs")}</span><span>${t("10 min")}</span><span>${t("Marktwert")}</span><span></span></div>
+      ${liste.map(p => { const d = aend(firmHist[p.id]); return `<button type="button" class="bankZeile" data-bankaktie="${p.id}"><span class="bankZeileName">${logoHtml(p.id, "bankZeileLogo", p.color)}<span><b>${escapeHtml(rohText(p.name))}</b><small>${t(BRANCHE_NAME[p.industry] || "")}</small></span></span><b class="mono">${fk(p.kurs || 0)}</b><em class="${d >= 0 ? "auf" : "ab"}">${pz(d)}</em><span class="mono">${fmt(p.marketValue || 0)}</span><span>${firmHist[p.id] ? sparklineVon(firmHist[p.id], 60, 18) : ""}</span></button>`; }).join("") || `<div class="netzLeer">${t("Keine Aktie gefunden.")}</div>`}</div></section></div>
+      <aside class="bankRand">${anzeige}</aside></div>`, "inhaltAktien" + q);
     return;
   }
   /* ---- Stadtkurier ---- */
@@ -7171,6 +7342,7 @@ function netzZeichnen() {
 }
 document.getElementById("netzFenster").addEventListener("input", e => {
   if (e.target.id === "netzSuche") { NETZ.suche = e.target.value; netzZeichnen(); }
+  if (e.target.id === "bankSuche") { NETZ.bankSuche = e.target.value; NETZ.bankTab = "aktien"; NETZ.bankAktie = null; netzZeichnen(); }
   if (e.target.id === "bwMenge") { NETZ.bwMenge = Math.max(1, Math.floor(+e.target.value) || 1); NETZ.sig.haupt = null; }
   if (e.target.id === "bwPreis") NETZ.bwPreis = +e.target.value || null;
   const n = e.target.closest?.("[data-netzn]"); if (n) NETZ.menge[n.dataset.netzn] = Math.max(1, Math.floor(+n.value) || 1);
@@ -7178,6 +7350,15 @@ document.getElementById("netzFenster").addEventListener("input", e => {
 document.getElementById("netzFenster").addEventListener("click", e => {
   if (e.target.closest("[data-netzzu]") || e.target.id === "netzFenster") return netzSchliessen();
   if (e.target.closest("[data-netzzurueck]")) { if (NETZ.seite === "kurier" && NETZ.artikel) { NETZ.artikel = null; NETZ.sig = {}; return netzZeichnen(); } return netzOeffnen(null); }
+  /* Stadtbank-Portal */
+  const btab = e.target.closest("[data-banktab]");
+  if (btab) { NETZ.bankTab = btab.dataset.banktab; if (NETZ.bankTab === "aktien") NETZ.bankAktie = null; NETZ.sig = {}; return netzZeichnen(); }
+  const bwahl = e.target.closest("[data-bankwahl]");
+  if (bwahl) { NETZ.bankWahl = bwahl.dataset.bankwahl; return netzZeichnen(); }
+  const bak = e.target.closest("[data-bankaktie]");
+  if (bak) { NETZ.bankTab = "aktien"; NETZ.bankAktie = bak.dataset.bankaktie || null; NETZ.sig = {}; return netzZeichnen(); }
+  const bh = e.target.closest("[data-bankhandeln]");
+  if (bh) { firmenAuf.add(bh.dataset.bankhandeln); BANK_REITER = "markt"; bankReiterZeigen(); NETZ.bankTab = "handeln"; NETZ.sig = {}; return netzZeichnen(); }
   const bw = e.target.closest("[data-boersewahl]");
   if (bw) { NETZ.ware = bw.dataset.boersewahl; NETZ.bwPreis = null; return netzZeichnen(); }
   const bs = e.target.closest("[data-bwseite]");
@@ -8902,7 +9083,7 @@ const TUT_EINSTEIGER = [
 
   { t: "Schritt 9 — Kauf Anteile an einer Firma",
     warte: (st, me, id) => (me.portfolio || []).length > 0 || (me.balance?.holdings || 0) > 0,
-    p: `Geh zur <b>Stadtbank</b> — sie steht mitten im Zentrum, du kannst sie auch auf der Karte anklicken.<br><br>Dort handelst du <b>Anteile</b> anderer Firmen. Wächst eine Firma, wächst dein Anteil mit, ohne dass du selbst baust. Kauf dir ein Paket von irgendjemandem.` },
+    p: `Geh zur <b>Stadtbank</b> — im Sandkasten die Website <b>bank.cs</b> im Stadtnetz; das Bankgebäude mitten im Zentrum führt auch dorthin.<br><br>Dort handelst du <b>Anteile</b> anderer Firmen. Wächst eine Firma, wächst dein Anteil mit, ohne dass du selbst baust. Kauf dir ein Paket von irgendjemandem.` },
 
   { t: "Schritt 10 — Wirf einen Blick auf die Finanzen",
     warte: () => TUT_GESEHEN.has("bonds"),

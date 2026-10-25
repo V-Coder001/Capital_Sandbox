@@ -5,6 +5,14 @@
  * `art`: "neu" (neue Funktion), "besser" (Verbesserung), "fix" (Fehler behoben). */
 window.UPDATES = [
   {
+    id: "2026-10-25k", datum: "2026-10-25",
+    titel: { de: "Stadtbank im Stadtnetz", en: "City bank in the city network" },
+    punkte: [
+      { art: "besser", de: "Die Stadtbank ist jetzt das Finanzportal bank.cs im Stadtnetz: Marktübersicht mit grün und rot eingefärbten Kacheln für Stadtindex, Branchen-Fonds und die größten Firmen, großer Verlauf, Analysen aus dem Stadtkurier und Anzeigen von Firmen. Unter „Aktien“ findest du jede Firma per Suche mit Detailseite; „Handeln & Depot“ ist die gewohnte Bank. Das Bankgebäude im Zentrum führt dorthin.",
+        en: "The city bank is now the finance portal bank.cs in the city network: market overview with green and red tiles for the city index, industry funds and the largest companies, a large chart, analyses from the City Courier and company ads. Under “Shares” you find every company by search with a detail page; “Trading & portfolio” is the familiar bank. The bank building in the centre leads there." },
+    ]
+  },
+  {
     id: "2026-10-25j", datum: "2026-10-25",
     titel: { de: "Stadtkurier im Stadtnetz", en: "City Courier in the city network" },
     punkte: [
