@@ -6696,6 +6696,7 @@ document.getElementById("hotelFenster").addEventListener("click", e => {
 const RZW = { offen: false, pid: null, reiter: "status", modul: "grund", sig: {} };
 const rzLvl = l => 1 + 0.3 * ((l || 1) - 1);
 function rzOeffnen(pid, reiter) {
+  TUT_GESEHEN.add("rz");
   Object.assign(RZW, { offen: true, pid, reiter: reiter || "status", sig: {} });
   const el = document.getElementById("rzFenster");
   el.hidden = false;
@@ -7011,6 +7012,7 @@ function netzOeffnen(pid = null) {
     SFX.spiel("klick");
   }
   if (pid === "kurier") TUT_GESEHEN.add("kurier");
+  if (!pid) TUT_GESEHEN.add("netz");
   if (pid === "boerse") TUT_GESEHEN.add("boerse");
   if (pid !== "boerse") boerseHeimholen();
   if (pid !== "bank") bankHeimholen();
@@ -8976,78 +8978,147 @@ const SFX_AKTION = {
  * geforderte Gebäude auf der Karte steht.
  * ================================================================ */
 /* Tutorial je Industrie: gemeinsamer Rahmen + spezifische Bau-Schritte */
+/* ---- Branchen-Tutorials (Sandkasten) ----
+ * Jede Branche hat ihren eigenen Rundgang: erst bauen, dann verkaufen, dann
+ * das, was nur diese Branche ausmacht (Gäste und Sterne, Ausschreibungen,
+ * Grundbedarf, Bürger-Apps …). Fast jeder Schritt wartet auf die echte
+ * Handlung und hakt sich dann selbst ab; „auslassen“ hilft, wenn etwas gerade
+ * nicht geht. Gemeinsam für alle: Stadt und Arbeiter, Stadtnetz, Vermögensziel. */
+const tutHat = (st, id, ...bts) => st.map.some(t => t.owner === id && bts.includes(t.btype) && !(t.bauBis > st.tick));
+const tutShop = (st, id) => st.map.some(t => t.owner === id && t.btype === "onlinemarkt" && t.system);
+const tutRegal = (st, id, gs) => st.map.some(t => t.owner === id && (t.shop || []).some(sl => sl?.good && (!gs || gs.includes(sl.good))));
+const tutGekauft = (st, me, id, gs) => gs.some(g => (me.sales?.[g]?.buyQty || 0) > 0 || st.orders.some(o => o.playerId === id && o.side === "buy" && o.good === g));
+const tutVerkauft = (st, me, id, gs) => gs.some(g => ((me.sales?.[g]?.botQty || 0) + (me.sales?.[g]?.playerQty || 0)) > 0
+  || st.orders.some(o => o.playerId === id && o.side === "sell" && o.good === g)) || tutRegal(st, id, gs);
 const TUT_IND = {
   agrar: [
-    { t: "Baue eine Farm", build: "farm",
-      p: `Klicke auf eine freie <em>grüne Agrar-Kachel</em> und wähle <b>Farm</b> ($1.200 + 3 Ziegel). Sie produziert <b>Obst</b> — dein Brot-und-Butter-Gut.` },
-    { t: "Baue einen Online-Marktplatz", build: "onlinemarkt",
-      p: `Baue auf einer <em>blauen Zentrums-Kachel</em> einen <b>Online-Marktplatz</b> ($3.000 + 8 Ziegel) — der einzige Weg, an die Stadt zu verkaufen. Klicke ihn an, installiere ein <b>Shop-System</b> (notfalls das Stadtportal) und lege <b>Ware, Menge und Stückpreis</b> fest — dann verkauft er von allein.` },
-    { t: "Baue eine Plantage", build: "plantage",
-      p: `Jetzt eine <b>Plantage</b> ($2.200 + 6 Ziegel) auf einer Agrar-Kachel: <b>Kannabis</b> ist langsam, aber wertvoll (Ø ~$45). Später veredelst du mit Saftpresse und Pharma-Labor.` },
-    { t: "Dein Handelsbedarf",
-      p: `Deine Farmen laufen auf <b>+150 % Tempo</b>, wenn <em>Strom + Wasser</em> im Lager liegen (wird verbraucht). Beides produzieren die <b>Grundversorger</b> — kaufe es im <b>Börse-Panel</b> (Kauforder oder direkt aus dem Buch). Und für jeden weiteren Bau brauchst du <b>Ziegel der Bauindustrie</b>.` },
+    { t: "Bau deine erste Farm", build: "farm", wartetext: "Warte auf die Farm …",
+      p: `Klick eine freie <em>grüne Agrar-Kachel</em> an und bau eine <b>Farm</b>. Sie erntet <b>Obst</b> — Sekunde für Sekunde, direkt in dein Lager.<br><br>Obst ist das Grundnahrungsmittel der Stadt: Bewohner kaufen es im Laden, Bäckereien und Saftpressen verarbeiten es weiter.` },
+    { t: "Bau deinen Laden", build: "onlinemarkt", wartetext: "Warte auf den Online-Marktplatz …",
+      p: `Ware im Lager ist noch kein Geld. Bau im <em>Zentrum</em> einen <b>Online-Marktplatz</b> — das ist der einzige Laden der Stadt, jede Branche darf ihn bauen.` },
+    { t: "Installier ein Shop-System", warte: (st, me, id) => tutShop(st, id), wartetext: "Warte auf das Shop-System …",
+      p: `Klick deinen Marktplatz an und wähl ein <b>Shop-System</b>. Ohne System verkauft er nichts.<br><br>Das <b>Stadtportal</b> ist immer da, nimmt aber 8 % je Verkauf. Systeme der Software-Firmen sind meist günstiger und verkaufen schneller.` },
+    { t: "Leg Obst ins Regal", warte: (st, me, id) => tutRegal(st, id, ["obst", "honig", "saft", "gebaeck", "kannabis", "medizin"]), wartetext: "Warte auf ein belegtes Regal …",
+      p: `Belege im Marktplatz ein <b>Regal</b> mit Obst. Den Preis bestimmst du.<br><br>Faustregel: nah am <b>Ø-Kurs</b> (steht oben im Ticker). Billiger macht kaum schneller, kostet aber bei jedem Stück Geld.` },
+    { t: "Hol dir den Boost", warte: (st, me, id) => tutGekauft(st, me, id, ["wasser", "strom"]), wartetext: "Warte auf Wasser oder Strom …",
+      p: `Liegen <b>Wasser</b> und <b>Strom</b> im Lager, wächst deine Farm bis zu <b>150 % schneller</b>. Beides verkaufen die Versorger.<br><br>Öffne das <b>Stadtnetz</b> (Knopf unten) → <b>Warenbörse</b>, wähl Wasser oder Strom und kauf ein paar Stück.` },
+    { t: "Veredle deine Ernte", warte: (st, me, id) => tutHat(st, id, "imkerei", "saftpresse", "plantage", "baeckerei"), wartetext: "Warte auf eine Imkerei, Saftpresse oder Plantage …",
+      p: `Rohes Obst bringt wenig. Mehr verdienst du mit Veredelung: Die <b>Imkerei</b> liefert Honig, die <b>Saftpresse</b> macht aus Obst Saft, die <b>Plantage</b> Kannabis für das Pharma-Labor. Später backt die <b>Bäckerei</b> aus Obst und Honig Gebäck — das teuerste Lebensmittel.` },
+    { t: "Deine Kunden in der Stadt",
+      p: `Drei Abnehmer solltest du kennen:<br>· Die <b>Bewohner</b> brauchen Lebensmittel im Laden — fehlen sie, sinkt die Zufriedenheit der Stadt.<br>· <b>Hotels ab 3 Sternen</b> kaufen Frühstück: Obst, Honig, Saft, Gebäck.<br>· Mit dem Website-Modul <b>Branchenportal</b> wird deine Website zum <b>Hofladen</b>: Mitspieler kaufen dort direkt bei dir.` },
   ],
   rohstoff: [
-    { t: "Schalte Industrie frei & baue eine Mine", build: "mine",
-      p: `Deine Gebäude stehen in der <em>braunen Industrie-Zone</em> — klicke eine gesperrte Kachel, schalte sie frei ($2.000) und baue dort eine <b>Mine</b> ($1.400 + 4 Ziegel). Sie fördert <b>Erze</b> — dein Grundstoff für alles Weitere.` },
-    { t: "Baue eine Ziegelei", build: "ziegelei",
-      p: `Schalte eine weitere Industrie-Kachel frei und baue die <b>Ziegelei</b> ($1.500 + 4 Ziegel): Sie macht aus <em>Erzen + Wasser</em> → <b>Ziegel</b>. Und Ziegel braucht <b>jeder Spieler für jedes Gebäude</b> — du sitzt an der Quelle des gesamten Stadtwachstums.` },
-    { t: "Dein Handelsbedarf",
-      p: `Kaufe <em>Wasser, Strom + Öl</em> von den <b>Grundversorgern</b> über die Börse (Minen laufen mit Strom + Öl auf +150 %). Verkaufe Ziegel &amp; Erze über deinen <b>Online-Marktplatz</b> zu deinem Preis. Fernziele: <b>Stahlwerk</b> (Erze + Öl → Stahl, Ø ~$80) und <b>Betonwerk</b> (→ Beton für alle großen Gebäude).` },
+    { t: "Bau eine Mine", build: "mine", wartetext: "Warte auf die Mine …",
+      p: `Deine Gebäude stehen in der <em>braunen Industrie-Zone</em>. Klick eine gesperrte Kachel an, schalte sie frei und bau eine <b>Mine</b>. Sie fördert <b>Erze</b> — den Grundstoff für Ziegel, Beton und Stahl.` },
+    { t: "Bau eine Ziegelei", build: "ziegelei", wartetext: "Warte auf die Ziegelei …",
+      p: `Die <b>Ziegelei</b> macht aus Erzen und Wasser <b>Ziegel</b>. Und Ziegel braucht <b>jede Firma für jedes Gebäude</b> — und die Stadt für jeden Wohnblock. Du sitzt an der Quelle des ganzen Wachstums.` },
+    { t: "Wasser, Strom und Öl", warte: (st, me, id) => tutGekauft(st, me, id, ["wasser", "strom", "oel"]), wartetext: "Warte auf einen Einkauf …",
+      p: `Die Ziegelei braucht <b>Wasser</b>, die Mine läuft mit <b>Strom und Öl</b> bis zu 150 % schneller. Kauf beides bei den Versorgern: <b>Stadtnetz</b> → <b>Warenbörse</b>.` },
+    { t: "Verkauf deine Ziegel", warte: (st, me, id) => tutVerkauft(st, me, id, ["ziegel", "erze", "beton", "stahl"]), wartetext: "Warte auf ein Angebot …",
+      p: `Ziegel verkaufst du am besten an der <b>Warenbörse</b>: Dort suchen andere Firmen laufend welche. Stell eine <b>Verkaufsorder</b> zum Ø-Kurs ein — oder bau einen Online-Marktplatz und leg sie ins Regal.` },
+    { t: "Liefer an die Stadt", warte: () => TUT_GESEHEN.has("finanzamt"), wartetext: "Warte, bis du die Stadtübersicht öffnest …",
+      p: `Die Stadt baut Wohnblöcke und bestellt das Baumaterial bei euch — <b>15 % über Kurs</b>, sofort bezahlt. Klick oben auf die <b>Einwohnerzahl</b>: In der Stadtübersicht stehen die offenen <b>Wohnbau-Aufträge</b>, dort lieferst du direkt.` },
+    { t: "Dein Weg nach oben",
+      p: `Sobald Geld da ist: <b>Betonwerk</b> (Erze und Öl → Beton) und <b>Stahlwerk</b> (Erze und Öl → Stahl). Beton brauchen große Gebäude und Wohnblöcke, Stahl die Autowerke und die Rüstung.<br><br>Mit dem Website-Modul <b>Branchenportal</b> wird deine Seite zum <b>Baustoff-Portal</b>: +5 % auf jede Wohnbau-Lieferung.` },
   ],
   versorger: [
-    { t: "Baue einen Brunnen", build: "brunnen",
-      p: `Starte günstig: <b>Brunnen</b> ($800 + 2 Ziegel) auf einer <em>grünen Agrar-Kachel</em> — produziert <b>Wasser</b>, das Agrar- und Bauspieler ständig brauchen.` },
-    { t: "Baue einen Online-Marktplatz", build: "onlinemarkt",
-      p: `Im <em>blauen Zentrum</em>: <b>Online-Marktplatz</b> ($3.000 + 8 Ziegel) mit 3 Regalen für alles — jede Ausbaustufe bringt ein Regal dazu. Mit installiertem Shop-System verkaufst du Wasser, Strom &amp; Öl zu <b>deinem Preis</b> an die Stadt.` },
-    { t: "Dein Ausbau-Pfad",
-      p: `Sobald Kapital da ist: Industrie-Kachel freischalten ($2.000) und <b>E-Werk</b> ($2.000) bauen — <em>Strom braucht jede andere Industrie</em>. Danach Wasserwerk und an der Küste ($12.000) die <b>Ölpumpe</b>. Du bist das Rückgrat der Stadt: Alle Boosts laufen über deine Waren.` },
+    { t: "Bau einen Brunnen", build: "brunnen", wartetext: "Warte auf den Brunnen …",
+      p: `Starte günstig: Bau auf einer <em>grünen Agrar-Kachel</em> einen <b>Brunnen</b>. Er fördert <b>Wasser</b> — das brauchen Farmen, Ziegeleien, Hotels und jeder Haushalt der Stadt.` },
+    { t: "Bau ein E-Werk", build: "ewerk", wartetext: "Warte auf das E-Werk …",
+      p: `Schalte in der <em>braunen Industrie-Zone</em> eine Kachel frei und bau ein <b>E-Werk</b>. <b>Strom</b> braucht fast jede Branche: Chipfabriken, Rechenzentren, Hotels, Minen für den Boost.` },
+    { t: "Verkauf an der Börse", warte: (st, me, id) => tutVerkauft(st, me, id, ["strom", "wasser", "oel", "diesel"]), wartetext: "Warte auf ein Angebot …",
+      p: `Deine Kunden sind die anderen Firmen. Stell an der <b>Warenbörse</b> (Stadtnetz) eine <b>Verkaufsorder</b> für Strom oder Wasser zum Ø-Kurs ein. Liegt ein passendes Gesuch im Buch, verkaufst du sofort.` },
+    { t: "Die Stadt kauft bei dir", warte: () => TUT_GESEHEN.has("finanzamt"), wartetext: "Warte, bis du die Stadtübersicht öffnest …",
+      p: `Jede Minute kauft die Stadt für ihre Haushalte <b>Strom und Wasser</b> — direkt aus den Lagern der Firmen, zu mindestens 70 % des Grundpreises. Je mehr du auf Lager hast, desto mehr geht an dich.<br><br>Klick oben auf die <b>Einwohnerzahl</b>: Unter „Grundbedarf“ siehst du, was die Stadt braucht.` },
+    { t: "Dein Ausbau",
+      p: `Mit Kapital: <b>Wasserwerk</b> für mehr Wasser, an der Küste <b>Windpark</b> und <b>Ölpumpe</b>, dazu die <b>Raffinerie</b> (Öl → Diesel für Autowerke und Panzer).<br><br>Mit dem Website-Modul <b>Branchenportal</b> wird deine Seite zum <b>Kundenportal</b>: Rechenzentren und Hotels kaufen dort Strom und Wasser direkt bei dir.` },
   ],
   tech: [
-    { t: "Schalte Industrie frei & baue eine Siliziummine", build: "siliziummine",
-      p: `Klicke eine gesperrte Kachel in der <em>braunen Industrie-Zone</em>, schalte sie frei ($2.000) und baue die <b>Siliziummine</b> ($1.400 + 4 Ziegel) — produziert <b>Silizium</b>, dein Rohstoff für alles Weitere.` },
-    { t: "Baue eine Chipfabrik", build: "chipfabrik",
-      p: `Schalte eine weitere Industrie-Kachel frei und baue die <b>Chipfabrik</b> ($3.200 + 8 Ziegel): Sie macht aus <em>Silizium + Strom</em> → <b>Elektronik</b>. Damit können <b>alle Spieler jeder Industrie</b> ihre Produktionsgebäude auflevel — jede Stufe +30 % Ausstoß, bis Stufe 5. Du lieferst den Rohstoff für das Wachstum der ganzen Stadt.` },
-    { t: "Dein Handelsbedarf",
-      p: `Kaufe <em>Strom</em> von den <b>Grundversorgern</b> über die Börse (Minen laufen damit auf +150 %). Verkaufe Elektronik &amp; Silizium über deinen <b>Online-Marktplatz</b> zu deinem Preis. Elektronik wird nicht zum Bauen gebraucht, sondern zum <b>Auflevel</b> bestehender Gebäude — je größer die Stadt wird, desto mehr wird nachgefragt.` },
+    { t: "Bau eine Siliziummine", build: "siliziummine", wartetext: "Warte auf die Siliziummine …",
+      p: `Schalte in der <em>braunen Industrie-Zone</em> eine Kachel frei und bau die <b>Siliziummine</b>. Sie fördert <b>Silizium</b>, deinen Rohstoff.` },
+    { t: "Bau eine Chipfabrik", build: "chipfabrik", wartetext: "Warte auf die Chipfabrik …",
+      p: `Die <b>Chipfabrik</b> macht aus Silizium und Strom <b>Elektronik</b>. Elektronik braucht <b>jede Firma</b>, um ihre Gebäude auszubauen — je größer die Stadt, desto größer die Nachfrage.` },
+    { t: "Strom für die Fabrik", warte: (st, me, id) => tutGekauft(st, me, id, ["strom"]), wartetext: "Warte auf Strom …",
+      p: `Ohne <b>Strom</b> steht die Chipfabrik still. Kauf ihn bei den Versorgern: <b>Stadtnetz</b> → <b>Warenbörse</b> → Strom.` },
+    { t: "Verkauf deine Elektronik", warte: (st, me, id) => tutVerkauft(st, me, id, ["elektronik", "silizium"]), wartetext: "Warte auf ein Angebot …",
+      p: `Stell an der <b>Warenbörse</b> eine Verkaufsorder für Elektronik ein — oder leg sie in einem Online-Marktplatz ins Regal. Elektronik ist teuer (rund 100 $), schon kleine Mengen bringen viel.` },
+    { t: "Bau selbst aus", warte: (st, me, id) => st.map.some(t => t.owner === id && (t.level || 1) >= 2), wartetext: "Warte auf einen Ausbau …",
+      p: `Klick eines deiner Gebäude an und bau es auf <b>Stufe 2</b> aus. Jede Stufe bringt 30 % mehr Ausstoß auf derselben Kachel — und du hast die Elektronik dafür selbst.` },
+    { t: "Dein Weg nach oben",
+      p: `Später: <b>Autowerke</b> (Elektronik, Stahl und Öl, Diesel oder Strom → Autos, über 300 $ das Stück) und das <b>Renn-Softwarelabor</b>.<br><br>Mit dem Website-Modul <b>Branchenportal</b> wird deine Seite zum <b>Großhandel</b>: Mitspieler kaufen Elektronik direkt bei dir.` },
   ],
   touristik: [
-    { t: "Baue einen Campingplatz", build: "campingplatz",
-      p: `Klicke eine freie <em>grüne Agrar-Kachel</em> und baue den <b>Campingplatz</b> ($1.500 + 4 Ziegel). Er braucht <b>keine Zutaten</b> und liefert dir sofort erste <b>Übernachtungen</b> — dein Einstieg ohne Handelspartner.` },
-    { t: "Schalte die Küste frei & baue ein Strandhotel", build: "strandhotel",
-      p: `Das <b>Strandhotel</b> ($2.400 + 6 Ziegel) ist das eigentliche Geschäft: Es macht aus <em>Wasser + Strom</em> deutlich mehr <b>Übernachtungen</b> als der Campingplatz. Achtung, es ist hungrig — 150 Wasser und 75 Strom pro Minute. Ohne Nachschub steht es still.` },
-    { t: "Dein Handelsbedarf",
-      p: `Du bist der <b>größte Kunde der Grundversorger</b>: Kaufe <em>Wasser und Strom</em> laufend an der Börse — beides liegt dort meist im Überfluss, weil es sonst kaum jemand abnimmt. Verkaufe deine Übernachtungen über einen <b>Online-Marktplatz</b>. Ein Shop-System mit <b>Touristik-Baum</b> (z. B. Online-Buchung) verkauft deine Übernachtungen schneller; das <b>Werbemodul</b> hebt den Preis, den die Stadt akzeptiert.` },
+    { t: "Bau einen Campingplatz", build: "campingplatz", wartetext: "Warte auf den Campingplatz …",
+      p: `Bau auf einer freien <em>grünen Agrar-Kachel</em> einen <b>Campingplatz</b>. Er braucht keine Zutaten und liefert sofort <b>Zimmer</b> (Übernachtungen) — dein Einstieg ohne Handelspartner.` },
+    { t: "Dein Touristik-Panel", warte: () => TUT_GESEHEN.has("touristik"), wartetext: "Warte, bis du das Touristik-Panel öffnest …",
+      p: `Unten erscheint jetzt der Knopf <b>Touristik</b>. Öffne ihn.<br><br>Jede Minute kommen <b>Gäste</b> in die Stadt — mehr, je größer und zufriedener sie ist. Sie wählen ein Hotel nach <b>Bewertung</b> und <b>Zimmerpreis</b> und zahlen direkt an dich. Den Preis stellst du dort ein.` },
+    { t: "Bau ein Strandhotel", build: "strandhotel", wartetext: "Warte auf das Strandhotel …",
+      p: `Das eigentliche Geschäft: das <b>Strandhotel</b> an der <em>Küste</em> (Kachel freischalten). Es macht aus Wasser und Strom viel mehr Zimmer als der Campingplatz und startet mit <b>2 Sternen</b>.` },
+    { t: "Wasser und Strom fürs Hotel", warte: (st, me, id) => tutGekauft(st, me, id, ["wasser", "strom"]), wartetext: "Warte auf Wasser oder Strom …",
+      p: `Ohne Nachschub steht das Hotel still. Kauf <b>Wasser und Strom</b> an der <b>Warenbörse</b> im Stadtnetz — beides liegt dort meist reichlich.` },
+    { t: "Renovier auf 3 Sterne", warte: (st, me, id) => st.map.some(t => t.owner === id && t.btype === "strandhotel" && (t.sterne || 2) >= 3), wartetext: "Warte auf die Renovierung …",
+      p: `Mehr Sterne = bessere Bewertung = mehr Gäste oder höhere Preise. Klick dein Strandhotel an und <b>renovier auf 3 Sterne</b> (1.500 $).` },
+    { t: "Frühstück einkaufen", warte: (st, me, id) => ["obst", "honig", "saft", "gebaeck"].some(g => (me.inv?.[g] || 0) >= 1) || tutGekauft(st, me, id, ["obst", "honig", "saft", "gebaeck"]), wartetext: "Warte auf Lebensmittel im Lager …",
+      p: `Ab 3 Sternen erwarten deine Gäste <b>Frühstück</b>: Obst, Honig, Saft oder Gebäck aus deinem Lager. Fehlt es, sinkt die Bewertung. Kauf <b>Obst</b> an der Warenbörse — oder direkt im <b>Hofladen</b> einer Agrar-Firma im Stadtnetz.` },
+    { t: "Feste und deine Buchungsseite",
+      p: `Im Touristik-Panel veranstaltest du <b>Stadtfeste</b>: Strandfest, Konzert oder Festival locken für einige Minuten viel mehr Gäste in die Stadt — du bekommst den größten Teil. Halte vorher genug Zimmer auf Lager.<br><br>Deine <b>Buchungsseite</b> zeigt allen deine Häuser, Preise und Gästebewertungen.` },
   ],
   software: [
-    { t: "Baue ein Entwicklerstudio", build: "entwicklerstudio",
-      p: `Im <em>blauen Zentrum</em>: <b>Entwicklerstudio</b> ($3.000). Es macht aus <em>Strom</em> Entwicklungspunkte (EP) — mit etwas Elektronik doppelt so schnell. Lege im Panel <b>Software</b> Name, Farbe und Gebühr deines <b>Shop-Systems</b> fest und starte Version 1 — rund 2,5 Minuten Entwicklung.` },
-    { t: "Baue ein Rechenzentrum", build: "rechenzentrum",
-      p: `Ebenfalls im <em>Zentrum</em>: <b>Rechenzentrum</b> ($3.500). Es trägt deine Kunden — 5 Online-Marktplätze je Stufe — und braucht dauernd <b>Strom</b>. Ohne Strom fällt dein System aus, und deine Kunden verkaufen nichts.` },
-    { t: "Dein Geschäft",
-      p: `Jede Firma kann einen <b>Online-Marktplatz</b> bauen, verkauft dort aber erst mit einem installierten Shop-System. Du verdienst an der <b>Einrichtung</b>, an der <b>Gebühr je Verkauf</b> und am <b>Werbe-Abo</b> — Werbung läuft hier nur noch über Werbemodule. Neue Versionen mit mehr Funktionen ziehen Kunden an; die Bots prüfen jede neue Software und wechseln, wenn sie besser ist. Die Konkurrenz ist das <b>Stadtportal</b>: teuer (8 %), aber immer da.` },
+    { t: "Bau ein Entwicklerstudio", build: "entwicklerstudio", wartetext: "Warte auf das Entwicklerstudio …",
+      p: `Bau im <em>Zentrum</em> ein <b>Entwicklerstudio</b>. Es macht aus Strom <b>Entwicklungspunkte</b> (EP) — mit etwas Elektronik doppelt so schnell. Damit entwickelst du alle deine Programme.` },
+    { t: "Leg dein Shop-System an", warte: (st, me, id) => (st.software || []).some(x => x.ownerId === id && !x.portal), wartetext: "Warte auf dein Shop-System …",
+      p: `Klick das Studio an → <b>Software-Baukasten öffnen</b>. Im Reiter „Mein System“ legst du Name, Farbe und Gebühr deines <b>Shop-Systems</b> fest, unter „Entwicklung“ startest du Version 1.<br><br>Jede Firma braucht ein Shop-System für ihren Laden — und soll deins nehmen statt des teuren Stadtportals.` },
+    { t: "Bau ein Rechenzentrum", build: "rechenzentrum", wartetext: "Warte auf das Rechenzentrum …",
+      p: `Deine Kunden laufen auf deinem <b>Rechenzentrum</b> (Zentrum): je Stufe 5 Shops, dazu Plätze für Apps und Websites. Es braucht dauernd <b>Strom</b> — ohne ihn fallen alle Kunden aus.` },
+    { t: "Version 1 fertigstellen", warte: (st, me, id) => (st.software || []).some(x => x.ownerId === id && x.version >= 1), wartetext: "Warte auf Version 1 …",
+      p: `Die Entwicklung dauert ein paar Minuten. Sorg dafür, dass Studio und Rechenzentrum <b>Strom</b> haben: <b>Stadtnetz</b> → <b>Warenbörse</b> → Strom kaufen. Sobald Version 1 fertig ist, wechseln die Bots zu dir, wenn du besser bist als die Konkurrenz.` },
+    { t: "Deine Statusseite", warte: () => TUT_GESEHEN.has("rz"), wartetext: "Warte, bis du die Statusseite öffnest …",
+      p: `Klick dein Rechenzentrum an → <b>Statusseite öffnen</b>. Dort siehst du Verfügbarkeit, Auslastung und Strom, stellst Preise ein und verteilst deine Plätze auf Shops, Apps und Websites. Kunden sehen dieselbe Seite und bestellen dort.` },
+    { t: "Eine Bürger-App", warte: (st, me, id) => (st.buergerApp || []).some(x => x.ownerId === id), wartetext: "Warte auf deine Bürger-App …",
+      p: `Im Baukasten, Reiter <b>Produkte</b>, legst du eine <b>Bürger-App</b> an. Die Einwohner zahlen ein Abo je Minute — je größer die Stadt, desto mehr. Entwickeln, Preis setzen, fertig.` },
+    { t: "Was noch geht",
+      p: `· <b>Jobbörse</b>: Firmen abonnieren sie und bekommen bei knappen Arbeitern Vorrang.<br>· <b>Website-Baukasten</b> (ab Shop-System v2): Andere Firmen bestellen ihre Website bei dir.<br>· <b>Malprogramm</b> und <b>Börsen-App</b>: Lizenzen in deinem eigenen Online-Shop.<br><br>Behalte Strom und Rechenzentren im Blick — Ausfälle sieht jeder auf deiner Statusseite.` },
   ],
   ruestung: [
-    { t: "Schalte Industrie frei & baue eine Munitionsfabrik", build: "munitionsfabrik",
-      p: `Klicke eine gesperrte Kachel in der <em>braunen Industrie-Zone</em>, schalte sie frei und baue die <b>Munitionsfabrik</b> ($1.400 + 4 Ziegel). Sie macht aus <em>Erze + Öl</em> <b>Munition</b> — billig im Bau, damit früh Geld hereinkommt.` },
-    { t: "Baue einen Online-Marktplatz", build: "onlinemarkt",
-      p: `Munition, Pistolen und Panzer verkaufst du über deinen <b>Online-Marktplatz</b> ($3.000) im Zentrum — mit einem Shop-System darauf. Am besten eins mit <b>Rüstungs-Baum</b> (Lizenz-Prüfung, Behörden-Portal): Es verkauft deine Waffen schneller als ein Allrounder.` },
-    { t: "Dein Handelsbedarf",
-      p: `Ab der <b>Waffenschmiede</b> ($4.000) hängst du an anderen: Sie braucht <em>Stahl</em> von der Bauindustrie und <em>Elektronik</em> von der Technologie. Das <b>Panzerwerk</b> ($8.000) kommt noch mit <em>Diesel</em> von den Versorgern dazu — drei fremde Branchen für ein Produkt. Dafür spielt der Panzer preislich in der Liga der Fahrzeuge. Kaufe die Vorprodukte früh, bevor andere sie wegkaufen.` },
+    { t: "Bau eine Munitionsfabrik", build: "munitionsfabrik", wartetext: "Warte auf die Munitionsfabrik …",
+      p: `Schalte in der <em>braunen Industrie-Zone</em> eine Kachel frei und bau die <b>Munitionsfabrik</b>. Sie macht aus Erzen und Öl <b>Munition</b> — billig im Bau, damit früh Geld hereinkommt.` },
+    { t: "Erze und Öl einkaufen", warte: (st, me, id) => tutGekauft(st, me, id, ["erze", "oel"]), wartetext: "Warte auf Erze oder Öl …",
+      p: `Du stellst nichts aus dem Nichts her: <b>Erze</b> kommen von der Rohstoff-Industrie, <b>Öl</b> von den Versorgern. Kauf beides an der <b>Warenbörse</b> im Stadtnetz.` },
+    { t: "Dein Laden mit Shop-System", warte: (st, me, id) => tutShop(st, id), wartetext: "Warte auf Laden und Shop-System …",
+      p: `Bau im Zentrum einen <b>Online-Marktplatz</b> und installier ein Shop-System — am besten eins mit <b>Rüstungs-Baum</b>, es verkauft Waffen schneller.` },
+    { t: "Verkauf deine Munition", warte: (st, me, id) => tutVerkauft(st, me, id, ["munition", "pistole", "panzer"]), wartetext: "Warte auf ein Angebot …",
+      p: `Leg <b>Munition</b> ins Regal oder stell eine Verkaufsorder an der Börse ein. Polizei, Stadtwache und Schützenverein kaufen in der Stadt.` },
+    { t: "Ausschreibungen", warte: () => TUT_GESEHEN.has("firma"), wartetext: "Warte, bis du das Firma-Panel öffnest …",
+      p: `Dein größtes Geschäft: <b>Ausschreibungen</b> der Stadt. Polizei, Stadtwache oder Grenzschutz suchen größere Mengen; du gibst 60 Sekunden lang ein verdecktes Gebot ab (80–140 % des Listenpreises). Wer liefert, steigert seinen Lieferruf. Geboten wird im <b>Firma</b>-Panel — öffne es einmal.` },
+    { t: "Bau die Waffenschmiede", build: "waffenschmiede", wartetext: "Warte auf die Waffenschmiede …",
+      p: `Die <b>Waffenschmiede</b> macht Pistolen aus Stahl, Elektronik und Munition. Stahl kaufst du bei der Rohstoff-, Elektronik bei der Technik-Branche. Kauf die Vorprodukte früh, bevor andere sie wegkaufen.` },
+    { t: "Dein Weg nach oben",
+      p: `Ganz oben steht das <b>Panzerwerk</b> (Stahl, Elektronik, Diesel) — Panzer bringen über 400 $ das Stück.<br><br>Mit dem Website-Modul <b>Branchenportal</b> bekommst du das <b>Ausschreibungsportal</b>: Deine Gebote zählen 5 % günstiger, jede Lieferung bringt 15 % mehr, und Ausschreibungen kommen häufiger.` },
   ],
 };
 function buildTut(ind) {
   const IND_NAME = { agrar: "Agrarwirtschaft", rohstoff: "Rohstoff- & Bauindustrie", versorger: "Grundversorgung", tech: "Technologie & Elektronik", touristik: "Touristik", ruestung: "Rüstungsindustrie", software: "Software-Branche" };
+  const ROLLE = {
+    agrar: "Du ernährst die Stadt: Obst, Honig, Saft und Gebäck für Bewohner, Bäckereien und Hotels.",
+    rohstoff: "Ohne dich wird nichts gebaut: Ziegel, Beton und Stahl braucht jede Firma und die Stadt selbst.",
+    versorger: "Du hältst die Stadt am Laufen: Strom und Wasser für Firmen und Haushalte.",
+    tech: "Du lieferst die Elektronik, mit der alle anderen ihre Gebäude ausbauen.",
+    touristik: "Du holst Gäste in die Stadt: Zimmer, Sterne, Frühstück und Stadtfeste.",
+    software: "Du baust die digitale Stadt: Shop-Systeme, Apps, Websites und Rechenzentren für alle anderen.",
+    ruestung: "Du belieferst Polizei, Stadtwache und Grenzschutz — mit Ausschreibungen als großem Geschäft.",
+  };
   return [
     { t: "Willkommen bei Capital Sandbox",
-      p: `Ich habe diese Stadt dreißig Jahre lang als CEO geführt — jetzt zeige ich <b>dir</b>, wie man in der <b>${IND_NAME[ind]}</b> ein Imperium aufbaut. Dein Ziel: als Erster das <b>Rundenziel</b> erreichen (oben links). Die Leiste ganz oben ist der <b>Börsenticker</b> mit den Ø-Kursen.` },
-    { t: "Deine Rolle in der Stadt",
-      p: `Jeder Spieler führt EINE Industrie — du kannst <b>nur deren Gebäude</b> bauen (Läden kann jeder). Alles andere lieferst du dir über die <b>Börse</b>: Agrar braucht Wasser+Strom der Versorger, Rohstoff &amp; Bau braucht Strom+Öl+Wasser — und <b>alle brauchen Ziegel</b> der Rohstoff- &amp; Bauindustrie zum Bauen. Nur zusammen entsteht ein fertiges Produkt.` },
-    ...TUT_IND[ind],
-    { t: "Verkaufen: dein Preis, dein Tempo",
-      p: `Deine Läden verkaufen automatisch — du legst <b>Menge und Preis</b> fest (z. B. „100 für $7"): Beim Ø-Kurs volle Geschwindigkeit, teurer = langsamer, billiger = schneller. An der Börse warten außerdem die <b>Industrie-Bots</b>: Sie kaufen dir deine Waren ab und verkaufen dir Nachschub, ohne den Markt zu fluten.` },
-    { t: "Großaufträge & Finanzen",
-      p: `Städte stellen <b>Großaufträge</b> (Ø×2, fixiert!) — alle zahlen gemeinsam ein, im Lager-Panel. Im <b>Finanzen-Panel</b> gibt es Anleihen (Vorsicht: Pfändung bei Verzug). Unter <b>Firma</b> siehst du deinen Rang, im <b>Lexikon</b> alles Wissen. Und nun: Zeig dieser Stadt, was in dir steckt — ich behalte dich im Auge.` },
+      p: `Ich habe diese Stadt dreißig Jahre lang als CEO geführt — jetzt zeige ich <b>dir</b>, wie man in der <b>${IND_NAME[ind] || ind}</b> groß wird.<br><br>${ROLLE[ind] || ""}<br><br>Dein Ziel: als Erster das <b>Vermögensziel</b> erreichen (oben links). Ganz oben läuft der <b>Kursticker</b> mit den Ø-Kursen aller Waren.` },
+    { t: "Die Stadt und deine Leute",
+      p: `Die Stadt wächst mit euch: Oben neben deinem Geld steht die <b>Einwohnerzahl</b>. Die Bewohner arbeiten in euren Gebäuden und kaufen in euren Läden.<br><br>Jedes Gebäude braucht <b>Arbeiter</b>. Sind sie knapp, gehen sie zur Firma mit dem besseren Lohn — den stellst du im <b>Firma</b>-Panel ein. Du baust nur Gebäude <b>deiner</b> Branche; alles andere kaufst du von den anderen.` },
+    ...(TUT_IND[ind] || TUT_IND.agrar),
+    { t: "Das Stadtnetz", warte: () => TUT_GESEHEN.has("netz"), wartetext: "Warte, bis du das Stadtnetz öffnest …",
+      p: `Unten findest du das <b>Stadtnetz</b> — das Internet der Stadt. Öffne es.<br><br>Dort sind der <b>Stadtkurier</b> (Nachrichten alle zwei Minuten), die <b>Warenbörse</b>, die <b>Stadtbank</b> (Aktien und Fonds), der <b>Anleihenmarkt</b> und die Websites aller Firmen. Eine eigene <b>Website</b> bringt dir Reichweite — bestellen kannst du sie bei einer Software-Firma.` },
+    { t: "Bring dein Vermögen auf 16.000 $", warte: (st, me, id) => (st.players[id]?.netWorth || 0) >= 16000, wartetext: "Warte, bis dein Nettovermögen 16.000 $ erreicht …",
+      p: `Jetzt läuft alles zusammen: produzieren, verkaufen, nachkaufen, ausbauen.<br><br>Dein <b>Nettovermögen</b> (oben links) ist Bargeld plus Lager plus Gebäude minus Schulden. Bring es von 9.500 $ auf <b>16.000 $</b> — mit einem zweiten Gebäude, Preisen nah am Ø-Kurs und vollem Lager bei den Zutaten.` },
+    { t: "Jetzt gehört die Stadt dir",
+      p: `Das war der Rundgang. Was dir im Spiel noch begegnet, erklären kurze <b>Hinweise</b> genau dann, wenn es wichtig wird. Im <b>Lexikon</b> steht jede Regel nach.<br><br>Mein letzter Rat: Schau regelmäßig in den <b>Stadtkurier</b>. Wer zuerst weiß, welche Ware knapp wird, verdient am meisten.` },
   ];
 }
 /* Kartellmodus: eigenes Tutorial — hier gelten andere Regeln (keine Branchen,
@@ -9226,7 +9297,11 @@ function tutShow(i) {
   document.getElementById("tutDots").innerHTML = TUT.map((_, j) => `<span class="${j <= i ? "on" : ""}"></span>`).join("");
   const wartet = !!(s.build || s.warte);
   document.getElementById("tutNext").style.display = wartet ? "none" : "";
-  document.getElementById("tutWait").style.display = wartet ? "flex" : "none";
+  const tw = document.getElementById("tutWait");
+  tw.style.display = wartet ? "flex" : "none";
+  /* Worauf der Schritt wartet, plus „auslassen“ — sonst hinge man fest, wenn
+   * etwas gerade nicht geht (kein Angebot an der Börse, zu wenig Geld …) */
+  if (wartet) tw.innerHTML = `<span>${s.wartetext || t("Warte auf Bau …")}</span><button type="button" id="tutAuslassen">${t("auslassen")}</button>`;
   /* Beschriftung immer setzen, nicht nur beim letzten Schritt: sonst traegt der
    * Knopf in einer zweiten Runde ab Schritt 1 noch das "Los geht's!" der
    * vorigen. */
@@ -9241,6 +9316,7 @@ document.getElementById("tutNext").addEventListener("click", () => {
   tutDone();
 });
 document.getElementById("tutSkip").addEventListener("click", tutDone);
+tutEl.addEventListener("click", e => { if (e.target.closest("#tutAuslassen")) tutShow(tutIdx + 1); });
 document.getElementById("help").addEventListener("click", () => tutShow(0));
 /* Schritte haken sich selbst ab, sobald die Handlung wirklich passiert ist.
  * `build` war der einzige Auslöser — damit liess sich nur Bauen üben. `warte`

@@ -5,6 +5,16 @@
  * `art`: "neu" (neue Funktion), "besser" (Verbesserung), "fix" (Fehler behoben). */
 window.UPDATES = [
   {
+    id: "2026-10-25m", datum: "2026-10-25",
+    titel: { de: "Neues Tutorial für jede Branche", en: "New tutorial for every industry" },
+    punkte: [
+      { art: "besser", de: "Jede Branche hat jetzt ihren eigenen Rundgang mit 9 bis 11 Schritten: erst bauen und verkaufen, dann das, was nur diese Branche ausmacht — Hofladen und Frühstück (Agrar), Wohnbau-Aufträge (Rohstoff), Grundbedarf der Stadt (Versorger), Ausbau mit Elektronik (Technik), Gäste, Sterne und Feste (Touristik), Shop-System, Statusseite und Bürger-App (Software), Ausschreibungen (Rüstung). Dazu für alle Stadt und Arbeiter, das Stadtnetz und ein Vermögensziel.",
+        en: "Every industry now has its own walkthrough with 9 to 11 steps: first build and sell, then what makes that industry special — farm shop and breakfast (agriculture), housing orders (raw materials), the city's basic needs (utilities), upgrading with electronics (tech), guests, stars and festivals (tourism), shop system, status page and citizen app (software), tenders (defence). Plus city and workers, the city network and a net-worth goal for everyone." },
+      { art: "besser", de: "Schritte haken sich selbst ab, sobald du die Handlung wirklich machst, und sagen, worauf sie warten. Geht etwas gerade nicht, kannst du einen Schritt „auslassen“.",
+        en: "Steps tick themselves off once you actually do the action and say what they are waiting for. If something isn't possible right now, you can “skip” a step." },
+    ]
+  },
+  {
     id: "2026-10-25l", datum: "2026-10-25",
     titel: { de: "Anleihenmarkt im Stadtnetz", en: "Bond market in the city network" },
     punkte: [
