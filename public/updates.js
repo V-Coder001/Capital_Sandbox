@@ -5,6 +5,14 @@
  * `art`: "neu" (neue Funktion), "besser" (Verbesserung), "fix" (Fehler behoben). */
 window.UPDATES = [
   {
+    id: "2026-10-25i", datum: "2026-10-25",
+    titel: { de: "Sandkasten ohne Mafia-Waren", en: "Sandbox without mafia goods" },
+    punkte: [
+      { art: "fix", de: "Schwarzgebrannter, Falschgeld, Goldbarren und Schmuggelzigaretten gehören zur Kartellwirtschaft. Im Sandkasten tauchen sie nicht mehr in Großaufträgen, im Kursticker, in den Warenlisten und im Marktbericht auf; die Familien-Gebäude fehlen im Lexikon.",
+        en: "Moonshine, counterfeit money, gold bars and contraband cigarettes belong to the cartel economy. In the sandbox they no longer appear in group orders, the price ticker, goods lists or the market report; the family buildings are gone from the lexicon." },
+    ]
+  },
+  {
     id: "2026-10-25h", datum: "2026-10-25",
     titel: { de: "Stadtnetz und Firmen-Websites", en: "City network and company websites" },
     punkte: [
