@@ -138,7 +138,7 @@ function verlaufChart(h, titel, geldFormat = fp, breite = 300, hoehe = 90) {
   const trend = h[0] ? (h[h.length - 1] / h[0] - 1) * 100 : null;
   const farbe = trend == null || Math.abs(trend) < 0.5 ? "var(--dim)" : trend > 0 ? "var(--up)" : "var(--down)";
   const minuten = Math.max(1, Math.round(h.length * 10 / 60));
-  return `<div style="background:rgba(12,18,28,.5);border:1px solid rgba(36,48,68,.7);border-radius:8px;padding:8px 10px;margin:6px 0">
+  return `<div class="vChart" style="background:rgba(12,18,28,.5);border:1px solid rgba(36,48,68,.7);border-radius:8px;padding:8px 10px;margin:6px 0">
     <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:2px">
       <span class="meta">${titel} · letzte ${minuten} min</span>
       <span style="font-family:var(--mono);font-size:12px;color:${farbe}">${trend == null ? "" : (trend > 0 ? "+" : "") + trend.toFixed(1) + " %"}</span>
