@@ -5,6 +5,20 @@
  * `art`: "neu" (neue Funktion), "besser" (Verbesserung), "fix" (Fehler behoben). */
 window.UPDATES = [
   {
+    id: "2026-10-25e", datum: "2026-10-25",
+    titel: { de: "Touristik: Gäste, Sterne und Stadtfeste", en: "Tourism: guests, stars and city festivals" },
+    punkte: [
+      { art: "neu", de: "Gäste: Jede Minute kommen Gäste in die Stadt — mehr, je größer und zufriedener sie ist. Sie wählen ein Hotel nach Bewertung und Zimmerpreis und zahlen direkt an die Touristik-Firma. Wer zu teuer ist, verliert Gäste an andere Urlaubsorte. Ersetzt den Grundbedarf an Übernachtungen.",
+        en: "Guests: every minute guests come to the city — more the bigger and happier it is. They pick a hotel by rating and room price and pay the tourism company directly. Too expensive loses guests to other destinations. Replaces the basic need for lodging." },
+      { art: "neu", de: "Sterne: Strandhotels lassen sich von 2 auf bis zu 5 Sterne renovieren (1.500 / 3.000 / 5.000 $). Mehr Sterne bringen mehr Gäste oder höhere Preise. Ab 3 Sternen erwarten die Gäste Frühstück: Obst, Honig, Saft oder Gebäck aus dem Lager.",
+        en: "Stars: beach hotels can be renovated from 2 up to 5 stars (1,500 / 3,000 / 5,000 $). More stars bring more guests or higher prices. From 3 stars guests expect breakfast: fruit, honey, juice or pastries from stock." },
+      { art: "neu", de: "Stadtfeste: Strandfest, Konzert oder Festival locken 5 bis 8 Minuten lang 60 bis 150 % mehr Gäste, machen die Bewohner zufriedener, und beim Festival kaufen sie mehr in den Läden. Der Veranstalter bekommt den größten Teil der Gäste.",
+        en: "City festivals: a beach party, concert or festival draws 60 to 150 % more guests for 5 to 8 minutes, makes residents happier, and during a festival they buy more in shops. The organiser gets the biggest share of guests." },
+      { art: "neu", de: "Neues Touristik-Panel (Knopf unten, sobald dir ein Campingplatz oder Strandhotel gehört): Gäste, Bewertung, Zimmerpreis, Renovieren, Feste und alle Hotels der Stadt.",
+        en: "New tourism panel (button at the bottom once you own a campground or beach hotel): guests, rating, room price, renovation, festivals and all hotels in the city." },
+    ]
+  },
+  {
     id: "2026-10-25d", datum: "2026-10-25",
     titel: { de: "Ein Modus, faire Branchen, Zeitlimit und Hinweise", en: "One mode, fair industries, time limit and hints" },
     punkte: [

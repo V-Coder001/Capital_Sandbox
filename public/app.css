@@ -1196,3 +1196,18 @@ td:first-child{font-family:var(--font)}
 #spielHinweis p{margin:0 0 10px;color:#c4cfdd}
 #spielHinweis .shFuss{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
 #spielHinweis .shAus{background:none;border:0;color:#8695ab;font-size:11px;cursor:pointer;margin-left:auto;text-decoration:underline}
+/* Touristik-Panel (Etappe 6) */
+.tourSterne{display:inline-flex;gap:1px;font-size:13px;letter-spacing:0;white-space:nowrap}
+.tourSterne i{font-style:normal;color:var(--line);opacity:.9}
+.tourSterne i.on{color:#fbbf24}
+.tourSterne i.halb{color:#fbbf24;opacity:.45}
+.swZahlen .tourSterne{font-size:15px}
+.tourFest{border:1px solid #fbbf24;background:rgba(251,191,36,.1);border-radius:10px;padding:8px 10px;margin-bottom:12px;font-size:13px}
+.tourFeste{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.tourFestKnopf{display:flex;flex-direction:column;align-items:flex-start;gap:3px;text-align:left;padding:9px 10px;border:1px solid var(--line);border-radius:10px;background:var(--panel2);color:var(--text);cursor:pointer;font:inherit}
+.tourFestKnopf b{font-size:13.5px}
+.tourFestKnopf span{font:600 12px var(--mono)}
+.tourFestKnopf small{font-size:11px;color:var(--dim);line-height:1.35}
+.tourFestKnopf:not(:disabled):hover{border-color:var(--accent)}
+.tourFestKnopf:disabled{opacity:.5;cursor:default}
+@media (max-width:560px){.tourFeste{grid-template-columns:1fr}}
