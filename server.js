@@ -1414,7 +1414,11 @@ const MM = Object.fromEntries(Object.keys(GOODS).map(k =>
  * Schützenvereine) — derselbe Absatz drückt den Kurs weniger. Die Branche hat
  * nur drei Waren und musste sie zugekauft veredeln; gemessen drückte
  * Stahlfaust allein Panzer auf 60 % und Pistolen auf 78 % des Grundpreises. */
-const MARKT_TIEFE = { munition: 1.5, pistole: 2.5, panzer: 2.5 };
+const MARKT_TIEFE = { munition: 1.5, pistole: 2.5, panzer: 2.5,
+  /* Übernachtungen: Gäste kommen von außerhalb. Die Touristik hat wie die
+   * Rüstung nur eine Ware und drückte ihren Kurs allein (rund 90k $ Umsatz,
+   * 24–31k $ Vermögen, Tabellenende). */
+  uebernachtung: 2 };
 const soldPressure = k => MM[k].sold * BASEP[k] / (4000 * (MARKT_TIEFE[k] || 1));   // verkaufter Wert / $4000 = 1 Druckpunkt
 function noteSold(k, qty) { MM[k].sold = Math.max(-200 / BASEP[k], MM[k].sold + qty); }
 
@@ -2086,7 +2090,9 @@ const BTYPES = {
   /* arbeiter: feste Belegschaft (Stadtwachstum). Mit Baukosten/250 brach die
    * Touristik von 113k auf 17k $ Vermögen ein — Hotel und Campingplatz waren
    * die lohnintensivsten Betriebe im Verhältnis zu ihrem Ertrag. */
-  campingplatz: { name: "Campingplatz", en: "Campground", cost: 1500, out: "uebernachtung", rate: 10/60, zone: "agrar", industry: "touristik", arbeiter: 3 },
+  /* Campingplatz 10/60 → 10/50: Die Touristik lag auch nach dem Lohn-Balancing
+   * am Tabellenende (rund 30–40k $ nach 60 Minuten). */
+  campingplatz: { name: "Campingplatz", en: "Campground", cost: 1500, out: "uebernachtung", rate: 10/50, zone: "agrar", industry: "touristik", arbeiter: 3 },
   strandhotel:  { name: "Strandhotel", en: "Beach hotel",  cost: 2400, out: null, rate: 0, zone: "kueste", industry: "touristik", arbeiter: 5,
                   proc: { in: { wasser: 2.5, strom: 1.25 }, out: "uebernachtung", rate: 10/30 } },
   brunnen:    { name: "Brunnen", en: "Well",           cost: 800,  out: "wasser",   rate: 2.5,  zone: "agrar",     industry: "versorger" },
@@ -5333,6 +5339,127 @@ function wohnbauLiefern(p, { id: aid, good, qty } = {}) {
   if (Object.values(a.needs).every(x => x.have >= x.req)) wohnAuftragAbschliessen(a, 0);
   return { ok: true, summe };
 }
+/* ---------- Rüstungsaufträge ----------
+ * Polizei, Stadtwache, Schützenverein und Grenzschutz schreiben Lieferungen
+ * aus. Eine Ausschreibung zur Zeit: 60 s lang geben Rüstungsfirmen ein
+ * verdecktes Gebot in Prozent des Listenpreises ab (80–140 %). Den Zuschlag
+ * bekommt das günstigste Gebot, gewichtet mit dem Lieferruf — wer zuletzt
+ * nicht geliefert hat, muss billiger anbieten. Der Gewinner liefert innerhalb
+ * der Frist und wird je Lieferung bezahlt; was am Ende fehlt, kostet 20 %
+ * seines Werts als Vertragsstrafe und 25 Rufpunkte. Bezahlt das Land, nicht
+ * die Stadtkasse — sonst bremsten die Aufträge den Wohnbau. Die Ware geht
+ * am Markt vorbei und drückt den Kurs nicht. */
+const RUEST = {
+  ERSTE: 360, ABSTAND: 240, BIETEN: 60, FRIST: 300,
+  GEBOT_MIN: 80, GEBOT_MAX: 140, STRAFE: 0.2,
+  RUF_START: 100, RUF_MINUS: 25, RUF_PLUS: 10,
+  ARTEN: [
+    { name: "Polizei", needs: { pistole: [20, 40], munition: [40, 90] } },
+    { name: "Stadtwache", needs: { panzer: [6, 12] } },
+    { name: "Schützenverein", needs: { munition: [70, 140] } },
+    { name: "Grenzschutz", needs: { pistole: [15, 30], panzer: [3, 6] } },
+  ],
+};
+const ruestFirma = p => (p.industries || [p.industry]).includes("ruestung");
+const ruestRuf = pid => G.stadt?.ruest?.ruf[pid] ?? RUEST.RUF_START;
+function ruestLog(text) {
+  const R = G.stadt.ruest;
+  R.log.unshift({ tick: G.tick, text });
+  if (R.log.length > 8) R.log.length = 8;
+}
+function ruestAusschreiben() {
+  const R = G.stadt.ruest, art = RUEST.ARTEN[Math.floor(Math.random() * RUEST.ARTEN.length)];
+  /* Mit der Stadt wachsen auch die Aufträge (Faktor 1 bis 1,6) */
+  const needs = {};
+  for (const [g, [lo, hi]] of Object.entries(art.needs))
+    needs[g] = { req: Math.round((lo + Math.random() * (hi - lo)) * stadtNachfrage()), have: 0 };
+  const a = { id: id(), name: art.name, needs, phase: "bieten", bisBieten: G.tick + RUEST.BIETEN, gebote: {} };
+  R.auftraege.push(a);
+  const txt = Object.entries(needs).map(([g, n]) => `${n.req}× ${GOODS[g].name}`).join(", ");
+  ruestLog(`Ausschreibung ${a.name}: ${txt}`);
+  for (const p of Object.values(G.players)) if (ruestFirma(p))
+    emitTo(p.id, "notice", { text: `Ausschreibung: ${a.name} sucht ${txt}. Gebote ${RUEST.BIETEN} s lang im Firma-Fenster.` });
+}
+function ruestEnde(a) {
+  const R = G.stadt.ruest;
+  R.auftraege = R.auftraege.filter(x => x !== a);
+  R.naechste = G.tick + RUEST.ABSTAND;
+}
+function ruestZuschlag(a) {
+  /* Ruf 100 zählt das Gebot wie abgegeben, Ruf 0 wie um 50 % teurer */
+  const wert = ([pid, g]) => g.prozent * (1 + (100 - ruestRuf(pid)) / 200);
+  const liste = Object.entries(a.gebote).filter(([pid]) => G.players[pid]).sort((x, y) => wert(x) - wert(y) || x[1].t - y[1].t);
+  if (!liste.length) { ruestLog(`${a.name}: kein Gebot — Auftrag ging nach außerhalb`); return ruestEnde(a); }
+  const [pid, g] = liste[0], p = G.players[pid];
+  Object.assign(a, { phase: "liefern", gewinner: pid, prozent: g.prozent, frist: G.tick + RUEST.FRIST, bieter: liste.length,
+    preise: Object.fromEntries(Object.keys(a.needs).map(k => [k, Math.round(BASEP[k] * g.prozent) / 100])) });
+  ruestLog(`${a.name}: Zuschlag an ${p.name} zu ${g.prozent} % (${liste.length} ${liste.length === 1 ? "Gebot" : "Gebote"})`);
+  emitTo(pid, "notice", { text: `Zuschlag! ${a.name}: Du lieferst zu ${g.prozent} % des Listenpreises, Frist ${Math.round(RUEST.FRIST / 60)} min.` });
+  for (const [anderer] of liste.slice(1)) emitTo(anderer, "notice", { text: `${a.name}: Der Zuschlag ging an ${p.name} (${g.prozent} %).` });
+}
+function ruestFristAus(a) {
+  const R = G.stadt.ruest, p = G.players[a.gewinner];
+  const rest = Object.entries(a.needs).reduce((m, [g, n]) => m + Math.max(0, n.req - n.have) * a.preise[g], 0);
+  if (p) {
+    const strafe = Math.min(Math.max(0, p.cash), Math.round(rest * RUEST.STRAFE));
+    p.cash -= strafe; p.stats.ausgaben += strafe;
+    R.ruf[p.id] = Math.max(0, ruestRuf(p.id) - RUEST.RUF_MINUS);
+    logTx(p, "Stadt", `${a.name}: nicht vollständig geliefert, Vertragsstrafe`, -strafe);
+    emitTo(p.id, "notice", { text: `${a.name}: Frist verpasst — ${strafe.toLocaleString("de-DE")} $ Vertragsstrafe, Lieferruf jetzt ${R.ruf[p.id]}.` });
+    ruestLog(`${a.name}: ${p.name} hat nicht vollständig geliefert (Strafe ${strafe.toLocaleString("de-DE")} $)`);
+  }
+  ruestEnde(a);
+}
+function ruestTick() {
+  if (!stadtAktiv()) return;
+  const R = G.stadt.ruest ??= { auftraege: [], naechste: G.tick + RUEST.ERSTE, ruf: {}, log: [] };
+  for (const a of [...R.auftraege]) {
+    if (a.phase === "bieten" && G.tick >= a.bisBieten) ruestZuschlag(a);
+    else if (a.phase === "liefern" && G.tick >= a.frist) ruestFristAus(a);
+  }
+  if (!R.auftraege.length && G.tick >= R.naechste && Object.values(G.players).some(ruestFirma)) ruestAusschreiben();
+}
+function ruestBieten(p, { id: aid, prozent } = {}) {
+  const a = G.stadt?.ruest?.auftraege.find(x => x.id === +aid);
+  if (!a || a.phase !== "bieten") return { error: "Keine laufende Ausschreibung" };
+  if (!ruestFirma(p)) return { error: "Nur Rüstungsfirmen können bieten" };
+  prozent = Math.round(+prozent);
+  if (!(prozent >= RUEST.GEBOT_MIN && prozent <= RUEST.GEBOT_MAX)) return { error: `Gebot zwischen ${RUEST.GEBOT_MIN} und ${RUEST.GEBOT_MAX} %` };
+  a.gebote[p.id] = { prozent, t: G.tick };
+  return { ok: true };
+}
+function ruestLiefern(p, { id: aid, good, qty } = {}) {
+  const a = G.stadt?.ruest?.auftraege.find(x => x.id === +aid);
+  if (!a || a.phase !== "liefern" || a.gewinner !== p.id) return { error: "Kein Auftrag von dir in Lieferung" };
+  const n = a.needs[good];
+  if (!n) return { error: "Diese Ware gehört nicht zum Auftrag" };
+  qty = Math.min(Math.floor(+qty || Infinity), n.req - n.have, Math.floor(p.inv[good] || 0));
+  if (!(qty > 0)) return { error: "Lager leer oder Menge geliefert" };
+  const summe = Math.round(qty * a.preise[good] * 100) / 100;
+  p.inv[good] -= qty; n.have += qty;
+  p.cash += summe; addRevenue(p, summe);
+  logTx(p, "Stadt", `${qty}× ${GOODS[good].name} an ${a.name} geliefert`, summe);
+  if (Object.values(a.needs).every(x => x.have >= x.req)) {
+    const R = G.stadt.ruest;
+    R.ruf[p.id] = Math.min(100, ruestRuf(p.id) + RUEST.RUF_PLUS);
+    p.stats.ruestAuftraege = (p.stats.ruestAuftraege || 0) + 1;
+    ruestLog(`${a.name}: vollständig geliefert von ${p.name}`);
+    emitTo(p.id, "notice", { text: `${a.name}: vollständig geliefert. Lieferruf ${R.ruf[p.id]}.` });
+    ruestEnde(a);
+  }
+  return { ok: true, summe };
+}
+function ruestPublic() {
+  const R = G.stadt?.ruest;
+  if (!R) return null;
+  return { auftraege: R.auftraege.map(a => ({ id: a.id, name: a.name, needs: a.needs, phase: a.phase,
+      bisBieten: a.bisBieten, frist: a.frist ?? null, gebote: Object.keys(a.gebote).length,
+      gewinner: a.gewinner ?? null, gewinnerName: a.gewinner ? G.players[a.gewinner]?.name ?? "—" : null,
+      prozent: a.prozent ?? null, preise: a.preise ?? null })),
+    naechste: R.auftraege.length ? null : R.naechste, log: R.log,
+    ruf: Object.fromEntries(Object.values(G.players).filter(ruestFirma).map(p => [p.id, ruestRuf(p.id)])),
+    regeln: { min: RUEST.GEBOT_MIN, max: RUEST.GEBOT_MAX, strafe: RUEST.STRAFE, bieten: RUEST.BIETEN, frist: RUEST.FRIST } };
+}
 /* Stadtanleihe: nur bei Wohnungsnot, eine unverkaufte zur Zeit, Schulden gedeckelt.
  * Sie laeuft ueber das normale Anleihen-System, Spieler und Bots zeichnen sie. */
 function stadtAnleiheAusgeben() {
@@ -5365,6 +5492,7 @@ function stadtTick() {
   const S = G.stadt;
   for (const t of G.map) if (t.wohnblock?.bis && t.wohnblock.bis <= G.tick) t.wohnblock = { stufe: t.wohnblock.stufe };
   wohnAuftraegePruefen();
+  ruestTick();
   if (G.tick % STADT.VERTEILUNG_TAKT === 0) { softwareStadtTick(); arbeitVerteilen(); }
   if (G.tick % 10 === 0) {
     const da = versorgungPruefen();
@@ -5407,7 +5535,8 @@ function stadtPublic() {
     log: S.log, stufen: STADT.STUFEN, kasseMin: STADT.KASSE_MIN, bauDauer: STADT.BAU_DAUER, takt: STADT.TAKT,
     arbeit: { faehig: S.arbeitsfaehig || 0, beschaeftigt: S.beschaeftigt || 0, arbeitslos: S.arbeitslos || 0, bedarf: S.bedarf || 0, offen: S.offen || 0,
       lohnsumme: S.lohnsumme || 0, lohnsteuer: S.lohnsteuer || 0, miete: S.miete || 0, stuetze: S.stuetze || 0 },
-    loehne: STADT.LOEHNE, anteile: { steuer: STADT.LOHNSTEUER, miete: STADT.MIETANTEIL, spar: STADT.SPARANTEIL }, quote: STADT.ERWERBSQUOTE };
+    loehne: STADT.LOEHNE, anteile: { steuer: STADT.LOHNSTEUER, miete: STADT.MIETANTEIL, spar: STADT.SPARANTEIL }, quote: STADT.ERWERBSQUOTE,
+    ruest: ruestPublic() };
 }
 stadtInit();   // erste Runde: G steht schon, die Karte ist die Sandkasten-Karte
 function finanzamtTick() {
@@ -6251,6 +6380,8 @@ function privateState(p) {
       verzug: !!p.lohnVerzug, letzt: p.lohnLetzt || null, gesamt: Math.round(p.stats.loehne || 0),
       arbeiter: G.map.reduce((a, t) => a + (t.owner === p.id ? t.arbeiter || 0 : 0), 0),
       soll: G.map.reduce((a, t) => a + (t.owner === p.id ? t.arbeiterSoll || 0 : 0), 0) } : null,
+    /* Eigene Gebote bleiben verdeckt — nur hier, nicht im öffentlichen Stand */
+    ruestGebote: G.stadt?.ruest ? Object.fromEntries(G.stadt.ruest.auftraege.filter(a => a.gebote[p.id]).map(a => [a.id, a.gebote[p.id].prozent])) : null,
     steuer: finanzamtAktiv() ? { ...steuerSchaetzung(p), letzter: p.steuerLetzter || null,
       schuld: Math.round(p.steuerSchuld || 0), gezahlt: Math.round(p.stats.steuern || 0) } : null,
     ownPct: Math.round((p.equity[p.id] || 0) / AKTIEN * 1000) / 10, ownAktien: p.equity[p.id] || 0, aktien: AKTIEN,
@@ -8565,6 +8696,8 @@ io.on("connection", socket => {
   }));
   /* --- Baumaterial fuer einen Wohnblock der Stadt liefern (Etappe 3) --- */
   socket.on("wohnbauLiefern", guard((p, d, ack) => { ack?.(wohnbauLiefern(p, d)); pushState(); }));
+  socket.on("ruestBieten", guard((p, d, ack) => { ack?.(ruestBieten(p, d)); pushState(); }));
+  socket.on("ruestLiefern", guard((p, d, ack) => { ack?.(ruestLiefern(p, d)); pushState(); }));
   /* --- Lohnstufe (Sandkasten, Etappe 2): sofort hoeher, nach Kuendigungsfrist niedriger --- */
   socket.on("lohnStufe", guard((p, { stufe }, ack) => {
     if (!stadtAktiv()) return ack?.({ error: "Löhne gibt es nur im Sandkasten und in der Einsteiger-Runde" });
@@ -10006,13 +10139,19 @@ const BOT_CFGS = [
      * eigenen Raffinerie — am Markt kam nie welches an. Ohne Öl steht das
      * Stahlwerk, ohne Stahl gibt es keine Fahrzeuge. */
     alwaysSell: ["wasser", "strom", "oel"], rennstall: true },
-  /* Reiner Ölförderer: baut immer weiter Ölpumpen und stellt alles Geförderte
-   * sofort in den Markt. Öl ist mit 8 $ das wertvollste Grundgut, deshalb bleibt
-   * er auch auf "Schwer" bei höchstens vier Pumpen gedeckelt. Bewusste Ausnahme
-   * von der Abdeckungsregel oben: er soll gar nicht die ganze Branche
-   * abbilden, sondern gezielt nur den Ölnachschub sichern. */
+  /* Ölförderer: stellt sein Öl sofort in den Markt. Öl ist mit 8 $ das
+   * wertvollste Grundgut. Bewusste Ausnahme von der Abdeckungsregel oben: er
+   * soll nicht die ganze Branche abbilden, sondern den Ölnachschub sichern.
+   * Früher nur Pumpen: Seit die Stadtwerke selbst Öl verkaufen, lagen
+   * bei ihm am Rundenende 3.600–4.200 Öl unverkauft, an der Börse 2.000–3.000
+   * im Angebot ohne ein Gebot. Staut sich das Öl (bauStopp), baut er keine
+   * weitere Pumpe — das Geld geht dann in Fonds statt in Förderung, die keiner
+   * abnimmt. Gemessen und verworfen: eine eigene Raffinerie (nahm den
+   * Stadtwerken das Dieselgeschäft) und ein eigener Laden (zwei Firmen drückten
+   * Öl in die Regale, der Kurs fiel für beide). */
   { name: "Nordsee Öl",      industry: "versorger", color: "#e5762f",
-    plan: ["oelpumpe"], planLoop: true, maxGebaeude: 4, needs: [], alwaysSell: ["oel"] },
+    plan: ["oelpumpe"], planLoop: true, maxGebaeude: 4, bauStopp: { oel: 800 },
+    needs: [], alwaysSell: ["oel"] },
 
   /* Stahl und Öl erst, wenn ein Autowerk steht (bedarfAusWerken). Fest auf
    * der Einkaufsliste kauften beide Bots Stahl beim Stadtnetz, ohne ein Werk
@@ -10028,10 +10167,14 @@ const BOT_CFGS = [
    * erst einmal nicht dominieren.
    * Kein alwaysSell für Übernachtungen (derselbe Fehler wie bei Stahlfausts
    * Munition): Ins Regal kamen sie erst ab 300 Stück, an der Börse kaufte sie
-   * niemand — gemessen bis Minute 40 kein einziger Verkauf, 632 auf Lager. */
+   * niemand — gemessen bis Minute 40 kein einziger Verkauf, 632 auf Lager.
+   * Vorrat: Das Strandhotel braucht 150 Wasser und 75 Strom je Minute. Mit dem
+   * Standardvorrat von 25 lief es gemessen bei rund 40 % und wurde nie
+   * ausgebaut (der Ausbau wartet, bis Zutaten für 30 s da sind). Der Deckel
+   * von vier Gebäuden fällt — die Branche lag auch ohne ihn am Tabellenende. */
   { name: "Küstenperle",     industry: "touristik", color: "#2dd4bf",
-    plan: ["campingplatz", "onlinemarkt", "strandhotel", "werbeagentur"], maxGebaeude: 4,
-    needs: ["wasser", "strom"], rennstall: true },
+    plan: ["campingplatz", "onlinemarkt", "strandhotel", "campingplatz", "strandhotel", "werbeagentur"],
+    needs: ["wasser", "strom"], vorrat: { wasser: 160, strom: 80 }, rennstall: true },
 
   /* Rüstung: baut erst die billige Munitionsfabrik, damit früh Geld reinkommt,
    * und kauft Stahl, Elektronik und Diesel für die teureren Stufen zu. */
@@ -10669,6 +10812,11 @@ async function spawnBot(cfg, lvl = BOT_LEVELS[BOT_LEVEL_DEFAULT]) {
        * stand eine ganze Runde offen, und Stahlfaust baute sein Panzerwerk nie. */
       const gefragt = new Set(st.orders.filter(o => o.side === "buy" && o.playerId !== myId
         && eigeneWare.has(o.good) && o.price >= (st.avg[o.good] || o.price) * 0.97).map(o => o.good));
+      /* Ware für einen gewonnenen Rüstungsauftrag bleibt ebenfalls aus Regal und
+       * Börse, bis geliefert ist — sonst kauft die Stadt sie im Laden weg. */
+      const vertragsWare = new Set();
+      for (const a of st.stadt?.ruest?.auftraege || []) if (a.phase === "liefern" && a.gewinner === myId)
+        for (const [g, n] of Object.entries(a.needs)) if (n.have < n.req) { vertragsWare.add(g); gefragt.add(g); }
       for (const t of st.map) {
         if (t.owner !== myId || !t.shop) continue;
         /* Grundversorgung (alwaysSell: Strom, Wasser, Öl) gehört an die Börse —
@@ -10713,6 +10861,24 @@ async function spawnBot(cfg, lvl = BOT_LEVELS[BOT_LEVEL_DEFAULT]) {
       for (const t of st.map) if (t.owner === myId && BTYPES[t.btype]?.proc)
         for (const g of Object.keys(BTYPES[t.btype].proc.in)) zutaten.add(g);
       for (const g of eigeneWare) zutaten.delete(g);
+      /* Rüstungsaufträge: bieten, wenn die eigenen Werke die Menge in der Frist
+       * schaffen (mit Sicherheitsabschlag), und als Gewinner laufend liefern. */
+      const RA = st.stadt?.ruest;
+      if (RA && cfg.industry === "ruestung") for (const a of RA.auftraege) {
+        if (a.phase === "bieten" && !me.ruestGebote?.[a.id]) {
+          const tempo = g => st.map.filter(t => t.owner === myId && BTYPES[t.btype]?.proc?.out === g && !(t.bauBis > st.tick))
+            .reduce((m, t) => m + BTYPES[t.btype].proc.rate * levelMult(t.level), 0);
+          const schafft = Object.entries(a.needs).every(([g, n]) => (me.inv[g] || 0) + tempo(g) * RA.regeln.frist * 0.6 >= n.req);
+          /* Ohne andere Rüstungsfirma am Tisch darf er mehr verlangen */
+          const konkurrenz = Object.values(st.players).some(pl => pl.id !== myId && (pl.industries || [pl.industry]).includes("ruestung"));
+          if (schafft) await em("ruestBieten", { id: a.id, prozent: (konkurrenz ? 100 : 120) + Math.floor(Math.random() * (konkurrenz ? 21 : 19)) });
+        } else if (a.phase === "liefern" && a.gewinner === myId) {
+          for (const [g, n] of Object.entries(a.needs)) {
+            const q = Math.min(Math.floor(me.inv[g] || 0), n.req - n.have);
+            if (q > 0) await em("ruestLiefern", { id: a.id, good: g, qty: q });
+          }
+        }
+      }
       /* Stadtprojekt: ebenfalls die Hälfte des Lagers liefern */
       if (st.stadtprojekt) for (const [g, n] of Object.entries(st.stadtprojekt.needs)) {
         if (zutaten.has(g)) continue;
@@ -10792,15 +10958,19 @@ async function spawnBot(cfg, lvl = BOT_LEVELS[BOT_LEVEL_DEFAULT]) {
           const h = depot.sort((a, b) => b.value - a.value)[0];
           const n = Math.min(PAKET, h.count);
           await em("listShares", { companyId: h.id, count: n, price: Math.max(200, Math.round(h.kurs * n * 0.95)) });
-        } else if ((st.players[myId]?.ownPct ?? 0) > 50 && meinBlock > 0) {
+        } else if ((st.players[myId]?.ownPct ?? 0) - 50 >= 5 && meinBlock > 0) {
           /* Notverkauf eigener Anteile: 10 % Abschlag auf den Marktwert, nicht mehr.
            * Untergrenze 50 %: Vorher stand hier nur "> 0", ein dauerhaft klammer
            * Bot verkaufte sich damit Block für Block bis auf null herunter.
            * Gemessen an Stahlfaust am Rundenende: Nettovermögen 0 bei 8.300 $
            * Umsatz und Bonität D — netWorth summiert ausschliesslich GEHALTENE
            * Anteile, und er hielt keinen einzigen mehr an sich selbst. Die
-           * Anzeige war korrekt, die Firma hatte sich selbst aufgelöst. */
-          await em("listShares", { count: PAKET, price: Math.max(400, Math.round(meinBlock * 0.9)) });
+           * Anzeige war korrekt, die Firma hatte sich selbst aufgelöst.
+           * Die Grenze gilt NACH dem Verkauf: Geprüft wurde vorher, ein ganzes
+           * 25er-Paket ging trotzdem raus — von 51 % auf 26 %. Gemessen hielten
+           * Küstenperle und Nordsee Öl so am Ende nur noch 26–34 % an sich. */
+          const n = Math.min(PAKET, Math.floor((st.players[myId]?.ownPct ?? 0) - 50));
+          await em("listShares", { count: n, price: Math.max(100, Math.round(meinBlock / PAKET * n * 0.9)) });
         }
       } else if (me.cash > 6000) {
         /* Günstige fremde Anteile aufsammeln: nur unter Marktwert zugreifen */
@@ -10982,7 +11152,8 @@ async function spawnBot(cfg, lvl = BOT_LEVELS[BOT_LEVEL_DEFAULT]) {
       /* Arbeitermangel in der Stadt: Ein neues Gebäude stünde halb leer —
        * meistens lieber abwarten, bis neue Bewohner zuziehen. */
       const arbeitKnapp = st.stadt?.arbeit && st.stadt.arbeit.offen > st.stadt.arbeit.faehig * .2 && Math.random() < .6;
-      if (Date.now() - lastBuild > lvl.bauPause && !planFertig && !arbeitKnapp) {
+      const lagerStau = Object.entries(cfg.bauStopp || {}).some(([g, n]) => (me.inv[g] || 0) > n);
+      if (Date.now() - lastBuild > lvl.bauPause && !planFertig && !arbeitKnapp && !lagerStau) {
         let btid = gesamtplan[built % gesamtplan.length];
         if (BTYPES[btid]?.racing && st.map.some(t => t.owner === myId && BTYPES[t.btype]?.racing))
           btid = gesamtplan[(built + 1) % gesamtplan.length];
@@ -11286,7 +11457,7 @@ async function spawnBot(cfg, lvl = BOT_LEVELS[BOT_LEVEL_DEFAULT]) {
        * hier an fremde Gebote zu 125–140 $ wieder ab: 163k $ Einkauf, 136k $
        * Weiterverkauf in einer Runde — und der Waffenschmiede fehlte er. */
       const gebote = st.orders
-        .filter(o => o.side === "buy" && o.playerId !== myId && !zutaten.has(o.good) &&
+        .filter(o => o.side === "buy" && o.playerId !== myId && !zutaten.has(o.good) && !vertragsWare.has(o.good) &&
                      (me.inv[o.good] || 0) > reserveFuer(o.good) + 1)
         .sort((a, b) => aufschlag(b) - aufschlag(a));
       /* Mehrere Gebote je Zyklus bedienen. Bei einem einzigen pro Bot-Takt
@@ -11300,7 +11471,7 @@ async function spawnBot(cfg, lvl = BOT_LEVELS[BOT_LEVEL_DEFAULT]) {
       let eingestellt = 0;
       for (const g of Object.keys(me.inv)) {
         const frei = me.inv[g] - (bauMat[g] || 0);   // Material fürs nächste Gebäude bleibt liegen
-        if (frei < 18 || zutaten.has(g)) continue;
+        if (frei < 18 || zutaten.has(g) || vertragsWare.has(g)) continue;
         /* Das Stadtnetz zählt nicht mit: Sein teures Notangebot (20 Elektronik)
          * hielt ChipWerke sonst davon ab, je selbst Elektronik anzubieten —
          * gemessen lagen nach 45 Minuten 890 Stück ungenutzt in ihrem Lager. */

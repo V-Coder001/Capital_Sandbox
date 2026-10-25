@@ -2010,6 +2010,13 @@ const EN = {
   "Arbeitsmarkt": "Labour market", "der Einwohner arbeiten": "of residents work", "Beschäftigt / Stellen": "Employed / jobs", "beschäftigt": "employed", "Stellen offen": "jobs open",
   "arbeitslos": "unemployed", "Stellen": "jobs", "Löhne aller Firmen": "Wages of all companies", "Lohnsteuer + Miete an die Stadt": "Wage tax + rent to the city", "der Löhne": "of wages",
   "Stütze für Arbeitslose": "Benefits for the unemployed", "Arbeit": "Work",
+  "Rüstungsaufträge": "Arms contracts", "Ausschreibung": "Tender", "Lieferung": "Delivery", "Lieferruf": "Delivery reputation",
+  "Polizei": "Police", "Stadtwache": "City guard", "Schützenverein": "Shooting club", "Grenzschutz": "Border guard",
+  "Gebote noch": "Bids for", "Gebote": "bids", "Dein Gebot": "Your bid", "Bieten": "Bid", "Gebot ändern": "Change bid",
+  "% vom Listenpreis": "% of list price", "Zuschlag an": "Awarded to", "Frist noch": "Deadline in",
+  "Nächste Ausschreibung in": "Next tender in", "dich": "you",
+  "Das günstigste Gebot gewinnt, gewichtet mit dem Lieferruf. Wer nicht rechtzeitig liefert, zahlt 20 % des fehlenden Werts als Strafe und verliert Ruf.":
+    "The cheapest bid wins, weighted by delivery reputation. If you miss the deadline you pay 20 % of the missing value as a penalty and lose reputation.",
   "Einwohner — die Stadt ist in dieser Runde von": "residents — this round the city grew from", "auf": "to", "gewachsen": "",
   "Fachkräfte": "Skilled workers", "der Arbeitenden, mehr durch die Stadtbibliothek": "of the workforce, more via the city library",
   "Stadtanleihen": "City bonds", "gezeichnet, an der Stadtbank": "subscribed, at the city bank",
@@ -6924,6 +6931,35 @@ function lohnHtml(me, state) {
     ${L.verzug ? `<div class="meta stMinus">${t("Löhne nicht voll bezahlt — du bekommst zuletzt Arbeiter, bis du wieder zahlst.")}</div>` : ""}
     <div class="meta" style="padding-bottom:8px">${t("Sind Arbeiter knapp, gehen sie zuerst zur Firma mit dem höchsten Lohn. Vom Lohn gehen 30 % als Steuer und Miete an die Stadt — damit baut sie Wohnungen.")}</div>`;
 }
+/* Rüstungsaufträge (nur Rüstungsfirmen im Sandkasten): verdeckt bieten in
+ * Prozent des Listenpreises, als Gewinner innerhalb der Frist liefern. */
+function ruestHtml(me, state, my) {
+  const R = state.stadt?.ruest;
+  if (!R || !(my?.industries || [my?.industry]).includes("ruestung")) return "";
+  const tick = state.tick || 0, myId = store.get().myId, regel = R.regeln;
+  const auftrag = a => {
+    const liste = Object.entries(a.needs);
+    if (a.phase === "bieten") {
+      const mein = me.ruestGebote?.[a.id];
+      return `<div class="stAuftrag"><div class="faPKopf"><b>${t("Ausschreibung")}: ${t(a.name)}</b><span class="meta">${t("Gebote noch")} ${Math.max(0, a.bisBieten - tick)} s · ${a.gebote} ${t("Gebote")}</span></div>
+        <div class="meta">${liste.map(([g, n]) => `${n.req}× ${gname(g)} (${t("Lager")} ${Math.floor(me.inv?.[g] || 0)})`).join(" · ")}</div>
+        <div class="faPFuss"><span class="meta">${mein ? `${t("Dein Gebot")}: ${mein} %` : `${regel.min}–${regel.max} ${t("% vom Listenpreis")}`}</span>
+          <input type="number" min="${regel.min}" max="${regel.max}" id="rg-${a.id}" value="${mein || 105}">
+          <button class="buyb" data-rgebot="${a.id}">${t(mein ? "Gebot ändern" : "Bieten")}</button></div></div>`;
+    }
+    const meins = a.gewinner === myId;
+    return `<div class="stAuftrag"><div class="faPKopf"><b>${t("Lieferung")}: ${t(a.name)}</b><span class="meta">${t("Zuschlag an")} ${meins ? t("dich") : a.gewinnerName} · ${a.prozent} % · ${t("Frist noch")} ${Math.max(0, a.frist - tick)} s</span></div>
+      ${liste.map(([g, n]) => `<div class="faProjekt">
+        <div class="faPKopf"><b>${gname(g)}</b><span class="meta">${n.have} / ${n.req} · ${fp(a.preise[g])}/Stk</span></div>
+        <div class="faBalken"><i style="width:${Math.min(100, n.have / n.req * 100).toFixed(1)}%"></i></div>
+        ${meins ? `<div class="faPFuss"><span class="meta">${t("Lager")}: ${Math.floor(me.inv?.[g] || 0)}</span>
+          <button class="buyb" data-rliefer="${a.id}" data-rlg="${g}" ${(me.inv?.[g] || 0) < 1 || n.have >= n.req ? "disabled" : ""}>${t("Liefern")}</button></div>` : ""}</div>`).join("")}</div>`;
+  };
+  return `<div class="sec">${t("Rüstungsaufträge")} <span class="meta">· ${t("Lieferruf")} ${R.ruf?.[myId] ?? 100}</span></div>
+    ${R.auftraege.length ? R.auftraege.map(auftrag).join("") : `<div class="kzrow"><span>${t("Nächste Ausschreibung in")}</span><b>${Math.max(0, (R.naechste || tick) - tick)} s</b></div>`}
+    <div class="meta" style="padding:4px 0 6px">${t("Das günstigste Gebot gewinnt, gewichtet mit dem Lieferruf. Wer nicht rechtzeitig liefert, zahlt 20 % des fehlenden Werts als Strafe und verliert Ruf.")}</div>
+    ${(R.log || []).length ? `<div class="stLog">${R.log.slice(0, 4).map(l => `<div class="meta">Min ${Math.floor(l.tick / 60)} · ${l.text}</div>`).join("")}</div>` : ""}`;
+}
 /* Lexikon-Gruppe „Stadt & Arbeit“ (nur wenn die Stadt in diesem Modus wächst) */
 function stadtLexikon() {
   const S = store.get().state?.stadt;
@@ -10027,6 +10063,7 @@ function render({ state, me, myId, chat, room }) {
         <div><span>Zinsausgaben</span><b class="${me.fin?.zinsAufwand ? "minus" : ""}">${me.fin?.zinsAufwand ? "− " : ""}${geld(me.fin?.zinsAufwand || 0)}</b></div>
       </div>
       ${lohnHtml(me, state)}
+      ${ruestHtml(me, state, my)}
       <div class="sec">Deine Aktie</div>
       <div class="fAktie">
         <div><span>Kurs</span><b>${fk(me.kurs ?? 0)}</b></div>
@@ -11164,6 +11201,10 @@ document.getElementById("firmabody").addEventListener("click", e => {
   if (lb) return act("lohnStufe", { stufe: lb.dataset.lohn });
   const jb = e.target.closest("[data-jobabo]");
   if (jb) return act("jobAbo", { id: jb.dataset.jobabo || null });
+  const rg = e.target.closest("[data-rgebot]");
+  if (rg) return act("ruestBieten", { id: +rg.dataset.rgebot, prozent: +document.getElementById(`rg-${rg.dataset.rgebot}`).value });
+  const rl = e.target.closest("[data-rliefer]");
+  if (rl) return act("ruestLiefern", { id: +rl.dataset.rliefer, good: rl.dataset.rlg });
   if (e.target.closest("[data-malen]")) return malOeffnen();
   const sa = e.target.closest("[data-shopauf]");
   if (sa) { const [x, y] = sa.dataset.shopauf.split(",").map(Number); return shopOeffnen(x, y); }
