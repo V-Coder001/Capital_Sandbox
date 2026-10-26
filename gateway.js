@@ -61,9 +61,14 @@ const app = express();
  * Runden auf diesem Server aufmachen. */
 const CORS_EXTRA = String(process.env.CORS_EXTRA || "").split(",").map(x => x.trim()).filter(Boolean);
 const PORTAL = /^https?:\/\/([a-z0-9-]+\.)*crazygames\.[a-z]{2,}(\.[a-z]{2,})?$/i;
+/* Herkunft der Desktop-App: ihr mitgelieferter Server auf 127.0.0.1 nimmt bei
+ * jedem Start einen anderen freien Port — siehe die ausfuehrliche Begruendung
+ * in server.js. Ohne diese Zeile faende die App hier keine Runde. */
+const LOKAL = /^http:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d{1,5})?$/i;
 function herkunftErlaubt(origin) {
   if (!origin) return true;                                   // gleiche Herkunft oder kein Browser
   if (PORTAL.test(origin)) return true;
+  if (LOKAL.test(origin)) return true;
   if (origin === "capacitor://app.crazygames.com") return true;
   return CORS_EXTRA.includes(origin);
 }

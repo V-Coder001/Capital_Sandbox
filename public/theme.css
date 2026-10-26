@@ -654,6 +654,9 @@ html[data-theme="papier"] .updAuf .updPunkt{box-shadow:0 0 0 2px #f8f4ea}
 .startModus{padding:22px 32px 0}
 .startKarte #netmode{display:grid!important;grid-template-columns:1fr 1fr;width:100%;padding:4px;border-radius:14px;
   background:rgba(4,8,14,.55);border:var(--rand);box-shadow:none}
+/* Desktop-App: dort kommt "Online-Runde erstellen" als dritte Wahl dazu. */
+.startKarte #netmode.drei{grid-template-columns:1fr 1fr 1fr}
+.startKarte #netmode.drei .netopt{font-size:13px;gap:7px}
 .startKarte #netmode .netopt{height:46px;display:flex;align-items:center;justify-content:center;gap:9px;font-size:14px;border-radius:10px;color:var(--dim)}
 .startKarte #netmode .netopt:hover{color:var(--text)}
 .startKarte #netmode .netopt.on{background:var(--akzent-flaeche)!important;color:var(--text)!important;

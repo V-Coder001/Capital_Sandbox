@@ -34,11 +34,22 @@ const CORS_EXTRA = String(process.env.CORS_EXTRA || "").split(",").map(s => s.tr
 /* crazygames.<tld> und beliebige Unterdomains davon; die TLD darf zweiteilig
  * sein (.com.br). Dazu die WebView der iOS-App, die eine capacitor-Herkunft hat. */
 const PORTAL = /^https?:\/\/([a-z0-9-]+\.)*crazygames\.[a-z]{2,}(\.[a-z]{2,})?$/i;
+/* Die Desktop-App liefert ihre Seite vom mitgelieferten Server auf 127.0.0.1
+ * aus — und der sucht sich bei jedem Start einen freien Port, weil ein fester
+ * oft belegt waere. Ihre Herkunft ist also http://127.0.0.1:<wechselnder Port>,
+ * und eine Liste fester Adressen koennte sie gar nicht treffen. Deshalb hier
+ * ein Muster, wie schon bei den Portal-Domains.
+ *
+ * Das oeffnet niemandem im Netz etwas: eine localhost-Herkunft kann nur von
+ * einem Programm kommen, das auf dem Rechner des Spielers ohnehin schon
+ * laeuft. */
+const LOKAL = /^http:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d{1,5})?$/i;
 function herkunftErlaubt(origin) {
   /* Ohne Origin-Kopf: gleiche Herkunft oder ein Client ohne Browser (unsere
    * Bots, Testskripte). Beides ist der bisherige, normale Fall. */
   if (!origin) return true;
   if (PORTAL.test(origin)) return true;
+  if (LOKAL.test(origin)) return true;
   if (origin === "capacitor://app.crazygames.com") return true;
   return CORS_EXTRA.includes(origin);
 }
@@ -91,8 +102,13 @@ app.get("/api/invite", (_req, res) => {
  * Meldungen landen als JSON-Zeilen plus Bilddateien im Ordner bugreports/.
  * Die Admin-Ansicht unter /bugs ist mit einem festen Schlüssel geschützt
  * (FESTER_SCHLUESSEL, überschreibbar per BUGS_KEY / ADMIN_KEY). */
-const BUGDIR = path.join(__dirname, "bugreports");
-fs.mkdirSync(BUGDIR, { recursive: true });
+/* Schreibbarer Ordner für alles, was der Server selbst ablegt (Bugreports,
+ * Bestenliste). Normalerweise das Projektverzeichnis — in der Desktop-App liegt
+ * server.js aber in einem nur lesbaren App-Paket, deshalb gibt die dort per
+ * CS_DATEN den Benutzerordner vor. */
+const DATEN = process.env.CS_DATEN || __dirname;
+const BUGDIR = path.join(DATEN, "bugreports");
+try { fs.mkdirSync(BUGDIR, { recursive: true }); } catch (e) { console.error("Bugreport-Ordner nicht anlegbar:", e.message); }
 /* Fester Schlüssel für Bugreports und Adminpanel — bleibt über Neustarts und
  * Deploys gleich. Per Umgebungsvariable (ADMIN_KEY / BUGS_KEY) überschreibbar. */
 const FESTER_SCHLUESSEL = "79ce89d";
@@ -430,7 +446,7 @@ app.get("/api/lobby", (_req, res) => {
  * Am Ende jeder Runde landet jeder menschliche Spieler mit Firmenname,
  * Nettovermögen, Spieldauer und Modus in der Liste; gehalten werden die
  * zehn besten nach Nettovermögen. Der Startbildschirm zeigt sie als Ansporn. */
-const HOF_DATEI = path.join(__dirname, "leaderboard.json");
+const HOF_DATEI = path.join(DATEN, "leaderboard.json");
 let HOF = [];
 try { HOF = JSON.parse(fs.readFileSync(HOF_DATEI, "utf8")); if (!Array.isArray(HOF)) HOF = []; } catch {}
 function hofSpeichern() {
