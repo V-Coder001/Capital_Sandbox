@@ -195,7 +195,18 @@ const act = (ev, payload) => socket.emit(ev, payload, res => {
  * Bewusst eine einzige Stelle fuer Socket UND die /api-Aufrufe: Waere die
  * Adresse an neun Stellen verteilt, wuerde beim naechsten Hosterwechsel genau
  * eine davon vergessen — und die faellt erst im Betrieb auf. */
-const SERVER = "";
+const SERVER_VORGABE = "";
+/* Seit der Desktop-Fassung ist die Adresse nicht mehr fuer die ganze Sitzung
+ * festgenagelt: dort laeuft beim Start ein eigener Server auf 127.0.0.1
+ * (Vorgabe bleibt also leer), aber derselbe Programmstart soll auch zu einer
+ * Online-Runde auf capitalsandbox.io wechseln koennen, ohne neu geladen zu
+ * werden. Deshalb ist SERVER veraenderlich — umgestellt wird er ausschliesslich
+ * ueber serverWechseln(), damit Socket und /api-Aufrufe nie auseinanderlaufen.
+ *
+ * Die Build-Vorgabe oben bleibt der Normalfall und gewinnt, wenn sie gesetzt
+ * ist: eine Portalfassung liegt auf fremdem CDN und hat gar keinen eigenen
+ * Server, zu dem sie zurueckfallen koennte. */
+let SERVER = SERVER_VORGABE;
 /* Alle Serverpfade laufen hierueber. Bei leerem SERVER kommt exakt der
  * bisherige relative Pfad heraus. */
 const api = pfad => SERVER + pfad;
@@ -1736,9 +1747,47 @@ function startHosting(retriesLeft = 2) {
  * gehabt — inklusive des WebRTC-Beitritts weiter unten, den es im
  * Gateway-Modus gar nicht braucht (alle erreichen ja denselben Server). */
 let MULTIROOM = false, GATEWAY_BOOT_ID = null, myRoomCode = null;
-const multiroomReady = fetch(api("/api/mode")).then(r => r.ok ? r.json() : { multiroom: false })
+/* Eigene Funktion statt einer einmaligen Kette, weil die Frage nach einem
+ * Serverwechsel neu beantwortet werden muss: der lokale server.js kennt
+ * /api/mode gar nicht, das Gateway schon. */
+const modusLaden = () => fetch(api("/api/mode")).then(r => r.ok ? r.json() : { multiroom: false })
   .then(d => { MULTIROOM = !!d.multiroom; GATEWAY_BOOT_ID = d.bootId || null; })
-  .catch(() => { MULTIROOM = false; });
+  .catch(() => { MULTIROOM = false; GATEWAY_BOOT_ID = null; });
+let multiroomReady = modusLaden();
+
+/* ---- Serverwechsel zur Laufzeit ----
+ * Der eine erlaubte Weg, SERVER zu aendern. Dieselben drei Schritte wie bei
+ * connectToRoom() weiter unten — alte Verbindung kappen, Kartencache verwerfen
+ * (die andere Seite hat eine andere Welt), neu binden —, nur dass hier auch die
+ * Adresse selbst wechselt und deshalb der Modus neu erfragt werden muss.
+ *
+ * Adresse leer = zurueck zur eigenen Herkunft, also in der Desktop-App der
+ * mitgelieferte Server auf 127.0.0.1. */
+async function serverWechseln(adresse) {
+  const neu = String(adresse || "").replace(/\/+$/, "");
+  if (neu === SERVER) return SERVER;
+  /* Eine Portalfassung hat keinen eigenen Server: dort waere ein Wechsel auf
+   * "gleiche Herkunft" eine Verbindung ins Leere. */
+  if (!neu && SERVER_VORGABE) return SERVER;
+  try { socket.disconnect?.(); } catch {}
+  cachedFullMap = null;
+  myRoomCode = null;
+  SERVER = neu;
+  multiroomReady = modusLaden();
+  await multiroomReady;
+  socket = io(SERVER || undefined);
+  bindSocketEvents(socket);
+  return SERVER;
+}
+/* Fuer den Join-Screen (und zum Nachsehen in der Konsole). Die Desktop-Huelle
+ * reicht ihre Online-Adresse ueber window.CS_DESKTOP herein, ohne dass dafuer
+ * eine zweite Fassung des Clients gebaut werden muesste. */
+window.CS_SERVER = {
+  aktuell: () => SERVER,
+  vorgabe: SERVER_VORGABE,
+  online: () => window.CS_DESKTOP?.onlineServer || SERVER_VORGABE || "",
+  wechseln: serverWechseln,
+};
 /* Wechselt die aktive Verbindung auf eine bestimmte Runde. Genau wie beim
  * WebRTC-Beitritt weiter unten: alte Verbindung sauber kappen, Kartencache
  * verwerfen (die neue Runde hat eine andere Karte), neu binden. */

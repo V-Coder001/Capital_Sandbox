@@ -35,9 +35,9 @@ python3 - "$ZIEL/app.js" "$SERVER" <<'PY'
 import sys
 pfad, server = sys.argv[1], sys.argv[2]
 s = open(pfad, encoding="utf-8").read()
-alt = 'const SERVER = "";'
+alt = 'const SERVER_VORGABE = "";'
 if alt not in s:
-    sys.exit("const SERVER = \"\"; nicht gefunden — hat sich app.js geaendert?")
+    sys.exit("const SERVER_VORGABE = \"\"; nicht gefunden — hat sich app.js geaendert?")
 open(pfad, "w", encoding="utf-8").write(s.replace(alt, f'const SERVER = "{server}";', 1))
 print(f"  Serveradresse gesetzt: {server}")
 PY
