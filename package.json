@@ -6,7 +6,81 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "gateway": "node gateway.js"
+    "gateway": "node gateway.js",
+    "desktop": "electron desktop/main.js",
+    "desktop:build": "electron-builder",
+    "desktop:dir": "electron-builder --dir"
+  },
+  "build": {
+    "appId": "io.capitalsandbox.game",
+    "productName": "Capital Sandbox",
+    "copyright": "Capital Sandbox",
+    "directories": {
+      "output": "dist/desktop",
+      "buildResources": "desktop/build"
+    },
+    "//": "main zeigt im Repo auf server.js (npm start) — nur im gepackten Programm auf die Electron-Huelle.",
+    "extraMetadata": {
+      "main": "desktop/main.js"
+    },
+    "files": [
+      "desktop/**",
+      "server.js",
+      "statisch.js",
+      "public/**",
+      "maps/**",
+      "package.json",
+      "!**/*.map",
+      "!marketing/**",
+      "!tools/**",
+      "!build/**",
+      "!dist/**"
+    ],
+    "//asarUnpack": "Das Intro-Video und die Tonspuren liest der Browser als Stream — ausgepackt laeuft das fluessiger.",
+    "asarUnpack": [
+      "public/assets/video/**",
+      "public/assets/music/**",
+      "public/assets/ambient/**",
+      "public/assets/sfx/**"
+    ],
+    "mac": {
+      "category": "public.app-category.simulation-games",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        }
+      ]
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "linux": {
+      "category": "Game",
+      "target": [
+        "AppImage"
+      ]
+    }
+  },
+  "devDependencies": {
+    "electron": "^33.2.0",
+    "electron-builder": "^25.1.8"
   },
   "dependencies": {
     "express": "^4.19.0",
@@ -14,5 +88,8 @@
     "peerjs": "^1.5.5",
     "socket.io": "^4.7.0",
     "socket.io-client": "^4.8.3"
+  },
+  "allowScripts": {
+    "electron@33.4.11": true
   }
 }

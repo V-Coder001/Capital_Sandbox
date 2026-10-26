@@ -91,8 +91,13 @@ app.get("/api/invite", (_req, res) => {
  * Meldungen landen als JSON-Zeilen plus Bilddateien im Ordner bugreports/.
  * Die Admin-Ansicht unter /bugs ist mit einem festen Schlüssel geschützt
  * (FESTER_SCHLUESSEL, überschreibbar per BUGS_KEY / ADMIN_KEY). */
-const BUGDIR = path.join(__dirname, "bugreports");
-fs.mkdirSync(BUGDIR, { recursive: true });
+/* Schreibbarer Ordner für alles, was der Server selbst ablegt (Bugreports,
+ * Bestenliste). Normalerweise das Projektverzeichnis — in der Desktop-App liegt
+ * server.js aber in einem nur lesbaren App-Paket, deshalb gibt die dort per
+ * CS_DATEN den Benutzerordner vor. */
+const DATEN = process.env.CS_DATEN || __dirname;
+const BUGDIR = path.join(DATEN, "bugreports");
+try { fs.mkdirSync(BUGDIR, { recursive: true }); } catch (e) { console.error("Bugreport-Ordner nicht anlegbar:", e.message); }
 /* Fester Schlüssel für Bugreports und Adminpanel — bleibt über Neustarts und
  * Deploys gleich. Per Umgebungsvariable (ADMIN_KEY / BUGS_KEY) überschreibbar. */
 const FESTER_SCHLUESSEL = "79ce89d";
@@ -430,7 +435,7 @@ app.get("/api/lobby", (_req, res) => {
  * Am Ende jeder Runde landet jeder menschliche Spieler mit Firmenname,
  * Nettovermögen, Spieldauer und Modus in der Liste; gehalten werden die
  * zehn besten nach Nettovermögen. Der Startbildschirm zeigt sie als Ansporn. */
-const HOF_DATEI = path.join(__dirname, "leaderboard.json");
+const HOF_DATEI = path.join(DATEN, "leaderboard.json");
 let HOF = [];
 try { HOF = JSON.parse(fs.readFileSync(HOF_DATEI, "utf8")); if (!Array.isArray(HOF)) HOF = []; } catch {}
 function hofSpeichern() {
