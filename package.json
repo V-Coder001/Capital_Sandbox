@@ -19,7 +19,6 @@
       "output": "dist/desktop",
       "buildResources": "desktop/build"
     },
-    "//": "main zeigt im Repo auf server.js (npm start) — nur im gepackten Programm auf die Electron-Huelle.",
     "extraMetadata": {
       "main": "desktop/main.js"
     },
@@ -36,7 +35,6 @@
       "!build/**",
       "!dist/**"
     ],
-    "//asarUnpack": "Das Intro-Video und die Tonspuren liest der Browser als Stream — ausgepackt laeuft das fluessiger.",
     "asarUnpack": [
       "public/assets/video/**",
       "public/assets/music/**",
@@ -91,5 +89,6 @@
   },
   "allowScripts": {
     "electron@33.4.11": true
-  }
+  },
+  "author": "V-Coder001"
 }
