@@ -34,11 +34,22 @@ const CORS_EXTRA = String(process.env.CORS_EXTRA || "").split(",").map(s => s.tr
 /* crazygames.<tld> und beliebige Unterdomains davon; die TLD darf zweiteilig
  * sein (.com.br). Dazu die WebView der iOS-App, die eine capacitor-Herkunft hat. */
 const PORTAL = /^https?:\/\/([a-z0-9-]+\.)*crazygames\.[a-z]{2,}(\.[a-z]{2,})?$/i;
+/* Die Desktop-App liefert ihre Seite vom mitgelieferten Server auf 127.0.0.1
+ * aus — und der sucht sich bei jedem Start einen freien Port, weil ein fester
+ * oft belegt waere. Ihre Herkunft ist also http://127.0.0.1:<wechselnder Port>,
+ * und eine Liste fester Adressen koennte sie gar nicht treffen. Deshalb hier
+ * ein Muster, wie schon bei den Portal-Domains.
+ *
+ * Das oeffnet niemandem im Netz etwas: eine localhost-Herkunft kann nur von
+ * einem Programm kommen, das auf dem Rechner des Spielers ohnehin schon
+ * laeuft. */
+const LOKAL = /^http:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d{1,5})?$/i;
 function herkunftErlaubt(origin) {
   /* Ohne Origin-Kopf: gleiche Herkunft oder ein Client ohne Browser (unsere
    * Bots, Testskripte). Beides ist der bisherige, normale Fall. */
   if (!origin) return true;
   if (PORTAL.test(origin)) return true;
+  if (LOKAL.test(origin)) return true;
   if (origin === "capacitor://app.crazygames.com") return true;
   return CORS_EXTRA.includes(origin);
 }

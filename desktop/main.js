@@ -50,8 +50,16 @@ function freierPort() {
 }
 
 /* Warten, bis der Spielserver wirklich antwortet — sonst zeigt das Fenster für
- * einen Moment eine Fehlerseite, statt direkt das Spiel. */
-function wartenBisBereit(port, versucheUebrig = 150) {
+ * einen Moment eine Fehlerseite, statt direkt das Spiel.
+ *
+ * Die Grenze ist absichtlich grosszuegig (1500 × 200 ms = 5 Minuten): Der
+ * erste Start nach dem Installieren liest einige hundert Dateien frisch von
+ * der Platte, und liegt der Spielordner in einer Cloud (iCloud Drive), muss
+ * macOS sie dabei erst herunterladen. Mit 30 Sekunden bricht die App dort mit
+ * einer Fehlermeldung ab, obwohl der Server gleich bereit gewesen waere. Dass
+ * das Warten nicht endlos ist, sichert der exit-Lauscher am Kindprozess: ein
+ * wirklich gescheiterter Server meldet sich sofort, nicht erst am Ende. */
+function wartenBisBereit(port, versucheUebrig = 1500) {
   return new Promise((resolve, reject) => {
     const tick = () => {
       const req = http.get({ host: "127.0.0.1", port, path: "/api/invite", timeout: 800 }, res => {
@@ -170,14 +178,23 @@ async function fensterBauen() {
     return { action: "deny" };
   });
 
+  /* Erst den Ladeschirm, dann den Server starten: sonst sieht man je nach
+   * Rechner minutenlang ein leeres Fenster und haelt die App fuer haengen. */
+  await fenster.loadFile(path.join(__dirname, "laden.html"));
+
   let port;
   try {
     port = await serverStarten();
   } catch (e) {
-    dialog.showErrorBox("Capital Sandbox", `Der Spielserver konnte nicht gestartet werden:\n\n${e.message}`);
+    dialog.showErrorBox("Capital Sandbox",
+      `Der Spielserver konnte nicht gestartet werden:\n\n${e.message}\n\n` +
+      `Liegt der Spielordner in einer Cloud (iCloud Drive, OneDrive, Dropbox), ` +
+      `kann der erste Start sehr lange dauern — dann hilft es, ihn auf die lokale Platte zu legen.`);
     app.quit();
     return;
   }
+  /* Waehrend des Wartens kann das Fenster laengst geschlossen worden sein. */
+  if (!fenster || fenster.isDestroyed()) return;
   await fenster.loadURL(`http://127.0.0.1:${port}/`);
 }
 
