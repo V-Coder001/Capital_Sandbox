@@ -120,10 +120,17 @@
   <!-- Erst die Wahl: selbst eröffnen oder beitreten — dann zwei Schritte und der Knopf -->
   <div class="startModus">
     <div id="netmode">
-      <button type="button" class="netopt on" data-net="host">
+      <button type="button" class="netopt on" data-net="host" data-ort="lokal">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
         Neue Runde starten</button>
-      <button type="button" class="netopt" data-net="join">
+      <!-- Nur in der Desktop-App sichtbar: dort laeuft die Runde sonst auf dem
+           eigenen Rechner und waere fuer Freunde ausserhalb des WLANs nicht
+           erreichbar. Im Browser ist die Seite schon vom Server gekommen, da
+           gibt es nichts zu waehlen. -->
+      <button type="button" class="netopt" data-net="host" data-ort="online" hidden>
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.7 2.5 15.3 0 18M12 3c-2.5 2.7-2.5 15.3 0 18"/></svg>
+        Online-Runde erstellen</button>
+      <button type="button" class="netopt" data-net="join" data-ort="online">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 3h4a2 2 0 012 2v14a2 2 0 01-2 2h-4M10 17l5-5-5-5M15 12H3"/></svg>
         Einer Runde beitreten</button>
     </div>

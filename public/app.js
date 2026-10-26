@@ -1769,6 +1769,14 @@ async function serverWechseln(adresse) {
   /* Eine Portalfassung hat keinen eigenen Server: dort waere ein Wechsel auf
    * "gleiche Herkunft" eine Verbindung ins Leere. */
   if (!neu && SERVER_VORGABE) return SERVER;
+  /* Erst anklopfen, dann umziehen: Scheitert das, bleibt die bestehende
+   * Verbindung unangetastet — sonst stuende der Spieler nach einem
+   * Fehlversuch ohne Server da. /api/mode gibt es nur beim Gateway, und genau
+   * dorthin fuehrt der Online-Weg. */
+  if (neu) {
+    const erreichbar = await fetch(neu + "/api/mode").then(r => r.ok).catch(() => false);
+    if (!erreichbar) throw new Error("Server nicht erreichbar: " + neu);
+  }
   try { socket.disconnect?.(); } catch {}
   cachedFullMap = null;
   myRoomCode = null;
@@ -1852,6 +1860,10 @@ try { const g = localStorage.getItem("cs_lang"); if (g === "en" || g === "de") S
 const EN = {
   /* Startbildschirm */
   "Neue Runde starten": "Start a new round", "Einer Runde beitreten": "Join a round",
+  "Online-Runde erstellen": "Create an online round",
+  "Verbinde mit dem Online-Server …": "Connecting to the online server …",
+  "Der Online-Server ist gerade nicht erreichbar — es geht auf diesem Rechner weiter.":
+    "The online server cannot be reached right now — carrying on with the round on this computer.",
   "Tutorial spielen": "Play the tutorial", "Runde erstellen": "Create round",
   "Spielanleitung lesen": "Read the manual", "Lieber ausprobieren": "Rather try it out",
   "Vorlesen": "Read aloud", "Stopp": "Stop", "Spielanleitung": "Manual",
@@ -2769,9 +2781,46 @@ document.querySelectorAll(".indopt:not(.netopt)").forEach(b => b.addEventListene
     socket.emit("brancheWaehlen", { industry: myIndustry },
       res => { if (res?.error) toast(res.error, true); });
 }));
+/* ---- Drei Wege in eine Runde (nur in der Desktop-App) ----
+ * Im Browser gibt es zwei: eine Runde aufmachen oder einer beitreten — die
+ * Seite kam ja vom Spielserver, die Adresse steht damit fest.
+ *
+ * Die Desktop-App bringt ihren eigenen Server mit. "Neue Runde starten" ist
+ * dort die Runde auf diesem Rechner (volle Grafik, kein Internet, Freunde im
+ * selben WLAN). Wer mit Freunden ausserhalb spielen will, braucht dagegen
+ * unseren oeffentlichen Server — deshalb hier die dritte Taste, die vor dem
+ * Erstellen auf dessen Adresse umschaltet. Beitreten geht immer dorthin. */
+const ortUmschalter = !!window.CS_DESKTOP && !!window.CS_SERVER?.online();
+if (ortUmschalter) {
+  document.querySelector('.netopt[data-ort="online"][data-net="host"]')?.removeAttribute("hidden");
+  document.getElementById("netmode")?.classList.add("drei");
+}
 /* Host vs. Beitreten-per-Code umschalten */
 let netMode = "host", remoteConn = null;
-document.querySelectorAll(".netopt").forEach(b => b.addEventListener("click", () => {
+document.querySelectorAll(".netopt").forEach(b => b.addEventListener("click", async () => {
+  /* Zuerst den Ort, dann alles andere: Ob es Rundencodes gibt, haengt am
+   * Server (MULTIROOM) — und das weiss der Client erst nach dem Wechsel. */
+  if (ortUmschalter && b.dataset.ort) {
+    const ziel = b.dataset.ort === "online" ? window.CS_SERVER.online() : "";
+    if (ziel !== window.CS_SERVER.aktuell()) {
+      const knoepfe = [...document.querySelectorAll(".netopt")];
+      const fehler = document.getElementById("joinErr");
+      knoepfe.forEach(x => x.disabled = true);
+      fehler.textContent = b.dataset.ort === "online" ? t("Verbinde mit dem Online-Server …") : "";
+      try {
+        await window.CS_SERVER.wechseln(ziel);
+        fehler.textContent = "";
+      } catch {
+        /* Zurueck auf den eigenen Server, sonst steht der Startbildschirm vor
+         * einer Adresse, die nicht antwortet. */
+        try { await window.CS_SERVER.wechseln(""); } catch {}
+        fehler.textContent = t("Der Online-Server ist gerade nicht erreichbar — es geht auf diesem Rechner weiter.");
+        b = document.querySelector('.netopt[data-ort="lokal"]') || b;
+      } finally {
+        knoepfe.forEach(x => x.disabled = false);
+      }
+    }
+  }
   netMode = b.dataset.net;
   document.querySelectorAll(".netopt").forEach(x => x.classList.toggle("on", x === b));
   document.getElementById("invite").style.display = netMode === "host" ? "" : "none";
