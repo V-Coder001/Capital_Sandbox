@@ -74,6 +74,12 @@
       "target": [
         "AppImage"
       ]
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "V-Coder001",
+      "repo": "Capital_Sandbox",
+      "releaseType": "draft"
     }
   },
   "devDependencies": {
@@ -90,5 +96,9 @@
   "allowScripts": {
     "electron@33.4.11": true
   },
-  "author": "V-Coder001"
+  "author": "V-Coder001",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/V-Coder001/Capital_Sandbox.git"
+  }
 }
