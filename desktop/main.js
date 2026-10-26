@@ -161,6 +161,16 @@ async function fensterBauen() {
     title: "Capital Sandbox",
     webPreferences: {
       preload: path.join(__dirname, "preload.cjs"),
+      /* Der Weg, auf dem das Preload-Skript an seine Werte kommt — es laeuft
+       * in der Sandbox und darf keine Dateien lesen. Siehe preload.cjs.
+       *
+       * Die nackte Domain antwortet mit 301 auf www., und die Umleitung
+       * passiert vor unserem Server, also ohne CORS-Koepfe: der Browser
+       * bricht schon dort ab. Deshalb hier mit www. */
+      additionalArguments: [
+        `--cs-version=${app.getVersion()}`,
+        `--cs-online=${process.env.CS_ONLINE_SERVER || "https://www.capitalsandbox.io"}`,
+      ],
       contextIsolation: true,
       nodeIntegration: false,
       backgroundThrottling: false,   // der 1-Sekunden-Tick darf im Hintergrund nicht einschlafen
