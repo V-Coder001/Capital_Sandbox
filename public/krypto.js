@@ -1,4 +1,4 @@
-/* Krypto-Börse im Spiel (Panel p-krypto). Liest state.krypto und me.kryptoKonto
+/* Krypto-Börse im Spiel: Teil der eigenen Stadtnetz-Seite der Software-Firma. Liest state.krypto und me.kryptoKonto
  * aus dem Snapshot, sendet Befehle über act() (siehe app.js). */
 let kryptoSig = "";
 const kryptoEsc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
@@ -22,7 +22,7 @@ function kryptoRendern(state, me, myId) {
   body.dataset.boerse = handelBoerse || "";
   body.dataset.coin = coin?.firmaId || "";
   const sig = JSON.stringify([K, konten, handelBoerse, coin?.firmaId]);
-  if (sig === kryptoSig) return;
+  if (sig === kryptoSig && body.childElementCount) return;
   if (body.contains(document.activeElement) && /INPUT|SELECT/.test(document.activeElement.tagName)) return;
   kryptoSig = sig;
 
@@ -91,8 +91,8 @@ function kryptoRendern(state, me, myId) {
     <section class="kr-block">${boersenTeil}</section>`;
 }
 
-document.getElementById("p-krypto")?.addEventListener("click", e => {
-  const b = e.target.closest("[data-kr]"); if (!b) return;
+document.addEventListener("click", e => {
+  const b = e.target.closest("#kryptobody [data-kr]"); if (!b) return;
   const v = id => document.getElementById(id)?.value;
   const boerse = b.dataset.boerse || null;
   switch (b.dataset.kr) {

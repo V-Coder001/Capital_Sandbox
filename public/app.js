@@ -6379,7 +6379,7 @@ addEventListener("keydown", e => {
 });
 
 /* ---- Dock & Panels ---- */
-const DOCK = [["karte","Karte"],["plan","Planbüro"],["kartell","Kartell"],["lager","Lager"],["boerse","Börse"],["bonds","Finanzen"],["firma","Firma"],["netz","Stadtnetz"],["touristik","Touristik"],["motorsport","Motorsport"],["lexikon","Lexikon"],["krypto","Krypto"],["chat","Chat"]];
+const DOCK = [["karte","Karte"],["plan","Planbüro"],["kartell","Kartell"],["lager","Lager"],["boerse","Börse"],["bonds","Finanzen"],["firma","Firma"],["netz","Stadtnetz"],["touristik","Touristik"],["motorsport","Motorsport"],["lexikon","Lexikon"],["chat","Chat"]];
 const dock = document.getElementById("dock");
 DOCK.forEach(([pid, label]) => { const b = document.createElement("button");
   b.className = "dockbtn"; b.dataset.p = pid; b.textContent = label;
@@ -7731,6 +7731,13 @@ function netzZeichnen() {
   const pid = NETZ.seite, p = state.players[pid], w = W[pid];
   if (!p) return netzOeffnen(null);
   const meins = pid === myId, B = BTYPES(), ind = p.industry;
+  /* Krypto-Börse: eigene Seite im Stadtnetz (Software-Firmen), gefüllt von krypto.js */
+  if (meins && ind === "software" && !fenster.querySelector("#kryptobody")) {
+    const host = document.createElement("section");
+    host.className = "netzBox netzKrypto";
+    host.innerHTML = `<b>${t("Krypto-Börse")}</b><div id="kryptobody"></div>`;
+    fenster.querySelector(".sfBrowser")?.appendChild(host);
+  }
   const anbieter = w && (w.anbieter === "stadtportal" ? null : (state.website || []).find(x => x.id === w.anbieter));
   fenster.querySelector(".sfBrowser").style.setProperty("--sys", p.color || "#0f766e");
   netzSetze(".sfUrl", `🔒 ${shopSlug(p.name)}.cs`, "url" + pid);
