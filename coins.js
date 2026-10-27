@@ -143,7 +143,11 @@ export function coinAusgeben(G, firma, menge, name, coinId) {
   if (!konto(b, firma.id)) b.konten[firma.id] = { cash: 0, coins: {} };
   c.minted += m;
   b.konten[firma.id].coins[c.id] = (b.konten[firma.id].coins[c.id] || 0) + m;
-  return { ok: true, coinId: c.id };
+  /* Ausgegebene Stück gehen an die Börse, nicht ins eigene Depot: Sie stehen
+   * sofort als Angebot im Buch. Zurückkaufen darf die Firma sie jederzeit. */
+  const preis = Math.max(0.01, Math.round(c.kurs * 100) / 100);
+  const r = coinOrder(G, firma, { boerseId: b.firmaId, coinId: c.id, side: "sell", qty: m, price: preis });
+  return { ok: true, coinId: c.id, angeboten: !r.error, preis };
 }
 
 /* Coins im Umlauf: ausgegeben, ohne was die Firma selbst im Konto hält. */

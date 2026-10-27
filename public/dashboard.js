@@ -70,7 +70,7 @@ function dashboardSeite(fenster, state, me, myId) {
         <span>${t("Sie trägt das Fundament deines Coins. Bei fremden Coins behältst du 30 %.")}</span></div>
       <div class="krBox"><small>${t("Neuen Coin auflegen")}</small>
         <div class="krBoxForm"><input id="dsNeuName" maxlength="16" placeholder="${t("Name")}"><input id="dsAusgabe" type="number" min="1" max="100" step="1" value="20"><button type="button" class="mini" data-dsausgeben ${eigene.length >= 5 ? "disabled" : ""}>${t("Auflegen")}</button></div>
-        <span>${eigene.length ? `${eigene.length} ${t("von")} 5 ${t("Coins aufgelegt")}` : t("Mit dem ersten Coin geht es los.")}</span></div>
+        <span>${eigene.length ? `${eigene.length} ${t("von")} 5 ${t("Coins aufgelegt")}` : t("Mit dem ersten Coin geht es los.")} · ${t("Ausgegebene Stück stehen sofort zum Kurs im Orderbuch deiner Börse.")}</span></div>
       <div class="krBox"><small>${t("Dein Konto")}</small>
         <div class="krBoxForm"><b class="mono">${konto ? fmt(konto.cash) : "—"}</b></div>
         <span>${konto ? `${t("Guthaben auf der eigenen Börse")} · ${konto.coins?.[pid] || 0} ${t("eigene Coins im Depot")}` : t("Du hast noch kein Konto auf deiner eigenen Börse.")}</span></div>

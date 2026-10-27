@@ -147,7 +147,7 @@ function kryptoSeite(fenster, state, me, myId) {
           <span>${t("Sie ist deine einzige Einnahme und trägt das Fundament deines Coins.")}</span></div>
         <div class="krBox"><small>${t("Neuen Coin auflegen")}</small>
           <div class="krBoxForm"><input id="krNeuName" maxlength="16" placeholder="${t("Name")}"><input id="krAusgabe" type="number" min="1" max="100" step="1" value="20"><button type="button" class="mini" data-krausgeben>${t("Auflegen")}</button></div>
-          <span>${eigene.length ? `${eigene.length} ${t("von")} 5 ${t("Coins aufgelegt")} · ${t("Mehr Stück eines bestehenden Coins gibst du in der Liste darunter aus.")}` : t("Dein erster Coin. Der Name steht auf der Börse.")}</span></div>
+          <span>${eigene.length ? `${eigene.length} ${t("von")} 5 ${t("Coins aufgelegt")} · ${t("Mehr Stück eines bestehenden Coins gibst du in der Liste darunter aus.")}` : t("Dein erster Coin. Der Name steht auf der Börse.")} ${t("Ausgegebene Stück gehen sofort als Angebot ins Buch.")}</span></div>
       </div>
       <div class="krVertraege"><small>${t("Deine Coins")}</small>
         ${eigene.length ? eigene.map(c => `<div class="krVertrag"><span>${coinName(c)} <small>${c.minted} ${t("von")} 100</small></span><b class="mono">${fp(c.kurs)}</b>
