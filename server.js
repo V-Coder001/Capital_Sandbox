@@ -1437,7 +1437,13 @@ const MARKT_TIEFE = { munition: 1.5, pistole: 2.5, panzer: 2.5,
    * 24–31k $ Vermögen, Tabellenende). */
   uebernachtung: 2 };
 const soldPressure = k => MM[k].sold * BASEP[k] / (4000 * (MARKT_TIEFE[k] || 1));   // verkaufter Wert / $4000 = 1 Druckpunkt
-function noteSold(k, qty) { MM[k].sold = Math.max(-200 / BASEP[k], MM[k].sold + qty); }
+/* Knappheit: Verbrauch in der Produktion zählt als Nachfrage und senkt `sold`
+ * (negativer Druck hebt den Anker). Die Untergrenze ist so gewählt, dass der
+ * Anker bei dauerhafter Knappheit bis zur 130-%-Grenze steigen kann. */
+const NACHFRAGE_FAKTOR = 0.5;   // Verbrauch wirkt halb so stark wie ein Verkauf
+const soldFloor = k => -1500 * (MARKT_TIEFE[k] || 1) / BASEP[k];   // −0,375 Druckpunkte = Anker 130 %
+function noteSold(k, qty) { MM[k].sold = Math.max(soldFloor(k), MM[k].sold + qty); }
+function noteDemand(k, qty) { MM[k].sold = Math.max(soldFloor(k), MM[k].sold - qty * NACHFRAGE_FAKTOR); }
 
 const BOOST_MULT = 0.75;   // je verfügbarem Boost-Rohstoff: +75 % Produktion
 
@@ -10276,7 +10282,10 @@ function runTick() {
       }
       if (frac > 0) {
         frac *= SPERR;   // Stromabschaltung drosselt Verbrauch und Ausstoß gleichermaßen
-        for (const [g, need] of Object.entries(bt.proc.in)) p.inv[g] -= need * lvl * frac * sparen;
+        for (const [g, need] of Object.entries(bt.proc.in)) {
+          p.inv[g] -= need * lvl * frac * sparen;
+          noteDemand(g, need * lvl * frac * sparen);
+        }
         const plus = (sb?.out || 0) + (sb?.turbo ? TURBO.OUT : 0);
         const menge = bt.proc.rate * lvl * frac * (1 + plus);
         if (sb) {
