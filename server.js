@@ -12,6 +12,7 @@ import { Server } from "socket.io";
 import path from "path";
 import { fileURLToPath } from "url";
 import { statisch, cacheKoepfe } from "./statisch.js";
+import { boerseEroeffnen, gebuehrSetzen, coinAusgeben, vertragSchliessen, vertragKuendigen, coinOrder, coinStorno, coinTick, coinsWert } from "./coins.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -2936,6 +2937,7 @@ const G = {
   auctions: [],         // {id, tileIdx, btype, minBid, bestBid, bestBidder, tLeft}
   lastTrade: {},        // good -> Preis des letzten echten Trades (Ticker)
   priceHist: {},        // good -> Kursverlauf, alle 10 s ein Punkt (Chart)
+  boersen: {}, coins: {}, coinVertraege: [], coinOrders: [],   // Krypto-Börse (siehe coins.js)
   news: [],             // Marktberichte der Nachrichtenzentrale, neueste zuerst
   firmHist: {},         // pid  -> Firmenwert-Verlauf, gleiche Taktung
   chat: Object.fromEntries(ROOMS.map(r => [r, []])),
@@ -3095,6 +3097,7 @@ function netWorth(p) {
     const aktien = o.equity[p.id] || 0;
     if (aktien > 0) nw += substance(o) * (aktien / AKTIEN);   // Buchwert, nicht Kurs
   }
+  nw += coinsWert(G, p.id);   // Coins zum Fundament (Buchwert), nicht zum Kurs
   /* Anteile, die gerade zum Verkauf angeboten sind, liegen in Verwahrung und
    * fehlen in der Cap-Table — sie gehören aber weiter dem Anbieter. */
   for (const l of G.shareListings) {
@@ -8631,6 +8634,32 @@ io.on("connection", socket => {
     ack?.({ ok: true });
   }));
 
+  /* ---- Krypto-Börse (Schritte 1 bis 6, siehe coins.js) ---- */
+  socket.on("coinBoerse", guard((p, { gebuehr }, ack) => {
+    if (!istSoftwareFirma(p)) return ack?.({ error: "Nur Software-Firmen betreiben eine Krypto-Börse" });
+    const w = webEigenes(p);
+    if (!w || !((w.faktor ?? 1) > 0)) return ack?.({ error: "Erst eine Website bauen und online halten" });
+    const r = G.boersen?.[p.id] ? gebuehrSetzen(G, p.id, gebuehr) : boerseEroeffnen(G, p, gebuehr);
+    ack?.(r.error ? r : { ok: true });
+  }));
+  socket.on("coinAusgeben", guard((p, { menge }, ack) => {
+    if (!istSoftwareFirma(p)) return ack?.({ error: "Nur Software-Firmen geben Coins aus" });
+    ack?.(coinAusgeben(G, p, menge));
+  }));
+  socket.on("coinVertrag", guard((p, { coinId, kuendigen }, ack) => {
+    ack?.(kuendigen ? vertragKuendigen(G, p.id, coinId) : vertragSchliessen(G, p.id, coinId));
+  }));
+  socket.on("coinOrder", guard((p, { boerseId, coinId, side, qty, price }, ack) => {
+    if (!["buy", "sell"].includes(side)) return ack?.({ error: "Ungültig" });
+    ack?.(coinOrder(G, p, { boerseId, coinId, side, qty, price }));
+  }));
+  socket.on("coinCancel", guard((p, { orderId }, ack) => {
+    const o = (G.coinOrders || []).find(x => x.id === orderId && x.playerId === p.id);
+    if (!o) return ack?.({ error: "Order nicht gefunden" });
+    coinStorno(G, o);
+    ack?.({ ok: true });
+  }));
+
   socket.on("cancelOrder", guard((p, { orderId }, ack) => {
     const o = G.orders.find(o => o.id === orderId && o.playerId === p.id);
     if (!o) return ack?.({ error: "Order nicht gefunden" });
@@ -9016,6 +9045,7 @@ io.on("connection", socket => {
     G.groupOrder = null; G.nextGroupIn = 20;
     G.nextDividendIn = DIVIDEND_INTERVAL;
     G.wettrunde = { nr: 1, phase: "annahme", rest: WETT_ANNAHME, start: {} }; G.wetten = []; G.wettLetzte = []; G.wettReserve = WETT_RESERVE;
+    G.boersen = {}; G.coins = {}; G.coinVertraege = []; G.coinOrders = [];
     G.markt = {}; G.marktLog = []; G.panikTag = null; G.panikErledigt = false; G.fonds = {}; G.etfHist = {}; G.faEtf = {}; G.software = {}; G.paint = {}; G.swFaktor = {}; G.werbeAktiv = new Set();
     G.boerseApp = {}; G.buergerApp = {}; G.jobboerse = {}; G.tour = { firmen: {} }; G.website = {}; G.rzUptime = {}; G.rzStoer = {}; G.depot = depotLeer(); G.bstat = {}; G.anzeigen = [];
     G.stadtkasse = STADT_GRUNDSTOCK; G.steuerStufe = 2; G.boerseGebuehren = 0; G.steuernGesamt = 0; G.stadtprojekt = null; G.projektPause = 120; G.stadtprojekteFertig = [];
@@ -10404,6 +10434,7 @@ function runTick() {
   finanzamtTick();
   stadtTick();
   if (G.tick % MARKT.TAG === 0) marktTag();   // Aktienkurse: F messen, P nachführen
+  coinTick(G, G.tick);                          // Krypto-Kurse: Fundament, Volumen, Tagesgrenze
   /* Kurswetten: Annahme → Laufzeit → Abrechnung */
   wettTick();
   /* Fahrergehälter: eine laufende Verpflichtung, kein Einmalkauf. Wer nicht
