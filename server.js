@@ -6735,6 +6735,13 @@ function snapshot() {
       contrib: Object.fromEntries(Object.entries(G.groupOrder.contrib).map(([pid, goods]) =>
         [G.players[pid]?.name ?? "—", goods])) } : null,
     contracts: G.contracts.filter(c => c.status === "open"),
+    /* Krypto-Börse: öffentlich sichtbar, ohne fremde Konten */
+    krypto: {
+      boersen: Object.values(G.boersen || {}).map(b => ({ firmaId: b.firmaId, gebuehr: b.gebuehr, aktiv: b.aktiv })),
+      coins: Object.values(G.coins || {}).map(c => ({ firmaId: c.firmaId, kurs: c.kurs, fundament: c.fundament, minted: c.minted })),
+      vertraege: (G.coinVertraege || []).filter(v => v.aktiv),
+      orders: (G.coinOrders || []).map(o => ({ id: o.id, boerseId: o.boerseId, coinId: o.coinId, side: o.side, qty: o.qty, price: o.price, playerId: o.playerId })),
+    },
   };
 }
 function privateState(p) {
@@ -6817,6 +6824,7 @@ function privateState(p) {
      * die Summe zum Nettovermögen in der Kopfzeile. */
     balance: { cash: Math.round(p.cash), invVal: Math.round(invVal), bldVal: Math.round(bldVal),
                bondVal, debtVal, markenwert: Math.round(swMarkenwert(p)),
+               kryptoKonto: Object.fromEntries(Object.values(G.boersen || {}).filter(b => b.konten?.[p.id]).map(b => [b.firmaId, b.konten[p.id]])),
                firmVal: Math.round(substance(p)),
                ownShare: (p.equity[p.id] || 0) / AKTIEN,
                holdings: Math.round(portfolio.reduce((sum, h) => sum + h.buchwert, 0)),   // Buchwert — wie im Nettovermögen

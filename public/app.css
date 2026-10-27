@@ -1821,3 +1821,13 @@ em.auf,.bankZeile em.auf{color:#15803d}em.ab,.bankZeile em.ab{color:#b91c1c}
 .genMehr>summary{cursor:pointer;font-size:11.5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#4b5563}
 .fw-dunkel .fwFaq p,.fw-dunkel .fwTeam small,.fw-dunkel .fwKontakt small,.fw-dunkel .fwZahlen span{color:#cbd5e1}
 .fw-dunkel .fwTeam b,.fw-dunkel .fwKontakt b{color:#f3f4f6}
+
+/* Krypto-Börse (krypto.js) */
+#kryptobody .kr-block { border-top: 1px solid var(--line, #23313d); padding: 10px 0; }
+#kryptobody .kr-block:first-child { border-top: 0; padding-top: 0; }
+#kryptobody h3 { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted, #8496a8); margin: 0 0 6px; font-weight: 600; }
+#kryptobody .kr-zeile { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 4px 0; font-variant-numeric: tabular-nums; }
+#kryptobody .kr-form { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin: 6px 0; }
+#kryptobody input, #kryptobody select { min-width: 0; max-width: 100%; }
+#kryptobody input { width: 96px; }
+#kryptobody .note { color: var(--muted, #8496a8); font-size: 12px; margin: 4px 0; }
