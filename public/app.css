@@ -1854,3 +1854,30 @@ em.auf,.bankZeile em.auf{color:#15803d}em.ab,.bankZeile em.ab{color:#b91c1c}
 #netzFenster .mini:hover{background:#e2e8f0}
 #netzFenster .buyb{background:#16a34a;color:#fff}
 #netzFenster .sellb{background:#dc2626;color:#fff}
+
+/* ---- Dashboard der Software-Firma (eigene Stadtnetz-Seite) ---- */
+.dsLayout{display:flex;flex-direction:column;gap:14px;padding:4px 2px}
+.dsKennzahlen{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.dsKennzahlen>div{background:#f8fafc;border:1px solid #e9edf4;border-radius:12px;padding:10px 12px;display:flex;flex-direction:column;gap:2px}
+.dsKennzahlen small{font-size:11px;color:#64748b}
+.dsKennzahlen b{font-size:19px;color:#0f172a}
+.dsKennzahlen span{font-size:11px;color:#94a3b8}
+.dsChart{background:#0f172a;border-radius:14px;padding:10px 12px}
+.dsBloecke{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:10px}
+.dsTabelle{background:#fff;border:1px solid #e9edf4;border-radius:14px;padding:12px 14px}
+.dsTabelleKopf{display:flex;justify-content:space-between;align-items:baseline;border-bottom:1px solid #eef2f7;padding-bottom:7px;margin-bottom:4px}
+.dsTabelleKopf b{font-size:14px;color:#0f172a}
+.dsTabelleKopf small{font-size:11px;color:#94a3b8}
+.dsZeile{display:grid;grid-template-columns:minmax(0,1fr) auto auto auto;gap:10px;align-items:center;padding:7px 0;border-bottom:1px solid #f4f6fa;font-size:12.5px}
+.dsZeile:last-of-type{border-bottom:none}
+.dsWer{display:flex;align-items:center;gap:7px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#0f172a}
+.dsLogo{width:18px;height:18px;border-radius:5px;flex:0 0 auto}
+.dsStatus{font-size:11px;color:#64748b}
+.dsJa{font-style:normal;background:#dcfce7;color:#166534;border-radius:5px;padding:1px 6px;font-size:10.5px;font-weight:600}
+.dsNein{font-style:normal;background:#fee2e2;color:#991b1b;border-radius:5px;padding:1px 6px;font-size:10.5px;font-weight:600}
+.dsHinweis{display:block;font-size:11px;color:#94a3b8;margin-top:8px}
+.dsAktion{display:flex;gap:10px;justify-content:flex-end}
+.dsLeer{background:#fff;border:1px solid #e9edf4;border-radius:14px;padding:22px;text-align:center;max-width:520px;margin:24px auto}
+.dsLeer h3{margin:0 0 6px;font-size:17px;color:#0f172a}
+.dsLeer p{margin:0 0 14px;font-size:13px;color:#64748b;line-height:1.5}
+.dsLeer .krBoxForm{justify-content:center}

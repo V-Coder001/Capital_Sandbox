@@ -6741,8 +6741,12 @@ function snapshot() {
     contracts: G.contracts.filter(c => c.status === "open"),
     /* Krypto-Börse: öffentlich sichtbar, ohne fremde Konten */
     krypto: {
-      boersen: Object.values(G.boersen || {}).map(b => ({ firmaId: b.firmaId, gebuehr: b.gebuehr, aktiv: b.aktiv, online: boerseOnline(b.firmaId) })),
-      coins: Object.values(G.coins || {}).map(c => ({ firmaId: c.firmaId, kurs: c.kurs, fundament: c.fundament, minted: c.minted })),
+      boersen: Object.values(G.boersen || {}).map(b => ({ firmaId: b.firmaId, gebuehr: b.gebuehr, aktiv: b.aktiv, online: boerseOnline(b.firmaId),
+        einnahmen: Math.round((b.einnahmen || 0) * 100) / 100, volumen: Math.round((b.volumen || 0) * 100) / 100,
+        konten: Object.keys(b.konten || {}).length, plaetze: rzStufen(b.firmaId) })),
+      coins: Object.values(G.coins || {}).map(c => ({ firmaId: c.firmaId, kurs: c.kurs, fundament: c.fundament, minted: c.minted,
+        volumen: Math.round((c.volumen || 0) * 100) / 100, trades: c.trades || 0,
+        fremdErtrag: Math.round((c.fremdErtrag || 0) * 100) / 100 })),
       vertraege: (G.coinVertraege || []).filter(v => v.aktiv),
       orders: (G.coinOrders || []).map(o => ({ id: o.id, boerseId: o.boerseId, coinId: o.coinId, side: o.side, qty: o.qty, price: o.price, playerId: o.playerId })),
     },

@@ -7477,6 +7477,8 @@ function netzZeichnen() {
           <button type="button" class="netzDienst" data-netzauf="bank"><span class="netzDienstIcon" style="background:#0e7490">🏦</span><span><b>${t("Stadtbank")}</b><small>bank.cs · ${t("Aktien, Übernahmen, Kurswetten")}</small></span></button>
         ${(state.krypto?.boersen || []).filter(x => x.aktiv && state.players[x.firmaId]).map(x => { const f = state.players[x.firmaId], n = (state.krypto.coins || []).filter(c => c.firmaId === x.firmaId || (state.krypto.vertraege || []).some(v => v.boerseId === x.firmaId && v.coinId === c.firmaId)).length;
           return `<button type="button" class="netzDienst" data-netzauf="krypto:${x.firmaId}"><span class="netzDienstIcon" style="background:${f.color || "#7c3aed"}">₿</span><span><b>${escapeHtml(rohText(f.name))} ${t("Coins")}</b><small>${shopSlug(f.name)}-coins.cs · ${x.online === false ? t("Börse gerade offline") : `${n} ${t("Coins")} · ${t("Gebühr")} ${(x.gebuehr * 100).toFixed(1)} %`}</small></span></button>`; }).join("")}
+        ${(() => { const ich = state.players?.[myId]; return ich && (ich.industries || [ich.industry]).includes("software")
+          ? `<button type="button" class="netzDienst" data-netzauf="dash:${myId}"><span class="netzDienstIcon" style="background:${ich.color || "#0f172a"}">⌘</span><span><b>${t("Dein Dashboard")}</b><small>${shopSlug(ich.name)}.cs/dashboard · ${t("Coin, Gebühr und Verträge")}</small></span></button>` : ""; })()}
         </div>
         ${kurierKasten(artikel)}
         <section class="netzAbschnitt"><div class="netzAbschnittKopf"><b>${NETZ.kat === "alle" ? t("Beliebte Seiten") : t(BRANCHE_NAME[NETZ.kat] || "")}</b><small>${t("sortiert nach Besuchern")}</small></div>
@@ -7731,6 +7733,7 @@ function netzZeichnen() {
   }
   /* ---- Krypto-Börse einer Software-Firma (krypto.js) ---- */
   if (String(NETZ.seite).startsWith("krypto:")) return kryptoSeite(fenster, state, me, myId);
+  if (String(NETZ.seite).startsWith("dash:")) return dashboardSeite(fenster, state, me, myId);
   /* ---- Seite einer Firma ---- */
   const pid = NETZ.seite, p = state.players[pid], w = W[pid];
   if (!p) return netzOeffnen(null);
@@ -7769,11 +7772,13 @@ function netzZeichnen() {
   const krypto = krB
     ? `<section class="rzBox krSeitenBox"><div class="rzBoxKopf"><b>₿ ${t("Krypto-Börse")}</b><small>${krCount} ${t("Coins")} · ${t("Gebühr")} ${(krB.gebuehr * 100).toFixed(1)} %</small></div>
          <p>${t("Coins dieser Firma und ihrer Vertragspartner — handelbar für alle.")}</p>
-         <button type="button" class="sfKaufen" data-netzauf="krypto:${pid}">${t("Zur Krypto-Börse")} →</button></section>`
+         <button type="button" class="sfKaufen" data-netzauf="krypto:${pid}">${t("Zur Krypto-Börse")} →</button>
+         ${meins ? `<button type="button" class="sfKaufen" data-netzauf="dash:${pid}">${t("Zum Dashboard")} →</button>` : ""}</section>`
     : meins && ind === "software"
       ? `<section class="rzBox krSeitenBox"><div class="rzBoxKopf"><b>₿ ${t("Krypto-Börse eröffnen")}</b><small>${t("eigene Seite im Stadtnetz")}</small></div>
          <p>${t("Du gibst einen eigenen Coin aus und lässt ihn auf deiner Börse handeln. Die Gebühr ist deine Einnahme und trägt den Kurs.")}</p>
-         <div class="krBoxForm"><input id="krNeuGebuehr" type="number" min="0" max="5" step="0.1" value="2"><span>% ${t("Gebühr")}</span><button type="button" class="sfKaufen" data-krneu>${t("Börse eröffnen")}</button></div></section>`
+         <div class="krBoxForm"><input id="krNeuGebuehr" type="number" min="0" max="5" step="0.1" value="2"><span>% ${t("Gebühr")}</span><button type="button" class="sfKaufen" data-krneu>${t("Börse eröffnen")}</button></div>
+         <button type="button" class="sfKaufen" data-netzauf="dash:${pid}">${t("Zum Dashboard")} →</button></section>`
       : "";
   if (krypto) eigenes += krypto;
   netzSetze(".netzInhalt", `${auftrag ? `<div class="fwBau">🛠 ${anbieter ? `${escapeHtml(rohText(anbieter.anbieter))} ${t("gestaltet diese Website gerade")}` : t("Diese Website wird gerade gestaltet")} · ${t("noch")} ${Math.floor(auftrag.rest / 60)}:${String(auftrag.rest % 60).padStart(2, "0")}</div>` : ""}

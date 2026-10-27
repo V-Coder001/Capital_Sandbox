@@ -49,7 +49,7 @@ export function boerseEroeffnen(G, firma, gebuehr) {
   const g = Number(gebuehr);
   if (!Number.isFinite(g) || g < COIN.GEBUEHR_MIN || g > COIN.GEBUEHR_MAX)
     return { error: `Die Gebühr muss zwischen ${COIN.GEBUEHR_MIN * 100} % und ${COIN.GEBUEHR_MAX * 100} % liegen` };
-  G.boersen[firma.id] = { firmaId: firma.id, gebuehr: g, aktiv: true, konten: {} };
+  G.boersen[firma.id] = { firmaId: firma.id, gebuehr: g, aktiv: true, konten: {}, einnahmen: 0, volumen: 0 };
   return { ok: true };
 }
 
@@ -214,12 +214,18 @@ function fuelle(G, c, kauf, verkauf, menge, preis) {
   const vk = konto(G.boersen[verkauf.boerseId], verkauf.playerId);
   if (vk) vk.cash += wert;
   /* Gebühr verteilen */
-  if (bk.firmaId === c.firmaId) gutschreiben(G, bk.firmaId, gebuehr);
+  if (bk.firmaId === c.firmaId) { gutschreiben(G, bk.firmaId, gebuehr); bk.einnahmen = (bk.einnahmen || 0) + gebuehr; }
   else {
     const an = gebuehr * COIN.VERTRAG_ANTEIL;
     gutschreiben(G, bk.firmaId, an);
     gutschreiben(G, c.firmaId, gebuehr - an);
+    bk.einnahmen = (bk.einnahmen || 0) + an;                       // Anteil der gastgebenden Börse
+    const hc = G.coins[c.firmaId]; if (hc) hc.fremdErtrag = (hc.fremdErtrag || 0) + (gebuehr - an);
   }
+  /* Kennzahlen für das Dashboard der Firma */
+  bk.volumen = (bk.volumen || 0) + wert;
+  c.volumen = (c.volumen || 0) + wert;
+  c.trades = (c.trades || 0) + 1;
   c.netVol += menge;
   c.feeStock += gebuehr;
 }
