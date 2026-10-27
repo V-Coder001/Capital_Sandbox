@@ -1,0 +1,1251 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Capital Sandbox — Multiplayer</title>
+<!-- Schriften des Entwurfs. Fällt offline sauber auf System-Schriften zurück,
+     das Spiel läuft schließlich auch im LAN ohne Internet. -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<!-- Archivo statt Inter, IBM Plex Mono statt JetBrains Mono. Inter ist die
+     Schrift, die in jeder Oberfläche steht, die niemand entworfen hat — sie
+     trägt keine Haltung. Archivo hat eine Breitenachse: schmal gesetzt bekommen
+     Beschriftungen etwas von einem Werksschild statt von einem Formular, und
+     die Ziffern von IBM Plex Mono passen zu einer Kursleiste, ohne wie ein
+     Editor auszusehen. -->
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..900&family=IBM+Plex+Mono:wght@400;500;600&family=Space+Grotesk:wght@400;500;600;700&family=Fraunces:opsz,wght@9..144,600;9..144,800&display=swap" rel="stylesheet">
+<!-- Thema (Vermessung / Kartenpapier) so früh wie möglich setzen, damit beim
+     Laden nichts im falschen Thema aufblitzt. Gemerkt pro Browser. -->
+<script>try{document.documentElement.dataset.theme=localStorage.getItem("cs_thema")==="papier"?"papier":"vermessung"}catch(e){document.documentElement.dataset.theme="vermessung"}</script>
+<link rel="stylesheet" href="app.css?v=__V__">
+</head>
+<body>
+<div id="bgDeck" aria-hidden="true"></div>
+<canvas id="bgTopo" aria-hidden="true"></canvas>
+<!-- Intro: läuft einmal je Serverstart, danach nicht mehr (siehe bootId) -->
+<div id="intro" hidden>
+  <video id="introVideo" playsinline preload="auto"></video>
+  <div id="introBar">
+    <button id="introSound" type="button" hidden>Ton einschalten</button>
+    <button id="introSkip" type="button">Überspringen</button>
+  </div>
+</div>
+
+<div id="join">
+<div id="joinGlow"></div>
+<!-- Werbeplakate im sonst leeren Raum neben der Karte. Rein dekorativ, daher
+     aria-hidden — für Screenreader wäre "Plakat" nur Rauschen. -->
+<div class="posterWall" id="posterL" aria-hidden="true" data-topo-avoid></div>
+<div class="posterWall" id="posterR" aria-hidden="true" data-topo-avoid></div>
+<!-- Neuigkeiten: auf breiten Bildschirmen eine feste Spalte rechts neben der
+     Karte, schmal als Fenster über den Knopf "Was ist neu". Inhalt: updates.js -->
+<aside id="updates" data-topo-avoid aria-labelledby="updKopf">
+  <div class="updKopf"><h2 id="updKopf">Was ist neu</h2><button type="button" class="updZu" data-upd-zu aria-label="Schließen">✕</button></div>
+  <div class="updListe" id="updListe"></div>
+</aside>
+<div class="card startKarte" data-topo-avoid>
+  <canvas id="joinParticles"></canvas>
+
+  <header class="hero">
+    <!-- Statuszeile: zeigt echte Verbindungs- und Spielerzahl, keine Platzhalter -->
+    <div id="joinStatus">
+      <div class="left">
+        <span class="pulse" id="joinPulse"><i></i><b></b></span>
+        <span id="joinStatusText">Verbinde …</span>
+      </div>
+      <div class="right">
+        <div id="joinSlots"></div>
+        <span id="rundenZahl" style="display:none">—</span>
+      </div>
+    </div>
+
+    <div class="heroGrid">
+      <div class="heroText">
+        <h1>Capital <span>Sandbox</span> <em class="beta">Beta</em></h1>
+        <p class="tag">Bau dir eine Firma auf, versorge die Stadt, handle mit den anderen —
+          und wenn du genug Anteile hast, kaufst du sie einfach auf.</p>
+      </div>
+      <!-- Werkzeugleiste: alles, was nicht zum Formular gehört, an einer Stelle -->
+      <div class="startWerkzeuge">
+        <button type="button" id="tutBuchAuf">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+               stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/>
+          </svg>
+          Spielanleitung</button>
+        <button type="button" class="startEinst updAuf" data-upd-auf>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 8v4l3 2"/><circle cx="12" cy="12" r="9"/></svg>
+          Was ist neu<i class="updPunkt" hidden></i></button>
+        <button type="button" class="startEinst" data-einst-auf aria-label="Einstellungen">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/></svg>
+          Einstellungen</button>
+        <div class="startSchalter">
+          <div class="themenwahl" role="group" aria-label="Kartenstil">
+            <button type="button" data-thema="vermessung">Vermessung</button>
+            <button type="button" data-thema="papier">Kartenpapier</button>
+          </div>
+          <div class="sprachwahl" role="group" aria-label="Sprache / Language">
+            <button type="button" data-lang="de" class="on">DE</button>
+            <button type="button" data-lang="en">EN</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Skyline aus den echten Gebäude-Sprites des Spiels -->
+    <div class="skyline" aria-hidden="true">
+      <div class="row">
+        <img src="assets/skyline/plantage-0.png" alt="" style="height:26px">
+        <img src="assets/skyline/farm-0.png" alt="" style="height:32px">
+        <img src="assets/skyline/markt-0.png" alt="" style="height:36px">
+        <img src="assets/skyline/buero-1.png" alt="" style="height:52px">
+        <img src="assets/skyline/kontor-0.png" alt="" style="height:38px">
+        <img src="assets/skyline/wasserwerk-0.png" alt="" style="height:30px">
+        <img src="assets/skyline/chipfabrik-0.png" alt="" style="height:44px">
+        <img src="assets/skyline/ewerk-0.png" alt="" style="height:34px">
+        <img src="assets/skyline/buero-0.png" alt="" style="height:48px">
+        <img src="assets/skyline/mine-0.png" alt="" style="height:32px">
+        <img src="assets/skyline/stahlwerk-0.png" alt="" style="height:34px">
+        <img src="assets/skyline/raffinerie-0.png" alt="" style="height:42px">
+        <img src="assets/skyline/kontor-0.png" alt="" style="height:36px">
+        <img src="assets/skyline/farm-0.png" alt="" style="height:28px">
+        <img src="assets/skyline/buero-1.png" alt="" style="height:46px">
+        <img src="assets/skyline/markt-0.png" alt="" style="height:34px">
+      </div>
+      <div class="fade l"></div><div class="fade r"></div><div class="fog"></div>
+    </div>
+  </header>
+
+  <!-- Erst die Wahl: selbst eröffnen oder beitreten — dann zwei Schritte und der Knopf -->
+  <div class="startModus">
+    <div id="netmode">
+      <button type="button" class="netopt on" data-net="host" data-ort="lokal">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+        Neue Runde starten</button>
+      <!-- Nur in der Desktop-App sichtbar: dort laeuft die Runde sonst auf dem
+           eigenen Rechner und waere fuer Freunde ausserhalb des WLANs nicht
+           erreichbar. Im Browser ist die Seite schon vom Server gekommen, da
+           gibt es nichts zu waehlen. -->
+      <button type="button" class="netopt" data-net="host" data-ort="online" hidden>
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.7 2.5 15.3 0 18M12 3c-2.5 2.7-2.5 15.3 0 18"/></svg>
+        Online-Runde erstellen</button>
+      <button type="button" class="netopt" data-net="join" data-ort="online">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 3h4a2 2 0 012 2v14a2 2 0 01-2 2h-4M10 17l5-5-5-5M15 12H3"/></svg>
+        Einer Runde beitreten</button>
+    </div>
+  </div>
+
+  <div class="body">
+    <section class="col schritt">
+      <div class="schrittKopf"><span class="nr">01</span><label class="flabel" for="jname">Deine Firma</label></div>
+      <div class="firmaZeile">
+        <span class="firmaVorschau" id="jvorschau" aria-hidden="true">N</span>
+        <input id="jname" placeholder="z. B. Nordwerk &amp; Co." maxlength="20" autocomplete="off">
+      </div>
+      <div class="colors" id="jcolors"></div>
+      <p class="schrittNotiz">Name und Farbe sehen alle Mitspieler auf Karte und Kurstafel.</p>
+    </section>
+
+    <section class="col schritt">
+      <div class="schrittKopf"><span class="nr">02</span><label class="flabel" id="netstep">Mitspieler einladen</label></div>
+        <div id="invite">
+          <div class="joinbox">
+            <div class="lbl">
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><circle cx="6" cy="6" r="5" stroke="#38bdf8" stroke-width="1" opacity=".5"/><path d="M3 6c0-1.66 1.34-3 3-3s3 1.34 3 3" stroke="#38bdf8" stroke-width="1" stroke-linecap="round"/></svg>
+              Gleiches Netzwerk
+            </div>
+            <div class="row">
+              <input id="inviteUrl" readonly value="…">
+              <button class="copybtn" id="inviteCopy" type="button">Kopieren</button>
+            </div>
+            <p id="inviteHint" style="margin-top:8px"></p>
+          </div>
+          <div class="joinbox">
+            <div class="lbl">
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><rect x="1" y="3" width="10" height="7" rx="1.5" stroke="#a78bfa" stroke-width="1" opacity=".5"/><path d="M4 3V2a2 2 0 014 0v1" stroke="#a78bfa" stroke-width="1" stroke-linecap="round"/></svg>
+              Von woanders
+            </div>
+            <div class="row" style="justify-content:space-between">
+              <span id="hostCode">…</span>
+              <button class="copybtn" id="hostCodeCopy" type="button">Kopieren</button>
+            </div>
+          </div>
+        </div>
+        <div id="oeffentlichRow" style="display:none">
+          <label class="oeffSchalter">
+            <input type="checkbox" id="oeffentlich" checked>
+            <span><b>Runde öffentlich zeigen</b>
+              <em>Sie steht dann für alle auf dem Startbildschirm und ist ohne Code zu betreten.</em></span>
+          </label>
+        </div>
+        <div id="joinCodeRow"        <div id="joinCodeRow" style="display:none">
+          <div id="oeffListe"></div>
+          <div class="joinbox">
+            <div class="lbl">
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><rect x="1" y="3" width="10" height="7" rx="1.5" stroke="#a78bfa" stroke-width="1" opacity=".5"/><path d="M4 3V2a2 2 0 014 0v1" stroke="#a78bfa" stroke-width="1" stroke-linecap="round"/></svg>
+              Code deines Hosts
+            </div>
+            <input id="jcode" placeholder="AB3XQ" maxlength="8" autocomplete="off">
+            <p id="joinCodeStatus" style="margin-top:8px"></p>
+          </div>
+        </div>
+    </section>
+  </div>
+
+  <div class="foot">
+    <div id="joinErr"></div>
+    <button class="go" id="jgo">Runde erstellen</button>
+    <p id="foothint">Ziel und Bots stellst du gleich im Warteraum ein.</p>
+  </div>
+
+  <!-- Ablauf und Modi: unter dem Knopf, für alle, die das Spiel noch nicht kennen -->
+  <div class="startInfo">
+    <div class="how">
+      <div class="hrow"><span>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><path d="M3 21h18M5 21V10l7-5 7 5v11M9 21v-6h6v6"/></svg></span>
+        <div><b>Bauen</b> <em>Kachel freischalten, Betrieb hochziehen, Rohstoffe verarbeiten.</em></div></div>
+      <div class="hrow"><span>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 7h13l-3-3M17 17H4l3 3"/></svg></span>
+        <div><b>Handeln</b> <em>Im eigenen Laden, an der Börse mit den anderen oder für die Stadt.</em></div></div>
+      <div class="hrow"><span>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 01-10 0V4zM17 6h3v2a3 3 0 01-3 3M7 6H4v2a3 3 0 003 3"/></svg></span>
+        <div><b>Gewinnen</b> <em>Wer zuerst das Vermögensziel knackt, gewinnt die Runde.</em></div></div>
+    </div>
+
+    <div class="startModi">
+      <div class="flabel">Spielmodi <span class="meta">— vorerst wird nur der Sandkasten gespielt</span></div>
+      <div class="modiReihe">
+        <div class="modusChip"><b>Sandbox</b><em>Freies Wirtschaften mit wachsender Stadt</em></div>
+        <div class="modusChip gesperrt"><b>Planwirtschaft <i>gesperrt</i></b><em>Plansolls erfüllen, Planpunkte sammeln</em></div>
+        <div class="modusChip gesperrt"><b>Einsteiger <i>gesperrt</i></b><em>Geführte Runde zum Kennenlernen</em></div>
+        <div class="modusChip gesperrt"><b>Race Day <i>gesperrt</i></b><em>Rennställe, Fahrer und Preisgeld</em></div>
+        <div class="modusChip gesperrt"><b>Kartell <i>gesperrt</i></b><em>Familien, Schutzgeld und Razzien</em></div>
+      </div>
+    </div>
+
+      <div id="hofBox" style="display:none">
+        <label class="flabel" style="margin-top:14px">🏆 Bestenliste dieses Servers</label>
+        <div id="hofListe"></div>
+      </div>
+  </div>
+
+  <div class="startFuss">
+    <div class="betaZeile"><b>Beta</b> — Fehler sind wahrscheinlich, und mit jeder Aktualisierung gehen
+      laufende Runden verloren. Meldungen gern über <b>Fehler melden</b> unten rechts im Spiel.</div>
+    <div id="joinFoot">
+      <span>capital-sandbox · läuft im Browser · <a href="index.html" style="color:inherit;text-decoration:underline">Herunterladen</a> · <a href="datenschutz.html" style="color:inherit;text-decoration:underline">Datenschutz</a> · <a href="impressum.html" style="color:inherit;text-decoration:underline">Impressum</a></span>
+      <div class="right"><span class="pulse"><i></i><b></b></span><span id="joinWaiting">—</span></div>
+    </div>
+  </div>
+
+  <!-- Branchenwahl: wandert beim Laden in den Warteraum (siehe unten) -->
+  <div hidden>
+      <div id="jind">
+        <!-- Nur im Renntag sichtbar: dort ersetzen zwei Rollen die sechs Branchen. -->
+        <button type="button" data-ind="rennclub" class="indopt rennrolle" style="display:none;--ac:#38bdf8;--ac08:rgba(56,189,248,.03);--ac15:rgba(56,189,248,.08);--ac18:rgba(56,189,248,.09);--ac35:rgba(56,189,248,.21);--ac50:rgba(56,189,248,.31)">
+          <img src="assets/deko/hochhaus-1.png" alt="">
+          <span class="txt"><span class="head"><b>Race Club</b><span class="chosen">Gewählt</span></span>
+          <small>Rennstall, Wagen und Fahrer. Du fährst um Punkte, Preisgeld und den Titel — Teile kaufst du bei der Rennindustrie.</small></span></button>
+        <button type="button" data-ind="rennindustrie" class="indopt rennrolle" style="display:none;--ac:#fbbf24;--ac08:rgba(251,191,36,.03);--ac15:rgba(251,191,36,.08);--ac18:rgba(251,191,36,.09);--ac35:rgba(251,191,36,.21);--ac50:rgba(251,191,36,.31)">
+          <img src="assets/skyline/chipfabrik-0.png" alt="">
+          <span class="txt"><span class="head"><b>Rennindustrie</b><span class="chosen">Gewählt</span></span>
+          <small>Rennreifen und Rennsoftware samt Zulieferkette. Du verkaufst an die Clubs, sponserst sie — und kaufst dir an der Bank Anteile an ihnen.</small></span></button>
+        <button type="button" data-ind="agrar" class="indopt on" style="--ac:#34d399;--ac08:rgba(52,211,153,.03);--ac15:rgba(52,211,153,.08);--ac18:rgba(52,211,153,.09);--ac35:rgba(52,211,153,.21);--ac50:rgba(52,211,153,.31)">
+          <img src="assets/skyline/farm-0.png" alt="">
+          <span class="txt"><span class="head"><b>Landwirtschaft</b><span class="chosen">Gewählt</span></span>
+          <small>Obst, Kannabis, Saft und Medikamente — der einfachste Einstieg.</small></span></button>
+        <button type="button" data-ind="rohstoff" class="indopt" style="--ac:#fb7185;--ac08:rgba(251,113,133,.03);--ac15:rgba(251,113,133,.08);--ac18:rgba(251,113,133,.09);--ac35:rgba(251,113,133,.21);--ac50:rgba(251,113,133,.31)">
+          <img src="assets/skyline/mine-0.png" alt="">
+          <span class="txt"><span class="head"><b>Rohstoff &amp; Bau</b><span class="chosen">Gewählt</span></span>
+          <small>Erze, Stahl, Ziegel und Beton. Ohne dich baut hier niemand.</small></span></button>
+        <button type="button" data-ind="versorger" class="indopt" style="--ac:#fbbf24;--ac08:rgba(251,191,36,.03);--ac15:rgba(251,191,36,.08);--ac18:rgba(251,191,36,.09);--ac35:rgba(251,191,36,.21);--ac50:rgba(251,191,36,.31)">
+          <img src="assets/skyline/ewerk-0.png" alt="">
+          <span class="txt"><span class="head"><b>Wasser, Strom &amp; Öl</b><span class="chosen">Gewählt</span></span>
+          <small>Läuft schnell und ununterbrochen — jeder braucht es dauernd.</small></span></button>
+        <button type="button" data-ind="tech" class="indopt" style="--ac:#a78bfa;--ac08:rgba(167,139,250,.03);--ac15:rgba(167,139,250,.08);--ac18:rgba(167,139,250,.09);--ac35:rgba(167,139,250,.21);--ac50:rgba(167,139,250,.31)">
+          <img src="assets/skyline/chipfabrik-0.png" alt="">
+          <span class="txt"><span class="head"><b>Technologie</b><span class="chosen">Gewählt</span></span>
+          <small>Silizium und Elektronik — damit leveln alle ihre Fabriken hoch.</small></span></button>
+        <button type="button" data-ind="touristik" class="indopt" style="--ac:#2dd4bf;--ac08:rgba(45,212,191,.03);--ac15:rgba(45,212,191,.08);--ac18:rgba(45,212,191,.09);--ac35:rgba(45,212,191,.21);--ac50:rgba(45,212,191,.31)">
+          <img src="assets/skyline/hotel-0.png" alt="">
+          <span class="txt"><span class="head"><b>Touristik</b><span class="chosen">Gewählt</span></span>
+          <small>Verwandelt Wasser und Strom in Gäste — die Branche, die kauft statt zu horten.</small></span></button>
+        <button type="button" data-ind="ruestung" class="indopt" style="--ac:#f43f5e;--ac08:rgba(244,63,94,.03);--ac15:rgba(244,63,94,.08);--ac18:rgba(244,63,94,.09);--ac35:rgba(244,63,94,.21);--ac50:rgba(244,63,94,.31)">
+          <img src="assets/skyline/stahlwerk-0.png" alt="">
+          <span class="txt"><span class="head"><b>Rüstung</b><span class="chosen">Gewählt</span></span>
+          <small>Munition, Pistolen und Panzer — die wertvollsten Güter, aber am Ende jeder Lieferkette.</small></span></button>
+        <button type="button" data-ind="software" class="indopt" style="--ac:#60a5fa;--ac08:rgba(96,165,250,.03);--ac15:rgba(96,165,250,.08);--ac18:rgba(96,165,250,.09);--ac35:rgba(96,165,250,.21);--ac50:rgba(96,165,250,.31)">
+          <img src="assets/skyline/buero-0.png" alt="">
+          <span class="txt"><span class="head"><b>Software</b><span class="chosen">Gewählt</span></span>
+          <small>Keine Waren, sondern Shop-Systeme: Ohne dich verkauft kein Online-Marktplatz der Stadt.</small></span></button>
+      </div>
+  </div>
+</div></div>
+
+<div id="lobbyWait"><div class="card" data-topo-avoid>
+  <div id="lwHead">
+    <h2 id="lwTitel">Warteraum</h2>
+    <span id="lwPulse"><span class="pulse"><i></i><b></b></span><span id="lwPulseText">wartet</span></span>
+  </div>
+  <p class="sub" id="lwSub">Sobald alle da sind, startet der Host die Runde.</p>
+
+  <div class="joinbox" id="lwCodeBox">
+    <div class="lbl">Rundencode für deine Mitspieler</div>
+    <div class="row" style="justify-content:space-between">
+      <span id="lwCode">—</span>
+      <button class="copybtn" id="lwCodeCopy" type="button">Kopieren</button>
+    </div>
+  </div>
+
+  <div class="joinbox">
+    <div class="lbl">Wer ist da — <span id="lwCount">0</span>/8</div>
+    <div id="lwPlayers"></div>
+  </div>
+
+  <div class="joinbox" id="lwBrancheBox">
+    <div class="lbl">Deine Branche</div>
+    <p style="font-size:12px;margin:2px 0 8px;color:#8695ab">Du baust nur Gebäude deiner Branche — alles andere kaufst du bei den anderen ein. Bis zum Start kannst du wechseln.</p>
+    <div id="lwBrancheSlot"></div>
+  </div>
+  <div class="joinbox" id="lwSettings">
+    <div class="lbl">Einstellungen</div>
+    <!-- Modus-Auswahl als Plakate. Der Modusname steht im Bild, die Bildunterschrift
+         wiederholt ihn trotzdem: die Plakate sind auf Deutsch beschriftet und im
+         Miniaturformat nicht immer sicher lesbar — beim Einsteiger steht der Name
+         ausserdem auf Englisch im Bild. -->
+    <div class="lwRow lwModeRow">
+      <label>Modus</label>
+      <div id="lwMode">
+        <button type="button" data-mode="sandbox" class="on">
+          <img src="assets/modi/sandbox.jpg" alt="" loading="lazy"><span>Sandbox</span></button>
+        <!-- Vorerst gesperrt: Gespielt wird nur der Sandkasten (siehe MODI_FREI im Server). -->
+        <button type="button" data-mode="plan" class="gesperrt" disabled title="Vorerst gesperrt">
+          <img src="assets/modi/plan.jpg" alt="" loading="lazy"><span>Planwirtschaft · gesperrt</span></button>
+        <button type="button" data-mode="einsteiger" class="gesperrt" disabled title="Vorerst gesperrt">
+          <img src="assets/modi/einsteiger.jpg" alt="" loading="lazy"><span>Einsteiger · gesperrt</span></button>
+        <button type="button" data-mode="renntag" class="gesperrt" disabled title="Vorerst gesperrt">
+          <img src="assets/modi/renntag.jpg" alt="" loading="lazy"><span>Race Day · gesperrt</span></button>
+        <button type="button" data-mode="kartell" class="gesperrt" disabled title="Vorerst gesperrt">
+          <img src="assets/modi/kartell.jpg" alt="" loading="lazy"><span>Kartell · gesperrt</span></button>
+      </div>
+    </div>
+    <p id="lwModeHint" style="display:none;font-size:11.5px;color:#8695ab;margin:2px 0 6px">
+      Planwirtschaft: Kein Vermögensziel — das Planbüro verkündet Plansolls, du lieferst zu festen
+      Ankaufspreisen ab und sammelst Planpunkte. Nach 5 Planphasen (oder bei 1.000 Punkten) gewinnt
+      der „Held der Arbeit".</p>
+    <p id="lwRenntagHint" style="display:none;font-size:11.5px;color:#8695ab;margin:2px 0 6px">
+      Race Day: Zwei Rollen statt sechs Branchen. <b>Race Club</b> startet mit Rennstall, Wagen und Fahrer
+      und fährt um den Titel. <b>Rennindustrie</b> baut die Zulieferkette, stellt Rennreifen und Rennsoftware
+      her und verkauft sie über die Börse — Läden gibt es hier nicht. Gewonnen wird über die Meisterschaft,
+      nicht über das Vermögen.</p>
+    <p id="lwKartellHint" style="display:none;font-size:11.5px;color:#8695ab;margin:2px 0 6px">
+      Kartellwirtschaft: Dasselbe Vermögensziel wie im Sandkasten — aber ihr dürft euch zu
+      <b>Kartellen</b> zusammenschließen (bis zu 4 Firmen), Preise absprechen und den Markt unter euch
+      aufteilen. Das Kartellamt schaut zu: Wie dicht es einem Kartell auf den Fersen ist, sehen nur
+      dessen Mitglieder.</p>
+    <!-- Familienwahl (Kartellmodus): vier feste Familien mit je einem
+         illegalen Produkt. Wer nichts wählt, wird beim Start zugeteilt. -->
+    <div class="lwRow" id="lwFamilieRow" style="display:none">
+      <label>Familie</label>
+      <div id="lwFamilie">
+        <button type="button" data-familie="famiglia" style="--fc:#e74c3c">La Famiglia</button>
+        <button type="button" data-familie="syndikat" style="--fc:#a78bfa">Das Syndikat</button>
+        <button type="button" data-familie="bratwa" style="--fc:#f5c542">Die Bratwa</button>
+        <button type="button" data-familie="triade" style="--fc:#2ecc71">Die Triade</button>
+        <button type="button" data-familie="polizei" style="--fc:#4a90d9">🚔 Die Polizei</button>
+      </div>
+    </div>
+    <p id="lwFamilieHint" style="display:none;font-size:11.5px;color:#8695ab;margin:2px 0 6px">
+      Höchstens ZWEI Spieler je Familie — freie Plätze übernehmen Mafia-KIs (die machen Platz, sobald ein
+      echter Spieler dazukommt), unbesetzte Polizei ein KI-Kommissar.
+      Die Polizei ist der Gegenspieler: Sie kontrolliert Transporte und räumt Bezirke per Razzia
+      (25 Einsatzpunkte = Polizei-Sieg). Jede Familie hat ein eigenes illegales Produkt (Schwarzgebrannter, Falschgeld, Goldbarren,
+      Schmuggelzigaretten) samt Gebäude, das nur sie bauen kann. Verkauft wird beim Hehler —
+      das bringt der Familie <b>Respekt</b>. Wer keine Familie wählt, wird beim Start zugeteilt.</p>
+    <p id="lwEinsteigerHint" style="display:none;font-size:11.5px;color:#8695ab;margin:2px 0 6px">
+      Einsteiger: Ein geführter Durchgang durch das ganze Spiel — Bauen, Verkaufen, Börse,
+      Kursticker, Nachrichten und Bank, Schritt für Schritt erklärt. Nichts ist gesperrt, die Bots
+      spielen normal mit. Die Runde endet, wenn du durch bist. Karte: San Francisco.</p>
+    <div class="lwRow" id="lwSaisonRow" style="display:none">
+      <label for="lwSaison">Saison</label>
+      <select id="lwSaison">
+        <option value="3">3 Renntage · kurz</option>
+        <option value="5" selected>5 Renntage · Standard</option>
+        <option value="8">8 Renntage · lang</option>
+        <option value="12">12 Renntage · Marathon</option>
+      </select>
+    </div>
+    <div class="lwRow" id="lwGoalRow">
+      <label for="lwGoal">Ziel</label>
+      <select id="lwGoal">
+        <option value="100000">$100.000 · etwa 30–40 Minuten</option>
+        <option value="250000">$250.000 · etwa 1 Stunde</option>
+        <option value="500000">$500.000 · etwa 2 Stunden</option>
+        <option value="1000000">$1 Mio. · für Ausdauernde</option>
+        <option value="10000000">$10 Mio. · Marathon</option>
+      </select>
+    </div>
+    <div class="lwRow" id="lwZeitRow">
+      <label for="lwZeit">Zeitlimit</label>
+      <select id="lwZeit">
+        <option value="0">kein Zeitlimit</option>
+        <option value="30">30 Minuten</option>
+        <option value="45">45 Minuten</option>
+        <option value="60">60 Minuten</option>
+        <option value="90">90 Minuten</option>
+      </select>
+    </div>
+    <div class="lwRow">
+      <label>Bots</label>
+      <div id="lwBotLevel">
+        <button type="button" data-lvl="einfach">Einfach</button>
+        <button type="button" data-lvl="mittel" class="on">Mittel</button>
+        <button type="button" data-lvl="schwer">Schwer</button>
+      </div>
+    </div>
+    <div id="lwBotCounts">
+      <div class="botrow" data-b="agrar"><span>Agrar</span><div class="pick"><button type="button" data-n="0">0</button><button type="button" data-n="1" class="on">1</button><button type="button" data-n="2">2</button></div></div>
+      <div class="botrow" data-b="rohstoff"><span>Rohstoff</span><div class="pick"><button type="button" data-n="0">0</button><button type="button" data-n="1" class="on">1</button><button type="button" data-n="2">2</button></div></div>
+      <div class="botrow" data-b="versorger"><span>Versorger</span><div class="pick"><button type="button" data-n="0">0</button><button type="button" data-n="1" class="on">1</button><button type="button" data-n="2">2</button></div></div>
+      <div class="botrow" data-b="tech"><span>Technik</span><div class="pick"><button type="button" data-n="0">0</button><button type="button" data-n="1" class="on">1</button><button type="button" data-n="2">2</button></div></div>
+      <div class="botrow" data-b="touristik"><span>Touristik</span><div class="pick"><button type="button" data-n="0">0</button><button type="button" data-n="1" class="on">1</button><button type="button" data-n="2">2</button></div></div>
+      <div class="botrow" data-b="ruestung"><span>Rüstung</span><div class="pick"><button type="button" data-n="0">0</button><button type="button" data-n="1" class="on">1</button><button type="button" data-n="2">2</button></div></div>
+      <div class="botrow" data-b="software"><span>Software</span><div class="pick"><button type="button" data-n="0">0</button><button type="button" data-n="1" class="on">1</button><button type="button" data-n="2">2</button></div></div>
+    </div>
+    <p id="lwBotSum">—</p>
+  </div>
+
+  <button id="lwStart" type="button">Runde starten</button>
+  <p id="lwHint">Der Host startet die Runde, sobald alle da sind.</p>
+</div></div>
+
+<canvas id="cv"></canvas>
+
+<div id="topbar">
+  <div id="ticker" title="Ø-Kurse als Orientierung — der Pfeil zeigt die Richtung gegenüber den letzten 30 Sekunden."><div id="tickerScroll"><div id="tickerTrack"><span class="tk">Warte auf erste Trades — der Ticker zeigt nur echte Transaktionspreise.</span></div></div><button id="tickerToggle" title="Alle Preise anzeigen" aria-label="Alle Preise anzeigen" aria-expanded="false">⌄</button></div>
+  <div id="status">
+    <div class="left"><div class="logo" id="mylogo">?</div><span id="coname"></span>
+      <span id="networth">NW <b id="nwv">$0</b> / <span id="goalv">$250.000</span> · Rating <b id="myrat">—</b></span></div>
+    <div class="right">
+      <div id="players"></div>
+      <span id="cash">$0</span>
+      <button id="einw" type="button" title="Einwohner der Stadt — Klick öffnet das Finanzamt mit der Stadtübersicht" hidden></button>
+      <div id="lvlwrap"><small>Level <span id="lvl">1</span></small><div id="xpbar"><div id="xpfill"></div></div></div>
+      <button id="roomCodeTop" title="Rundencode kopieren — zeig ihn weiteren Mitspielern" style="display:none;background:none;border:1px solid var(--line);border-radius:7px;color:var(--dim);height:24px;cursor:pointer;padding:0 8px;font:11px/1 ui-monospace,monospace;letter-spacing:.05em"></button>
+      <!-- Ton: Stummschalter und Regler bilden ein Bedienelement. Vorher zwei
+           lose Teile, davon ein nackter Browser-Slider ohne sichtbare Füllung. -->
+      <div class="tonpill" id="tonPill">
+        <button id="music" title="Musik an/aus" aria-label="Musik an/aus"></button>
+        <div class="tonreg">
+          <input id="musicVol" type="range" min="0" max="100" value="22" aria-label="Lautstärke">
+          <span class="tonwert" id="tonWert" aria-hidden="true">22 %</span>
+        </div>
+      </div>
+      <button id="findBtn" title="Zu meinen Gebäuden springen (Taste F)" aria-label="Zu meinen Gebäuden springen" style="background:none;border:1px solid var(--line);border-radius:7px;color:var(--dim);width:24px;height:24px;cursor:pointer;display:grid;place-items:center;padding:0">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="7"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>
+      </button>
+      <button id="themeBtn" type="button" data-thema-toggle title="Kartenstil wechseln: Vermessung / Kartenpapier" aria-label="Kartenstil wechseln">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M3 18c4-1 5-5 9-5s6 3 9 2"/><path d="M3 12c4-1 5-5 9-5s6 3 9 2"/></svg><span data-thema-label>KARTE</span>
+      </button>
+      <button id="langBtn" data-lang-toggle title="Sprache / Language" style="background:none;border:1px solid var(--line);border-radius:7px;color:var(--dim);height:24px;cursor:pointer;padding:0 7px;font:600 10px/1 var(--font);letter-spacing:.06em">DE</button>
+      <button id="bugBtn" title="Fehler melden" aria-label="Fehler melden" style="background:none;border:1px solid var(--line);border-radius:7px;color:var(--dim);width:24px;height:24px;cursor:pointer;display:grid;place-items:center;padding:0">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="8" y="6" width="8" height="12" rx="4"/><path d="M12 6V3M8 10H4M8 15H5M16 10h4M16 15h3M9 6l-2-2M15 6l2-2"/></svg>
+      </button>
+      <button id="help" title="Tutorial erneut ansehen" style="background:none;border:1px solid var(--line);border-radius:7px;color:var(--dim);width:24px;height:24px;cursor:pointer;font-size:13px">?</button>
+      <!-- Menü für Nebensachen (Ton, Kartenstil, Sprache, Fehler melden, Tutorial).
+           Die Knöpfe oben werden beim Laden hier hineingehängt — ihre bestehenden
+           Klick-Funktionen bleiben dabei erhalten. -->
+      <div id="hudMenuWrap">
+        <button id="hudMenuBtn" type="button" aria-haspopup="true" aria-expanded="false" aria-label="Einstellungen und Hilfe" title="Einstellungen und Hilfe">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+        </button>
+        <div id="hudMenu" role="menu" hidden></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="dock"></div>
+
+<!-- Planbüro (nur im Planwirtschafts-Modus): Plansoll, Ablieferung, Punkte -->
+<div class="panel" id="p-plan">
+  <div class="phead"><h2>Planbüro</h2><button class="x" data-close>✕</button></div>
+  <div class="pbody">
+    <div class="joinbox" style="margin-bottom:12px">
+      <div class="lbl">Aktuelle Planphase</div>
+      <div id="planPhase" style="font-size:13px">—</div>
+    </div>
+    <div class="joinbox" style="margin-bottom:12px">
+      <div class="lbl">Dein Plansoll</div>
+      <div id="planSoll"><p class="note">—</p></div>
+    </div>
+    <div class="joinbox" style="margin-bottom:12px">
+      <div class="lbl">Materialzuteilung</div>
+      <p class="note" style="margin:0 0 8px">Bezugsschein-Budget dieser Phase: <b id="planBudget">—</b> ·
+        Priorität <b id="planPrio">—</b>. Gute Planerfüllung bringt nächste Phase mehr Budget —
+        Übererfüllung hebt aber auch dein Soll an (Basiseffekt).</p>
+      <div class="formrow">
+        <select id="planGood"></select>
+        <input id="planQty" type="number" min="1" placeholder="Menge">
+        <button class="buyb" id="planRequestBtn">Zuteilung beantragen</button>
+      </div>
+      <p id="planReqStatus" class="note" style="margin:6px 0 0"></p>
+    </div>
+    <div class="joinbox">
+      <div class="lbl">Planerfüllung aller Betriebe</div>
+      <div id="planRang">—</div>
+    </div>
+  </div>
+</div>
+
+<!-- Kartell (nur im Kartellmodus). Drei Zustände in einem Panel: kein Kartell
+     (gründen + wer sich sonst zusammengetan hat), Einladung offen (annehmen
+     oder ablehnen), Mitglied (Absprachen, Verdacht, Mitglieder). -->
+<div class="panel" id="p-kartell">
+  <div class="phead"><h2>Kartell</h2><button class="x" data-close>✕</button></div>
+  <div class="pbody">
+    <div id="kartellInhalt"></div>
+    <div class="joinbox" style="margin-top:12px">
+      <div class="lbl">Kartelle in der Stadt</div>
+      <div id="kartellFremde">—</div>
+    </div>
+  </div>
+</div>
+
+<!-- Adminpanel im Spiel. Kein Eintrag im Dock und kein eigener Link: Es geht
+     nur ueber die versteckte Geste auf dem Firmenlogo auf (siehe adminGeste).
+     Bis zur Anmeldung steht hier nichts als das Schluesselfeld. -->
+<div class="panel" id="p-admin">
+  <div class="phead"><h2>Verwaltung</h2><button class="x" data-close>✕</button></div>
+  <div class="pbody"><div id="adminInhalt"></div></div>
+</div>
+
+<!-- Schwarzmarkt-Baracke (Planwirtschaft): steht auf der Karte, wo sonst die
+     Stadtbank ist — das Panel öffnet sich per Klick aufs Gebäude. -->
+<div class="panel" id="p-schwarz">
+  <div class="phead"><h2>Schwarzmarkt</h2><button class="x" data-close>✕</button></div>
+  <div class="pbody">
+    <div class="joinbox">
+      <div class="lbl">Ware gegen Ware · unter der Hand</div>
+      <p class="note" style="margin:0 0 8px">Offiziell verboten. Jeder Tausch kann auffliegen (25 %):
+        Eintrag in die Kaderakte für beide Seiten, −40 Punkte — beim dritten Eintrag wird die
+        nächste Zuteilung halbiert. <span id="planAkte"></span></p>
+      <div class="formrow">
+        <span class="meta">Gebe</span>
+        <select id="smGebeGood"></select>
+        <input id="smGebeQty" type="number" min="1" placeholder="Menge" style="width:70px">
+        <span class="meta">für</span>
+        <select id="smWillGood"></select>
+        <input id="smWillQty" type="number" min="1" placeholder="Menge" style="width:70px">
+        <button class="buyb" id="smAnbieten">Anbieten</button>
+      </div>
+      <p id="smStatus" class="note" style="margin:6px 0 0"></p>
+      <div id="smAngebote" style="margin-top:8px"></div>
+    </div>
+  </div>
+</div>
+
+<div class="panel" id="p-boerse">
+  <div class="phead"><h2>Warenbörse (P2P)</h2><button class="x" data-close>✕</button></div>
+  <div class="pbody">
+    <!-- Orderformular: beschriftete Felder im Raster, ein klarer Knopf darunter -->
+    <div class="orderform">
+      <label><span>Ware</span><select id="oGood"></select></label>
+      <label><span>Richtung</span><select id="oSide"><option value="sell">Verkauf</option><option value="buy">Kauf</option></select></label>
+      <label><span>Menge</span><input id="oQty" type="number" min="1" placeholder="Menge"></label>
+      <label><span>Preis $</span><input id="oPrice" type="number" min="0.01" step="0.01" placeholder="Preis $"></label>
+      <button class="buyb" id="oPlace">Order platzieren</button>
+    </div>
+    <div id="oGebuehr" class="oGebuehr" hidden></div>
+    <div class="orderfilter">
+      <label for="exFilter" class="meta">Orderbuch zeigen</label>
+      <select id="exFilter"><option value="">Alle Waren</option></select>
+    </div>
+    <div id="exbook"></div>
+  </div>
+</div>
+
+<div class="panel" id="p-lager">
+  <div class="phead"><h2>Warenlager</h2><button class="x" data-close>✕</button></div>
+  <div class="pbody"><div class="invgrid" id="invgrid"></div></div>
+</div>
+
+<div class="panel" id="p-bonds">
+  <div class="phead"><h2>Anleihen &amp; Finanzen</h2><button class="x" data-close>✕</button></div>
+  <div class="pbody">
+    <div class="sec">Anleihe emittieren</div>
+    <div class="formrow">
+      <input id="bPrin" type="number" min="100" value="3000" title="Nennwert $">
+      <input id="bRate" type="number" min="1" max="50" value="8" title="Zins % / min">
+      <input id="bTerm" type="number" min="30" value="180" title="Laufzeit s">
+      <button class="issue" id="bIssue" style="width:auto;margin:0;padding:8px 12px">Emittieren</button>
+    </div>
+    <div id="bondlist"></div>
+    <div class="note" style="margin-top:10px">Firmenanteile werden nicht mehr hier, sondern in der <b>Stadtbank</b> gehandelt — das Gebäude im Zentrum der Karte anklicken.</div>
+    <div class="sec">Zwangsversteigerungen</div>
+    <div id="auctionlist"><span class="meta">Keine laufenden Auktionen.</span></div>
+  </div>
+</div>
+
+<!-- Stadtbank: fester Ort auf der Karte, an dem alle Spieler Firmenanteile handeln.
+     Erreichbar nur über die Bank-Kachel im Zentrum, nicht über die Leiste unten. -->
+<!-- Finanzamt: Steuern, Stadtkasse, Bankreserve, Stadtprojekte. Erreichbar über
+     das Finanzamt-Gebäude im Zentrum. -->
+<div class="panel" id="p-finanzamt">
+  <div class="phead"><h2>Finanzamt</h2><button class="x" data-close>✕</button></div>
+  <div class="pbody" id="finanzamtbody"></div>
+</div>
+
+<div class="panel" id="p-news">
+  <div class="phead"><h2>Nachrichtenzentrale</h2><button class="x" data-close>✕</button></div>
+  <div class="pbody">
+    <div class="nwlead">Der Marktbericht erscheint alle zwei Minuten und vergleicht mit der Lage von vor zwei Minuten.</div>
+    <div id="newsliste"></div>
+  </div>
+</div>
+
+<div class="panel" id="p-bank">
+  <div class="phead"><h2>Stadtbank — Aktienhandel</h2><button class="x" data-close>✕</button></div>
+  <div class="pbody">
+    <!-- Kopfzeile statt Textwand: die eigene Lage auf einen Blick. Die Erklärung
+         zum Marktwert stand vorher als fünfzeiliger Block ganz oben und drückte
+         alles Handelbare unter den Falz — sie steht jetzt kompakt darunter und
+         vollständig im Lexikon. -->
+    <div class="bkopf" id="bankKopf"></div>
+
+    <!-- Drei Reiter statt einer langen Seite: Markt (Kurse + Angebote je
+         Firma), Handeln (Formulare), Depot. -->
+    <div class="bReiter" role="tablist" aria-label="Stadtbank">
+      <button type="button" role="tab" data-breiter="markt" class="on">Markt</button>
+      <button type="button" role="tab" data-breiter="handeln">Handeln<i id="bReiterHandeln"></i></button>
+      <button type="button" role="tab" data-breiter="wetten">Kurswetten<i id="bReiterWetten"></i></button>
+      <button type="button" role="tab" data-breiter="depot">Depot<i id="bReiterDepot"></i></button>
+    </div>
+
+    <section data-bseite="markt">
+      <div id="sharelist"></div>
+      <div id="bankboard"></div>
+      <div id="etfboard"></div>
+      <div id="depotboard"></div>
+      <div id="marktlog"></div>
+    </section>
+
+    <section data-bseite="handeln" hidden>
+      <div id="bidlist"></div>
+      <div class="bhandel">
+        <div class="bseite kauf">
+          <div class="bseite-kopf"><span class="pfeil">▲</span>Anteile übernehmen</div>
+          <div class="bForm">
+            <label class="breit"><span>Firma</span><select id="bidCompany"></select></label>
+            <label><span>Aktien</span><input id="bidCount" type="number" min="1" max="100" step="1" value="10"></label>
+            <label><span>Gebot gesamt $</span><input id="bidPrice" type="number" min="1" value="2000"></label>
+            <button class="bknopf kauf breit" id="bidSend">Kaufanfrage senden</button>
+          </div>
+          <div class="meta" id="bidHint"></div>
+        </div>
+        <div class="bseite verkauf">
+          <div class="bseite-kopf"><span class="pfeil">▼</span>Aktien abgeben</div>
+          <div class="bForm">
+            <label class="breit"><span>Firma</span><select id="shCompany"></select></label>
+            <label><span>Aktien</span><input id="shCount" type="number" min="1" max="100" step="1" value="10"></label>
+            <label><span>Preis gesamt $</span><input id="shPrice" type="number" min="1" value="1000"></label>
+            <label class="breit"><span>An wen</span><select id="shTo"><option value="">Offener Markt (alle)</option></select></label>
+            <button type="button" class="mini breit" id="shKurs">Preis = Kurs × Aktien</button>
+            <button class="bknopf verkauf breit" id="shList">Anbieten</button>
+          </div>
+          <div class="meta" id="shHint"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Kurswetten: long/short auf den Firmenwert einer Runde. Formular statisch,
+         damit ein State-Update die Eingabe nicht wegwischt. -->
+    <section data-bseite="wetten" hidden>
+      <div id="wKopf"></div>
+      <div id="wFirmen"></div>
+      <div class="wForm" id="wForm">
+        <label class="breit"><span>Firma</span><select id="wFirma"></select></label>
+        <div class="wRichtung breit" role="radiogroup" aria-label="Richtung">
+          <button type="button" data-wrichtung="long" class="on"><b>▲ Long</b><small>Firmenwert steigt</small></button>
+          <button type="button" data-wrichtung="short"><b>▼ Short</b><small>Firmenwert fällt</small></button>
+        </div>
+        <label class="breit"><span>Einsatz $</span><input id="wEinsatz" type="number" min="100" step="100" value="500"></label>
+        <div class="wSchnell breit"><button type="button" data-wanteil=".1">10 %</button><button type="button" data-wanteil=".25">25 %</button><button type="button" data-wanteil=".5">50 %</button><button type="button" data-wanteil="1">Max</button></div>
+        <div class="wVorschau breit" id="wVorschau"></div>
+        <button class="bknopf kauf breit" id="wSetzen">Wette setzen</button>
+      </div>
+      <div id="wMeine"></div>
+    </section>
+
+    <section data-bseite="depot" hidden>
+      <div id="bankdepot"></div>
+    </section>
+  </div>
+</div>
+
+<div class="panel" id="p-firma">
+  <div class="phead"><h2>Unternehmen</h2><button class="x" data-close>✕</button></div>
+  <div class="pbody" id="firmabody"></div>
+</div>
+
+<!-- Online-Shop: Schaufenster eines Online-Marktplatzes. Wird per JS gefüllt
+     (shopOeffnen), bezahlt wird mit dem installierten Shop-System. -->
+<div id="shopFenster" hidden></div>
+<!-- Buchungsseite einer Touristik-Firma (hotelOeffnen), im Stil der Shop-Seiten -->
+<div id="hotelFenster" hidden></div>
+<!-- Statusseite einer Software-Firma: Rechenzentren, Hosting, Website-Baukasten (rzOeffnen) -->
+<div id="rzFenster" hidden></div>
+<!-- Stadtnetz und Firmen-Websites (netzOeffnen) -->
+<div id="netzFenster" hidden></div>
+<div id="genFenster" hidden></div>
+<div id="leitFenster" hidden></div>
+
+<!-- Software: alle Shop-Systeme der Stadt; für Software-Firmen der Baukasten.
+     Geöffnet über Entwicklerstudio, Rechenzentrum oder Online-Marktplatz. -->
+<div class="panel" id="p-software">
+  <div class="phead"><h2>Software &amp; Shop-Systeme</h2><button class="x" data-close>✕</button></div>
+  <div class="pbody" id="softwarebody"></div>
+</div>
+
+<!-- Touristik (Etappe 6): Gäste, Zimmerpreis, Sterne, Stadtfeste -->
+<div class="panel" id="p-touristik">
+  <div class="phead"><h2>Touristik &amp; Gäste</h2><button class="x" data-close>✕</button></div>
+  <div class="pbody" id="tourbody"></div>
+</div>
+
+<div class="panel" id="p-motorsport">
+  <div class="phead"><h2>Motorsport</h2><button class="x" data-close>✕</button></div>
+  <div class="pbody" id="motorbody"></div>
+</div>
+
+<div class="panel" id="p-lexikon">
+  <div class="phead"><h2>Lexikon</h2><button class="x" data-close>✕</button></div>
+  <div class="pbody" id="lexbody"></div>
+</div>
+
+<div class="panel" id="p-chat">
+  <div class="phead"><h2>Chat &amp; Direkthandel</h2><button class="x" data-close>✕</button></div>
+  <div id="rooms"></div>
+  <div id="chatlog"></div>
+  <div id="ctrbar">
+    <span style="color:var(--dim)">Vertrag:</span>
+    <select id="cTo"></select><select id="cGood"></select>
+    <input id="cQty" type="number" min="1" placeholder="Menge"><input id="cPrice" type="number" min="0.01" step="0.01" placeholder="$/Stk">
+    <button class="mini" id="cSend">Anbieten</button>
+  </div>
+  <form id="chatform"><input id="chatin" placeholder="Nachricht…" autocomplete="off"><button>➤</button></form>
+</div>
+
+<!-- Aufgaben: kompakt — Fortschritt + nächste Aufgabe, Rest aufklappbar. -->
+<div id="quests" style="display:none">
+  <div class="qKopf">Starter-Aufgaben</div>
+  <div id="questlist"></div>
+</div>
+
+<div id="tut">
+  <div id="tutHead">
+    <svg class="mentorAvatar" viewBox="0 0 74 74" role="img" aria-label="Hans Mustermann">
+      <circle cx="37" cy="37" r="37" fill="#20293a"/>
+      <circle cx="37" cy="30" r="13" fill="var(--accent)" opacity=".85"/>
+      <path d="M10 68c2-15 13-24 27-24s25 9 27 24" fill="var(--accent)" opacity=".85"/>
+    </svg>
+    <div class="who"><b>Hans Mustermann</b><span>CEO a. D. · dein Mentor</span></div>
+  </div>
+  <div class="step" id="tutStep"></div>
+  <h3 id="tutTitle"></h3>
+  <p id="tutText"></p>
+  <div class="row">
+    <div class="dots" id="tutDots"></div>
+    <span id="tutWait">Warte auf Bau …</span>
+    <div class="btns"><button id="tutSkip">Tutorial überspringen</button><button id="tutNext">Weiter</button></div>
+  </div>
+</div>
+
+<!-- ===== Ausführliches Tutorial (Startbildschirm) =====
+     Erklärt das ganze Spiel, unabhängig von einer laufenden Runde. Das kurze
+     Tutorial in der Partie bleibt davon unberührt — es führt durchs erste Bauen,
+     dieses hier erklärt die Systeme dahinter. -->
+<div id="tutBuch" aria-hidden="true">
+  <div class="tbCard" role="dialog" aria-label="Tutorial">
+    <div class="tbHead">
+      <div>
+        <h2>Spielanleitung</h2>
+        <p id="tbFortschritt">Kapitel 1 von 1</p>
+      </div>
+      <button type="button" class="tbLaut" id="tbVorlesen" aria-pressed="false"
+              title="Kapitel vorlesen lassen — liest danach weiter bis zum Ende">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+             stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M11 5 6 9H2v6h4l5 4V5z"/><path d="M15.5 8.5a5 5 0 010 7"/><path d="M18.5 5.5a9 9 0 010 13"/>
+        </svg><span>Vorlesen</span>
+      </button>
+      <select id="tbStimme" class="tbStimme" aria-label="Stimme wählen" title="Stimme wählen"></select>
+      <button class="tbZu" id="tbZu" aria-label="Schließen">&#10005;</button>
+    </div>
+    <div class="tbBody">
+      <nav class="tbNav" id="tbNav"></nav>
+      <article class="tbInhalt" id="tbInhalt"></article>
+    </div>
+    <div class="tbFuss">
+      <button type="button" id="tbUeben" class="tbUeben">Lieber ausprobieren</button>
+      <button type="button" id="tbZurueck">Zurück</button>
+      <div class="tbPunkte" id="tbPunkte"></div>
+      <button type="button" id="tbWeiter">Weiter</button>
+    </div>
+  </div>
+</div>
+
+<style>
+/* Casino Municipale — Gold & Samt */
+.gcPanel{border-color:#c9a04e66!important;background:linear-gradient(168deg,#151b28,#0d1320 55%,#141017)!important;
+  box-shadow:0 24px 70px rgba(0,0,0,.65),0 0 0 1px rgba(201,160,78,.13),0 0 46px rgba(201,160,78,.09)!important}
+.gcPanel .phead{border-bottom:1px solid rgba(201,160,78,.28)!important}
+.gcKopf{position:relative;text-align:center;padding:13px 10px 11px;border:1px solid rgba(201,160,78,.32);border-radius:12px;
+  margin-bottom:4px;background:radial-gradient(130% 140% at 50% -25%,rgba(201,160,78,.17),transparent 55%),linear-gradient(180deg,#191223,#120d15)}
+.gcKopf .orna{color:#c9a04e77;font-size:10px;letter-spacing:7px}
+.gcKopf h3{margin:3px 0 2px;font-size:19px;color:#f0dcae;font-weight:900;letter-spacing:.4px;text-shadow:0 2px 16px rgba(201,160,78,.4)}
+.gcSterne{color:#e8c268;letter-spacing:3px;font-size:12px;text-shadow:0 0 9px rgba(232,194,104,.55)}
+.gcStats{display:flex;gap:6px;justify-content:center;flex-wrap:wrap;margin-top:10px}
+.gcStat{flex:1;min-width:94px;padding:6px 7px;border-radius:8px;background:rgba(8,12,19,.55);border:1px solid rgba(201,160,78,.16)}
+.gcStat b{display:block;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.gcStat span{display:block;font-size:9px;color:var(--dim);text-transform:uppercase;letter-spacing:.7px;margin-top:2px}
+.gcAusbau{display:flex;align-items:center;gap:8px;margin-top:10px;font-size:9.5px;color:var(--dim);letter-spacing:1px}
+.gcAusbau .balken{flex:1;height:5px;border-radius:3px;background:rgba(201,160,78,.13);overflow:hidden}
+.gcAusbau .balken i{display:block;height:100%;background:linear-gradient(to right,#8a6a3a,#e8c268);box-shadow:0 0 9px rgba(232,194,104,.65)}
+.gcTrenn{display:flex;align-items:center;gap:10px;margin:14px 0 3px;color:#c9a04eaa;font-size:9.5px;font-weight:700;letter-spacing:2.5px;text-transform:uppercase;white-space:nowrap}
+.gcTrenn::before,.gcTrenn::after{content:"";flex:1;height:1px;background:linear-gradient(to right,transparent,rgba(201,160,78,.45),transparent)}
+.gcReihe{display:flex;gap:11px;align-items:center;padding:8px 9px;margin-top:7px;border-radius:10px;border:1px solid rgba(201,160,78,.14);
+  background:linear-gradient(180deg,rgba(22,30,45,.8),rgba(13,18,28,.8));transition:border-color .18s,transform .18s,box-shadow .18s}
+.gcReihe:hover{border-color:rgba(232,194,104,.55);transform:translateY(-1px);box-shadow:0 6px 18px rgba(0,0,0,.35),0 0 15px rgba(201,160,78,.13)}
+.gcIkone{flex:none;display:grid;place-items:center;width:38px;height:38px;font-size:19px;border-radius:50%;
+  background:radial-gradient(circle at 32% 28%,#26334d,#131a29);border:1px solid rgba(201,160,78,.38);box-shadow:inset 0 0 9px rgba(0,0,0,.55)}
+.gcLive{display:inline-flex;align-items:center;gap:4px;font-size:8px;font-weight:800;letter-spacing:1.2px;color:#e8c268;
+  border:1px solid rgba(201,160,78,.55);border-radius:99px;padding:1.5px 7px;vertical-align:2px;margin-left:5px}
+.gcLive i{width:5px;height:5px;border-radius:50%;background:#ff5757;box-shadow:0 0 6px #ff5757;animation:gcPuls 1.4s infinite}
+@keyframes gcPuls{0%,100%{opacity:1}50%{opacity:.25}}
+.gcGold{background:linear-gradient(135deg,#3b2d15,#584420)!important;border-color:#c9a04e!important;color:#f2e2b8!important;text-shadow:0 1px 4px rgba(0,0,0,.5)}
+.gcGold:hover{box-shadow:0 0 14px rgba(201,160,78,.35)}
+.gcZu{text-align:center;padding:22px 14px;border:1px dashed rgba(201,160,78,.3);border-radius:11px;margin-top:10px;background:rgba(10,13,20,.5)}
+.gcZu .tuer{font-size:30px;filter:grayscale(.4);opacity:.85}
+/* Spieltische: ovaler Filz, Sitze rundherum, Chips, Slot-Neon */
+.gcTischWrap{position:relative;width:100%;height:300px;margin:8px 0 4px}
+.gcOval{position:absolute;left:2%;right:2%;top:8%;bottom:6%;border-radius:50% / 46%;
+  background:radial-gradient(ellipse at 50% 30%,rgba(255,120,120,.26),transparent 65%),radial-gradient(ellipse at center,#8e1e2a,#5a1016 78%);
+  border:5px solid #57351d;box-shadow:0 0 0 2px #c9a04e,0 0 0 7px #3a2417,0 0 0 8px #c9a04e55,0 16px 34px rgba(0,0,0,.55),inset 0 0 46px rgba(0,0,0,.5)}
+.gcOval.gruen{background:radial-gradient(ellipse at 50% 30%,rgba(120,255,170,.18),transparent 65%),radial-gradient(ellipse at center,#1d7a45,#0b3a20 78%)}
+.gcOval .marke{position:absolute;inset:0;display:grid;place-items:center;font-weight:900;letter-spacing:7px;color:rgba(0,0,0,.3);font-size:21px;text-transform:uppercase;pointer-events:none}
+.gcOval .linie{position:absolute;left:9%;right:9%;top:14%;bottom:14%;border:1.5px solid rgba(232,194,104,.32);border-radius:50% / 46%;pointer-events:none}
+.gcSitz{position:absolute;transform:translate(-50%,-50%);text-align:center;z-index:2;max-width:122px}
+.gcSitz.foldd{opacity:.42;filter:grayscale(.6)}
+.gcAvatar{width:30px;height:30px;border-radius:50%;margin:0 auto;display:grid;place-items:center;font:900 13px system-ui;color:#0b0f16;border:2px solid #c9a04e;box-shadow:0 2px 8px rgba(0,0,0,.55)}
+.gcSitz.dran .gcAvatar{animation:gcDranPuls 1.1s infinite}
+@keyframes gcDranPuls{0%,100%{box-shadow:0 0 0 0 rgba(232,194,104,.85)}70%{box-shadow:0 0 0 9px rgba(232,194,104,0)}}
+.gcSName{display:inline-block;font-size:9px;font-weight:800;background:rgba(8,11,18,.9);border:1px solid rgba(201,160,78,.4);border-radius:6px;padding:1px 6px;margin-top:2px;max-width:116px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.gcSInfo{font:700 8.5px var(--mono);color:#e8c268;margin-top:1px;text-shadow:0 1px 3px rgba(0,0,0,.7)}
+.gcKS{display:inline-block;min-width:20px;padding:3px 2px;margin:1px;border-radius:4px;background:#f5f1e7;font:800 10.5px var(--mono);text-align:center;box-shadow:0 2px 5px rgba(0,0,0,.55)}
+.gcKS.rk{transform:rotate(-4deg)}.gcKS.rk2{transform:rotate(4deg)}
+.gcRueckS{display:inline-block;width:20px;height:25px;margin:1px;border-radius:4px;vertical-align:middle;background:repeating-linear-gradient(45deg,#28406e,#28406e 3px,#1c2f52 3px,#1c2f52 6px);border:1px solid #3d588f;box-shadow:0 2px 5px rgba(0,0,0,.5)}
+.gcChip{display:inline-block;width:12px;height:12px;border-radius:50%;border:2px dashed rgba(255,255,255,.75);vertical-align:-2px;margin-right:3px;background:radial-gradient(circle at 35% 30%,#e85555,#7e1b1b);box-shadow:0 1px 3px rgba(0,0,0,.5)}
+.gcPot{position:absolute;left:50%;top:33%;transform:translate(-50%,-50%);z-index:1;background:rgba(8,11,18,.85);border:1px solid #c9a04e;border-radius:99px;padding:2px 12px;font:800 11px var(--mono);color:#e8c268;box-shadow:0 0 12px rgba(201,160,78,.3);white-space:nowrap}
+.gcBoard{position:absolute;left:50%;top:54%;transform:translate(-50%,-50%);z-index:1;white-space:nowrap}
+/* Slots: Neon-Maschine */
+.gcSlot{border-radius:18px;padding:12px 12px 14px;background:linear-gradient(165deg,#2c1547,#170a2a);border:3px solid #ff9d2e;box-shadow:0 0 22px rgba(255,157,46,.5),inset 0 0 34px rgba(120,60,220,.35);margin:6px 0 10px}
+.gcSlotTitel{text-align:center;font:900 13px system-ui;letter-spacing:4px;color:#ffd75e;text-shadow:0 0 12px rgba(255,157,46,.85);margin-bottom:9px}
+.gcWalzen{display:flex;gap:7px;background:#0c0620;border-radius:12px;padding:10px;border:2px solid rgba(255,184,77,.5);box-shadow:inset 0 0 18px rgba(0,0,0,.7)}
+.gcWalzeN{flex:1;display:grid;place-items:center;height:92px;font-size:44px;border-radius:8px;background:linear-gradient(180deg,#150b2e,#311b5e 50%,#150b2e);box-shadow:inset 0 8px 16px rgba(0,0,0,.65),inset 0 -8px 16px rgba(0,0,0,.65),0 0 0 1px rgba(255,184,77,.25)}
+.gcSpin{display:block;width:100%;margin-top:11px;padding:12px;border-radius:99px;border:3px solid #ffb84d;background:linear-gradient(180deg,#ff5f8f,#c81e5b);color:#fff;font:900 15px system-ui;letter-spacing:3px;text-shadow:0 1px 4px rgba(0,0,0,.45);box-shadow:0 0 18px rgba(255,95,143,.5),0 4px 0 #8e1440;cursor:pointer}
+.gcSpin:active{transform:translateY(2px)}
+.wzBahn{position:relative;height:40px;overflow:hidden;border-bottom:1px dashed rgba(255,255,255,.14)}
+.wzBahn:last-of-type{border-bottom:none}
+.wzBahn.b1{background:linear-gradient(180deg,#1c548c,#123a5c)}
+.wzBahn.b2{background:linear-gradient(180deg,#184c80,#0f3352)}
+.wzBahn.b3{background:linear-gradient(180deg,#144674,#0d2e4a)}
+.wzBahn::before{content:"";position:absolute;inset:0;background:repeating-linear-gradient(100deg,rgba(255,255,255,.07) 0 14px,transparent 14px 34px);background-size:48px 100%;animation:wzWasser 3.4s linear infinite}
+.wzBahn:nth-child(odd)::before{animation-duration:4.6s}
+@keyframes wzWasser{to{background-position:-48px 0}}
+.wzBahn .nr{position:absolute;left:5px;top:11px;width:16px;height:16px;border-radius:50%;display:grid;place-items:center;font:800 9px var(--mono);color:#0d1320;background:linear-gradient(180deg,#f2dda2,#b9903f);box-shadow:0 1px 3px rgba(0,0,0,.55);z-index:2}
+.wzBahn.wahl{box-shadow:inset 0 0 0 2px #e8c268,inset 0 0 20px rgba(232,194,104,.22)}
+.wzBoot{position:absolute;left:4%;top:6px;font-size:22px;z-index:2;filter:drop-shadow(0 2px 3px rgba(0,0,0,.55))}
+.wzGischt{position:absolute;top:17px;font-size:11px;color:#dff0ff;opacity:0;z-index:1;text-shadow:0 0 4px rgba(255,255,255,.8)}
+.wzKopfleiste{display:flex;align-items:center;justify-content:center;gap:8px;padding:4px 0;background:linear-gradient(180deg,#57351d,#3a2417);color:#e8c268;font:800 9px system-ui;letter-spacing:2.5px;text-transform:uppercase;text-shadow:0 1px 2px rgba(0,0,0,.6)}
+.wzZiel{position:absolute;right:9%;top:0;bottom:0;width:5px;background:repeating-linear-gradient(180deg,#fff 0 5px,#161616 5px 10px);opacity:.9;z-index:1;box-shadow:0 0 6px rgba(255,255,255,.35)}
+.gcFilzPad{border-radius:14px;border:4px solid #57351d;box-shadow:0 0 0 2px #c9a04e,inset 0 0 26px rgba(0,0,0,.5);background:radial-gradient(ellipse at 50% 30%,rgba(120,255,170,.16),transparent 65%),radial-gradient(ellipse at center,#1d7a45,#0b3a20 80%);padding:14px;margin:6px 0 10px}
+</style>
+<!-- Themen: übersetzte Altfarben fürs Kartenpapier, danach Feinschliff beider
+     Themen. Beide NACH den Stilblöcken, damit sie bei gleicher Spezifität gewinnen. -->
+<link rel="stylesheet" href="theme-papier.css">
+<link rel="stylesheet" href="theme.css">
+<div id="gcSpielModal" style="position:fixed;inset:0;z-index:53;display:none;place-items:center;background:rgba(6,9,15,.55);backdrop-filter:blur(2px)" onclick="if(event.target===this)gcSpielSchliessen()">
+  <div class="panel gcPanel" style="position:static;display:flex;width:min(430px,94vw);max-height:86vh;border-color:#c9a04e55">
+    <div class="phead" style="background:linear-gradient(135deg,rgba(201,160,78,.16),transparent)">
+      <h2 id="gcSpielTitel">Spieltisch</h2><button class="x" onclick="gcSpielSchliessen()">✕</button>
+    </div>
+    <div class="pbody gcSpielInhalt"></div>
+  </div>
+</div>
+<div id="gcasinoModal" style="position:fixed;inset:0;z-index:52;display:none;place-items:center;background:rgba(6,9,15,.6);backdrop-filter:blur(2px)" onclick="if(event.target===this)gcasinoSchliessen()">
+  <div class="panel gcPanel" style="position:static;display:flex;width:min(470px,94vw);max-height:84vh;border-color:#c9a04e55;box-shadow:0 16px 48px rgba(0,0,0,.65), 0 0 30px rgba(201,160,78,.12)">
+    <div class="phead" style="background:linear-gradient(135deg,rgba(201,160,78,.16),transparent)">
+      <h2>🎰 Casino Municipale</h2><button class="x" onclick="gcasinoSchliessen()">✕</button>
+    </div>
+    <div class="pbody gcInhalt"></div>
+  </div>
+</div>
+<div id="kampfBanner" style="position:fixed;inset:0;z-index:55;display:none;place-items:center;pointer-events:none;background:radial-gradient(ellipse at center,rgba(10,6,6,.0),rgba(10,6,6,.55))">
+  <div id="kampfBannerBox" style="text-align:center;transform:scale(.8);transition:transform .25s">
+    <div id="kampfBannerEmoji" style="font-size:54px">⚔️</div>
+    <div id="kampfBannerTitel" style="font-size:34px;font-weight:800;letter-spacing:.04em;text-shadow:0 3px 18px rgba(0,0,0,.8)"></div>
+    <div id="kampfBannerSub" style="font-size:15px;color:#dfe6f2;opacity:.85;margin-top:6px;text-shadow:0 2px 8px rgba(0,0,0,.8)"></div>
+  </div>
+</div>
+
+<div id="tilemenu"></div>
+
+<!-- Bugreport: Beschreibung plus optionaler Screenshot (automatisch von der
+     Karte oder eigene Datei). Landet per POST /api/bugreport beim Server. -->
+<div id="bugDialog" hidden>
+  <div class="bugcard">
+    <h3>Fehler melden</h3>
+    <p class="bugsub">Beschreibe kurz, was schiefgelaufen ist — je genauer, desto schneller lässt es sich beheben.</p>
+    <textarea id="bugText" maxlength="4000" rows="5" placeholder="Was ist passiert? Was hättest du erwartet?"></textarea>
+    <label class="bugopt"><input type="checkbox" id="bugShot" checked> Screenshot der Karte anhängen</label>
+    <label class="bugopt bugfile">Eigenes Bild stattdessen:
+      <input type="file" id="bugFile" accept="image/png,image/jpeg,image/webp"></label>
+    <div class="bugrow">
+      <button type="button" id="bugAbbr">Abbrechen</button>
+      <button type="button" id="bugSend" class="primary">Melden</button>
+    </div>
+    <p id="bugStatus"></p>
+  </div>
+</div>
+
+<!-- Renntag-Overlay: Anmeldung/Wetten, Live-Rennen mit Strecke, Siegerehrung.
+     Für alle Spieler sichtbar; minimierbar auf einen Chip unten rechts. -->
+<div id="rennOverlay" hidden>
+  <div class="renncard">
+    <div class="rennhead">
+      <h2 id="rennTitel">🏁 Renntag</h2>
+      <div style="display:flex;gap:10px;align-items:center">
+        <span id="rennUhr" class="rennuhr">—</span>
+        <button id="rennMini" type="button" title="Minimieren">▁</button>
+      </div>
+    </div>
+    <div id="rennBody"></div>
+  </div>
+  <div id="rennAmpel" hidden></div>
+</div>
+<button id="rennChip" type="button" hidden>🏁 <span id="rennChipText">Rennen</span></button>
+
+<div id="toasts"></div>
+<div id="win"><div class="wincard">
+  <div class="winhead">
+    <div class="winKicker" id="winKicker">Runde beendet</div>
+    <h1><span id="winname"></span> gewinnt!</h1>
+    <p id="winsub">Das Rundenziel wurde erreicht.</p>
+  </div>
+  <div id="winPodest"></div>
+  <div id="winMein"></div>
+  <div class="winAbschnitt"><div class="winTitel">Endstand</div><div id="wintable"></div></div>
+  <div class="winAbschnitt" id="winAwardsBox"><div class="winTitel">Auszeichnungen</div><div id="winawards"></div></div>
+  <div class="winfoot">
+    <button type="button" id="winKarte">Karte ansehen</button>
+    <button id="winNew">Neue Runde starten</button>
+    <p>Setzt Karte, Firmen und Kurse zurück — auch für die Mitspieler.</p>
+  </div>
+</div></div>
+<button type="button" id="winWieder" hidden>🏆 Auswertung</button>
+
+<script src="vendor/socket.io.min.js"></script>
+<script src="vendor/peerjs.min.js"></script>
+<script src="topo.js"></script>
+<script src="flaeche.js"></script>
+<script src="updates.js"></script>
+<script>
+/* ================================================================
+ * Einstellungen (Grafik, Steuerung, Sound) — im Browser gemerkt.
+ * EINST.x liest einen Wert, EINST.setzen(k, v) speichert und meldet
+ * "einstellung" an alle, die darauf reagieren (Auflösung, Musik, …).
+ * ================================================================ */
+window.EINST = (() => {
+  const STUFEN = {
+    /* glas: Unschärfe hinter Leisten und Panels (backdrop-filter). Sie muss bei
+     * jedem neu gezeichneten Kartenbild mitberechnet werden — auf Retina und
+     * schwächeren Grafikchips einer der teuersten Posten. */
+    hoch:    { aufloesung: 1,   hintergrund: true,  wolken: true,  verkehr: true,  licht: true,  fps: 60, glas: true },
+    mittel:  { aufloesung: .75, hintergrund: true,  wolken: true,  verkehr: true,  licht: true,  fps: 60, glas: false },
+    niedrig: { aufloesung: .5,  hintergrund: false, wolken: false, verkehr: false, licht: false, fps: 30, glas: false },
+  };
+  const STANDARD = Object.assign({ qualitaet: "hoch" }, STUFEN.hoch, {
+    radEmpf: 1, zoomZumZeiger: true, trackpadSchiebt: true, tastatur: true,
+    effekte: true, effekteVol: 60,
+    autoQualitaet: true, fpsAnzeige: false, hinweise: true,
+  });
+  let w = {};
+  try { w = JSON.parse(localStorage.getItem("cs_einst") || "{}") || {}; } catch {}
+  const e = Object.assign({}, STANDARD, w);
+  const melden = k => document.dispatchEvent(new CustomEvent("einstellung", { detail: k }));
+  const api = {
+    STUFEN,
+    setzen(k, v) {
+      e[k] = v;
+      if (k === "qualitaet" && STUFEN[v]) Object.assign(e, STUFEN[v]);
+      else if (k in STUFEN.hoch) {          // Einzelschalter → "eigene"
+        const passt = Object.entries(STUFEN).find(([, st]) => Object.keys(st).every(x => st[x] === e[x]));
+        e.qualitaet = passt ? passt[0] : "eigene";
+      }
+      try { localStorage.setItem("cs_einst", JSON.stringify(e)); } catch {}
+      melden(k);
+    },
+    alle: () => Object.assign({}, e),
+  };
+  return new Proxy(api, { get: (t, k) => k in t ? t[k] : e[k] });
+})();
+/* Glas-Effekt an/aus: eine Klasse am Dokument schaltet alle backdrop-filter ab */
+(() => {
+  const anwenden = () => document.documentElement.classList.toggle("ohneGlas", !EINST.glas);
+  anwenden();
+  document.addEventListener("einstellung", e => { if (e.detail === "glas" || e.detail === "qualitaet") anwenden(); });
+})();
+</script>
+<script>
+/* ---- Kopfleisten-Menü ----
+ * Ton, Kartenstil, Sprache, Fehler melden und Tutorial stehen nicht mehr als
+ * neun Einzelknöpfe in der Leiste, sondern hinter einem Menüknopf. Die
+ * vorhandenen Elemente werden nur umgehängt — ihre Klick-Logik bleibt. */
+document.addEventListener("DOMContentLoaded", () => {
+  const menu = document.getElementById("hudMenu"), btn = document.getElementById("hudMenuBtn");
+  if (!menu || !btn) return;
+  const oben = document.createElement("button");
+  oben.type = "button"; oben.className = "hmEinst"; oben.dataset.einstAuf = "";
+  oben.innerHTML = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/></svg> Einstellungen<small>Grafik · Steuerung · Sound</small>`;
+  menu.append(oben);
+  const ZEILEN = [["tonPill", "Ton"], ["themeBtn", "Kartenstil"], ["langBtn", "Sprache"], ["help", "Tutorial ansehen"], ["bugBtn", "Fehler melden"]];
+  for (const [id, text] of ZEILEN) {
+    const el = document.getElementById(id); if (!el) continue;
+    const zeile = document.createElement("div"); zeile.className = "hmZeile";
+    const lab = document.createElement("span"); lab.textContent = text;
+    zeile.append(lab, el); menu.append(zeile);
+  }
+  const auf = an => { menu.hidden = !an; btn.setAttribute("aria-expanded", String(an)); btn.classList.toggle("on", an); };
+  btn.addEventListener("click", e => { e.stopPropagation(); auf(menu.hidden); });
+  document.addEventListener("click", e => { if (!menu.hidden && !e.target.closest("#hudMenuWrap")) auf(false); });
+  document.addEventListener("keydown", e => { if (e.key === "Escape") auf(false); });
+});
+document.addEventListener("click", e => {
+  if (!e.target.closest("[data-quests-toggle]")) return;
+  let alle = false; try { alle = localStorage.getItem("cs_quests_alle") === "1"; localStorage.setItem("cs_quests_alle", alle ? "0" : "1"); } catch {}
+  if (window.store) store.set({});   // neu zeichnen
+});
+</script>
+<script>
+/* ---- Themenwechsel: Vermessung (Standard) <-> Kartenpapier ----
+ * Setzt <html data-theme>, merkt die Wahl und sagt der Topo-Karte und der
+ * Spielfläche Bescheid (beide lesen ihre Farben dann neu). */
+(function () {
+  function anzeigen() {
+    const t = document.documentElement.dataset.theme;
+    document.querySelectorAll("[data-thema]").forEach(b => b.classList.toggle("on", b.dataset.thema === t));
+    document.querySelectorAll("[data-thema-label]").forEach(el => el.textContent = t === "papier" ? "PAPIER" : "VERMESS.");
+  }
+  window.themaSetzen = function (t) {
+    t = t === "papier" ? "papier" : "vermessung";
+    document.documentElement.dataset.theme = t;
+    try { localStorage.setItem("cs_thema", t); } catch (e) {}
+    anzeigen();
+    document.dispatchEvent(new Event("themawechsel"));
+  };
+  document.addEventListener("click", e => {
+    const b = e.target.closest("[data-thema],[data-thema-toggle]");
+    if (!b) return;
+    themaSetzen(b.dataset.thema || (document.documentElement.dataset.theme === "papier" ? "vermessung" : "papier"));
+  });
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", anzeigen); else anzeigen();
+})();
+</script>
+<script src="app.js?v=__V__"></script>
+
+<!-- ================================================================
+     Einstellungen: Grafik, Steuerung, Sound
+     ================================================================ -->
+<div id="einstellungen" role="dialog" aria-modal="true" aria-labelledby="einstTitel" hidden>
+  <div class="eKarte">
+    <div class="eKopf">
+      <h2 id="einstTitel">Einstellungen</h2>
+      <button type="button" class="eZu" data-einst-zu aria-label="Schließen">×</button>
+    </div>
+    <div class="eReiter" role="tablist">
+      <button type="button" role="tab" data-reiter="grafik" class="on">Grafik</button>
+      <button type="button" role="tab" data-reiter="steuerung">Steuerung</button>
+      <button type="button" role="tab" data-reiter="sound">Sound</button>
+    </div>
+
+    <section class="eSeite" data-seite="grafik">
+      <div class="eGruppe">
+        <div class="eLabel">Qualität<small>Hoch für starke Rechner, Niedrig für Laptops im Akkubetrieb.</small></div>
+        <div class="eSegment" role="radiogroup" aria-label="Qualität" data-einst-wahl="qualitaet">
+          <button type="button" data-wert="niedrig">Niedrig</button>
+          <button type="button" data-wert="mittel">Mittel</button>
+          <button type="button" data-wert="hoch">Hoch</button>
+        </div>
+      </div>
+      <div class="eGruppe">
+        <div class="eLabel">Auflösung<small>Weniger Pixel = flüssiger, etwas weicher.</small></div>
+        <div class="eSegment" role="radiogroup" aria-label="Auflösung" data-einst-wahl="aufloesung">
+          <button type="button" data-wert="0.5">50 %</button>
+          <button type="button" data-wert="0.75">75 %</button>
+          <button type="button" data-wert="1">100 %</button>
+        </div>
+      </div>
+      <div class="eGruppe">
+        <div class="eLabel">Bildrate</div>
+        <div class="eSegment" role="radiogroup" aria-label="Bildrate" data-einst-wahl="fps">
+          <button type="button" data-wert="30">30 / s</button>
+          <button type="button" data-wert="60">Maximal</button>
+        </div>
+      </div>
+      <label class="eSchalter"><span>Animierter Hintergrund<small>Höhenlinien bewegen sich im Spiel</small></span><input type="checkbox" data-einst="hintergrund"><i></i></label>
+      <label class="eSchalter"><span>Wolken</span><input type="checkbox" data-einst="wolken"><i></i></label>
+      <label class="eSchalter"><span>Verkehr<small>Autos und Lieferwagen auf den Straßen</small></span><input type="checkbox" data-einst="verkehr"><i></i></label>
+      <label class="eSchalter"><span>Tageszeit &amp; Licht<small>Dämmerung, Nacht, Dunst</small></span><input type="checkbox" data-einst="licht"><i></i></label>
+      <label class="eSchalter"><span>Glas-Effekt<small>Unschärfe hinter Leisten und Fenstern — kostet viel Grafikleistung</small></span><input type="checkbox" data-einst="glas"><i></i></label>
+      <label class="eSchalter"><span>Automatisch anpassen<small>Ruckelt das Spiel, schaltet es die Grafik stufenweise herunter</small></span><input type="checkbox" data-einst="autoQualitaet"><i></i></label>
+      <label class="eSchalter"><span>Bildrate anzeigen<small>Kleine Anzeige unten links: Bilder pro Sekunde</small></span><input type="checkbox" data-einst="fpsAnzeige"><i></i></label>
+      <div class="eGruppe">
+        <div class="eLabel">Kartenstil</div>
+        <div class="eSegment" role="radiogroup" aria-label="Kartenstil">
+          <button type="button" data-thema="vermessung">Vermessung</button>
+          <button type="button" data-thema="papier">Kartenpapier</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="eSeite" data-seite="steuerung" hidden>
+      <div class="eGruppe">
+        <div class="eLabel">Zoom-Empfindlichkeit<small>Mausrad und Kneifen</small></div>
+        <div class="eRegler"><input type="range" min="0.4" max="2" step="0.1" data-einst-zahl="radEmpf" aria-label="Zoom-Empfindlichkeit"><output></output></div>
+      </div>
+      <label class="eSchalter"><span>Zum Mauszeiger zoomen<small>Aus: immer zur Bildmitte</small></span><input type="checkbox" data-einst="zoomZumZeiger"><i></i></label>
+      <label class="eSchalter"><span>Trackpad-Wischen verschiebt die Karte<small>Aus: Wischen zoomt</small></span><input type="checkbox" data-einst="trackpadSchiebt"><i></i></label>
+      <label class="eSchalter"><span>Tastatursteuerung<small>WASD / Pfeiltasten verschieben, + / − zoomen</small></span><input type="checkbox" data-einst="tastatur"><i></i></label>
+      <label class="eSchalter"><span>Hinweise im Spiel<small>Kurze Erklärung, wenn ein System zum ersten Mal wichtig wird</small></span><input type="checkbox" data-einst="hinweise"><i></i></label>
+      <div class="eTasten">
+        <div><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd><span>Karte verschieben</span></div>
+        <div><kbd>+</kbd><kbd>−</kbd><span>Zoomen</span></div>
+        <div><kbd>F</kbd><span>Zu meinen Gebäuden</span></div>
+        <div><kbd>Esc</kbd><span>Menü / Fenster schließen</span></div>
+        <div><kbd>Ziehen</kbd><span>Karte mit der Maus verschieben</span></div>
+      </div>
+    </section>
+
+    <section class="eSeite" data-seite="sound" hidden>
+      <label class="eSchalter"><span>Musik<small>Naturkulisse im Hintergrund</small></span><input type="checkbox" data-einst-musik><i></i></label>
+      <div class="eGruppe">
+        <div class="eLabel">Musik-Lautstärke</div>
+        <div class="eRegler"><input type="range" min="0" max="100" step="1" data-einst-musikvol aria-label="Musik-Lautstärke"><output></output></div>
+      </div>
+      <label class="eSchalter"><span>Soundeffekte<small>Bauen, Geld, Klicks</small></span><input type="checkbox" data-einst="effekte"><i></i></label>
+      <div class="eGruppe">
+        <div class="eLabel">Effekt-Lautstärke</div>
+        <div class="eRegler"><input type="range" min="0" max="100" step="1" data-einst-zahl="effekteVol" aria-label="Effekt-Lautstärke"><output></output></div>
+      </div>
+      <button type="button" class="eTest" data-einst-test>Effekt anhören</button>
+    </section>
+  </div>
+</div>
+<script>
+/* Einstellungsfenster: liest/schreibt EINST, steuert MUSIC, spielt Testklang. */
+(function () {
+  const dlg = document.getElementById("einstellungen");
+  const auf = () => { dlg.hidden = false; fuellen(); dlg.querySelector(".eReiter .on")?.focus(); };
+  const zu = () => { dlg.hidden = true; };
+  window.einstellungenOeffnen = auf;
+  function fuellen() {
+    dlg.querySelectorAll("[data-einst]").forEach(i => i.checked = !!EINST[i.dataset.einst]);
+    dlg.querySelectorAll("[data-einst-zahl]").forEach(i => { i.value = EINST[i.dataset.einstZahl]; i.nextElementSibling.textContent = anzeige(i); });
+    dlg.querySelectorAll("[data-einst-wahl]").forEach(g => g.querySelectorAll("button").forEach(b =>
+      b.classList.toggle("on", String(EINST[g.dataset.einstWahl]) === b.dataset.wert)));
+    const m = dlg.querySelector("[data-einst-musik]"); m.checked = !MUSIC.istAus();
+    const mv = dlg.querySelector("[data-einst-musikvol]"); mv.value = MUSIC.vol(); mv.nextElementSibling.textContent = mv.value + " %";
+    dlg.querySelectorAll("[data-thema]").forEach(b => b.classList.toggle("on", b.dataset.thema === document.documentElement.dataset.theme));
+  }
+  const anzeige = i => i.dataset.einstZahl === "radEmpf" ? Math.round(i.value * 100) + " %" : i.value + " %";
+  dlg.addEventListener("change", e => {
+    const i = e.target;
+    if (i.dataset.einst) EINST.setzen(i.dataset.einst, i.checked);
+    if (i.hasAttribute("data-einst-musik")) MUSIC.setStumm(!i.checked);
+    fuellen();
+  });
+  dlg.addEventListener("input", e => {
+    const i = e.target;
+    if (i.dataset.einstZahl) { EINST.setzen(i.dataset.einstZahl, +i.value); i.nextElementSibling.textContent = anzeige(i); }
+    if (i.hasAttribute("data-einst-musikvol")) { MUSIC.setVol(+i.value); i.nextElementSibling.textContent = i.value + " %"; }
+  });
+  dlg.addEventListener("click", e => {
+    if (e.target === dlg || e.target.closest("[data-einst-zu]")) return zu();
+    const w = e.target.closest("[data-einst-wahl] button");
+    if (w) { const k = w.parentElement.dataset.einstWahl, v = w.dataset.wert;
+      EINST.setzen(k, isNaN(+v) ? v : +v); fuellen(); return; }
+    const r = e.target.closest("[data-reiter]");
+    if (r) { dlg.querySelectorAll("[data-reiter]").forEach(b => b.classList.toggle("on", b === r));
+      dlg.querySelectorAll("[data-seite]").forEach(sx => sx.hidden = sx.dataset.seite !== r.dataset.reiter); return; }
+    if (e.target.closest("[data-einst-test]")) { SFX.spiel("geld"); return; }
+    if (e.target.closest("[data-thema]")) setTimeout(fuellen, 0);
+  });
+  document.addEventListener("keydown", e => { if (e.key === "Escape" && !dlg.hidden) zu(); });
+  document.addEventListener("click", e => { if (e.target.closest("[data-einst-auf]")) { e.preventDefault(); auf(); } });
+})();
+</script>
+<script>
+/* "Was ist neu" auf der Startseite — Daten aus updates.js */
+(() => {
+  const liste = document.getElementById("updListe"), box = document.getElementById("updates");
+  if (!liste || !window.UPDATES?.length) { box?.remove(); document.querySelector("[data-upd-auf]")?.remove(); return; }
+  const ART = { neu: ["Neu", "New"], besser: ["Besser", "Improved"], fix: ["Fix", "Fix"] };
+  const sprache = () => (typeof SPRACHE !== "undefined" && SPRACHE === "en") ? "en" : "de";
+  const datum = (d, en) => new Date(d + "T12:00:00").toLocaleDateString(en ? "en-GB" : "de-DE", { day: "numeric", month: "long", year: "numeric" });
+  const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+  let gesehen = ""; try { gesehen = localStorage.getItem("cs_updates_gesehen") || ""; } catch {}
+  const neuestes = UPDATES[0].id;
+  function zeichnen() {
+    const en = sprache() === "en";
+    document.getElementById("updKopf").textContent = en ? "What's new" : "Was ist neu";
+    const knopf = document.querySelector("[data-upd-auf]");
+    if (knopf) knopf.childNodes[knopf.childNodes.length - 2].textContent = en ? " What's new" : " Was ist neu";
+    liste.innerHTML = UPDATES.map((u, i) => `<article class="updEintrag${u.id > gesehen && gesehen ? " ungelesen" : ""}">
+      <time datetime="${u.datum}">${datum(u.datum, en)}</time>
+      <h3>${esc(u.titel[en ? "en" : "de"] || u.titel.de)}</h3>
+      <ul>${u.punkte.map(p => `<li><span class="updArt ${p.art}">${ART[p.art]?.[en ? 1 : 0] || p.art}</span>${esc(p[en ? "en" : "de"] || p.de)}</li>`).join("")}</ul>
+    </article>`).join("");
+  }
+  const punkt = document.querySelector(".updPunkt");
+  if (punkt) punkt.hidden = gesehen === neuestes;
+  function gelesen() { try { localStorage.setItem("cs_updates_gesehen", neuestes); } catch {} if (punkt) punkt.hidden = true; }
+  zeichnen();
+  /* Breit: die Spalte ist sichtbar — wer die Startseite sieht, hat sie gesehen */
+  if (matchMedia("(min-width:1560px)").matches) setTimeout(gelesen, 4000);
+  document.addEventListener("click", e => {
+    if (e.target.closest("[data-upd-auf]")) { box.classList.add("offen"); gelesen(); return; }
+    if (e.target.closest("[data-upd-zu]") || e.target === box) box.classList.remove("offen");
+    if (e.target.closest("[data-lang]")) setTimeout(zeichnen, 0);
+  });
+  document.addEventListener("keydown", e => { if (e.key === "Escape") box.classList.remove("offen"); });
+})();
+</script>
+<script>
+/* Startbildschirm: Vorschau der eigenen Firmenmarke (Initiale + Farbe) */
+(() => {
+  const v = document.getElementById("jvorschau"), n = document.getElementById("jname");
+  if (!v || !n) return;
+  const neu = () => {
+    v.textContent = (n.value.trim()[0] || n.placeholder.replace(/^z\. B\. /, "")[0] || "?").toUpperCase();
+    const on = document.querySelector("#jcolors button.on");
+    if (on) v.style.setProperty("--fv", on.style.background || getComputedStyle(on).backgroundColor);
+  };
+  n.addEventListener("input", neu);
+  document.getElementById("jcolors").addEventListener("click", () => setTimeout(neu, 0));
+  neu();
+})();
+</script>
+</body>
+</html>
