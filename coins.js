@@ -1,19 +1,19 @@
 /* ============================================================
- * Krypto-Börse: Coins der Software-Firmen (Umsetzungsplan Schritt 1 bis 6)
+ * Krypto-Börse: Coins der Software-Firmen (Umsetzungsplan Schritt 1 bis 7)
  * ------------------------------------------------------------
  * Ein Coin ist ungedeckt. Sein Wert ist das Fundament, und das kommt allein
  * aus Börsengebühren. Die Gebühr legt jede Börse selbst fest.
  *
- *  Fundament   Fc = Gebührenstock / Coins je Firma (fest)
- *  Kurs        C(t+1) = C·(1 + β·Druck) + α·(Fc − C), Druck = Netto-Volumen / Umlauf
+ *  Fundament    Fc = Gebührenstock / COIN.UMLAUF (fest)
+ *  Kurs         C(t+1) = C·(1 + β·Druck) + α·(Fc − C), Druck = Netto-Volumen / Umlauf
  *  Tagesgrenze  C bleibt je Markttag im Band ±TAGESGRENZE um den Tagesanfang
  *  Nettovermögen Coins zählen zum Fundament (Buchwert), nicht zum Kurs
  *
- * Eine Börse gehört einer Software-Firma mit eigener Website. Ein Konto gilt
- * nur für eine Börse. Fremde Coins gibt es nur mit Vertrag; die Börse bekommt
- * dann VERTRAG_ANTEIL der Gebühr, der Rest geht an die Firma des Coins.
- * Alle Funktionen arbeiten auf dem Zustand G und haben keine Seiteneffekte
- * außerhalb davon, damit sie sich einzeln testen lassen.
+ * Konten: Ein Konto gilt für eine Börse. Geld und Coins liegen im Konto der
+ * Börse, bei der der Auftrag eingestellt wurde. Der Käufer zahlt die Gebühr an
+ * seine Börse. Fremde Coins gibt es nur mit Vertrag; die Börse bekommt dann
+ * VERTRAG_ANTEIL der Gebühr, der Rest geht an die Firma des Coins.
+ * Alle Funktionen arbeiten auf dem Zustand G, damit sie sich einzeln testen lassen.
  * ============================================================ */
 
 export const COIN = {
@@ -29,7 +29,10 @@ export const COIN = {
   KURS_START: 10,         // Startkurs einer frischen Ausgabe; zugleich Startfundament
 };
 
-/* Zustand: G.boersen[firmaId] = Börse, G.coins[firmaId] = Coin, G.coinVertraege = Verträge */
+/* G.boersen[firmaId]   = Börse { firmaId, gebuehr, aktiv, konten: { pid: { cash, coins: { coinId: n } } } }
+ * G.coins[firmaId]     = Coin  { firmaId, kurs, fundament, feeStock, netVol, minted, tagStart, tagTick }
+ * G.coinVertraege      = [{ id, boerseId, coinId, aktiv }]
+ * G.coinOrders         = offene Aufträge { id, boerseId, coinId, side, qty, price, playerId, reserviert } */
 export function coinsInit(G) {
   G.boersen ??= {};
   G.coins ??= {};
@@ -37,18 +40,20 @@ export function coinsInit(G) {
   G.coinOrders ??= [];
 }
 
-/* Die Börse einer Firma eröffnen. Voraussetzung prüft der Aufrufer (Website online). */
+const konto = (b, pid) => b.konten?.[pid] || null;
+
+/* Die Börse einer Firma eröffnen. Die Website-Voraussetzung prüft der Aufrufer. */
 export function boerseEroeffnen(G, firma, gebuehr) {
   coinsInit(G);
   if (G.boersen[firma.id]) return { error: "Die Firma hat schon eine Börse" };
   const g = Number(gebuehr);
   if (!Number.isFinite(g) || g < COIN.GEBUEHR_MIN || g > COIN.GEBUEHR_MAX)
     return { error: `Die Gebühr muss zwischen ${COIN.GEBUEHR_MIN * 100} % und ${COIN.GEBUEHR_MAX * 100} % liegen` };
-  G.boersen[firma.id] = { id: firma.id, firmaId: firma.id, gebuehr: g, aktiv: true };
+  G.boersen[firma.id] = { firmaId: firma.id, gebuehr: g, aktiv: true, konten: {} };
   return { ok: true };
 }
 
-/* Gebühr einer bestehenden Börse ändern. Wirkt nur auf neue Handel. */
+/* Gebühr einer bestehenden Börse ändern. Wirkt nur auf neue Abschlüsse. */
 export function gebuehrSetzen(G, firmaId, gebuehr) {
   const b = G.boersen?.[firmaId];
   if (!b) return { error: "Keine Börse" };
@@ -59,38 +64,68 @@ export function gebuehrSetzen(G, firmaId, gebuehr) {
   return { ok: true };
 }
 
-/* Coin einer Firma ausgeben: Die Coins liegen zunächst im Eigenbesitz der Firma. */
+/* Konto bei einer Börse eröffnen (ein Konto je Spieler und Börse). */
+export function kontoEroeffnen(G, boerseId, p) {
+  coinsInit(G);
+  const b = G.boersen[boerseId];
+  if (!b?.aktiv) return { error: "Diese Börse gibt es nicht" };
+  if (!konto(b, p.id)) b.konten[p.id] = { cash: 0, coins: {} };
+  return { ok: true };
+}
+
+/* Geld zwischen Spielerkasse und Börsenkonto verschieben. */
+export function einzahlen(G, boerseId, p, betrag) {
+  const k = konto(G.boersen?.[boerseId], p.id);
+  const m = Math.floor(+betrag * 100) / 100;
+  if (!k) return { error: "Erst ein Konto bei dieser Börse eröffnen" };
+  if (!(m > 0) || p.cash < m) return { error: "Zu wenig Bargeld" };
+  p.cash -= m; k.cash += m;
+  return { ok: true };
+}
+export function auszahlen(G, boerseId, p, betrag) {
+  const k = konto(G.boersen?.[boerseId], p.id);
+  const m = Math.floor(+betrag * 100) / 100;
+  if (!k) return { error: "Kein Konto bei dieser Börse" };
+  if (!(m > 0) || k.cash < m) return { error: "Zu wenig Guthaben auf dem Konto" };
+  k.cash -= m; p.cash += m;
+  return { ok: true };
+}
+
+/* Coin einer Firma ausgeben. Die Coins liegen im Konto der Firma bei der eigenen Börse. */
 export function coinAusgeben(G, firma, menge) {
   coinsInit(G);
-  if (!G.boersen[firma.id]?.aktiv) return { error: "Erst eine Börse eröffnen" };
+  const b = G.boersen[firma.id];
+  if (!b?.aktiv) return { error: "Erst eine Börse eröffnen" };
   const m = Math.floor(+menge);
   if (!(m > 0)) return { error: "Menge > 0 nötig" };
   let c = G.coins[firma.id];
   if (!c) {
     c = G.coins[firma.id] = {
       firmaId: firma.id, kurs: COIN.KURS_START, fundament: COIN.KURS_START,
-      feeStock: COIN.KURS_START * COIN.UMLAUF, netVol: 0, minted: 0, holdings: {}, tagStart: COIN.KURS_START, tagTick: 0,
+      feeStock: COIN.KURS_START * COIN.UMLAUF, netVol: 0, minted: 0, tagStart: COIN.KURS_START, tagTick: 0,
     };
   }
   if (c.minted + m > COIN.UMLAUF) return { error: `Höchstens ${COIN.UMLAUF - c.minted} Coins mehr ausgeben` };
+  if (!konto(b, firma.id)) b.konten[firma.id] = { cash: 0, coins: {} };
   c.minted += m;
-  c.holdings[firma.id] = (c.holdings[firma.id] || 0) + m;
+  b.konten[firma.id].coins[firma.id] = (b.konten[firma.id].coins[firma.id] || 0) + m;
   return { ok: true };
 }
 
-/* Umlauf = ausgegebene Coins ohne den Eigenbestand der Firma. */
-export function umlauf(c) {
-  return Math.max(1, c.minted - (c.holdings[c.firmaId] || 0));
+/* Coins im Umlauf: ausgegeben, ohne was die Firma selbst im Konto hält. */
+export function umlauf(G, c) {
+  const eigen = konto(G.boersen[c.firmaId], c.firmaId)?.coins?.[c.firmaId] || 0;
+  return Math.max(1, c.minted - eigen);
 }
 
-/* Darf die Börse diesen Coin handeln? Eigener Coin immer, fremder nur mit Vertrag. */
+/* Führt die Börse diesen Coin? Eigener Coin immer, fremder nur mit Vertrag. */
 export function listet(G, boerseId, coinId) {
   if (!G.boersen?.[boerseId]?.aktiv || !G.coins?.[coinId]) return false;
   if (boerseId === coinId) return true;
   return (G.coinVertraege || []).some(v => v.boerseId === boerseId && v.coinId === coinId && v.aktiv);
 }
 
-/* Vertrag: Börse bietet den Coin einer anderen Firma an. Ohne Kündigungsfrist. */
+/* Vertrag: Börse bietet den Coin einer anderen Firma an. */
 export function vertragSchliessen(G, boerseId, coinId) {
   coinsInit(G);
   if (boerseId === coinId) return { error: "Der eigene Coin braucht keinen Vertrag" };
@@ -101,8 +136,7 @@ export function vertragSchliessen(G, boerseId, coinId) {
   return { ok: true };
 }
 
-/* Kündigung: Der Vertrag endet sofort. Offene Aufträge dieser Börse auf dem Coin
- * werden storniert, die Sperre geht an den Besitzer zurück. */
+/* Kündigung ist sofort wirksam. Offene Aufträge dieser Börse auf dem Coin werden storniert. */
 export function vertragKuendigen(G, boerseId, coinId) {
   const v = (G.coinVertraege || []).find(x => x.boerseId === boerseId && x.coinId === coinId && x.aktiv);
   if (!v) return { error: "Kein aktiver Vertrag" };
@@ -111,23 +145,23 @@ export function vertragKuendigen(G, boerseId, coinId) {
   return { ok: true };
 }
 
-/* Auftrag einstellen. Kauf sperrt Geld inklusive Gebühr der eigenen Börse,
- * Verkauf sperrt Coins. Passende Gegenaufträge werden sofort ausgeführt, der
- * Rest steht im Buch. Die Gebühr zahlt der Käufer an dessen Börse. */
+/* Auftrag einstellen. Kauf sperrt Geld im Konto inklusive Gebühr, Verkauf sperrt Coins.
+ * Passende Gegenaufträge werden sofort ausgeführt, der Rest steht im Buch. */
 export function coinOrder(G, p, { boerseId, coinId, side, qty, price }) {
   coinsInit(G);
   if (!listet(G, boerseId, coinId)) return { error: "Diese Börse führt den Coin nicht" };
-  const c = G.coins[coinId], b = G.boersen[boerseId];
+  const c = G.coins[coinId], b = G.boersen[boerseId], k = konto(b, p.id);
+  if (!k) return { error: "Erst ein Konto bei dieser Börse eröffnen" };
   const m = Math.floor(+qty), pr = Math.round(+price * 100) / 100;
   if (!(m > 0) || !(pr > 0)) return { error: "Menge und Preis > 0 nötig" };
   let reserviert;
   if (side === "buy") {
     reserviert = m * pr * (1 + b.gebuehr);
-    if (p.cash < reserviert) return { error: "Zu wenig Kapital" };
-    p.cash -= reserviert;
+    if (k.cash < reserviert) return { error: "Zu wenig Guthaben auf dem Konto" };
+    k.cash -= reserviert;
   } else {
-    if ((c.holdings[p.id] || 0) < m) return { error: "Nicht genug Coins" };
-    c.holdings[p.id] -= m;
+    if ((k.coins[coinId] || 0) < m) return { error: "Nicht genug Coins im Konto" };
+    k.coins[coinId] -= m;
     reserviert = m;
   }
   const o = { id: `co_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`, boerseId, coinId, side, qty: m, price: pr, playerId: p.id, reserviert };
@@ -136,11 +170,13 @@ export function coinOrder(G, p, { boerseId, coinId, side, qty, price }) {
   return { ok: true, order: o };
 }
 
-/* Auftrag zurücknehmen: Geld oder Coins gehen zurück an den Einsteller. */
+/* Auftrag zurücknehmen: Geld oder Coins gehen zurück ins Konto des Einstellers. */
 export function coinStorno(G, o) {
-  const p = G.players[o.playerId];
-  if (o.side === "buy") { if (p) p.cash += o.reserviert; }
-  else { const c = G.coins[o.coinId]; if (c) c.holdings[o.playerId] = (c.holdings[o.playerId] || 0) + o.reserviert; }
+  const k = konto(G.boersen[o.boerseId], o.playerId);
+  if (k) {
+    if (o.side === "buy") k.cash += o.reserviert;
+    else k.coins[o.coinId] = (k.coins[o.coinId] || 0) + o.reserviert;
+  }
   o.reserviert = 0;
   G.coinOrders = G.coinOrders.filter(x => x !== o);
 }
@@ -155,47 +191,48 @@ function matchen(G, o) {
   for (const x of gegen) {
     if (o.qty <= 0) break;
     const kauf = o.side === "buy" ? o : x, verkauf = o.side === "buy" ? x : o;
-    const menge = Math.min(o.qty, x.qty), preis = x.price;   // Ausführung zum Preis des Wartenden
+    const menge = Math.min(o.qty, x.qty), preis = x.price;
     fuelle(G, c, kauf, verkauf, menge, preis);
     x.qty -= menge; o.qty -= menge;
   }
   G.coinOrders = G.coinOrders.filter(x => x.qty > 0);
 }
 
-/* Ein Abschluss: Coins wechseln den Besitzer, Geld fließt, Gebühr geht an die Börse
- * des Käufers (mit Vertragsanteil für die Firma des Coins). */
+/* Ein Abschluss: Coins ins Konto des Käufers, Geld ins Konto des Verkäufers,
+ * Gebühr an die Börse des Käufers (mit Vertragsanteil für die Firma des Coins). */
 function fuelle(G, c, kauf, verkauf, menge, preis) {
-  const wert = menge * preis, g = G.boersen[kauf.boerseId].gebuehr, gebuehr = wert * g;
-  /* Käufer hat zum Limit gesperrt: Differenz zurück, Kosten abziehen. */
+  const wert = menge * preis, bk = G.boersen[kauf.boerseId], g = bk.gebuehr, gebuehr = wert * g;
+  /* Käufer hat zum Limit gesperrt: Differenz zurück ins Konto. */
   kauf.reserviert -= menge * kauf.price * (1 + g);
-  const kp = G.players[kauf.playerId];
-  if (kp) kp.cash += menge * (kauf.price - preis) * (1 + g);
-  /* Verkäufer bekommt den Wert, Coins gehen an den Käufer. */
+  const kk = konto(bk, kauf.playerId);
+  if (kk) {
+    kk.cash += menge * (kauf.price - preis) * (1 + g);
+    kk.coins[c.firmaId] = (kk.coins[c.firmaId] || 0) + menge;
+  }
+  /* Verkäufer bekommt den Wert im Konto seiner Börse. */
   verkauf.reserviert -= menge;
-  const vp = G.players[verkauf.playerId];
-  if (vp) vp.cash += wert;
-  c.holdings[kauf.playerId] = (c.holdings[kauf.playerId] || 0) + menge;
+  const vk = konto(G.boersen[verkauf.boerseId], verkauf.playerId);
+  if (vk) vk.cash += wert;
   /* Gebühr verteilen */
-  const bId = kauf.boerseId ? G.boersen[kauf.boerseId].firmaId : null;
-  if (bId === c.firmaId) addCash(G, bId, gebuehr);
+  if (bk.firmaId === c.firmaId) gutschreiben(G, bk.firmaId, gebuehr);
   else {
     const an = gebuehr * COIN.VERTRAG_ANTEIL;
-    addCash(G, bId, an);
-    addCash(G, c.firmaId, gebuehr - an);
+    gutschreiben(G, bk.firmaId, an);
+    gutschreiben(G, c.firmaId, gebuehr - an);
   }
   c.netVol += menge;
   c.feeStock += gebuehr;
-  c.letzterPreis = preis;
 }
-const addCash = (G, pid, betrag) => { if (G.players[pid]) G.players[pid].cash += betrag; };
+/* Gebühren fließen in die Spielerkasse der Firma (nicht in ein Börsenkonto). */
+const gutschreiben = (G, pid, betrag) => { if (G.players[pid]) G.players[pid].cash += betrag; };
 
 /* Jeden Tick: Kurs nachführen, Tagesgrenze und Gebührenstock. */
 export function coinTick(G, tick) {
   for (const c of Object.values(G.coins || {})) {
     if (tick - c.tagTick >= COIN.TAG) { c.tagTick = tick; c.tagStart = c.kurs; }
     c.feeStock *= COIN.ZERFALL;
-    c.fundament = Math.max(0.01, c.feeStock / COIN.UMLAUF);   // fester Nenner: Der Wert je Coin hängt nicht an der Streuung
-    const druck = c.netVol / umlauf(c);
+    c.fundament = Math.max(0.01, c.feeStock / COIN.UMLAUF);
+    const druck = c.netVol / umlauf(G, c);
     c.netVol = 0;
     let k = c.kurs * (1 + COIN.BETA * druck);
     k += COIN.ALPHA * (c.fundament - k);
@@ -204,10 +241,19 @@ export function coinTick(G, tick) {
   }
 }
 
-/* Buchwert der Coins eines Spielers (Fundament × Anzahl, auch Gesperrtes) */
+/* Buchwert der Coins eines Spielers: alle Konten, Coins zum Fundament. */
 export function coinsWert(G, pid) {
   let w = 0;
-  for (const c of Object.values(G.coins || {})) w += (c.holdings[pid] || 0) * c.fundament;
-  for (const o of G.coinOrders || []) if (o.playerId === pid && o.side === "sell") w += o.reserviert * (G.coins[o.coinId]?.fundament || 0);
+  for (const b of Object.values(G.boersen || {})) {
+    const k = b.konten?.[pid];
+    if (!k) continue;
+    for (const [coinId, n] of Object.entries(k.coins)) w += n * (G.coins[coinId]?.fundament || 0);
+    w += k.cash;
+  }
+  for (const o of G.coinOrders || []) {
+    if (o.playerId !== pid) continue;
+    if (o.side === "sell") w += o.reserviert * (G.coins[o.coinId]?.fundament || 0);
+    else w += o.reserviert;   // gesperrtes Geld gehört weiter dem Spieler
+  }
   return w;
 }

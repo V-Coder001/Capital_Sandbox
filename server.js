@@ -12,7 +12,7 @@ import { Server } from "socket.io";
 import path from "path";
 import { fileURLToPath } from "url";
 import { statisch, cacheKoepfe } from "./statisch.js";
-import { boerseEroeffnen, gebuehrSetzen, coinAusgeben, vertragSchliessen, vertragKuendigen, coinOrder, coinStorno, coinTick, coinsWert } from "./coins.js";
+import { boerseEroeffnen, gebuehrSetzen, kontoEroeffnen, einzahlen, auszahlen, coinAusgeben, vertragSchliessen, vertragKuendigen, coinOrder, coinStorno, coinTick, coinsWert } from "./coins.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -8641,6 +8641,12 @@ io.on("connection", socket => {
     if (!w || !((w.faktor ?? 1) > 0)) return ack?.({ error: "Erst eine Website bauen und online halten" });
     const r = G.boersen?.[p.id] ? gebuehrSetzen(G, p.id, gebuehr) : boerseEroeffnen(G, p, gebuehr);
     ack?.(r.error ? r : { ok: true });
+  }));
+  socket.on("coinKonto", guard((p, { boerseId, aktion, betrag }, ack) => {
+    if (aktion === "eröffnen") return ack?.(kontoEroeffnen(G, boerseId, p));
+    if (aktion === "einzahlen") return ack?.(einzahlen(G, boerseId, p, betrag));
+    if (aktion === "auszahlen") return ack?.(auszahlen(G, boerseId, p, betrag));
+    ack?.({ error: "Ungültig" });
   }));
   socket.on("coinAusgeben", guard((p, { menge }, ack) => {
     if (!istSoftwareFirma(p)) return ack?.({ error: "Nur Software-Firmen geben Coins aus" });
