@@ -1454,7 +1454,13 @@ const MARKT_TIEFE = { munition: 1.5, pistole: 2.5, panzer: 2.5,
    * 24–31k $ Vermögen, Tabellenende). */
   uebernachtung: 2 };
 const soldPressure = k => MM[k].sold * BASEP[k] / (4000 * (MARKT_TIEFE[k] || 1));   // verkaufter Wert / $4000 = 1 Druckpunkt
-function noteSold(k, qty) { MM[k].sold = Math.max(-200 / BASEP[k], MM[k].sold + qty); }
+/* Knappheit: Verbrauch in der Produktion zählt als Nachfrage und senkt `sold`
+ * (negativer Druck hebt den Anker). Die Untergrenze ist so gewählt, dass der
+ * Anker bei dauerhafter Knappheit bis zur 130-%-Grenze steigen kann. */
+const NACHFRAGE_FAKTOR = 0.5;   // Verbrauch wirkt halb so stark wie ein Verkauf
+const soldFloor = k => -1500 * (MARKT_TIEFE[k] || 1) / BASEP[k];   // −0,375 Druckpunkte = Anker 130 %
+function noteSold(k, qty) { MM[k].sold = Math.max(soldFloor(k), MM[k].sold + qty); }
+function noteDemand(k, qty) { MM[k].sold = Math.max(soldFloor(k), MM[k].sold - qty * NACHFRAGE_FAKTOR); }
 
 const BOOST_MULT = 0.75;   // je verfügbarem Boost-Rohstoff: +75 % Produktion
 
@@ -1859,7 +1865,7 @@ function rennAnkuendigen() {
     }
   }
   feldAuffuellen(G.rennen);
-  io.emit("notice", { text: `🏁 Renntag! Anmeldung, Wetten und Sponsoring sind ${RENN_ANMELDUNG} s offen — Nenngeld ${RENN_NENNGELD.toLocaleString("de-DE")} $.` });
+  io.emit("notice", { text: `🏁 Renntag! Anmeldung, Wetten und Sponsoring sind ${RENN_ANMELDUNG} s offen — Nenngeld ${RENN_NENNGELD.toLocaleString("de-DE")} $. Zu finden im Stadtnetz.` });
 }
 function rennStarten() {
   const r = G.rennen;
@@ -2989,6 +2995,7 @@ const G = {
   anzeigen: [],          // Werbenetz: {id, produktId, firmaId, text, bis}
   fonds: {}, etfHist: {}, faEtf: {}, software: {}, paint: {}, swFaktor: {},   // Branchenfonds (ETFs), Fondsanteile des Finanzamts
   stadtkasse: 20000, steuerStufe: 2, boerseGebuehren: 0,         // Finanzamt: Anteil der Steuern für Großauftrags-Prämien und Stadtprojekte
+  casino: { einnahmen: 0, runden: 0, log: [] },   // Stadt-Casino (casino.cs): Überschuss des Hauses, letzte Runden
   steuernGesamt: 0,
   stadtprojekt: null, projektPause: 120, stadtprojekteFertig: [],
   fahrer: [],            // Fahrerpool der Runde: {id, name, land, Werte…, teamId, autoId}
@@ -5944,6 +5951,78 @@ function stadtTick() {
  * genau 1, bei der fuenffachen Stadt rund 1,6 (Deckel). */
 const stadtNachfrage = () => !stadtAktiv() ? 1
   : Math.max(STADT.NACHFRAGE_MIN, Math.min(STADT.NACHFRAGE_MAX, Math.pow(G.stadt.einwohner / STADT.START_EINW, STADT.NACHFRAGE_EXP))) * (1 + festLaeden());
+/* ---------- Stadt-Casino (casino.cs im Stadtnetz) ----------
+ * Ein Spielhaus, das der Stadt gehoert: vier Spiele mit rund 5 % Hausvorteil.
+ * Gewuerfelt wird ausschliesslich hier im Server — der Client zeigt nur an,
+ * sonst liesse sich das Ergebnis im Browser drehen. Der Ueberschuss landet in
+ * derselben Stadtkasse wie Steuern und Wohnbau, das Casino finanziert also
+ * sichtbar die Stadt mit. Gespielt wird mit Spielgeld, nichts davon hat einen
+ * Bezug zu echtem Geld. */
+const CASINO_MIN = 50, CASINO_MAX = 2000;
+/* Walzen: fuenf Symbole, 125 Kombinationen. Drei gleiche zahlen den Faktor des
+ * Symbols, zwei gleiche geben den halben Einsatz zurueck. Erwartungswert
+ * daraus: 0,24 (Paare) + 89/125 (Drillinge) = rund 0,95. */
+const CASINO_WALZEN = [
+  { s: "wappen", n: "Stadtwappen", f: 50 },
+  { s: "glocke", n: "Glocke",      f: 15 },
+  { s: "stern",  n: "Stern",       f: 10 },
+  { s: "muenze", n: "Münze",       f: 8  },
+  { s: "klee",   n: "Kleeblatt",   f: 6  },
+];
+/* Rad: 13 Felder. Die 0 ist die Stadt und gehoert immer dem Haus — daraus
+ * entsteht der Hausvorteil, ganz wie beim gruenen Feld im Roulette. */
+const CASINO_RAD = 13, CASINO_RAD_ZAHL = 12.3, CASINO_RAD_FARBE = 2.05;
+const CASINO_SPIELE = {
+  muenze:  { name: "Münzwurf",     kurz: "Kopf oder Zahl",  quote: "1,90×" },
+  wuerfel: { name: "Würfel",       kurz: "Hoch oder Tief",  quote: "1,90×" },
+  walzen:  { name: "Stadtwalzen",  kurz: "Drei Symbole",    quote: "bis 50×" },
+  rad:     { name: "Rad",          kurz: "Setz auf dein Feld", quote: "bis 12,3×" },
+};
+/* Eine Runde auswuerfeln. Rueckgabe: faktor = Vielfaches des Einsatzes, das
+ * ausgezahlt wird (0 = verloren, 0.5 = halber Einsatz zurueck). gewonnen ist
+ * nur fuer die Anzeige gedacht und bei einem halben Rueckfluss bewusst false. */
+function casinoRunde(spiel, tipp) {
+  if (spiel === "muenze") {
+    if (tipp !== "kopf" && tipp !== "zahl") return null;
+    const wurf = Math.random() < .5 ? "kopf" : "zahl";
+    const gewonnen = wurf === tipp;
+    return { gewonnen, faktor: gewonnen ? 1.9 : 0, ergebnis: wurf,
+      text: wurf === "kopf" ? "Kopf" : "Zahl" };
+  }
+  if (spiel === "wuerfel") {
+    if (tipp !== "hoch" && tipp !== "tief") return null;
+    const augen = 1 + Math.floor(Math.random() * 6);
+    const hoch = augen >= 4;
+    const gewonnen = (tipp === "hoch") === hoch;
+    return { gewonnen, faktor: gewonnen ? 1.9 : 0, ergebnis: augen,
+      text: `${augen} — ${hoch ? "hoch" : "tief"}` };
+  }
+  if (spiel === "walzen") {
+    const w = [0, 0, 0].map(() => CASINO_WALZEN[Math.floor(Math.random() * CASINO_WALZEN.length)]);
+    const drei = w[0].s === w[1].s && w[1].s === w[2].s;
+    const paar = !drei && (w[0].s === w[1].s || w[1].s === w[2].s || w[0].s === w[2].s);
+    return { gewonnen: drei, faktor: drei ? w[0].f : paar ? .5 : 0, ergebnis: w.map(x => x.s),
+      text: drei ? `Dreimal ${w[0].n}!` : paar ? "Zwei gleiche — halber Einsatz zurück" : "Keine zwei gleichen" };
+  }
+  if (spiel === "rad") {
+    const feld = Math.floor(Math.random() * CASINO_RAD);
+    const farbe = feld === 0 ? "stadt" : feld % 2 ? "rot" : "schwarz";
+    const aufZahl = /^[0-9]+$/.test(String(tipp));
+    const zahl = aufZahl ? +tipp : null;
+    if (aufZahl ? !(zahl >= 1 && zahl < CASINO_RAD) : (tipp !== "rot" && tipp !== "schwarz")) return null;
+    const gewonnen = feld !== 0 && (aufZahl ? zahl === feld : tipp === farbe);
+    return { gewonnen, faktor: gewonnen ? (aufZahl ? CASINO_RAD_ZAHL : CASINO_RAD_FARBE) : 0,
+      ergebnis: feld, farbe,
+      text: feld === 0 ? "Stadt — das Haus kassiert" : `${feld} ${farbe}` };
+  }
+  return null;
+}
+function casinoPublic() {
+  if (!stadtAktiv()) return null;
+  return { einnahmen: Math.round(G.casino.einnahmen), runden: G.casino.runden,
+    min: CASINO_MIN, max: CASINO_MAX, radFelder: CASINO_RAD,
+    walzen: CASINO_WALZEN, spiele: CASINO_SPIELE, log: G.casino.log };
+}
 function stadtPublic() {
   if (!stadtAktiv()) return null;
   const S = G.stadt, kap = wohnKapazitaet();
@@ -6703,6 +6782,7 @@ function snapshot() {
     wettrunde: wettrundePublic(),
     finanzamt: finanzamtPublic(),
     stadt: stadtPublic(),
+    casino: casinoPublic(),
     stadtprojekt: G.stadtprojekt ? { id: G.stadtprojekt.id, name: G.stadtprojekt.name, key: G.stadtprojekt.key,
       budget: G.stadtprojekt.budget, ttl: G.stadtprojekt.ttl, needs: G.stadtprojekt.needs,
       contrib: Object.fromEntries(Object.entries(G.stadtprojekt.contrib).map(([pid, goods]) =>
@@ -7873,6 +7953,34 @@ io.on("connection", socket => {
       return ack?.({ ok: true, text: `Soldat angeheuert (${G.soldaten[fid]}/${SOLDATEN_MAX}).` });
     }
     ack?.({ error: "Diese Kassen-Aktion gibt es nicht" });
+  }));
+
+  /* --- Stadt-Casino auf casino.cs: eine Runde spielen --- */
+  socket.on("casinoSpielen", guard((p, { spiel, tipp, einsatz }, ack) => {
+    if (!stadtAktiv()) return ack?.({ error: "Das Stadt-Casino öffnet erst mit der wachsenden Stadt" });
+    const def = CASINO_SPIELE[spiel];
+    if (!def) return ack?.({ error: "Dieses Spiel kennt das Haus nicht" });
+    einsatz = Math.floor(+einsatz) || 0;
+    if (!(einsatz >= CASINO_MIN && einsatz <= CASINO_MAX))
+      return ack?.({ error: `Einsatz zwischen ${CASINO_MIN} und ${CASINO_MAX} $` });
+    if (p.cash < einsatz) return ack?.({ error: "Zu wenig Bargeld" });
+    const r = casinoRunde(spiel, tipp);
+    if (!r) return ack?.({ error: "Dieser Tipp passt nicht zum Spiel" });
+    /* Erst den Einsatz einziehen, dann auszahlen: So stimmt die Stadtkasse
+     * auch dann, wenn die Runde gewonnen wird. */
+    p.cash -= einsatz; G.stadtkasse += einsatz;
+    const aus = Math.round(einsatz * r.faktor);
+    if (aus > 0) { p.cash += aus; G.stadtkasse -= aus; }
+    const netto = aus - einsatz;
+    G.casino.einnahmen -= netto;        // was der Spieler verliert, gewinnt die Stadt
+    G.casino.runden++;
+    logTx(p, "Casino", `${def.name}: ${r.text}`, netto);
+    G.casino.log.unshift({ tick: G.tick, name: p.name, farbe: p.color, spiel, netto, text: r.text });
+    G.casino.log.length = Math.min(G.casino.log.length, 10);
+    /* Grosse Treffer gehen durch die ganze Stadt — sonst bekommt niemand mit,
+     * dass auf casino.cs ueberhaupt etwas passiert. */
+    if (netto >= 5000) io.emit("notice", { text: `🎰 ${p.name} räumt im Stadt-Casino ab — ${Math.round(netto)} $ bei ${def.name}!` });
+    ack?.({ ok: true, ...r, einsatz, auszahlung: aus, netto, cash: Math.round(p.cash) });
   }));
 
   /* --- Wahrzeichen: ein interaktives Gebäude je Bezirk --- */
@@ -9089,6 +9197,7 @@ io.on("connection", socket => {
     G.tick = 0; G.winner = null; G.winGrund = null; G.report = null; G.plan = null; G.tutorialEnde = false;
     G.rennen = null; G.naechstesRennenIn = RENN_INTERVALL; G.werksTeams = werksTeamsBauen();
     G.wm = {}; G.saisonRennen = 0; G.fanAuszahlungIn = FAN_TAKT;
+    G.casino = { einnahmen: 0, runden: 0, log: [] };
     G.hofGespeichert = false;
     G.cartels = []; G.familienRespekt = {}; G.bezirke = null; G.pate = null;
     G.pateWahl = { phase: null, endet: 0, naechste: 0, kandidaten: [], stimmen: {}, stich: null };
@@ -10331,7 +10440,10 @@ function runTick() {
       }
       if (frac > 0) {
         frac *= SPERR;   // Stromabschaltung drosselt Verbrauch und Ausstoß gleichermaßen
-        for (const [g, need] of Object.entries(bt.proc.in)) p.inv[g] -= need * lvl * frac * sparen;
+        for (const [g, need] of Object.entries(bt.proc.in)) {
+          p.inv[g] -= need * lvl * frac * sparen;
+          noteDemand(g, need * lvl * frac * sparen);
+        }
         const plus = (sb?.out || 0) + (sb?.turbo ? TURBO.OUT : 0);
         const menge = bt.proc.rate * lvl * frac * (1 + plus);
         if (sb) {
