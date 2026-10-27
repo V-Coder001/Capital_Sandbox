@@ -1822,6 +1822,72 @@ em.auf,.bankZeile em.auf{color:#15803d}em.ab,.bankZeile em.ab{color:#b91c1c}
 .fw-dunkel .fwFaq p,.fw-dunkel .fwTeam small,.fw-dunkel .fwKontakt small,.fw-dunkel .fwZahlen span{color:#cbd5e1}
 .fw-dunkel .fwTeam b,.fw-dunkel .fwKontakt b{color:#f3f4f6}
 
+/* ---- Krypto-Börse im Stadtnetz (krypto.js) ----
+ * Setzt auf die Klassen der Warenbörse (bw*) auf; hier nur, was dazukommt:
+ * Kontozeile über dem Formular, Verwaltung der eigenen Börse, Vertragsliste.
+ * Die Stadtnetz-Seiten sind hell, deshalb helle Flächen statt der Spielfarben. */
+.krFremd{font-style:normal;font-size:9.5px;letter-spacing:.05em;text-transform:uppercase;color:#6d28d9;background:#ede9fe;border-radius:4px;padding:1px 5px;margin-left:6px}
+.krKonto{display:flex;justify-content:space-between;align-items:center;gap:14px;flex-wrap:wrap;background:#fff;border:1px solid #e6e9f0;border-radius:16px;padding:12px 14px}
+.krKontoWerte{display:flex;gap:26px;flex-wrap:wrap}
+.krKonto small{display:block;font-size:11px;color:#4b5563}
+.krKonto b{font-size:17px;color:#111827}
+.krKontoForm{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.krKontoForm input{width:100px;border:1px solid #d4d8e2;border-radius:9px;padding:8px 10px;font:600 13px var(--mono);color:#111827;background:#fff}
+.krKontoLeer b{display:block;font-size:14px;color:#111827}
+.krKontoLeer small{display:block;margin-top:2px}
+.krVerwaltung{display:flex;flex-direction:column;gap:12px;background:#fff;border:1px solid #e6e9f0;border-radius:16px;padding:14px}
+.krVerwaltungKopf{display:flex;justify-content:space-between;align-items:baseline;gap:10px}
+.krVerwaltungKopf b{font-size:14px;color:#111827}
+.krVerwaltungKopf small{font-size:11.5px;color:#6b7280}
+.krVerwaltungGrid{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(240px,1fr))}
+.krBox{background:#f8fafc;border:1px solid #e6e9f0;border-radius:12px;padding:10px 12px}
+.krBox>small{display:block;font-size:11px;font-weight:700;color:#374151;margin-bottom:8px}
+.krBox>span{display:block;margin-top:8px;font-size:11.5px;color:#6b7280}
+.krBoxForm{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.krBoxForm input{width:88px;border:1px solid #d4d8e2;border-radius:9px;padding:8px 10px;font:600 13px var(--mono);color:#111827;background:#fff}
+.krBoxForm span{font-size:13px;color:#4b5563}
+.krVertraege>small{display:block;font-size:11px;font-weight:700;color:#374151;margin-bottom:4px}
+.krVertraege>span{display:block;margin-top:10px;font-size:11.5px;color:#6b7280}
+.krVertrag{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:12px;align-items:center;padding:8px 0;border-top:1px solid #eef1f6;color:#111827;font-size:13px}
+.krSeitenBox p{margin:6px 0 10px;font-size:12px;color:#4b5563}
+#netzFenster .mini{background:#f1f5f9;color:#111827;border:1px solid #d4d8e2}
+#netzFenster .mini:hover{background:#e2e8f0}
+#netzFenster .buyb{background:#16a34a;color:#fff}
+#netzFenster .sellb{background:#dc2626;color:#fff}
+
+/* ---- Dashboard der Software-Firma (eigene Stadtnetz-Seite) ---- */
+.dsLayout{display:flex;flex-direction:column;gap:14px;padding:4px 2px}
+.dsKennzahlen{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.dsKennzahlen>div{background:#f8fafc;border:1px solid #e9edf4;border-radius:12px;padding:10px 12px;display:flex;flex-direction:column;gap:2px}
+.dsKennzahlen small{font-size:11px;color:#64748b}
+.dsKennzahlen b{font-size:19px;color:#0f172a}
+.dsKennzahlen span{font-size:11px;color:#94a3b8}
+.dsChart{background:#0f172a;border-radius:14px;padding:10px 12px}
+.dsBloecke{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:10px}
+.dsTabelle{background:#fff;border:1px solid #e9edf4;border-radius:14px;padding:12px 14px}
+.dsTabelleKopf{display:flex;justify-content:space-between;align-items:baseline;border-bottom:1px solid #eef2f7;padding-bottom:7px;margin-bottom:4px}
+.dsTabelleKopf b{font-size:14px;color:#0f172a}
+.dsTabelleKopf small{font-size:11px;color:#94a3b8}
+.dsZeile{display:grid;grid-template-columns:minmax(0,1fr) auto auto auto;gap:10px;align-items:center;padding:7px 0;border-bottom:1px solid #f4f6fa;font-size:12.5px}
+.dsZeile:last-of-type{border-bottom:none}
+.dsWer{display:flex;align-items:center;gap:7px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#0f172a}
+.dsLogo{width:18px;height:18px;border-radius:5px;flex:0 0 auto}
+.dsStatus{font-size:11px;color:#64748b}
+.dsJa{font-style:normal;background:#dcfce7;color:#166534;border-radius:5px;padding:1px 6px;font-size:10.5px;font-weight:600}
+.dsNein{font-style:normal;background:#fee2e2;color:#991b1b;border-radius:5px;padding:1px 6px;font-size:10.5px;font-weight:600}
+.dsHinweis{display:block;font-size:11px;color:#94a3b8;margin-top:8px}
+.dsAktion{display:flex;gap:10px;justify-content:flex-end}
+.dsLeer{background:#fff;border:1px solid #e9edf4;border-radius:14px;padding:22px;text-align:center;max-width:520px;margin:24px auto}
+.dsLeer h3{margin:0 0 6px;font-size:17px;color:#0f172a}
+.dsLeer p{margin:0 0 14px;font-size:13px;color:#64748b;line-height:1.5}
+.dsLeer .krBoxForm{justify-content:center}
+.krVon{display:block;font-size:11px;color:#94a3b8;margin-top:2px}
+#netzFenster .krBoxForm input[maxlength]{min-width:0;flex:1 1 90px}
+.krVertrag small{color:#94a3b8;font-weight:400;font-size:11px}
+.dsWer small{color:#94a3b8;font-weight:400;font-size:11px}
+.krTrend{font-style:normal;background:#fef3c7;color:#92400e;border-radius:5px;padding:1px 5px;font-size:10px;font-weight:700;letter-spacing:.3px}
+.dsTrend{font-style:normal;background:#fef3c7;color:#92400e;border-radius:5px;padding:1px 6px;font-size:10.5px;font-weight:700}
+.dsZeile.dsCoin{grid-template-columns:minmax(0,1fr) auto minmax(0,auto) auto auto}
 /* ================================================================
  * Renntag-Meldung im Stadtnetz
  * Frueher sprang der Renntag als Overlay ueber die ganze Karte. Jetzt steht

@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Börsen-Testseite</title>
+<style>
+:root { --bg: #f4f6f8; --panel: #fff; --line: #dde3ea; --fg: #14202b; --muted: #617084; --accent: #0a9d6e; color-scheme: light; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg: #0b1116; --panel: #121b23; --line: #23313d; --fg: #e8eef4; --muted: #8496a8; --accent: #3ddc97; color-scheme: dark; } }
+:root[data-theme="dark"] { --bg: #0b1116; --panel: #121b23; --line: #23313d; --fg: #e8eef4; --muted: #8496a8; --accent: #3ddc97; color-scheme: dark; }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 14px/1.4 system-ui, sans-serif; padding: 16px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+h1 { font-size: 18px; margin: 0 0 4px; } p.note { color: var(--muted); margin: 0 0 14px; }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 12px; margin-bottom: 12px; max-width: 560px; }
+h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 0 0 8px; }
+.form { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+input, select { background: var(--bg); color: var(--fg); border: 1px solid var(--line); border-radius: 8px; padding: 8px; font: inherit; min-width: 0; }
+input { width: 110px; } input.wide { width: 180px; }
+button { background: var(--accent); color: var(--bg); border: 0; border-radius: 8px; padding: 8px 12px; font: inherit; font-weight: 700; cursor: pointer; }
+button.alt { background: var(--line); color: var(--fg); }
+#log { font: 12px/1.5 ui-monospace, monospace; white-space: pre-wrap; color: var(--muted); max-height: 220px; overflow: auto; }
+table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; font-size: 13px; }
+td, th { text-align: left; padding: 4px 6px; border-bottom: 1px solid var(--line); }
+</style>
+</head>
+<body>
+<h1>Börsen-Testseite</h1>
+<p class="note">Testet die Krypto-Börse ohne Oberfläche im Spiel. Der Server muss mit <code>BOERSE_TEST=1</code> laufen, dann entfällt die Website-Pflicht.</p>
+
+<div class="panel">
+  <h2>1. Spieler</h2>
+  <div class="form"><input id="name" class="wide" placeholder="Firmenname" value="Testsoft"><button id="reg">Als Software-Firma anmelden</button><button id="start" class="alt">Runde starten (Host)</button></div>
+</div>
+
+<div class="panel">
+  <h2>2. Börse und Coins (deine Firma)</h2>
+  <div class="form"><input id="gebuehr" type="number" step="0.001" min="0" max="0.05" value="0.02" title="Gebühr 0 bis 0,05"><button id="boerse">Börse eröffnen / Gebühr setzen</button></div>
+  <div class="form"><input id="menge" type="number" value="50"><button id="ausgeben">Coins ausgeben</button></div>
+  <div class="form"><button id="konto" class="alt">Konto bei meiner Börse eröffnen</button><input id="einzahlen" type="number" value="1000"><button id="einz" class="alt">Einzahlen</button></div>
+</div>
+
+<div class="panel">
+  <h2>3. Auftrag</h2>
+  <div class="form">
+    <select id="side"><option value="buy">Kaufen</option><option value="sell">Verkaufen</option></select>
+    <input id="coin" class="wide" placeholder="Coin-ID (= Firmen-ID)">
+    <input id="qty" type="number" value="5" title="Menge">
+    <input id="price" type="number" step="0.01" value="10" title="Preis">
+    <button id="order">Auftrag einstellen</button>
+  </div>
+  <p class="note">Coin-ID steht unter „Eigene ID“ und in der Börsen-Seite. Dein eigener Coin: deine ID.</p>
+  <p class="note">Eigene ID: <b id="meineId">—</b></p>
+</div>
+
+<div class="panel">
+  <h2>Börse (öffentlich)</h2>
+  <table><thead><tr><th>Coin</th><th>Kurs</th><th>Fundament</th><th>Umlauf</th></tr></thead><tbody id="tab"></tbody></table>
+</div>
+
+<div class="panel">
+  <h2>Protokoll</h2>
+  <div id="log"></div>
+</div>
+
+<script src="vendor/socket.io.min.js"></script>
+<script>
+const socket = io();
+let meineId = null;
+const $ = id => document.getElementById(id);
+const log = (t, res) => { $("log").textContent = t + (res ? " → " + JSON.stringify(res) : "") + "\n" + $("log").textContent; };
+const send = (ev, data, label) => new Promise(r => socket.emit(ev, data, res => { const kurz = res?.goods ? { ok: res.ok, you: res.you } : res; log(label, kurz); r(res); }));
+
+$("reg").onclick = async () => {
+  const res = await send("register", { name: $("name").value, color: "#38bdf8", industry: "software" }, "register");
+  if (res?.you) { meineId = res.you; $("meineId").textContent = meineId; $("coin").value = meineId; }
+};
+$("start").onclick = () => send("startRound", {}, "startRound");
+$("boerse").onclick = () => send("coinBoerse", { gebuehr: +$("gebuehr").value }, "coinBoerse");
+$("ausgeben").onclick = () => send("coinAusgeben", { menge: +$("menge").value }, "coinAusgeben");
+$("konto").onclick = () => send("coinKonto", { boerseId: meineId, aktion: "eröffnen" }, "konto eröffnen");
+$("einz").onclick = () => send("coinKonto", { boerseId: meineId, aktion: "einzahlen", betrag: +$("einzahlen").value }, "einzahlen");
+$("order").onclick = () => send("coinOrder", { boerseId: meineId, coinId: $("coin").value.trim(), side: $("side").value, qty: +$("qty").value, price: +$("price").value }, "coinOrder");
+
+async function tabelle() {
+  try {
+    const d = await (await fetch("/api/boersen", { cache: "no-store" })).json();
+    $("tab").innerHTML = d.coins.map(c => `<tr><td>${c.name}</td><td>${c.kurs.toFixed(2)}</td><td>${c.fundament.toFixed(2)}</td><td>${c.umlauf}</td></tr>`).join("") || `<tr><td colspan="4">Noch keine Coins</td></tr>`;
+  } catch (e) {}
+}
+setInterval(tabelle, 2000); tabelle();
+</script>
+</body>
+</html>

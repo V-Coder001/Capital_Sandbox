@@ -7595,6 +7595,10 @@ function netzZeichnen() {
           <button type="button" class="netzDienst" data-netzauf="boerse"><span class="netzDienstIcon" style="background:#1d4ed8">📈</span><span><b>${t("Warenbörse")}</b><small>boerse.cs · ${state.orders.length} ${t("offene Orders")}</small></span></button>
           <button type="button" class="netzDienst" data-netzauf="anleihen"><span class="netzDienstIcon" style="background:#7c3aed">%</span><span><b>${t("Anleihenmarkt")}</b><small>anleihen.cs · ${(state.bonds || []).filter(b => !b.holderId).length} ${t("am Markt")}</small></span></button>
           <button type="button" class="netzDienst" data-netzauf="bank"><span class="netzDienstIcon" style="background:#0e7490">🏦</span><span><b>${t("Stadtbank")}</b><small>bank.cs · ${t("Aktien, Übernahmen, Kurswetten")}</small></span></button>
+        ${(state.krypto?.boersen || []).filter(x => x.aktiv && state.players[x.firmaId]).map(x => { const f = state.players[x.firmaId], n = (state.krypto.coins || []).filter(c => c.firmaId === x.firmaId || (state.krypto.vertraege || []).some(v => v.boerseId === x.firmaId && v.coinId === c.id)).length;
+          return `<button type="button" class="netzDienst" data-netzauf="krypto:${x.firmaId}"><span class="netzDienstIcon" style="background:${f.color || "#7c3aed"}">₿</span><span><b>${escapeHtml(rohText(f.name))} ${t("Coins")}</b><small>${shopSlug(f.name)}-coins.cs · ${x.online === false ? t("Börse gerade offline") : `${n} ${t("Coins")} · ${t("Gebühr")} ${(x.gebuehr * 100).toFixed(1)} %`}</small></span></button>`; }).join("")}
+        ${(() => { const ich = state.players?.[myId]; return ich && (ich.industries || [ich.industry]).includes("software")
+          ? `<button type="button" class="netzDienst" data-netzauf="dash:${myId}"><span class="netzDienstIcon" style="background:${ich.color || "#0f172a"}">⌘</span><span><b>${t("Dein Dashboard")}</b><small>${shopSlug(ich.name)}.cs/dashboard · ${t("Coin, Gebühr und Verträge")}</small></span></button>` : ""; })()}
           <button type="button" class="netzDienst" data-netzauf="casino"><span class="netzDienstIcon" style="background:#c99b3a">🎰</span><span><b>${t("Stadt-Casino")}</b><small>casino.cs · ${Object.keys(state.casino?.spiele || {}).length} ${t("Spiele")} · ${t("Spielgeld")}</small></span></button>
         </div>
         ${kurierKasten(artikel)}
@@ -7943,6 +7947,9 @@ function netzZeichnen() {
     netzSetze(".sfFuss", `<span class="sfFussLogo">📰</span><span>${t("Stadtkurier · erscheint alle zwei Minuten · Anzeigen aus dem Werbenetz")}</span>`, "fussKurier");
     return;
   }
+  /* ---- Krypto-Börse einer Software-Firma (krypto.js) ---- */
+  if (String(NETZ.seite).startsWith("krypto:")) return kryptoSeite(fenster, state, me, myId);
+  if (String(NETZ.seite).startsWith("dash:")) return dashboardSeite(fenster, state, me, myId);
   /* ---- Seite einer Firma ---- */
   const pid = NETZ.seite, p = state.players[pid], w = W[pid];
   if (!p) return netzOeffnen(null);
@@ -7975,6 +7982,21 @@ function netzZeichnen() {
       ${w.aktion ? `<div class="sfEigen">${t("Läuft")} · ${t("noch")} ${Math.ceil(w.aktion.rest / 60)} min</div>` : w.aktionPause ? `<div class="sfEigen">${t("Nächste Aktion in")} ${Math.ceil(w.aktionPause / 60)} min</div>`
         : `<button type="button" class="sfKaufen" data-netzaktion ${me.cash < (A?.kosten || 600) ? "disabled" : ""}>${t("Aktion starten")} · ${fmt(A?.kosten || 600)}</button>`}</section>`
     : `<section class="rzBox"><b>⚡ ${t("Aktionen")}</b><small>${t("Ab Website-Modul „Aktionen“ (v3): 5 Minuten +25 % Reichweite.")}</small></section>`;
+  /* Krypto-Börse dieser Firma: Verweis auf ihre eigene Seite (siehe krypto.js) */
+  const krB = (state.krypto?.boersen || []).find(x => x.firmaId === pid && x.aktiv);
+  const krCount = krB ? (state.krypto.coins || []).filter(c => c.firmaId === pid || (state.krypto.vertraege || []).some(v => v.boerseId === pid && v.coinId === c.id)).length : 0;
+  const krypto = krB
+    ? `<section class="rzBox krSeitenBox"><div class="rzBoxKopf"><b>₿ ${t("Krypto-Börse")}</b><small>${krCount} ${t("Coins")} · ${t("Gebühr")} ${(krB.gebuehr * 100).toFixed(1)} %</small></div>
+         <p>${t("Coins dieser Firma und ihrer Vertragspartner — handelbar für alle.")}</p>
+         <button type="button" class="sfKaufen" data-netzauf="krypto:${pid}">${t("Zur Krypto-Börse")} →</button>
+         ${meins ? `<button type="button" class="sfKaufen" data-netzauf="dash:${pid}">${t("Zum Dashboard")} →</button>` : ""}</section>`
+    : meins && ind === "software"
+      ? `<section class="rzBox krSeitenBox"><div class="rzBoxKopf"><b>₿ ${t("Krypto-Börse eröffnen")}</b><small>${t("eigene Seite im Stadtnetz")}</small></div>
+         <p>${t("Du gibst einen eigenen Coin aus und lässt ihn auf deiner Börse handeln. Die Gebühr ist deine Einnahme und trägt den Kurs.")}</p>
+         <div class="krBoxForm"><input id="krNeuGebuehr" type="number" min="0" max="5" step="0.1" value="2"><span>% ${t("Gebühr")}</span><button type="button" class="sfKaufen" data-krneu>${t("Börse eröffnen")}</button></div>
+         <button type="button" class="sfKaufen" data-netzauf="dash:${pid}">${t("Zum Dashboard")} →</button></section>`
+      : "";
+  if (krypto) eigenes += krypto;
   netzSetze(".netzInhalt", `${auftrag ? `<div class="fwBau">🛠 ${anbieter ? `${escapeHtml(rohText(anbieter.anbieter))} ${t("gestaltet diese Website gerade")}` : t("Diese Website wird gerade gestaltet")} · ${t("noch")} ${Math.floor(auftrag.rest / 60)}:${String(auftrag.rest % 60).padStart(2, "0")}</div>` : ""}
     ${firmenSeiteHtml(state, me, myId, pid, null)}${eigenes ? `<div class="fwEigenes">${eigenes}</div>` : ""}`, "inhalt" + pid);
   netzSetze(".sfFuss", anbieter ? `${logoHtml(anbieter.ownerId, "sfFussLogo", anbieter.farbe)}<span>${t("Website von")} <b>${escapeHtml(rohText(anbieter.name))}</b> · ${escapeHtml(rohText(anbieter.anbieter))}</span>` : `<span class="sfFussLogo">🏛</span><span>${t("Grundseite vom Stadtportal")}</span>`, "fuss" + pid);
@@ -7986,6 +8008,10 @@ document.getElementById("netzFenster").addEventListener("input", e => {
   if (e.target.id === "bankSuche") { NETZ.bankSuche = e.target.value; NETZ.bankTab = "aktien"; NETZ.bankAktie = null; netzZeichnen(); }
   if (e.target.id === "bwMenge") { NETZ.bwMenge = Math.max(1, Math.floor(+e.target.value) || 1); NETZ.sig.haupt = null; }
   if (e.target.id === "bwPreis") NETZ.bwPreis = +e.target.value || null;
+  /* Krypto-Börse: Eingaben merken, damit ein Tick sie nicht zurücksetzt */
+  if (e.target.id === "krMenge") { NETZ.krMenge = Math.max(1, Math.floor(+e.target.value) || 1); NETZ.sig.krHaupt = null; }
+  if (e.target.id === "krPreis") NETZ.krPreis = +e.target.value || null;
+  if (e.target.id === "krBetrag") NETZ.krBetrag = Math.max(0, +e.target.value || 0);
   /* Nur merken, nicht neu zeichnen: Das Feld soll beim Tippen den Fokus behalten. */
   if (e.target.id === "casEinsatz") NETZ.casinoEinsatz = +e.target.value || 0;
   const n = e.target.closest?.("[data-netzn]"); if (n) NETZ.menge[n.dataset.netzn] = Math.max(1, Math.floor(+n.value) || 1);
@@ -11930,6 +11956,7 @@ function render({ state, me, myId, chat, room }) {
   kartellFremdeRendern(state, myId);
   rennenRendern(state, myId);
   motorsportRendern(state, me, myId);
+  kryptoRendern(state, me, myId);
   /* Tipp-Schutz: Panel nicht neu rendern, während man in einem seiner Felder tippt */
   const typingIn = el => el && el.contains(document.activeElement) &&
     /INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName);
