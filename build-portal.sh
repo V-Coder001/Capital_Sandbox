@@ -28,6 +28,9 @@ HIER="$(cd "$(dirname "$0")" && pwd)"
 ZIEL="$HIER/build/portal"
 rm -rf "$ZIEL"; mkdir -p "$ZIEL"
 cp -R "$HIER/public/." "$ZIEL/"
+# Auf der Webseite ist index.html die Download-Seite, das Spiel liegt in spiel.html.
+# Im Portal ist das Spiel die Startseite.
+mv "$ZIEL/spiel.html" "$ZIEL/index.html"
 
 # Die eine Zeile, die diese Fassung ausmacht.
 # Seit dem Aufteilen steht das Hauptskript in app.js, nicht mehr in index.html.
