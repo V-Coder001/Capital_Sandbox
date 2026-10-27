@@ -27,7 +27,7 @@ function dashboardSeite(fenster, state, me, myId) {
   banner.hidden = !offline;
   if (offline) netzSetze(".sfBanner", `<b>⚠</b><span>${t("Börse gerade offline")} — ${t("das Rechenzentrum der Firma läuft nicht.")}</span>`, "dsOff" + pid);
 
-  const name = p => escapeHtml(rohText(state.players?.[p]?.name || "—"));
+  const name = p => String(p).startsWith("buerger") ? t("Stadtbewohner") : escapeHtml(rohText(state.players?.[p]?.name || "—"));
   const coin = (state.krypto?.coins || []).find(c => c.firmaId === pid) || null;
   const orders = (state.krypto?.orders || []).filter(o => o.boerseId === pid);
   const konto = me?.kryptoKonto?.[pid] || null;

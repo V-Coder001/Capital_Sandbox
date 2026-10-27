@@ -25,7 +25,26 @@ export const COIN = {
   ALPHA: 0.25,            // Rückkehr zum Fundament je Tick (1 Tick = 1 s)
   TAGESGRENZE: 0.15,      // ±15 % je Markttag
   TAG: 60,                // Ticks je Markttag (wie MARKT.TAG)
-  ZERFALL: 0.998,         // Gebührenstock fällt je Tick auf diesen Anteil zurück (gewollt: ohne Handel sinkt der Wert)
+  ZERFALL: 0.999,         // Gebührenstock fällt je Tick — ohne Handel sinkt der Wert von allein
+  HEBEL: 300,             // Gebühren zählen vielfach: das Fundament ist die kapitalisierte Einnahme,
+                          // nicht die Summe der Gebühren. Mit ZERFALL ergibt das ein Gleichgewicht —
+                          // ein lebhaft gehandelter Coin trägt sich und steigt, ein toter fällt.
+  BUERGER: "buerger",     // Kennung der Bewohner-Konten; die Gruppen heißen buerger1 … buerger4
+  BUERGER_GRUPPEN: [      // Vier Sorten Bewohner, damit sie auch untereinander handeln
+    { id: "buerger1", gier: 0.95, basis: 0.35 },   // Trendläufer: springt auf jede Bewegung auf
+    { id: "buerger2", gier: 0.15, basis: 0.20 },   // Rechner: schaut aufs Fundament
+    { id: "buerger3", gier: -0.5, basis: 0.15 },   // Gegenwetter: verkauft in den Hype hinein
+    { id: "buerger4", gier: 0.5, basis: 0.30 },    // Mitläufer
+  ],
+  BUERGER_TAKT: 5,        // alle 5 Ticks überlegen die Stadtbewohner neu
+  BUERGER_ZUFLUSS: 30,    // $ je Takt und Börse, die aus der Stadt in den Coin-Handel fließen
+  BUERGER_KASSE_MAX: 6000,// mehr Geld hält die Stadt nicht im Coin-Handel
+  BUERGER_LUST: 0.55,     // wie oft ein Takt überhaupt zu einem Auftrag führt
+  BUERGER_MENGE: 4,       // größte Stückzahl je Auftrag
+  BUERGER_GIER: 0.6,      // Gewicht des Trends gegenüber der Bewertung
+  BUERGER_BASIS: 0.3,     // Grundneugier: ein neuer Coin wird erst einmal gekauft
+  BUERGER_GEBUEHR_SCHEU: 6, // eine teure Börse schreckt die Bewohner ab — die Gebühr ist kein Selbstläufer
+  BUERGER_SAETTIGUNG: 25, // ab so vielen Coins im Bestand lässt die Kauflust nach
   KURS_START: 10,         // Startkurs einer frischen Ausgabe; zugleich Startfundament
 };
 
@@ -227,7 +246,9 @@ function fuelle(G, c, kauf, verkauf, menge, preis) {
   c.volumen = (c.volumen || 0) + wert;
   c.trades = (c.trades || 0) + 1;
   c.netVol += menge;
-  c.feeStock += gebuehr;
+  /* Das Fundament hängt am Umschlag in Stück, nicht am Geldwert: sonst trüge
+   * ein hoher Kurs über die Gebühr seinen eigenen Wert und liefe davon. */
+  c.feeStock += menge * g * COIN.HEBEL;
 }
 /* Gebühren fließen in die Spielerkasse der Firma (nicht in ein Börsenkonto). */
 const gutschreiben = (G, pid, betrag) => { if (G.players[pid]) G.players[pid].cash += betrag; };
@@ -262,4 +283,79 @@ export function coinsWert(G, pid) {
     else w += o.reserviert;   // gesperrtes Geld gehört weiter dem Spieler
   }
   return w;
+}
+
+/* ============================================================
+ * Stadtbewohner handeln Coins
+ * ------------------------------------------------------------
+ * Damit ein Coin überhaupt lebt, muss jemand ihn wollen. Das sind die
+ * Stadtbewohner: Sie haben auf jeder Börse ein gemeinsames Konto und
+ * kaufen oder verkaufen alle paar Sekunden ein paar Stück.
+ *
+ * Ihre Laune hat zwei Teile. Der Trend zieht sie mit — steigt der Kurs,
+ * wollen alle rein, das ist der Hype. Die Bewertung zieht dagegen: Liegt
+ * der Kurs weit über dem Fundament, trauen sie dem Frieden nicht. So kann
+ * ein Coin steigen, ohne beliebig zu steigen, und ein gehandelter Coin
+ * verdient über die Gebühren sein Fundament selbst.
+ *
+ * Das Geld dafür kommt in kleinen Schritten aus der Stadt in die
+ * Börsenkasse und ist gedeckelt (BUERGER_KASSE_MAX je Börse).
+ * ============================================================ */
+
+export function coinBuerger(G, tick) {
+  coinsInit(G);
+  if (tick % COIN.BUERGER_TAKT) return;
+  for (const b of Object.values(G.boersen)) {
+    if (!b.aktiv) continue;
+    /* Zufluss aus der Stadt, gedeckelt, gleichmäßig auf die Gruppen verteilt */
+    const je = COIN.BUERGER_ZUFLUSS / COIN.BUERGER_GRUPPEN.length;
+    for (const g of COIN.BUERGER_GRUPPEN) {
+      const k = (b.konten[g.id] ??= { cash: 0, coins: {} });
+      if (k.cash < COIN.BUERGER_KASSE_MAX) k.cash += je;
+    }
+
+    for (const c of Object.values(G.coins)) {
+      if (!listet(G, b.firmaId, c.firmaId) || !c.minted) continue;
+
+      /* Trend: Kurs gegen den Stand von vor ein paar Takten */
+      const h = (c.buergerHist ??= []);
+      h.push(c.kurs); if (h.length > 12) h.shift();
+      const frueher = h[0] || c.kurs;
+      const trend = Math.max(-1, Math.min(1, (frueher > 0 ? c.kurs / frueher - 1 : 0) * 6));
+      /* Bewertung: unter Fundament billig, weit darüber teuer */
+      const bewertung = Math.max(-1, Math.min(1, (c.kurs > 0 ? c.fundament / c.kurs - 1 : 0) * 3));
+
+      for (const g of COIN.BUERGER_GRUPPEN) {
+        if (Math.random() > COIN.BUERGER_LUST) continue;
+        const k = b.konten[g.id];
+        const bestand = k.coins[c.firmaId] || 0;
+        const satt = Math.min(1, bestand / COIN.BUERGER_SAETTIGUNG);
+        const laune = g.basis * (1 - satt) + g.gier * trend + (1 - Math.abs(g.gier)) * bewertung
+          - b.gebuehr * COIN.BUERGER_GEBUEHR_SCHEU
+          + (Math.random() - 0.5) * 0.5;
+
+        const buch = G.coinOrders.filter(o => o.coinId === c.firmaId && o.boerseId === b.firmaId && o.playerId !== g.id);
+        const besteFrage = buch.filter(o => o.side === "sell").sort((x, y) => x.price - y.price)[0];
+        const bestesGebot = buch.filter(o => o.side === "buy").sort((x, y) => y.price - x.price)[0];
+        const menge = 1 + Math.floor(Math.random() * COIN.BUERGER_MENGE);
+
+        if (laune > 0.12) {
+          /* Kaufen: das günstigste Angebot nehmen, sonst knapp über dem Kurs bieten */
+          const preis = Math.round((besteFrage ? besteFrage.price : c.kurs * (1 + 0.01 + Math.random() * 0.04)) * 100) / 100;
+          if (k.cash >= menge * preis * (1 + b.gebuehr))
+            coinOrder(G, { id: g.id }, { boerseId: b.firmaId, coinId: c.firmaId, side: "buy", qty: menge, price: preis });
+        } else if (laune < -0.12 && bestand > 0) {
+          /* Verkaufen: ins beste Gesuch hinein, sonst knapp unter dem Kurs */
+          const preis = Math.round((bestesGebot ? bestesGebot.price : c.kurs * (1 - 0.01 - Math.random() * 0.04)) * 100) / 100;
+          coinOrder(G, { id: g.id }, { boerseId: b.firmaId, coinId: c.firmaId, side: "sell", qty: Math.min(bestand, menge), price: Math.max(0.01, preis) });
+        }
+      }
+    }
+
+    /* Aufträge der Bewohner liegen nicht ewig im Buch */
+    for (const o of G.coinOrders.filter(x => String(x.playerId).startsWith(COIN.BUERGER) && x.boerseId === b.firmaId)) {
+      o.alter = (o.alter || 0) + 1;
+      if (o.alter > 6) coinStorno(G, o);
+    }
+  }
 }

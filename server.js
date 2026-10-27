@@ -12,7 +12,7 @@ import { Server } from "socket.io";
 import path from "path";
 import { fileURLToPath } from "url";
 import { statisch, cacheKoepfe } from "./statisch.js";
-import { boerseEroeffnen, gebuehrSetzen, kontoEroeffnen, einzahlen, auszahlen, coinAusgeben, vertragSchliessen, vertragKuendigen, coinOrder, coinStorno, coinTick, coinsWert } from "./coins.js";
+import { coinBuerger, boerseEroeffnen, gebuehrSetzen, kontoEroeffnen, einzahlen, auszahlen, coinAusgeben, vertragSchliessen, vertragKuendigen, coinOrder, coinStorno, coinTick, coinsWert } from "./coins.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -6743,7 +6743,7 @@ function snapshot() {
     krypto: {
       boersen: Object.values(G.boersen || {}).map(b => ({ firmaId: b.firmaId, gebuehr: b.gebuehr, aktiv: b.aktiv, online: boerseOnline(b.firmaId),
         einnahmen: Math.round((b.einnahmen || 0) * 100) / 100, volumen: Math.round((b.volumen || 0) * 100) / 100,
-        konten: Object.keys(b.konten || {}).length, plaetze: rzStufen(b.firmaId) })),
+        konten: Object.keys(b.konten || {}).filter(x => !String(x).startsWith("buerger")).length, plaetze: rzStufen(b.firmaId) })),
       coins: Object.values(G.coins || {}).map(c => ({ firmaId: c.firmaId, kurs: c.kurs, fundament: c.fundament, minted: c.minted,
         volumen: Math.round((c.volumen || 0) * 100) / 100, trades: c.trades || 0,
         fremdErtrag: Math.round((c.fremdErtrag || 0) * 100) / 100 })),
@@ -10476,6 +10476,7 @@ function runTick() {
   stadtTick();
   if (G.tick % MARKT.TAG === 0) marktTag();   // Aktienkurse: F messen, P nachführen
   coinTick(G, G.tick);                          // Krypto-Kurse: Fundament, Volumen, Tagesgrenze
+  coinBuerger(G, G.tick);                       // Stadtbewohner handeln die Coins
   /* Kurswetten: Annahme → Laufzeit → Abrechnung */
   wettTick();
   /* Fahrergehälter: eine laufende Verpflichtung, kein Einmalkauf. Wer nicht

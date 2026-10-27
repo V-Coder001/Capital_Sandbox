@@ -58,7 +58,7 @@ function kryptoSeite(fenster, state, me, myId) {
   const coin = coins.find(c => c.firmaId === NETZ.krCoin) || null;
   const konto = me?.kryptoKonto?.[bId] || null;
   const meins = bId === myId;
-  const name = pid => escapeHtml(rohText(state.players?.[pid]?.name || "—"));
+  const name = pid => String(pid).startsWith("buerger") ? t("Stadtbewohner") : escapeHtml(rohText(state.players?.[pid]?.name || "—"));
 
   netzSetze(".sfUrl", `🔒 ${shopSlug(firma.name)}-coins.cs${coin ? "/" + shopSlug(state.players[coin.firmaId]?.name || "") : ""}`, "krUrl" + bId + NETZ.krCoin);
   netzSetze(".sfKopf", `<div class="sfMarke">${logoHtml(bId, "sfLogo", farbe)}<div><b>${name(bId)} ${t("Coins")}</b><small>${t("Krypto-Börse")} · ${t("Gebühr")} ${(b.gebuehr * 100).toFixed(1)} % · ${coins.length} ${t("Coins gelistet")}</small></div></div>`,
