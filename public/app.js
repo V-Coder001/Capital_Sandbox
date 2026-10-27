@@ -2331,6 +2331,33 @@ const EN = {
   "Wohnbau-Aufträge suchen Baumaterial": "housing orders need building materials",
   "Zum Online-Shop": "To the online shop",
   "Zurück zum Stadtnetz": "Back to the city network",
+  /* Renntag-Meldung im Stadtnetz (ersetzt das frühere Pop-up) */
+  "Renntag läuft — die Anmeldung auf der Rennstrecke ist offen.": "Race day — entries are open at the track.",
+  "Das Rennen läuft gerade.": "The race is under way.",
+  "Siegerehrung auf der Rennstrecke.": "Podium ceremony at the track.",
+  "Zum Renntag": "To the race day", "Zuschauen": "Watch", "Ergebnis ansehen": "See the result",
+  /* Stadt-Casino (casino.cs) */
+  "Stadt-Casino": "City casino",
+  "Betrieben von der Stadt · Spielgeld, kein echtes Geld": "Run by the city · play money, no real money",
+  "Spielgeld": "play money", "Spiele": "games", "Runden": "rounds", "je Runde": "per round",
+  "Einnahmen der Stadt": "City revenue", "Letzte Runden": "Last rounds",
+  "Noch hat niemand gespielt.": "Nobody has played yet.",
+  "Stadt-Originale": "City originals", "vom Spielhaus selbst betrieben": "run by the casino itself",
+  "Alle Spiele": "All games", "offen": "open", "Dein Tipp": "Your call", "Setzen": "Place bet",
+  "Auszahlung bei Gewinn": "Payout if you win", "Drei gleiche": "Three of a kind",
+  "Ergebnis vom Server": "Result from the server",
+  "Setz deinen Einsatz und spiel eine Runde.": "Set your stake and play a round.",
+  "Münzwurf": "Coin toss", "Würfel": "Dice", "Stadtwalzen": "City reels", "Rad": "Wheel",
+  "Kopf oder Zahl": "Heads or tails", "Hoch oder Tief": "High or low",
+  "Drei Symbole": "Three symbols", "Setz auf dein Feld": "Bet on your field",
+  "Kopf": "Heads", "Zahl": "Tails", "Hoch (4–6)": "High (4–6)", "Tief (1–3)": "Low (1–3)",
+  "Rot": "Red", "Schwarz": "Black", "bis 50×": "up to 50×", "bis 12,3×": "up to 12.3×",
+  "Das Ergebnis jeder Runde würfelt der Server, nicht dein Browser. Der Überschuss des Hauses fließt in die Stadtkasse und bezahlt damit denselben Topf wie Steuern und Wohnbau.": "Every round is rolled by the server, not by your browser. The house surplus goes into the city treasury and pays into the same pot as taxes and housing.",
+  "Triffst du, bekommst du das 1,9-Fache deines Einsatzes.": "Call it right and you get 1.9 times your stake.",
+  "Drei gleiche Symbole zahlen den Faktor des Symbols (Stadtwappen 50×, Glocke 15×, Stern 10×, Münze 8×, Kleeblatt 6×). Zwei gleiche geben den halben Einsatz zurück.": "Three matching symbols pay that symbol's factor (city crest 50×, bell 15×, star 10×, coin 8×, clover 6×). Two matching return half the stake.",
+  "Eine Zahl zahlt 12,3×, Rot oder Schwarz zahlt 2,05×. Das Feld ★ gehört der Stadt — dann gewinnt das Haus.": "A number pays 12.3×, red or black pays 2.05×. The ★ field belongs to the city — then the house wins.",
+  "Das Stadt-Casino wird von der Stadt betrieben · Einsatz": "The city casino is run by the city · stake",
+  "Spielgeld, nur zur Unterhaltung": "Play money, for entertainment only",
   "Zuschlag": "Awarded",
   "gekauft": "bought",
   "hat noch keine Website.": "has no website yet.",
@@ -7345,7 +7372,79 @@ function kurierKasten(artikel) {
  * Firma eine eigene Seite: Grundseite für alle, Branchenportal mit Direktkauf
  * (Hofladen, Großhandel, Baustoff-Portal, Kundenportal) oder Ausschreibungen,
  * Aktionen ab Modul v3. Touristik öffnet die Buchungsseite, Software die Statusseite. */
-const NETZ = { offen: false, seite: null, suche: "", menge: {}, sig: {}, kat: "alle", ressort: "alle", artikel: null };
+const NETZ = { offen: false, seite: null, suche: "", menge: {}, sig: {}, kat: "alle", ressort: "alle", artikel: null,
+  /* Stadt-Casino: welches Spiel offen ist, der gewaehlte Tipp, der Einsatz und
+   * die zuletzt vom Server gewuerfelte Runde (nur zur Anzeige). */
+  casinoSpiel: null, casinoTipp: null, casinoEinsatz: 500, casinoErgebnis: null };
+
+/* ---- Stadt-Casino: Grafik und Beschriftung ----
+ * Die Spielbilder stehen bewusst als Inline-SVG hier und nicht als Bilddateien:
+ * So skalieren sie mit dem Fenster und der Build braucht keine neuen Dateien. */
+const CASINO_WAPPEN = (f, s = 1) => `<path d="M14 3 3.5 8v2h21V8L14 3Z" fill="${f}"/><rect x="6" y="12" width="2.6" height="9" fill="${f}"/><rect x="12.7" y="12" width="2.6" height="9" fill="${f}"/><rect x="19.4" y="12" width="2.6" height="9" fill="${f}"/><rect x="3.5" y="22.4" width="21" height="2.6" rx=".6" fill="${f}"/>`;
+const CASINO_BILD = {
+  muenze: `<svg width="92" height="92" viewBox="0 0 92 92" fill="none" aria-hidden="true">
+    <ellipse cx="46" cy="76" rx="27" ry="6" fill="rgba(0,0,0,.28)"/>
+    <circle cx="46" cy="42" r="28" fill="url(#casG1)"/>
+    <circle cx="46" cy="42" r="22" fill="none" stroke="rgba(90,62,11,.35)" stroke-width="2" stroke-dasharray="4 4"/>
+    <g transform="translate(32 28) scale(1)">${CASINO_WAPPEN("#7d5a1c")}</g>
+    <defs><radialGradient id="casG1" cx="34%" cy="28%"><stop offset="0" stop-color="#fbeec0"/><stop offset=".45" stop-color="#eccd83"/><stop offset="1" stop-color="#b98f35"/></radialGradient></defs></svg>`,
+  wuerfel: `<svg width="96" height="92" viewBox="0 0 96 92" fill="none" aria-hidden="true">
+    <ellipse cx="48" cy="78" rx="30" ry="6" fill="rgba(0,0,0,.28)"/>
+    <rect x="56" y="40" width="26" height="26" rx="6" fill="#dfe7f2" transform="rotate(12 69 53)"/>
+    <circle cx="69" cy="53" r="3.6" fill="#0a5c4e"/>
+    <rect x="20" y="22" width="44" height="44" rx="9" fill="url(#casG2)"/>
+    <circle cx="32" cy="34" r="4.2" fill="#0a5c4e"/><circle cx="52" cy="34" r="4.2" fill="#0a5c4e"/>
+    <circle cx="42" cy="44" r="4.2" fill="#0a5c4e"/>
+    <circle cx="32" cy="54" r="4.2" fill="#0a5c4e"/><circle cx="52" cy="54" r="4.2" fill="#0a5c4e"/>
+    <defs><linearGradient id="casG2" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fff"/><stop offset="1" stop-color="#cfd9e8"/></linearGradient></defs></svg>`,
+  walzen: `<svg width="112" height="88" viewBox="0 0 112 88" fill="none" aria-hidden="true">
+    <rect x="10" y="18" width="92" height="52" rx="10" fill="#2a1206" stroke="rgba(255,255,255,.14)"/>
+    <rect x="18" y="26" width="24" height="36" rx="6" fill="#faf3e4"/>
+    <rect x="44" y="26" width="24" height="36" rx="6" fill="#faf3e4"/>
+    <rect x="70" y="26" width="24" height="36" rx="6" fill="#faf3e4"/>
+    <text x="30" y="52" font-family="monospace" font-size="22" font-weight="700" fill="#c2410c" text-anchor="middle">7</text>
+    <text x="56" y="52" font-family="monospace" font-size="22" font-weight="700" fill="#c2410c" text-anchor="middle">7</text>
+    <circle cx="82" cy="44" r="9.5" fill="#e9c46a"/>
+    <g transform="translate(76.4 38.4) scale(.4)">${CASINO_WAPPEN("#8a2a08")}</g></svg>`,
+  rad: `<svg width="96" height="92" viewBox="0 0 96 92" fill="none" aria-hidden="true">
+    <ellipse cx="48" cy="78" rx="28" ry="6" fill="rgba(0,0,0,.3)"/>
+    <circle cx="48" cy="44" r="30" fill="#1b0f3d" stroke="#e9c46a" stroke-width="3"/>
+    <circle cx="48" cy="44" r="21" fill="none" stroke="rgba(233,196,106,.45)" stroke-width="1.5"/>
+    <path d="M48 14v60M18 44h60M27 23l42 42M69 23 27 65" stroke="rgba(233,196,106,.3)" stroke-width="1.4"/>
+    <circle cx="48" cy="44" r="8" fill="#e9c46a"/><circle cx="48" cy="23" r="4" fill="#2dd4a7"/></svg>`,
+};
+const CASINO_VERLAUF = { muenze: "#2b4bd4,#1a2a7a", wuerfel: "#0e8d78,#0a5c4e", walzen: "#c2410c,#8a2a08", rad: "#6d28d9,#4c1d95" };
+const CASINO_SYM = { wappen: "🏛", glocke: "🔔", stern: "★", muenze: "🪙", klee: "🍀" };
+/* Die Tipps je Spiel: Beschriftung und der Wert, den der Server erwartet. */
+const casinoTipps = (spiel, C) =>
+  spiel === "muenze" ? [["kopf", "Kopf"], ["zahl", "Zahl"]] :
+  spiel === "wuerfel" ? [["hoch", "Hoch (4–6)"], ["tief", "Tief (1–3)"]] :
+  spiel === "rad" ? [["rot", "Rot"], ["schwarz", "Schwarz"],
+    ...Array.from({ length: (C?.radFelder || 13) - 1 }, (_, i) => [String(i + 1), String(i + 1)])] :
+  [];
+/* Das Rad als Tortengrafik: 13 Felder, die 0 gehoert als "Stadt" dem Haus.
+ * Beim Ergebnis dreht die CSS-Animation das Rad so, dass das Siegerfeld oben
+ * unter dem Zeiger steht. */
+function casinoRadSvg(felder, treffer) {
+  const w = 360 / felder, mitte = 86, r = 78;
+  const stueck = (i) => {
+    const a1 = (i * w - 90) * Math.PI / 180, a2 = ((i + 1) * w - 90) * Math.PI / 180;
+    const f = i === 0 ? "#0f766e" : i % 2 ? "#b4263c" : "#1c2335";
+    return `<path d="M${mitte} ${mitte} L${(mitte + r * Math.cos(a1)).toFixed(1)} ${(mitte + r * Math.sin(a1)).toFixed(1)} A${r} ${r} 0 0 1 ${(mitte + r * Math.cos(a2)).toFixed(1)} ${(mitte + r * Math.sin(a2)).toFixed(1)} Z" fill="${f}" stroke="rgba(233,196,106,.45)" stroke-width="1"${i === treffer ? ` opacity="1"` : ``}/>`;
+  };
+  const zahl = (i) => {
+    const a = ((i + .5) * w - 90) * Math.PI / 180;
+    return `<text x="${(mitte + r * .74 * Math.cos(a)).toFixed(1)}" y="${(mitte + r * .74 * Math.sin(a) + 4).toFixed(1)}" text-anchor="middle" font-size="12" font-weight="700" fill="#f3e6c4" font-family="monospace">${i === 0 ? "★" : i}</text>`;
+  };
+  const dreh = treffer == null ? 0 : -((treffer + .5) * w);
+  return `<div class="casRadBox"><span class="casRadZeiger"></span>
+    <svg class="casRad${treffer == null ? "" : " dreht"}" style="--dreh:${dreh.toFixed(1)}deg" width="172" height="172" viewBox="0 0 172 172" aria-hidden="true">
+      ${Array.from({ length: felder }, (_, i) => stueck(i)).join("")}
+      ${Array.from({ length: felder }, (_, i) => zahl(i)).join("")}
+      <circle cx="86" cy="86" r="20" fill="#120c26" stroke="#e9c46a" stroke-width="2"/>
+      <g transform="translate(72 72) scale(1)">${CASINO_WAPPEN("#e9c46a")}</g>
+    </svg></div>`;
+}
 function netzOeffnen(pid = null) {
   const st = store.get().state;
   if (pid && st.players?.[pid]?.industry === "touristik") return hotelOeffnen(pid);
@@ -7358,6 +7457,7 @@ function netzOeffnen(pid = null) {
         <span class="sfUrl"></span><button type="button" class="sfZu" data-netzzu aria-label="${t("Schließen")}">✕</button></div>
       <div class="netzEil" hidden></div>
       <header class="sfKopf"></header>
+      <div class="netzRenn" hidden></div>
       <div class="sfBanner" hidden></div>
       <div class="sfHinweis" hidden></div>
       <div class="rzInhalt netzInhalt"></div>
@@ -7411,12 +7511,32 @@ function netzZeichnen() {
   kopfEl.style.display = "";
   kopfEl.classList.toggle("netzHero", !NETZ.seite);
   kopfEl.classList.toggle("netzZeitung", NETZ.seite === "kurier");
+  /* Das Casino bringt sein eigenes dunkles Haus mit — wie eine Website, die
+   * im Stadtnetz-Browser anders aussieht als die Seiten der Stadt. */
+  fenster.querySelector(".sfBrowser").classList.toggle("casBrowser", NETZ.seite === "casino");
   /* Eilmeldung oben im Stadtnetz: Großauftrag oder offene Ausschreibung */
   const artikel = kurierArtikel(state);
   const eil = artikel.find(a => a.eil);
   const eilEl = fenster.querySelector(".netzEil");
   eilEl.hidden = !eil;
   netzSetze(".netzEil", eil ? `<button type="button" data-kurierauf="${eil.id}"><span class="netzEilMarke">${t("EILMELDUNG")}</span><span class="netzEilText">${escapeHtml(rohText(eil.titel))}${eil.zusatz ? ` — ${escapeHtml(rohText(eil.zusatz))}` : ""}</span><span class="netzEilLink">${t("Zum Artikel")} →</span></button>` : "", "eil");
+  /* Renntag: Statt eines Pop-ups, das sich ungefragt vor die Karte legt, steht
+   * hier eine Zeile — auf jeder Seite des Stadtnetzes, solange der Renntag
+   * laeuft. Erst der Knopf oeffnet die Rennstrecke. */
+  const rennen = state.rennen;
+  fenster.querySelector(".netzRenn").hidden = !rennen;
+  if (rennen) {
+    const uhr = rennen.phase === "ergebnis" ? t("ZIEL")
+      : `${Math.floor(rennen.rest / 60)}:${String(rennen.rest % 60).padStart(2, "0")}`;
+    const [text, knopf] =
+      rennen.phase === "anmeldung" ? [t("Renntag läuft — die Anmeldung auf der Rennstrecke ist offen."), t("Zum Renntag")] :
+      rennen.phase === "laeuft" ? [t("Das Rennen läuft gerade."), t("Zuschauen")] :
+      [t("Siegerehrung auf der Rennstrecke."), t("Ergebnis ansehen")];
+    netzSetze(".netzRenn", `<span class="netzRennFlagge">🏁</span>
+      <span class="netzRennText">${text}</span>
+      <span class="netzRennUhr mono">${uhr}</span>
+      <button type="button" data-rennauf>${knopf}</button>`, "renn");
+  }
   if (!NETZ.seite) {
     fenster.querySelector(".sfBrowser").style.setProperty("--sys", "#0f766e");
     netzSetze(".sfUrl", "🔒 stadtnetz.cs", "url");
@@ -7475,6 +7595,7 @@ function netzZeichnen() {
           <button type="button" class="netzDienst" data-netzauf="boerse"><span class="netzDienstIcon" style="background:#1d4ed8">📈</span><span><b>${t("Warenbörse")}</b><small>boerse.cs · ${state.orders.length} ${t("offene Orders")}</small></span></button>
           <button type="button" class="netzDienst" data-netzauf="anleihen"><span class="netzDienstIcon" style="background:#7c3aed">%</span><span><b>${t("Anleihenmarkt")}</b><small>anleihen.cs · ${(state.bonds || []).filter(b => !b.holderId).length} ${t("am Markt")}</small></span></button>
           <button type="button" class="netzDienst" data-netzauf="bank"><span class="netzDienstIcon" style="background:#0e7490">🏦</span><span><b>${t("Stadtbank")}</b><small>bank.cs · ${t("Aktien, Übernahmen, Kurswetten")}</small></span></button>
+          <button type="button" class="netzDienst" data-netzauf="casino"><span class="netzDienstIcon" style="background:#c99b3a">🎰</span><span><b>${t("Stadt-Casino")}</b><small>casino.cs · ${Object.keys(state.casino?.spiele || {}).length} ${t("Spiele")} · ${t("Spielgeld")}</small></span></button>
         </div>
         ${kurierKasten(artikel)}
         <section class="netzAbschnitt"><div class="netzAbschnittKopf"><b>${NETZ.kat === "alle" ? t("Beliebte Seiten") : t(BRANCHE_NAME[NETZ.kat] || "")}</b><small>${t("sortiert nach Besuchern")}</small></div>
@@ -7691,6 +7812,101 @@ function netzZeichnen() {
     netzSetze(".sfFuss", `<span class="sfFussLogo">%</span><span>${t("Der Anleihenmarkt wird von der Stadt betrieben · Firmenanteile handelst du auf bank.cs")}</span>`, "fussAnl");
     return;
   }
+  /* ---- Stadt-Casino (casino.cs) ----
+   * Ein Haus der Stadt: Der Server wuerfelt, diese Seite zeigt nur an. Links
+   * die Lobby mit den Spielen, im Spiel der Tisch und rechts der Einsatz. */
+  if (NETZ.seite === "casino") {
+    const C = state.casino;
+    if (!C) return netzOeffnen(null);
+    fenster.querySelector(".sfBrowser").style.setProperty("--sys", "#c99b3a");
+    const spiel = NETZ.casinoSpiel && C.spiele[NETZ.casinoSpiel] ? NETZ.casinoSpiel : null;
+    const erg = NETZ.casinoErgebnis?.spiel === spiel ? NETZ.casinoErgebnis : null;
+    netzSetze(".sfUrl", `🔒 casino.cs${spiel ? "/" + spiel : ""}`, "url");
+    netzSetze(".sfKopf", `<div class="sfMarke"><span class="sfLogo casLogo">${CASINO_SYM.wappen}</span><div><b>${t("Stadt-Casino")}</b><small>${t("Betrieben von der Stadt · Spielgeld, kein echtes Geld")}</small></div></div>
+      <span class="rzBadges"><span class="sfBadge">${t("Guthaben")} ${fmt(me.cash)}</span><span class="sfBadge casBadge">${t("Einnahmen der Stadt")} ${fmt(C.einnahmen)}</span><span class="sfBadge">${C.runden} ${t("Runden")}</span></span>`, "kopfCas");
+    fenster.querySelector(".sfBanner").hidden = true;
+    fenster.querySelector(".sfHinweis").hidden = true;
+    const letzte = (C.log || []).map(l => `<div class="casLogZeile"><span class="casLogPunkt" style="background:${l.netto >= 0 ? "#2dd4a7" : "#f0536b"}"></span><span><b>${escapeHtml(rohText(l.name))}</b><small>${t(C.spiele[l.spiel]?.name || l.spiel)} · ${escapeHtml(l.text)}</small></span><em class="mono ${l.netto >= 0 ? "auf" : "ab"}">${l.netto >= 0 ? "+" : "−"}${fmt(Math.abs(l.netto))}</em></div>`).join("");
+
+    if (!spiel) {
+      const kachel = ([id2, s]) => `<button type="button" class="casKarte" data-casinospiel="${id2}">
+        <span class="casBild" style="background:linear-gradient(150deg,${CASINO_VERLAUF[id2]})">
+          <em class="casQuote mono">${t(s.quote)}</em>${CASINO_BILD[id2] || ""}
+          <b class="casName">${t(s.name).toUpperCase()}</b></span>
+        <span class="casFuss"><i class="casPunkt"></i>${t("offen")}<em class="mono">${t(s.kurz)}</em></span></button>`;
+      netzSetze(".netzInhalt", `<div class="casLayout"><div class="casHaupt">
+          <div class="netzAbschnittKopf"><b>${t("Stadt-Originale")}</b><small>${t("vom Spielhaus selbst betrieben")}</small></div>
+          <div class="casKarten">${Object.entries(C.spiele).map(kachel).join("")}</div>
+          <p class="casHinweisText">${t("Das Ergebnis jeder Runde würfelt der Server, nicht dein Browser. Der Überschuss des Hauses fließt in die Stadtkasse und bezahlt damit denselben Topf wie Steuern und Wohnbau.")}</p>
+        </div><aside class="casSeite">
+          <section class="netzBox"><b>${t("Letzte Runden")}</b>${letzte || `<small class="anlLeer">${t("Noch hat niemand gespielt.")}</small>`}</section>
+          <section class="netzBox casKasse"><b>${t("Einnahmen der Stadt")}</b><strong class="mono">${fmt(C.einnahmen)}</strong><small>${t("aus")} ${C.runden} ${t("Runden")}</small></section>
+        </aside></div>`, "inhaltCas");
+      netzSetze(".sfFuss", `<span class="sfFussLogo">${CASINO_SYM.wappen}</span><span>${t("Das Stadt-Casino wird von der Stadt betrieben · Einsatz")} ${fmt(C.min)} – ${fmt(C.max)} · ${t("Spielgeld, nur zur Unterhaltung")}</span>`, "fussCas");
+      return;
+    }
+
+    /* ---- Spielansicht ---- */
+    const def = C.spiele[spiel];
+    const tipps = casinoTipps(spiel, C);
+    if (tipps.length && !tipps.some(([v]) => v === NETZ.casinoTipp)) NETZ.casinoTipp = tipps[0][0];
+    const buehne = (() => {
+      if (spiel === "muenze") {
+        const seite = erg ? erg.ergebnis : null;
+        return `<div class="casMuenze${erg ? " faellt" : ""}">${seite === "zahl" ? `<span class="casMuenzeZahl mono">$</span>` : `<svg width="62" height="62" viewBox="0 0 28 28" aria-hidden="true">${CASINO_WAPPEN("#6b4b14")}</svg>`}</div>`;
+      }
+      if (spiel === "wuerfel") {
+        const augen = erg ? erg.ergebnis : null;
+        const punkte = { 1: [[1, 1]], 2: [[0, 0], [2, 2]], 3: [[0, 0], [1, 1], [2, 2]], 4: [[0, 0], [2, 0], [0, 2], [2, 2]],
+          5: [[0, 0], [2, 0], [1, 1], [0, 2], [2, 2]], 6: [[0, 0], [2, 0], [0, 1], [2, 1], [0, 2], [2, 2]] }[augen] || [];
+        return `<div class="casWuerfel${erg ? " rollt" : ""}">${augen
+          ? punkte.map(([x, y]) => `<i style="left:${18 + x * 31}%;top:${18 + y * 31}%"></i>`).join("")
+          : `<span class="casWartet">?</span>`}</div>`;
+      }
+      if (spiel === "walzen") {
+        const w = erg ? erg.ergebnis : ["wappen", "glocke", "stern"];
+        return `<div class="casWalzen${erg ? " dreht" : ""}">${w.map((s, i) =>
+          `<span style="animation-delay:${i * .12}s">${CASINO_SYM[s] || "?"}</span>`).join("")}</div>`;
+      }
+      return casinoRadSvg(C.radFelder, erg ? erg.ergebnis : null);
+    })();
+    const meldung = erg
+      ? `<div class="casErgebnis ${erg.gewonnen ? "gut" : erg.auszahlung > 0 ? "halb" : "schlecht"}">${escapeHtml(erg.text)}
+          <small class="mono">${erg.netto >= 0 ? "+" : "−"}${fmt(Math.abs(erg.netto))}</small></div>`
+      : `<div class="casErgebnis warte">${t("Setz deinen Einsatz und spiel eine Runde.")}</div>`;
+    netzSetze(".netzInhalt", `<div class="casSpiel">
+        <section class="casTisch">
+          <header class="casTischKopf"><b>${t(def.name)}</b><em class="mono">${t(def.quote)}</em><span class="casFair mono">${t("Ergebnis vom Server")}</span></header>
+          ${buehne}${meldung}
+        </section>
+        <aside class="casPanel" id="casPanel"></aside>
+      </div>`, "inhaltCas" + spiel);
+    /* Das Einsatzfeld getrennt zeichnen und waehrend des Tippens in Ruhe
+     * lassen — der Sekundentakt wuerde sonst den Fokus aus dem Feld nehmen. */
+    const tippt = fenster.contains(document.activeElement) && document.activeElement?.id === "casEinsatz";
+    if (!tippt) {
+      const einsatz = Math.min(C.max, Math.max(C.min, Math.floor(NETZ.casinoEinsatz) || C.min));
+      const zahlTipp = /^[0-9]+$/.test(String(NETZ.casinoTipp));
+      const faktor = spiel === "walzen" ? null : spiel === "rad" ? (zahlTipp ? 12.3 : 2.05) : 1.9;
+      netzSetze("#casPanel", `
+        <button type="button" class="casZurueck" data-casinolobby>← ${t("Alle Spiele")}</button>
+        <div><span class="casLbl">${t("Einsatz")}</span>
+          <div class="casFeld"><input id="casEinsatz" type="number" min="${C.min}" max="${C.max}" step="50" value="${einsatz}"><span class="mono">$</span></div></div>
+        <div class="casChips">${[100, 500, 1000, 2000].map(v => `<button type="button" class="${v === einsatz ? "on" : ""}" data-casinochip="${v}">${v >= 1000 ? v / 1000 + "k" : v}</button>`).join("")}</div>
+        ${tipps.length ? `<div><span class="casLbl">${t("Dein Tipp")}</span>
+          <div class="casTipps${spiel === "rad" ? " casTippsRad" : ""}">${tipps.map(([v, n]) =>
+            `<button type="button" class="${NETZ.casinoTipp === v ? "on" : ""}${v === "rot" ? " rot" : v === "schwarz" ? " schwarz" : ""}" data-casinotipp="${v}">${t(n)}</button>`).join("")}</div></div>` : ""}
+        ${faktor ? `<div class="casAus"><span>${t("Auszahlung bei Gewinn")}</span><b class="mono">${fmt(Math.round(einsatz * faktor))}</b></div>`
+          : `<div class="casAus"><span>${t("Drei gleiche")}</span><b class="mono">${t("bis")} ${fmt(einsatz * 50)}</b></div>`}
+        <button type="button" class="casSetzen" data-casinosetzen>${t("Setzen")}</button>
+        <div class="casRegel">${spiel === "walzen"
+          ? t("Drei gleiche Symbole zahlen den Faktor des Symbols (Stadtwappen 50×, Glocke 15×, Stern 10×, Münze 8×, Kleeblatt 6×). Zwei gleiche geben den halben Einsatz zurück.")
+          : spiel === "rad" ? t("Eine Zahl zahlt 12,3×, Rot oder Schwarz zahlt 2,05×. Das Feld ★ gehört der Stadt — dann gewinnt das Haus.")
+          : t("Triffst du, bekommst du das 1,9-Fache deines Einsatzes.")}</div>`, "panelCas" + spiel);
+    }
+    netzSetze(".sfFuss", `<span class="sfFussLogo">${CASINO_SYM.wappen}</span><span>${t("Einsatz")} ${fmt(C.min)} – ${fmt(C.max)} ${t("je Runde")} · ${t("Spielgeld, nur zur Unterhaltung")}</span>`, "fussCas");
+    return;
+  }
   /* ---- Stadtkurier ---- */
   if (NETZ.seite === "kurier") {
     KURIER.gelesen = Math.max(KURIER.gelesen, (state.news || [])[0]?.ts || 0);
@@ -7770,11 +7986,40 @@ document.getElementById("netzFenster").addEventListener("input", e => {
   if (e.target.id === "bankSuche") { NETZ.bankSuche = e.target.value; NETZ.bankTab = "aktien"; NETZ.bankAktie = null; netzZeichnen(); }
   if (e.target.id === "bwMenge") { NETZ.bwMenge = Math.max(1, Math.floor(+e.target.value) || 1); NETZ.sig.haupt = null; }
   if (e.target.id === "bwPreis") NETZ.bwPreis = +e.target.value || null;
+  /* Nur merken, nicht neu zeichnen: Das Feld soll beim Tippen den Fokus behalten. */
+  if (e.target.id === "casEinsatz") NETZ.casinoEinsatz = +e.target.value || 0;
   const n = e.target.closest?.("[data-netzn]"); if (n) NETZ.menge[n.dataset.netzn] = Math.max(1, Math.floor(+n.value) || 1);
 });
 document.getElementById("netzFenster").addEventListener("click", e => {
   if (e.target.closest("[data-netzzu]") || e.target.id === "netzFenster") return netzSchliessen();
-  if (e.target.closest("[data-netzzurueck]")) { if (NETZ.seite === "kurier" && NETZ.artikel) { NETZ.artikel = null; NETZ.sig = {}; return netzZeichnen(); } return netzOeffnen(null); }
+  if (e.target.closest("[data-netzzurueck]")) {
+    if (NETZ.seite === "kurier" && NETZ.artikel) { NETZ.artikel = null; NETZ.sig = {}; return netzZeichnen(); }
+    /* Im Casino fuehrt der Zurueck-Pfeil aus dem Spiel erst in die Lobby. */
+    if (NETZ.seite === "casino" && NETZ.casinoSpiel) { NETZ.casinoSpiel = null; NETZ.casinoErgebnis = null; NETZ.sig = {}; return netzZeichnen(); }
+    return netzOeffnen(null);
+  }
+  /* Renntag: Der Knopf in der Meldung ist der einzige Weg zur Rennstrecke. */
+  if (e.target.closest("[data-rennauf]")) { netzSchliessen(); rennMinimiert = false; rennenRendern.sig = ""; return render(store.get()); }
+  /* Stadt-Casino */
+  const csp = e.target.closest("[data-casinospiel]");
+  if (csp) { NETZ.casinoSpiel = csp.dataset.casinospiel; NETZ.casinoTipp = null; NETZ.casinoErgebnis = null; NETZ.sig = {}; SFX.spiel("klick"); return netzZeichnen(); }
+  if (e.target.closest("[data-casinolobby]")) { NETZ.casinoSpiel = null; NETZ.casinoErgebnis = null; NETZ.sig = {}; return netzZeichnen(); }
+  const cch = e.target.closest("[data-casinochip]");
+  if (cch) { NETZ.casinoEinsatz = +cch.dataset.casinochip; NETZ.sig = {}; return netzZeichnen(); }
+  const cti = e.target.closest("[data-casinotipp]");
+  if (cti) { NETZ.casinoTipp = cti.dataset.casinotipp; NETZ.sig = {}; return netzZeichnen(); }
+  if (e.target.closest("[data-casinosetzen]")) {
+    const C = store.get().state.casino;
+    const einsatz = Math.min(C.max, Math.max(C.min, Math.floor(+document.getElementById("casEinsatz")?.value) || C.min));
+    NETZ.casinoEinsatz = einsatz;
+    return socket.emit("casinoSpielen", { spiel: NETZ.casinoSpiel, tipp: NETZ.casinoTipp, einsatz }, r => {
+      if (r?.error) return toast(r.error, true);
+      NETZ.casinoErgebnis = { ...r, spiel: NETZ.casinoSpiel };
+      NETZ.sig = {};
+      SFX.spiel(r.netto >= 0 ? "geld" : "hinweis");
+      render(store.get());
+    });
+  }
   /* Anleihenmarkt */
   const ak = e.target.closest("[data-anlkauf]");
   if (ak) return act("buyBond", { bondId: +ak.dataset.anlkauf });
@@ -10210,7 +10455,11 @@ function motorsportRendern(state, me, myId) {
  * mit animierter Strecke, dann die Siegerehrung. Der Server schickt jede
  * Sekunde neue Distanzen; die Streckengrafik interpoliert dazwischen, damit
  * die Wagen flüssig fahren statt zu springen. */
-let rennMinimiert = false;
+/* Der Renntag startet zugeklappt. Frueher sprang das Overlay bei jedem
+ * Renntag von selbst auf und stand dann minutenlang vor der Karte — wer
+ * gerade baute oder handelte, wurde jedes Mal herausgerissen. Jetzt ist der
+ * einzige Einstieg die kurze Meldung auf den Seiten im Stadtnetz. */
+let rennMinimiert = true;
 const RENN_ANIM = new Map();     // autoId -> { shown, ziel }
 /* ---- Renn-Sounds (WebAudio, synthetisch — keine Dateien nötig) ----
  * Respektiert den Stummschalter der Musik. Kurzer Piep je Ampellicht,
@@ -10297,18 +10546,21 @@ function rennenRendern(state, myId) {
   const r = state.rennen;
   if (!r) {
     if (!ov.hidden) ov.hidden = true;
-    chip.hidden = true; rennMinimiert = false; RENN_ANIM.clear();
+    chip.hidden = true; rennMinimiert = true; RENN_ANIM.clear();
     rennenRendern.phase = null;
     return;
   }
-  /* Bei jedem Phasenwechsel wieder aufklappen — den Start will niemand verpassen. */
   if (rennenRendern.phase !== r.phase) {
-    if (r.phase === "ergebnis" && rennenRendern.phase === "laeuft") rennJubel();
-    rennenRendern.phase = r.phase; rennMinimiert = false; rennenRendern.sig = "";
+    /* Jubel nur, wenn jemand auch hinsieht — ein Tusch aus dem Nichts, waehrend
+     * man anderswo arbeitet, erklaert sich nicht. */
+    if (r.phase === "ergebnis" && rennenRendern.phase === "laeuft" && !rennMinimiert) rennJubel();
+    rennenRendern.phase = r.phase; rennenRendern.sig = "";
   }
   ov.hidden = rennMinimiert;
-  chip.hidden = !rennMinimiert;
-  rennAmpelRendern(r);
+  /* Kein schwebender Chip mehr: Der Renntag meldet sich ausschliesslich auf
+   * den Seiten im Stadtnetz. */
+  chip.hidden = true;
+  rennAmpelRendern(rennMinimiert ? null : r);
   document.getElementById("rennChipText").textContent =
     r.phase === "anmeldung" ? `${t("Anmeldung")} ${r.rest}s` : r.phase === "laeuft" ? t("RENNEN LÄUFT") : t("Siegerehrung");
   if (rennMinimiert) return;
