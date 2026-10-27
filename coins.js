@@ -25,7 +25,7 @@ export const COIN = {
   ALPHA: 0.25,            // Rückkehr zum Fundament je Tick (1 Tick = 1 s)
   TAGESGRENZE: 0.15,      // ±15 % je Markttag
   TAG: 60,                // Ticks je Markttag (wie MARKT.TAG)
-  ZERFALL: 0.998,         // Gebührenstock fällt je Tick auf diesen Anteil zurück
+  ZERFALL: 0.998,         // Gebührenstock fällt je Tick auf diesen Anteil zurück (gewollt: ohne Handel sinkt der Wert)
   KURS_START: 10,         // Startkurs einer frischen Ausgabe; zugleich Startfundament
 };
 
