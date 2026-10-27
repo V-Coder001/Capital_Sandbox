@@ -1881,3 +1881,7 @@ em.auf,.bankZeile em.auf{color:#15803d}em.ab,.bankZeile em.ab{color:#b91c1c}
 .dsLeer h3{margin:0 0 6px;font-size:17px;color:#0f172a}
 .dsLeer p{margin:0 0 14px;font-size:13px;color:#64748b;line-height:1.5}
 .dsLeer .krBoxForm{justify-content:center}
+.krVon{display:block;font-size:11px;color:#94a3b8;margin-top:2px}
+#netzFenster .krBoxForm input[maxlength]{min-width:0;flex:1 1 90px}
+.krVertrag small{color:#94a3b8;font-weight:400;font-size:11px}
+.dsWer small{color:#94a3b8;font-weight:400;font-size:11px}

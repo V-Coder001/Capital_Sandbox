@@ -7475,7 +7475,7 @@ function netzZeichnen() {
           <button type="button" class="netzDienst" data-netzauf="boerse"><span class="netzDienstIcon" style="background:#1d4ed8">📈</span><span><b>${t("Warenbörse")}</b><small>boerse.cs · ${state.orders.length} ${t("offene Orders")}</small></span></button>
           <button type="button" class="netzDienst" data-netzauf="anleihen"><span class="netzDienstIcon" style="background:#7c3aed">%</span><span><b>${t("Anleihenmarkt")}</b><small>anleihen.cs · ${(state.bonds || []).filter(b => !b.holderId).length} ${t("am Markt")}</small></span></button>
           <button type="button" class="netzDienst" data-netzauf="bank"><span class="netzDienstIcon" style="background:#0e7490">🏦</span><span><b>${t("Stadtbank")}</b><small>bank.cs · ${t("Aktien, Übernahmen, Kurswetten")}</small></span></button>
-        ${(state.krypto?.boersen || []).filter(x => x.aktiv && state.players[x.firmaId]).map(x => { const f = state.players[x.firmaId], n = (state.krypto.coins || []).filter(c => c.firmaId === x.firmaId || (state.krypto.vertraege || []).some(v => v.boerseId === x.firmaId && v.coinId === c.firmaId)).length;
+        ${(state.krypto?.boersen || []).filter(x => x.aktiv && state.players[x.firmaId]).map(x => { const f = state.players[x.firmaId], n = (state.krypto.coins || []).filter(c => c.firmaId === x.firmaId || (state.krypto.vertraege || []).some(v => v.boerseId === x.firmaId && v.coinId === c.id)).length;
           return `<button type="button" class="netzDienst" data-netzauf="krypto:${x.firmaId}"><span class="netzDienstIcon" style="background:${f.color || "#7c3aed"}">₿</span><span><b>${escapeHtml(rohText(f.name))} ${t("Coins")}</b><small>${shopSlug(f.name)}-coins.cs · ${x.online === false ? t("Börse gerade offline") : `${n} ${t("Coins")} · ${t("Gebühr")} ${(x.gebuehr * 100).toFixed(1)} %`}</small></span></button>`; }).join("")}
         ${(() => { const ich = state.players?.[myId]; return ich && (ich.industries || [ich.industry]).includes("software")
           ? `<button type="button" class="netzDienst" data-netzauf="dash:${myId}"><span class="netzDienstIcon" style="background:${ich.color || "#0f172a"}">⌘</span><span><b>${t("Dein Dashboard")}</b><small>${shopSlug(ich.name)}.cs/dashboard · ${t("Coin, Gebühr und Verträge")}</small></span></button>` : ""; })()}
@@ -7768,7 +7768,7 @@ function netzZeichnen() {
     : `<section class="rzBox"><b>⚡ ${t("Aktionen")}</b><small>${t("Ab Website-Modul „Aktionen“ (v3): 5 Minuten +25 % Reichweite.")}</small></section>`;
   /* Krypto-Börse dieser Firma: Verweis auf ihre eigene Seite (siehe krypto.js) */
   const krB = (state.krypto?.boersen || []).find(x => x.firmaId === pid && x.aktiv);
-  const krCount = krB ? (state.krypto.coins || []).filter(c => c.firmaId === pid || (state.krypto.vertraege || []).some(v => v.boerseId === pid && v.coinId === c.firmaId)).length : 0;
+  const krCount = krB ? (state.krypto.coins || []).filter(c => c.firmaId === pid || (state.krypto.vertraege || []).some(v => v.boerseId === pid && v.coinId === c.id)).length : 0;
   const krypto = krB
     ? `<section class="rzBox krSeitenBox"><div class="rzBoxKopf"><b>₿ ${t("Krypto-Börse")}</b><small>${krCount} ${t("Coins")} · ${t("Gebühr")} ${(krB.gebuehr * 100).toFixed(1)} %</small></div>
          <p>${t("Coins dieser Firma und ihrer Vertragspartner — handelbar für alle.")}</p>

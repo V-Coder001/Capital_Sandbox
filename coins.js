@@ -17,7 +17,8 @@
  * ============================================================ */
 
 export const COIN = {
-  UMLAUF: 100,            // Coins je Firma, die ausgegeben werden dürfen
+  UMLAUF: 100,            // Stück je Coin, die ausgegeben werden dürfen
+  COINS_JE_FIRMA: 5,      // so viele verschiedene Coins darf eine Firma auflegen
   GEBUEHR_MAX: 0.05,      // höchste Gebühr, die eine Börse einstellen darf (5 %)
   GEBUEHR_MIN: 0,         // 0 ist erlaubt, dann verdient die Börse nichts
   VERTRAG_ANTEIL: 0.30,   // Anteil der Börse an der Gebühr fremder Coins
@@ -111,45 +112,59 @@ export function auszahlen(G, boerseId, p, betrag) {
 }
 
 /* Coin einer Firma ausgeben. Die Coins liegen im Konto der Firma bei der eigenen Börse. */
-export function coinAusgeben(G, firma, menge) {
+/* Coins einer Firma. Eine Firma darf mehrere auflegen, jeder mit eigenem Namen. */
+export const coinsVon = (G, firmaId) => Object.values(G.coins || {}).filter(c => c.firmaId === firmaId);
+
+/* Coins ausgeben. Ohne coinId entsteht ein neuer Coin unter dem Namen,
+ * mit coinId werden weitere Stück eines bestehenden Coins ausgegeben. */
+export function coinAusgeben(G, firma, menge, name, coinId) {
   coinsInit(G);
   const b = G.boersen[firma.id];
   if (!b?.aktiv) return { error: "Erst eine Börse eröffnen" };
   const m = Math.floor(+menge);
   if (!(m > 0)) return { error: "Menge > 0 nötig" };
-  let c = G.coins[firma.id];
+
+  let c = coinId ? G.coins[coinId] : null;
+  if (coinId && (!c || c.firmaId !== firma.id)) return { error: "Das ist nicht dein Coin" };
   if (!c) {
-    c = G.coins[firma.id] = {
-      firmaId: firma.id, kurs: COIN.KURS_START, fundament: COIN.KURS_START,
+    const sauber = String(name || "").trim().slice(0, 16);
+    if (!sauber) return { error: "Der Coin braucht einen Namen" };
+    if (coinsVon(G, firma.id).length >= COIN.COINS_JE_FIRMA)
+      return { error: `Höchstens ${COIN.COINS_JE_FIRMA} Coins je Firma` };
+    if (Object.values(G.coins).some(x => x.name.toLowerCase() === sauber.toLowerCase()))
+      return { error: "Den Namen gibt es schon" };
+    const id = `cn_${firma.id}_${coinsVon(G, firma.id).length + 1}`;
+    c = G.coins[id] = {
+      id, firmaId: firma.id, name: sauber, kurs: COIN.KURS_START, fundament: COIN.KURS_START,
       feeStock: COIN.KURS_START * COIN.UMLAUF, netVol: 0, minted: 0, tagStart: COIN.KURS_START, tagTick: 0,
     };
   }
-  if (c.minted + m > COIN.UMLAUF) return { error: `Höchstens ${COIN.UMLAUF - c.minted} Coins mehr ausgeben` };
+  if (c.minted + m > COIN.UMLAUF) return { error: `Höchstens ${COIN.UMLAUF - c.minted} Stück mehr ausgeben` };
   if (!konto(b, firma.id)) b.konten[firma.id] = { cash: 0, coins: {} };
   c.minted += m;
-  b.konten[firma.id].coins[firma.id] = (b.konten[firma.id].coins[firma.id] || 0) + m;
-  return { ok: true };
+  b.konten[firma.id].coins[c.id] = (b.konten[firma.id].coins[c.id] || 0) + m;
+  return { ok: true, coinId: c.id };
 }
 
 /* Coins im Umlauf: ausgegeben, ohne was die Firma selbst im Konto hält. */
 export function umlauf(G, c) {
-  const eigen = konto(G.boersen[c.firmaId], c.firmaId)?.coins?.[c.firmaId] || 0;
+  const eigen = konto(G.boersen[c.firmaId], c.firmaId)?.coins?.[c.id] || 0;
   return Math.max(1, c.minted - eigen);
 }
 
 /* Führt die Börse diesen Coin? Eigener Coin immer, fremder nur mit Vertrag. */
 export function listet(G, boerseId, coinId) {
   if (!G.boersen?.[boerseId]?.aktiv || !G.coins?.[coinId]) return false;
-  if (boerseId === coinId) return true;
+  if (G.coins[coinId].firmaId === boerseId) return true;   // eigener Coin braucht keinen Vertrag
   return (G.coinVertraege || []).some(v => v.boerseId === boerseId && v.coinId === coinId && v.aktiv);
 }
 
 /* Vertrag: Börse bietet den Coin einer anderen Firma an. */
 export function vertragSchliessen(G, boerseId, coinId) {
   coinsInit(G);
-  if (boerseId === coinId) return { error: "Der eigene Coin braucht keinen Vertrag" };
   if (!G.boersen[boerseId]?.aktiv) return { error: "Erst eine Börse eröffnen" };
   if (!G.coins[coinId]) return { error: "Der Coin existiert nicht" };
+  if (G.coins[coinId].firmaId === boerseId) return { error: "Der eigene Coin braucht keinen Vertrag" };
   if (listet(G, boerseId, coinId)) return { error: "Der Vertrag besteht schon" };
   G.coinVertraege.push({ id: `cv_${boerseId}_${coinId}`, boerseId, coinId, aktiv: true });
   return { ok: true };
@@ -226,7 +241,7 @@ function fuelle(G, c, kauf, verkauf, menge, preis) {
   const kk = konto(bk, kauf.playerId);
   if (kk) {
     kk.cash += menge * (kauf.price - preis) * (1 + g);
-    kk.coins[c.firmaId] = (kk.coins[c.firmaId] || 0) + menge;
+    kk.coins[c.id] = (kk.coins[c.id] || 0) + menge;
   }
   /* Verkäufer bekommt den Wert im Konto seiner Börse. */
   verkauf.reserviert -= menge;
@@ -239,7 +254,7 @@ function fuelle(G, c, kauf, verkauf, menge, preis) {
     gutschreiben(G, bk.firmaId, an);
     gutschreiben(G, c.firmaId, gebuehr - an);
     bk.einnahmen = (bk.einnahmen || 0) + an;                       // Anteil der gastgebenden Börse
-    const hc = G.coins[c.firmaId]; if (hc) hc.fremdErtrag = (hc.fremdErtrag || 0) + (gebuehr - an);
+    c.fremdErtrag = (c.fremdErtrag || 0) + (gebuehr - an);
   }
   /* Kennzahlen für das Dashboard der Firma */
   bk.volumen = (bk.volumen || 0) + wert;
@@ -315,7 +330,7 @@ export function coinBuerger(G, tick) {
     }
 
     for (const c of Object.values(G.coins)) {
-      if (!listet(G, b.firmaId, c.firmaId) || !c.minted) continue;
+      if (!listet(G, b.firmaId, c.id) || !c.minted) continue;
 
       /* Trend: Kurs gegen den Stand von vor ein paar Takten */
       const h = (c.buergerHist ??= []);
@@ -328,13 +343,13 @@ export function coinBuerger(G, tick) {
       for (const g of COIN.BUERGER_GRUPPEN) {
         if (Math.random() > COIN.BUERGER_LUST) continue;
         const k = b.konten[g.id];
-        const bestand = k.coins[c.firmaId] || 0;
+        const bestand = k.coins[c.id] || 0;
         const satt = Math.min(1, bestand / COIN.BUERGER_SAETTIGUNG);
         const laune = g.basis * (1 - satt) + g.gier * trend + (1 - Math.abs(g.gier)) * bewertung
           - b.gebuehr * COIN.BUERGER_GEBUEHR_SCHEU
           + (Math.random() - 0.5) * 0.5;
 
-        const buch = G.coinOrders.filter(o => o.coinId === c.firmaId && o.boerseId === b.firmaId && o.playerId !== g.id);
+        const buch = G.coinOrders.filter(o => o.coinId === c.id && o.boerseId === b.firmaId && o.playerId !== g.id);
         const besteFrage = buch.filter(o => o.side === "sell").sort((x, y) => x.price - y.price)[0];
         const bestesGebot = buch.filter(o => o.side === "buy").sort((x, y) => y.price - x.price)[0];
         const menge = 1 + Math.floor(Math.random() * COIN.BUERGER_MENGE);
@@ -343,11 +358,11 @@ export function coinBuerger(G, tick) {
           /* Kaufen: das günstigste Angebot nehmen, sonst knapp über dem Kurs bieten */
           const preis = Math.round((besteFrage ? besteFrage.price : c.kurs * (1 + 0.01 + Math.random() * 0.04)) * 100) / 100;
           if (k.cash >= menge * preis * (1 + b.gebuehr))
-            coinOrder(G, { id: g.id }, { boerseId: b.firmaId, coinId: c.firmaId, side: "buy", qty: menge, price: preis });
+            coinOrder(G, { id: g.id }, { boerseId: b.firmaId, coinId: c.id, side: "buy", qty: menge, price: preis });
         } else if (laune < -0.12 && bestand > 0) {
           /* Verkaufen: ins beste Gesuch hinein, sonst knapp unter dem Kurs */
           const preis = Math.round((bestesGebot ? bestesGebot.price : c.kurs * (1 - 0.01 - Math.random() * 0.04)) * 100) / 100;
-          coinOrder(G, { id: g.id }, { boerseId: b.firmaId, coinId: c.firmaId, side: "sell", qty: Math.min(bestand, menge), price: Math.max(0.01, preis) });
+          coinOrder(G, { id: g.id }, { boerseId: b.firmaId, coinId: c.id, side: "sell", qty: Math.min(bestand, menge), price: Math.max(0.01, preis) });
         }
       }
     }

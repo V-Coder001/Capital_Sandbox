@@ -19,7 +19,7 @@ function kryptoVerlauf(state) {
   krLetzterPunkt = state.tick;
   if (state.tick % 10) return;
   for (const c of state.krypto.coins) {
-    const h = (KR_HIST[c.firmaId] ??= []);
+    const h = (KR_HIST[c.id] ??= []);
     h.push(c.kurs);
     if (h.length > 90) h.shift();
   }
@@ -31,12 +31,13 @@ function kryptoRendern(state) {
   kryptoVerlauf(state);
 }
 
+const coinName = c => escapeHtml(rohText(c?.name || "—"));
 const krBoerseVon = (state, id) => (state.krypto?.boersen || []).find(b => b.firmaId === id);
-const krCoinVon = (state, id) => (state.krypto?.coins || []).find(c => c.firmaId === id);
-const krListet = (state, boerseId, coinId) => boerseId === coinId ||
-  (state.krypto?.vertraege || []).some(v => v.boerseId === boerseId && v.coinId === coinId);
+const krCoinVon = (state, id) => (state.krypto?.coins || []).find(c => c.id === id);
+const krListet = (state, boerseId, coin) => coin.firmaId === boerseId ||
+  (state.krypto?.vertraege || []).some(v => v.boerseId === boerseId && v.coinId === coin.id);
 /* Coins, die diese Börse führt: der eigene plus alle mit Vertrag */
-const krCoins = (state, boerseId) => (state.krypto?.coins || []).filter(c => krListet(state, boerseId, c.firmaId));
+const krCoins = (state, boerseId) => (state.krypto?.coins || []).filter(c => krListet(state, boerseId, c));
 
 /* Die Seite einer Börse. Wird aus netzZeichnen aufgerufen, wenn
  * NETZ.seite mit "krypto:" beginnt. */
@@ -54,33 +55,33 @@ function kryptoSeite(fenster, state, me, myId) {
   fenster.querySelector(".sfHinweis").hidden = true;
 
   const coins = krCoins(state, bId);
-  if (!NETZ.krCoin || !coins.some(c => c.firmaId === NETZ.krCoin)) NETZ.krCoin = coins[0]?.firmaId || null;
-  const coin = coins.find(c => c.firmaId === NETZ.krCoin) || null;
+  if (!NETZ.krCoin || !coins.some(c => c.id === NETZ.krCoin)) NETZ.krCoin = coins[0]?.id || null;
+  const coin = coins.find(c => c.id === NETZ.krCoin) || null;
   const konto = me?.kryptoKonto?.[bId] || null;
   const meins = bId === myId;
   const name = pid => String(pid).startsWith("buerger") ? t("Stadtbewohner") : escapeHtml(rohText(state.players?.[pid]?.name || "—"));
 
-  netzSetze(".sfUrl", `🔒 ${shopSlug(firma.name)}-coins.cs${coin ? "/" + shopSlug(state.players[coin.firmaId]?.name || "") : ""}`, "krUrl" + bId + NETZ.krCoin);
+  netzSetze(".sfUrl", `🔒 ${shopSlug(firma.name)}-coins.cs${coin ? "/" + shopSlug(coin.name) : ""}`, "krUrl" + bId + NETZ.krCoin);
   netzSetze(".sfKopf", `<div class="sfMarke">${logoHtml(bId, "sfLogo", farbe)}<div><b>${name(bId)} ${t("Coins")}</b><small>${t("Krypto-Börse")} · ${t("Gebühr")} ${(b.gebuehr * 100).toFixed(1)} % · ${coins.length} ${t("Coins gelistet")}</small></div></div>`,
     "krKopf" + bId + b.gebuehr + coins.length);
 
   /* ---- Linke Spalte: gelistete Coins ---- */
   const liste = coins.map(c => {
-    const h = KR_HIST[c.firmaId] || [], tr = h.length > 1 && h[0] ? (c.kurs / h[0] - 1) * 100 : 0;
-    const offen = (state.krypto.orders || []).filter(o => o.coinId === c.firmaId && o.boerseId === bId).length;
-    return `<button type="button" class="bwZeile${c.firmaId === NETZ.krCoin ? " on" : ""}" data-krcoin="${c.firmaId}">
-      <span class="bwName">${name(c.firmaId)}${c.firmaId === bId ? "" : ` <em class="krFremd">${t("Vertrag")}</em>`}</span>
+    const h = KR_HIST[c.id] || [], tr = h.length > 1 && h[0] ? (c.kurs / h[0] - 1) * 100 : 0;
+    const offen = (state.krypto.orders || []).filter(o => o.coinId === c.id && o.boerseId === bId).length;
+    return `<button type="button" class="bwZeile${c.id === NETZ.krCoin ? " on" : ""}" data-krcoin="${c.id}">
+      <span class="bwName">${coinName(c)}${c.firmaId === bId ? "" : ` <em class="krFremd">${t("Vertrag")}</em>`}</span>
       <b class="mono">${fp(c.kurs)}</b>
       <span class="bwTrend">${Math.abs(tr) < 0.5 ? "" : `<span style="color:${tr > 0 ? "var(--up)" : "var(--down)"};font-size:11px">${tr > 0 ? "+" : ""}${tr.toFixed(0)} %</span>`}</span>
       <span class="bwAnz">${offen || ""}</span></button>`;
   }).join("") || `<div class="bwLeer">${t("Noch kein Coin gelistet.")}</div>`;
 
   /* ---- Orderbuch des gewählten Coins auf dieser Börse ---- */
-  const buch = coin ? (state.krypto.orders || []).filter(o => o.coinId === coin.firmaId && o.boerseId === bId) : [];
+  const buch = coin ? (state.krypto.orders || []).filter(o => o.coinId === coin.id && o.boerseId === bId) : [];
   const angebote = buch.filter(o => o.side === "sell" && o.playerId !== myId).sort((x, y) => x.price - y.price);
   const gesuche = buch.filter(o => o.side === "buy" && o.playerId !== myId).sort((x, y) => y.price - x.price);
   const meine = (state.krypto.orders || []).filter(o => o.playerId === myId && o.boerseId === bId);
-  const bestand = konto?.coins?.[coin?.firmaId] || 0;
+  const bestand = konto?.coins?.[coin?.id] || 0;
   const seite = NETZ.krSeite || "buy";
 
   /* ---- Konto: ohne Konto kein Handel ---- */
@@ -88,7 +89,7 @@ function kryptoSeite(fenster, state, me, myId) {
     ? `<section class="krKonto">
          <div class="krKontoWerte">
            <div><small>${t("Guthaben auf dem Konto")}</small><b class="mono">${fmt(konto.cash)}</b></div>
-           <div><small>${t("Dein Bestand")}</small><b class="mono">${bestand} ${coin ? name(coin.firmaId) : ""}</b></div>
+           <div><small>${t("Dein Bestand")}</small><b class="mono">${bestand} ${coin ? coinName(coin) : ""}</b></div>
          </div>
          <div class="krKontoForm">
            <input id="krBetrag" type="number" min="1" step="100" value="${NETZ.krBetrag || 500}" aria-label="${t("Betrag")}">
@@ -104,7 +105,7 @@ function kryptoSeite(fenster, state, me, myId) {
   /* ---- Detail, Formular, Buch ---- */
   const detail = coin ? `<section class="bwDetail">
       <div class="bwDetailKopf">
-        <div><span class="bwKat">${coin.firmaId === bId ? t("Eigener Coin") : t("Über Vertrag gelistet")}</span><h3>${name(coin.firmaId)}</h3></div>
+        <div><span class="bwKat">${coin.firmaId === bId ? t("Eigener Coin") : t("Über Vertrag gelistet")}</span><h3>${coinName(coin)}</h3><small class="krVon">${t("von")} ${name(coin.firmaId)}</small></div>
         <div class="bwPreis"><b class="mono">${fp(coin.kurs)}</b><span>${t("Kurs")}</span></div>
       </div>
       <div class="bwKennzahlen">
@@ -113,7 +114,7 @@ function kryptoSeite(fenster, state, me, myId) {
         <div><small>${t("Bestes Gesuch")}</small><b class="mono">${gesuche[0] ? fp(gesuche[0].price) : "—"}</b><span>${gesuche[0] ? `${gesuche[0].qty}× ${t("gesucht")}` : t("niemand sucht")}</span></div>
         <div><small>${t("Ausgegeben")}</small><b class="mono">${coin.minted}</b><span>${t("von")} 100</span></div>
       </div>
-      <div class="bwChart">${verlaufChart(KR_HIST[coin.firmaId], t("Kursverlauf"))}</div>
+      <div class="bwChart">${verlaufChart(KR_HIST[coin.id], t("Kursverlauf"))}</div>
     </section>` : `<section class="bwDetail"><div class="bwLeer">${t("Diese Börse führt noch keinen Coin.")}</div></section>`;
 
   const form = coin ? `${kontoTeil}<section class="bwForm">
@@ -133,10 +134,10 @@ function kryptoSeite(fenster, state, me, myId) {
     </div>` : "";
 
   const meineTeil = meine.length ? `<section class="bwMeine"><b>${t("Meine Aufträge")}</b>${meine.map(o =>
-    `<div class="bwOrder"><span class="${o.side === "buy" ? "bwK" : "bwV"}">${o.side === "buy" ? t("Kauf") : t("Verkauf")}</span><span class="mono"><b>${o.qty}×</b> ${name(o.coinId)} · ${fp(o.price)}</span><button type="button" class="mini" data-krstorno="${o.id}">${t("Storno")}</button></div>`).join("")}</section>` : "";
+    `<div class="bwOrder"><span class="${o.side === "buy" ? "bwK" : "bwV"}">${o.side === "buy" ? t("Kauf") : t("Verkauf")}</span><span class="mono"><b>${o.qty}×</b> ${coinName((state.krypto.coins || []).find(c => c.id === o.coinId))} · ${fp(o.price)}</span><button type="button" class="mini" data-krstorno="${o.id}">${t("Storno")}</button></div>`).join("")}</section>` : "";
 
   /* ---- Verwaltung: nur für die Firma, der die Börse gehört ---- */
-  const eigenerCoin = krCoinVon(state, bId);
+  const eigene = (state.krypto.coins || []).filter(c => c.firmaId === bId);
   const fremde = (state.krypto.coins || []).filter(c => c.firmaId !== bId);
   const verwaltung = meins ? `<section class="krVerwaltung">
       <div class="krVerwaltungKopf"><b>${t("Deine Börse verwalten")}</b><small>${t("nur du siehst diesen Bereich")}</small></div>
@@ -144,15 +145,20 @@ function kryptoSeite(fenster, state, me, myId) {
         <div class="krBox"><small>${t("Handelsgebühr")}</small>
           <div class="krBoxForm"><input id="krGebuehr" type="number" min="0" max="5" step="0.1" value="${(b.gebuehr * 100).toFixed(1)}"><span>%</span><button type="button" class="mini" data-krgebuehr>${t("Setzen")}</button></div>
           <span>${t("Sie ist deine einzige Einnahme und trägt das Fundament deines Coins.")}</span></div>
-        <div class="krBox"><small>${t("Eigener Coin")}</small>
-          <div class="krBoxForm"><input id="krAusgabe" type="number" min="1" max="${100 - (eigenerCoin?.minted || 0)}" step="1" value="10"><button type="button" class="mini" data-krausgeben ${(eigenerCoin?.minted || 0) >= 100 ? "disabled" : ""}>${t("Ausgeben")}</button></div>
-          <span>${eigenerCoin ? `${eigenerCoin.minted} ${t("von")} 100 ${t("ausgegeben")}` : t("Noch kein Coin ausgegeben.")}</span></div>
+        <div class="krBox"><small>${t("Neuen Coin auflegen")}</small>
+          <div class="krBoxForm"><input id="krNeuName" maxlength="16" placeholder="${t("Name")}"><input id="krAusgabe" type="number" min="1" max="100" step="1" value="20"><button type="button" class="mini" data-krausgeben>${t("Auflegen")}</button></div>
+          <span>${eigene.length ? `${eigene.length} ${t("von")} 5 ${t("Coins aufgelegt")} · ${t("Mehr Stück eines bestehenden Coins gibst du in der Liste darunter aus.")}` : t("Dein erster Coin. Der Name steht auf der Börse.")}</span></div>
+      </div>
+      <div class="krVertraege"><small>${t("Deine Coins")}</small>
+        ${eigene.length ? eigene.map(c => `<div class="krVertrag"><span>${coinName(c)} <small>${c.minted} ${t("von")} 100</small></span><b class="mono">${fp(c.kurs)}</b>
+          <button type="button" class="mini" data-krnach="${c.id}" ${c.minted >= 100 ? "disabled" : ""}>${t("10 nachlegen")}</button></div>`).join("")
+          : `<div class="bwLeer">${t("Noch kein eigener Coin.")}</div>`}
       </div>
       <div class="krVertraege"><small>${t("Fremde Coins auf deiner Börse")}</small>
-        ${fremde.length ? fremde.map(c => { const hat = krListet(state, bId, c.firmaId);
-          return `<div class="krVertrag"><span>${name(c.firmaId)}</span><b class="mono">${fp(c.kurs)}</b>${hat
-            ? `<button type="button" class="mini" data-krkuend="${c.firmaId}">${t("Kündigen")}</button>`
-            : `<button type="button" class="mini" data-krvertrag="${c.firmaId}">${t("Vertrag schließen")}</button>`}</div>`; }).join("")
+        ${fremde.length ? fremde.map(c => { const hat = krListet(state, bId, c);
+          return `<div class="krVertrag"><span>${coinName(c)} <small>${name(c.firmaId)}</small></span><b class="mono">${fp(c.kurs)}</b>${hat
+            ? `<button type="button" class="mini" data-krkuend="${c.id}">${t("Kündigen")}</button>`
+            : `<button type="button" class="mini" data-krvertrag="${c.id}">${t("Vertrag schließen")}</button>`}</div>`; }).join("")
           : `<div class="bwLeer">${t("Keine andere Firma hat einen Coin.")}</div>`}
         <span>${t("Für fremde Coins behältst du 30 % der Gebühr, der Rest geht an die Firma des Coins. Verträge sind jederzeit kündbar.")}</span>
       </div>
@@ -196,7 +202,9 @@ document.addEventListener("click", e => {
   const st = e.target.closest("[data-krstorno]");
   if (st) return schick("coinCancel", { orderId: st.dataset.krstorno }, t("Auftrag zurückgenommen"));
   if (e.target.closest("[data-krgebuehr]")) return schick("coinBoerse", { gebuehr: wert("krGebuehr") / 100 }, t("Gebühr gesetzt"));
-  if (e.target.closest("[data-krausgeben]")) return schick("coinAusgeben", { menge: wert("krAusgabe") }, t("Coins ausgegeben"));
+  if (e.target.closest("[data-krausgeben]")) return schick("coinAusgeben", { menge: wert("krAusgabe"), name: document.getElementById("krNeuName")?.value }, t("Coin aufgelegt"));
+  const nach = e.target.closest("[data-krnach]");
+  if (nach) return schick("coinAusgeben", { menge: 10, coinId: nach.dataset.krnach }, t("Coins nachgelegt"));
   const vt = e.target.closest("[data-krvertrag]");
   if (vt) return schick("coinVertrag", { coinId: vt.dataset.krvertrag }, t("Vertrag geschlossen"));
   const kd = e.target.closest("[data-krkuend]");

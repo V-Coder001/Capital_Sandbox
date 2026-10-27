@@ -12,7 +12,7 @@ import { Server } from "socket.io";
 import path from "path";
 import { fileURLToPath } from "url";
 import { statisch, cacheKoepfe } from "./statisch.js";
-import { coinBuerger, boerseEroeffnen, gebuehrSetzen, kontoEroeffnen, einzahlen, auszahlen, coinAusgeben, vertragSchliessen, vertragKuendigen, coinOrder, coinStorno, coinTick, coinsWert } from "./coins.js";
+import { COIN, coinBuerger, boerseEroeffnen, gebuehrSetzen, kontoEroeffnen, einzahlen, auszahlen, coinAusgeben, vertragSchliessen, vertragKuendigen, coinOrder, coinStorno, coinTick, coinsWert } from "./coins.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -6744,7 +6744,7 @@ function snapshot() {
       boersen: Object.values(G.boersen || {}).map(b => ({ firmaId: b.firmaId, gebuehr: b.gebuehr, aktiv: b.aktiv, online: boerseOnline(b.firmaId),
         einnahmen: Math.round((b.einnahmen || 0) * 100) / 100, volumen: Math.round((b.volumen || 0) * 100) / 100,
         konten: Object.keys(b.konten || {}).filter(x => !String(x).startsWith("buerger")).length, plaetze: rzStufen(b.firmaId) })),
-      coins: Object.values(G.coins || {}).map(c => ({ firmaId: c.firmaId, kurs: c.kurs, fundament: c.fundament, minted: c.minted,
+      coins: Object.values(G.coins || {}).map(c => ({ id: c.id, name: c.name, firmaId: c.firmaId, kurs: c.kurs, fundament: c.fundament, minted: c.minted,
         volumen: Math.round((c.volumen || 0) * 100) / 100, trades: c.trades || 0,
         fremdErtrag: Math.round((c.fremdErtrag || 0) * 100) / 100 })),
       vertraege: (G.coinVertraege || []).filter(v => v.aktiv),
@@ -8682,9 +8682,9 @@ io.on("connection", socket => {
     if (aktion === "auszahlen") return ack?.(auszahlen(G, boerseId, p, betrag));
     ack?.({ error: "Ungültig" });
   }));
-  socket.on("coinAusgeben", guard((p, { menge }, ack) => {
+  socket.on("coinAusgeben", guard((p, { menge, name, coinId }, ack) => {
     if (!istSoftwareFirma(p)) return ack?.({ error: "Nur Software-Firmen geben Coins aus" });
-    ack?.(coinAusgeben(G, p, menge));
+    ack?.(coinAusgeben(G, p, menge, name, coinId));
   }));
   socket.on("coinVertrag", guard((p, { coinId, kuendigen }, ack) => {
     ack?.(kuendigen ? vertragKuendigen(G, p.id, coinId) : vertragSchliessen(G, p.id, coinId));
@@ -10887,6 +10887,10 @@ function stopBots() {
   botHandles.length = 0;
   botsStarted = false;
 }
+/* Coin-Namen der Bots: Firmenname plus ein Anhang, damit jeder Coin anders heißt. */
+const BOT_COIN_ANHANG = ["Coin", "Token", "Bit", "Credit", "Chip"];
+const botCoinName = (firma, n) => `${String(firma).split(" ")[0].slice(0, 10)}${BOT_COIN_ANHANG[n % BOT_COIN_ANHANG.length]}`;
+
 async function spawnBot(cfg, lvl = BOT_LEVELS[BOT_LEVEL_DEFAULT]) {
   const { io: ioClient } = await import("socket.io-client");
   const s = ioClient(`http://localhost:${PORT}`);
@@ -11297,6 +11301,37 @@ async function spawnBot(cfg, lvl = BOT_LEVELS[BOT_LEVEL_DEFAULT]) {
           if (!web) await em("webEinstellen", { name: `${cfg.name} Web`.slice(0, 20), preis: WEBSITE.PREIS_START });
           else if (!web.entwicklung && web.version < WEBSITE.STUFEN.length && me.cash > 1500 && app?.version >= 1) await em("webEntwickeln", {});
           else if (web.version >= 1 && web.kunden > web.plaetze && web.preis < WEBSITE.PREIS_MAX && Math.random() < .2) await em("webEinstellen", { name: web.name, preis: web.preis + 5 });
+
+          /* Krypto-Börse: sobald die Website läuft, legt der Bot eine Börse an,
+           * gibt einen Coin aus und stellt immer wieder ein paar Stück ins
+           * Schaufenster. Läuft der gut, kommt ein zweiter Coin dazu. */
+          const meineBoerse = (st.krypto?.boersen || []).find(x => x.firmaId === myId);
+          const meineCoins = (st.krypto?.coins || []).filter(c => c.firmaId === myId);
+          if (!meineBoerse) {
+            if (web?.version >= 1) await em("coinBoerse", { gebuehr: (1.5 + Math.random() * 1.5) / 100 });
+          } else {
+            if (!meineCoins.length) await em("coinAusgeben", { menge: 40, name: botCoinName(cfg.name, 0) });
+            else {
+              /* Ein zweiter Coin, wenn der erste läuft und Platz im Depot ist */
+              const laeuft = meineCoins[0].kurs > COIN.KURS_START && (meineCoins[0].trades || 0) > 20;
+              if (laeuft && meineCoins.length < 3 && Math.random() < .04)
+                await em("coinAusgeben", { menge: 30, name: botCoinName(cfg.name, meineCoins.length) });
+              /* Nachschub ins Schaufenster: verkaufen, was im eigenen Depot liegt */
+              const konto = me.kryptoKonto?.[myId];
+              for (const c of meineCoins) {
+                if (c.minted < COIN.UMLAUF && Math.random() < .05) await em("coinAusgeben", { menge: 10, coinId: c.id });
+                const bestand = konto?.coins?.[c.id] || 0;
+                const offen = (st.krypto?.orders || []).filter(o => o.coinId === c.id && o.playerId === myId).length;
+                if (bestand > 3 && offen < 2 && Math.random() < .25)
+                  await em("coinOrder", { boerseId: myId, coinId: c.id, side: "sell", qty: Math.min(5, bestand),
+                    price: Math.round(c.kurs * (1.01 + Math.random() * 0.04) * 100) / 100 });
+              }
+              /* Verträge: fremde Coins aufs eigene Parkett holen, das bringt 30 % */
+              const fremd = (st.krypto?.coins || []).filter(c => c.firmaId !== myId
+                && !(st.krypto?.vertraege || []).some(v => v.boerseId === myId && v.coinId === c.id));
+              if (fremd.length && Math.random() < .08) await em("coinVertrag", { coinId: fremd[Math.floor(Math.random() * fremd.length)].id });
+            }
+          }
         }
       }
       /* --- Touristik (Etappe 6): Zimmerpreis nachführen, Hotels renovieren,
