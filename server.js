@@ -4387,7 +4387,11 @@ const RZ_UPTIME_MIN = 30;
 const rzAnteil = (pid, k) => ((G.players[pid]?.rzVerteilung?.[k]) ?? RZ_VERTEILUNG[k]) / RZ_VERTEILUNG[k];
 const webEigenes = p => Object.values(G.website || {}).find(x => x.ownerId === p.id) || null;
 const webKunden = w => Object.values(G.players).filter(k => k.website?.anbieter === w.id && k.id !== w.ownerId);
-const webPlaetze = w => Math.floor(rzStufen(w.ownerId) * WEBSITE.PLAETZE_JE_STUFE * rzAnteil(w.ownerId, "web"));
+/* Die Krypto-Börse der Firma belegt einen Platz im Rechenzentrum wie eine Website. */
+const boerseLaeuft = pid => !!G.boersen?.[pid]?.aktiv;
+const boerseOnline = pid => boerseLaeuft(pid) && (rzStufen(pid) > 0 || process.env.BOERSE_TEST === "online");
+const webPlaetze = w => Math.max(0, Math.floor(rzStufen(w.ownerId) * WEBSITE.PLAETZE_JE_STUFE * rzAnteil(w.ownerId, "web"))
+  - (boerseLaeuft(w.ownerId) ? 1 : 0));
 /* Reichweite der eigenen Website: Modul-Bonus, solange sie online ist */
 function webBonus(p) {
   const w = p?.website;
@@ -6737,7 +6741,7 @@ function snapshot() {
     contracts: G.contracts.filter(c => c.status === "open"),
     /* Krypto-Börse: öffentlich sichtbar, ohne fremde Konten */
     krypto: {
-      boersen: Object.values(G.boersen || {}).map(b => ({ firmaId: b.firmaId, gebuehr: b.gebuehr, aktiv: b.aktiv })),
+      boersen: Object.values(G.boersen || {}).map(b => ({ firmaId: b.firmaId, gebuehr: b.gebuehr, aktiv: b.aktiv, online: boerseOnline(b.firmaId) })),
       coins: Object.values(G.coins || {}).map(c => ({ firmaId: c.firmaId, kurs: c.kurs, fundament: c.fundament, minted: c.minted })),
       vertraege: (G.coinVertraege || []).filter(v => v.aktiv),
       orders: (G.coinOrders || []).map(o => ({ id: o.id, boerseId: o.boerseId, coinId: o.coinId, side: o.side, qty: o.qty, price: o.price, playerId: o.playerId })),
@@ -6814,6 +6818,8 @@ function privateState(p) {
     ownPct: Math.round((p.equity[p.id] || 0) / AKTIEN * 1000) / 10, ownAktien: p.equity[p.id] || 0, aktien: AKTIEN,
     portfolio, revenue: Math.round(p.revenue), ausschuettung: p.ausschuettung,
     swEp: Math.floor(p.swEp || 0),
+    /* Konten dieser Firma bei den Krypto-Börsen (ein Konto je Börse, siehe coins.js) */
+    kryptoKonto: Object.fromEntries(Object.values(G.boersen || {}).filter(b => b.konten?.[p.id]).map(b => [b.firmaId, b.konten[p.id]])),
     paintStufe: paintStufeVon(p), paintLizenz: p.paintLizenz || null,
     boerseStufe: boerseStufeVon(p), boerseLizenz: p.boerseLizenz || null,
     etf: Object.entries(p.etf || {}).map(([br, n]) => ({ branche: br, name: INDUSTRIES[br]?.name ?? br, anteile: Math.round(n * 100) / 100,
@@ -6824,7 +6830,6 @@ function privateState(p) {
      * die Summe zum Nettovermögen in der Kopfzeile. */
     balance: { cash: Math.round(p.cash), invVal: Math.round(invVal), bldVal: Math.round(bldVal),
                bondVal, debtVal, markenwert: Math.round(swMarkenwert(p)),
-               kryptoKonto: Object.fromEntries(Object.values(G.boersen || {}).filter(b => b.konten?.[p.id]).map(b => [b.firmaId, b.konten[p.id]])),
                firmVal: Math.round(substance(p)),
                ownShare: (p.equity[p.id] || 0) / AKTIEN,
                holdings: Math.round(portfolio.reduce((sum, h) => sum + h.buchwert, 0)),   // Buchwert — wie im Nettovermögen
@@ -8682,6 +8687,7 @@ io.on("connection", socket => {
   }));
   socket.on("coinOrder", guard((p, { boerseId, coinId, side, qty, price }, ack) => {
     if (!["buy", "sell"].includes(side)) return ack?.({ error: "Ungültig" });
+    if (!boerseOnline(boerseId)) return ack?.({ error: "Börse gerade offline" });
     ack?.(coinOrder(G, p, { boerseId, coinId, side, qty, price }));
   }));
   socket.on("coinCancel", guard((p, { orderId }, ack) => {

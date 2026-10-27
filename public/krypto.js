@@ -1,109 +1,215 @@
-/* Krypto-Börse im Spiel: Teil der eigenen Stadtnetz-Seite der Software-Firma. Liest state.krypto und me.kryptoKonto
- * aus dem Snapshot, sendet Befehle über act() (siehe app.js). */
-let kryptoSig = "";
-const kryptoEsc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
-const kryptoFmt = (n, d = 2) => Number(n || 0).toLocaleString("de-DE", { minimumFractionDigits: d, maximumFractionDigits: d });
+/* ============================================================
+ * Krypto-Börse im Stadtnetz
+ * ------------------------------------------------------------
+ * Jede Software-Firma mit Börse bekommt eine eigene Seite im Stadtnetz,
+ * erreichbar unter NETZ.seite = "krypto:<firmaId>". Die Seite ist wie die
+ * Warenbörse aufgebaut — links die Coins, in der Mitte Kurs und Verlauf,
+ * daneben das Handelsformular, darunter Orderbuch und eigene Aufträge.
+ * Gehandelt werden Coins, keine Aktien: Sie werden von Software-Firmen
+ * ausgegeben und sind ungedeckt (siehe coins.js auf dem Server).
+ * ============================================================ */
 
-function kryptoRendern(state, me, myId) {
-  const body = document.getElementById("kryptobody");
-  if (!body || !state?.krypto || !me || !myId) return;
-  const K = state.krypto, name = pid => state.players?.[pid]?.name ?? "—";
-  const meinStand = state.players?.[myId];
-  const software = (meinStand?.industries || [meinStand?.industry]).includes("software");
-  const konten = me.kryptoKonto || {};
-  const meineBoerse = K.boersen.find(b => b.firmaId === myId);
-  const meinCoin = K.coins.find(c => c.firmaId === myId);
-  /* Handelsbörse: eigene, falls Konto da, sonst die erste mit Konto */
-  const handelBoerse = (konten[myId] && meineBoerse) ? myId : Object.keys(konten)[0] || null;
-  const boersenMitKonto = K.boersen.filter(b => konten[b.firmaId]);
-  const gelisteteCoins = K.coins.filter(c => handelBoerse && (c.firmaId === handelBoerse || K.vertraege.some(v => v.boerseId === handelBoerse && v.coinId === c.firmaId)));
-  const coin = K.coins.find(c => c.firmaId === (body.dataset.coin || gelisteteCoins[0]?.firmaId)) || gelisteteCoins[0] || null;
-  const meineOrders = K.orders.filter(o => o.playerId === myId);
-  body.dataset.boerse = handelBoerse || "";
-  body.dataset.coin = coin?.firmaId || "";
-  const sig = JSON.stringify([K, konten, handelBoerse, coin?.firmaId]);
-  if (sig === kryptoSig && body.childElementCount) return;
-  if (body.contains(document.activeElement) && /INPUT|SELECT/.test(document.activeElement.tagName)) return;
-  kryptoSig = sig;
+/* Kursverlauf je Coin, clientseitig gesammelt (alle 10 s ein Punkt, wie priceHist) */
+const KR_HIST = {};
+let krLetzterPunkt = 0;
 
-  if (!software) {
-    body.innerHTML = `<p class="note">Die Krypto-Börse gehört Software-Firmen mit Website. Du spielst eine andere Branche.</p>`;
-    return;
+function kryptoVerlauf(state) {
+  if (!state?.krypto) return;
+  if (state.tick === krLetzterPunkt) return;
+  krLetzterPunkt = state.tick;
+  if (state.tick % 10) return;
+  for (const c of state.krypto.coins) {
+    const h = (KR_HIST[c.firmaId] ??= []);
+    h.push(c.kurs);
+    if (h.length > 90) h.shift();
   }
-
-  const boerseTeil = meineBoerse
-    ? `<div class="kr-zeile"><span>Gebühr deiner Börse</span><b>${kryptoFmt(meineBoerse.gebuehr * 100, 1)} %</b></div>
-       <div class="kr-form"><input id="kr-gebuehr" type="number" min="0" max="5" step="0.1" value="${kryptoFmt(meineBoerse.gebuehr * 100, 1)}"><button data-kr="boerse">Gebühr setzen</button></div>`
-    : `<p class="note">Du hast noch keine Börse. Sie braucht eine Website im Stadtnetz, die online ist.</p>
-       <div class="kr-form"><input id="kr-gebuehr" type="number" min="0" max="5" step="0.1" value="2"><span>% Gebühr</span><button data-kr="boerse">Börse eröffnen</button></div>`;
-
-  const coinTeil = meinCoin
-    ? `<div class="kr-zeile"><span>Dein Coin</span><b>${kryptoFmt(meinCoin.kurs)} $</b></div>
-       <p class="note">Fundament ${kryptoFmt(meinCoin.fundament)} $ · ausgegeben ${meinCoin.minted} von 100</p>
-       <div class="kr-form"><input id="kr-menge" type="number" min="1" max="${100 - meinCoin.minted}" value="10"><button data-kr="ausgeben" ${meinCoin.minted >= 100 ? "disabled" : ""}>Coins ausgeben</button></div>`
-    : meineBoerse ? `<div class="kr-form"><input id="kr-menge" type="number" min="1" max="100" value="50"><button data-kr="ausgeben">Coins ausgeben</button></div>` : "";
-
-  const kontoTeil = !handelBoerse || !konten[handelBoerse]
-    ? (meineBoerse ? `<div class="kr-form"><button data-kr="konto" data-boerse="${myId}">Konto bei meiner Börse eröffnen</button></div>` : "")
-    : (() => {
-        const k = konten[handelBoerse];
-        const coinsIm = Object.entries(k.coins || {}).filter(([, n]) => n > 0)
-          .map(([cid, n]) => `${kryptoEsc(name(cid))}: ${n}`).join(" · ") || "keine";
-        return `<div class="kr-zeile"><span>Konto bei ${kryptoEsc(name(handelBoerse))}</span><b>${kryptoFmt(k.cash)} $</b></div>
-          <p class="note">Coins: ${coinsIm}</p>
-          <div class="kr-form"><input id="kr-betrag" type="number" min="1" value="500"><button data-kr="einzahlen" data-boerse="${handelBoerse}">Einzahlen</button><button data-kr="auszahlen" data-boerse="${handelBoerse}">Auszahlen</button></div>`;
-      })();
-
-  const handelTeil = handelBoerse && konten[handelBoerse] && coin
-    ? `<h3>Handel auf ${kryptoEsc(name(handelBoerse))}</h3>
-       <div class="kr-form">
-         <select id="kr-coin">${gelisteteCoins.map(c => `<option value="${c.firmaId}" ${c.firmaId === coin.firmaId ? "selected" : ""}>${kryptoEsc(name(c.firmaId))} · ${kryptoFmt(c.kurs)} $</option>`).join("")}</select>
-         <select id="kr-seite"><option value="buy">Kaufen</option><option value="sell">Verkaufen</option></select>
-       </div>
-       <div class="kr-form"><input id="kr-qty" type="number" min="1" value="5"><input id="kr-price" type="number" step="0.01" min="0.01" value="${kryptoFmt(coin.kurs)}"><button data-kr="order">Auftrag einstellen</button></div>`
-    : "";
-
-  const orderTeil = meineOrders.length
-    ? `<h3>Offene Aufträge</h3>` + meineOrders.map(o => `<div class="kr-zeile"><span>${o.side === "buy" ? "Kauf" : "Verkauf"} ${o.qty} × ${kryptoFmt(o.price)} $ (${kryptoEsc(name(o.coinId))})</span><button data-kr="storno" data-order="${o.id}">Zurücknehmen</button></div>`).join("")
-    : "";
-
-  const vertragTeil = handelBoerse && meineBoerse && handelBoerse === myId
-    ? `<h3>Verträge</h3>` +
-      K.coins.filter(c => c.firmaId !== myId).map(c => {
-        const v = K.vertraege.some(x => x.boerseId === myId && x.coinId === c.firmaId);
-        return `<div class="kr-zeile"><span>${kryptoEsc(name(c.firmaId))}</span>${v
-          ? `<button data-kr="kuendigen" data-coin="${c.firmaId}">Kündigen</button>`
-          : `<button data-kr="vertrag" data-coin="${c.firmaId}">Vertrag schließen</button>`}</div>`;
-      }).join("") || `<p class="note">Keine fremden Coins am Markt.</p>`
-    : "";
-
-  const boersenTeil = K.boersen.length
-    ? `<h3>Alle Börsen</h3>` + K.boersen.map(b => `<div class="kr-zeile"><span>${kryptoEsc(name(b.firmaId))}</span><b>${kryptoFmt(b.gebuehr * 100, 1)} % Gebühr</b></div>`).join("")
-    : "";
-
-  body.innerHTML = `
-    <section class="kr-block"><h3>Deine Börse</h3>${boerseTeil}</section>
-    ${coinTeil ? `<section class="kr-block"><h3>Dein Coin</h3>${coinTeil}</section>` : ""}
-    ${kontoTeil ? `<section class="kr-block"><h3>Konto</h3>${kontoTeil}</section>` : ""}
-    ${handelTeil ? `<section class="kr-block">${handelTeil}</section>` : ""}
-    ${orderTeil ? `<section class="kr-block">${orderTeil}</section>` : ""}
-    ${vertragTeil ? `<section class="kr-block">${vertragTeil}</section>` : ""}
-    <section class="kr-block">${boersenTeil}</section>`;
 }
 
+/* Von jedem Render aufgerufen: Verlauf sammeln und, wenn die Krypto-Seite
+ * offen ist, neu zeichnen. Das Panel im Dock gibt es nicht mehr. */
+function kryptoRendern(state) {
+  kryptoVerlauf(state);
+}
+
+const krBoerseVon = (state, id) => (state.krypto?.boersen || []).find(b => b.firmaId === id);
+const krCoinVon = (state, id) => (state.krypto?.coins || []).find(c => c.firmaId === id);
+const krListet = (state, boerseId, coinId) => boerseId === coinId ||
+  (state.krypto?.vertraege || []).some(v => v.boerseId === boerseId && v.coinId === coinId);
+/* Coins, die diese Börse führt: der eigene plus alle mit Vertrag */
+const krCoins = (state, boerseId) => (state.krypto?.coins || []).filter(c => krListet(state, boerseId, c.firmaId));
+
+/* Die Seite einer Börse. Wird aus netzZeichnen aufgerufen, wenn
+ * NETZ.seite mit "krypto:" beginnt. */
+function kryptoSeite(fenster, state, me, myId) {
+  const bId = NETZ.seite.slice(7);
+  const b = krBoerseVon(state, bId), firma = state.players?.[bId];
+  if (!b || !firma) return netzOeffnen(null);
+  const farbe = firma.color || "#7c3aed";
+  fenster.querySelector(".sfBrowser").style.setProperty("--sys", farbe);
+  /* Stromausfall im Rechenzentrum: die Börse ist dann nicht erreichbar. */
+  const offline = b.online === false;
+  const banner = fenster.querySelector(".sfBanner");
+  banner.hidden = !offline;
+  if (offline) netzSetze(".sfBanner", `<b>⚠</b><span>${t("Börse gerade offline")} — ${t("das Rechenzentrum der Firma läuft nicht.")}</span>`, "krOff" + bId);
+  fenster.querySelector(".sfHinweis").hidden = true;
+
+  const coins = krCoins(state, bId);
+  if (!NETZ.krCoin || !coins.some(c => c.firmaId === NETZ.krCoin)) NETZ.krCoin = coins[0]?.firmaId || null;
+  const coin = coins.find(c => c.firmaId === NETZ.krCoin) || null;
+  const konto = me?.kryptoKonto?.[bId] || null;
+  const meins = bId === myId;
+  const name = pid => escapeHtml(rohText(state.players?.[pid]?.name || "—"));
+
+  netzSetze(".sfUrl", `🔒 ${shopSlug(firma.name)}-coins.cs${coin ? "/" + shopSlug(state.players[coin.firmaId]?.name || "") : ""}`, "krUrl" + bId + NETZ.krCoin);
+  netzSetze(".sfKopf", `<div class="sfMarke">${logoHtml(bId, "sfLogo", farbe)}<div><b>${name(bId)} ${t("Coins")}</b><small>${t("Krypto-Börse")} · ${t("Gebühr")} ${(b.gebuehr * 100).toFixed(1)} % · ${coins.length} ${t("Coins gelistet")}</small></div></div>`,
+    "krKopf" + bId + b.gebuehr + coins.length);
+
+  /* ---- Linke Spalte: gelistete Coins ---- */
+  const liste = coins.map(c => {
+    const h = KR_HIST[c.firmaId] || [], tr = h.length > 1 && h[0] ? (c.kurs / h[0] - 1) * 100 : 0;
+    const offen = (state.krypto.orders || []).filter(o => o.coinId === c.firmaId && o.boerseId === bId).length;
+    return `<button type="button" class="bwZeile${c.firmaId === NETZ.krCoin ? " on" : ""}" data-krcoin="${c.firmaId}">
+      <span class="bwName">${name(c.firmaId)}${c.firmaId === bId ? "" : ` <em class="krFremd">${t("Vertrag")}</em>`}</span>
+      <b class="mono">${fp(c.kurs)}</b>
+      <span class="bwTrend">${Math.abs(tr) < 0.5 ? "" : `<span style="color:${tr > 0 ? "var(--up)" : "var(--down)"};font-size:11px">${tr > 0 ? "+" : ""}${tr.toFixed(0)} %</span>`}</span>
+      <span class="bwAnz">${offen || ""}</span></button>`;
+  }).join("") || `<div class="bwLeer">${t("Noch kein Coin gelistet.")}</div>`;
+
+  /* ---- Orderbuch des gewählten Coins auf dieser Börse ---- */
+  const buch = coin ? (state.krypto.orders || []).filter(o => o.coinId === coin.firmaId && o.boerseId === bId) : [];
+  const angebote = buch.filter(o => o.side === "sell" && o.playerId !== myId).sort((x, y) => x.price - y.price);
+  const gesuche = buch.filter(o => o.side === "buy" && o.playerId !== myId).sort((x, y) => y.price - x.price);
+  const meine = (state.krypto.orders || []).filter(o => o.playerId === myId && o.boerseId === bId);
+  const bestand = konto?.coins?.[coin?.firmaId] || 0;
+  const seite = NETZ.krSeite || "buy";
+
+  /* ---- Konto: ohne Konto kein Handel ---- */
+  const kontoTeil = konto
+    ? `<section class="krKonto">
+         <div class="krKontoWerte">
+           <div><small>${t("Guthaben auf dem Konto")}</small><b class="mono">${fmt(konto.cash)}</b></div>
+           <div><small>${t("Dein Bestand")}</small><b class="mono">${bestand} ${coin ? name(coin.firmaId) : ""}</b></div>
+         </div>
+         <div class="krKontoForm">
+           <input id="krBetrag" type="number" min="1" step="100" value="${NETZ.krBetrag || 500}" aria-label="${t("Betrag")}">
+           <button type="button" class="mini" data-krein>${t("Einzahlen")}</button>
+           <button type="button" class="mini" data-kraus>${t("Auszahlen")}</button>
+         </div>
+       </section>`
+    : `<section class="krKonto krKontoLeer">
+         <div><b>${t("Kein Konto bei dieser Börse")}</b><small>${t("Ein Konto gilt für eine Börse. Geld und Coins liegen darin, nicht in deiner Kasse.")}</small></div>
+         <button type="button" class="buyb" data-krkonto>${t("Konto eröffnen")}</button>
+       </section>`;
+
+  /* ---- Detail, Formular, Buch ---- */
+  const detail = coin ? `<section class="bwDetail">
+      <div class="bwDetailKopf">
+        <div><span class="bwKat">${coin.firmaId === bId ? t("Eigener Coin") : t("Über Vertrag gelistet")}</span><h3>${name(coin.firmaId)}</h3></div>
+        <div class="bwPreis"><b class="mono">${fp(coin.kurs)}</b><span>${t("Kurs")}</span></div>
+      </div>
+      <div class="bwKennzahlen">
+        <div><small>${t("Fundament")}</small><b class="mono">${fp(coin.fundament)}</b><span>${t("aus Börsengebühren")}</span></div>
+        <div><small>${t("Bestes Angebot")}</small><b class="mono">${angebote[0] ? fp(angebote[0].price) : "—"}</b><span>${angebote[0] ? `${angebote[0].qty}× ${t("verfügbar")}` : t("niemand verkauft")}</span></div>
+        <div><small>${t("Bestes Gesuch")}</small><b class="mono">${gesuche[0] ? fp(gesuche[0].price) : "—"}</b><span>${gesuche[0] ? `${gesuche[0].qty}× ${t("gesucht")}` : t("niemand sucht")}</span></div>
+        <div><small>${t("Ausgegeben")}</small><b class="mono">${coin.minted}</b><span>${t("von")} 100</span></div>
+      </div>
+      <div class="bwChart">${verlaufChart(KR_HIST[coin.firmaId], t("Kursverlauf"))}</div>
+    </section>` : `<section class="bwDetail"><div class="bwLeer">${t("Diese Börse führt noch keinen Coin.")}</div></section>`;
+
+  const form = coin ? `${kontoTeil}<section class="bwForm">
+      <div class="bwSeiten"><button type="button" class="${seite === "buy" ? "on kauf" : ""}" data-krseite="buy">${t("Kaufen")}</button><button type="button" class="${seite === "sell" ? "on verkauf" : ""}" data-krseite="sell">${t("Verkaufen")}</button></div>
+      <label><span>${t("Menge")}</span><input id="krMenge" type="number" min="1" step="1" value="${NETZ.krMenge || 5}"></label>
+      <label><span>${t("Preis je Coin")}</span><input id="krPreis" type="number" min="0.01" step="0.01" value="${NETZ.krPreis ?? (Math.round(coin.kurs * 100) / 100)}"></label>
+      <button type="button" class="${seite === "buy" ? "buyb" : "sellb"} bwSenden" data-krsenden ${konto && !offline ? "" : "disabled"}>${offline ? t("Börse gerade offline") : seite === "buy" ? t("Kauforder platzieren") : t("Verkaufsorder platzieren")}</button>
+      <small>${seite === "buy"
+        ? `${t("Der Kauf kostet zusätzlich")} ${(b.gebuehr * 100).toFixed(1)} % ${t("Gebühr. Sie geht an die Börse — bei fremden Coins behält sie 30 %, der Rest geht an die Firma des Coins.")}`
+        : t("Liegt ein Gesuch zu diesem Preis oder höher, wird sofort verkauft. Sonst bleibt die Order stehen; die Coins liegen so lange fest.")}</small>
+    </section>` : "";
+
+  const zeile = o => `<div class="bwOrder"><span class="mono"><b>${o.qty}×</b> ${fp(o.price)}</span><span class="bwWer">${name(o.playerId)}</span><button type="button" class="mini" data-krpreis="${o.price}">${t("Preis übernehmen")}</button></div>`;
+  const buchTeil = coin ? `<div class="bwBuch">
+      <section><div class="bwBuchKopf verkauf"><b>${t("Angebote")}</b><small>${t("jemand verkauft — du kaufst")}</small></div>${angebote.map(zeile).join("") || `<div class="bwLeer">${t("Keine Angebote")}</div>`}</section>
+      <section><div class="bwBuchKopf kauf"><b>${t("Gesuche")}</b><small>${t("jemand kauft — du verkaufst")}</small></div>${gesuche.map(zeile).join("") || `<div class="bwLeer">${t("Keine Gesuche")}</div>`}</section>
+    </div>` : "";
+
+  const meineTeil = meine.length ? `<section class="bwMeine"><b>${t("Meine Aufträge")}</b>${meine.map(o =>
+    `<div class="bwOrder"><span class="${o.side === "buy" ? "bwK" : "bwV"}">${o.side === "buy" ? t("Kauf") : t("Verkauf")}</span><span class="mono"><b>${o.qty}×</b> ${name(o.coinId)} · ${fp(o.price)}</span><button type="button" class="mini" data-krstorno="${o.id}">${t("Storno")}</button></div>`).join("")}</section>` : "";
+
+  /* ---- Verwaltung: nur für die Firma, der die Börse gehört ---- */
+  const eigenerCoin = krCoinVon(state, bId);
+  const fremde = (state.krypto.coins || []).filter(c => c.firmaId !== bId);
+  const verwaltung = meins ? `<section class="krVerwaltung">
+      <div class="krVerwaltungKopf"><b>${t("Deine Börse verwalten")}</b><small>${t("nur du siehst diesen Bereich")}</small></div>
+      <div class="krVerwaltungGrid">
+        <div class="krBox"><small>${t("Handelsgebühr")}</small>
+          <div class="krBoxForm"><input id="krGebuehr" type="number" min="0" max="5" step="0.1" value="${(b.gebuehr * 100).toFixed(1)}"><span>%</span><button type="button" class="mini" data-krgebuehr>${t("Setzen")}</button></div>
+          <span>${t("Sie ist deine einzige Einnahme und trägt das Fundament deines Coins.")}</span></div>
+        <div class="krBox"><small>${t("Eigener Coin")}</small>
+          <div class="krBoxForm"><input id="krAusgabe" type="number" min="1" max="${100 - (eigenerCoin?.minted || 0)}" step="1" value="10"><button type="button" class="mini" data-krausgeben ${(eigenerCoin?.minted || 0) >= 100 ? "disabled" : ""}>${t("Ausgeben")}</button></div>
+          <span>${eigenerCoin ? `${eigenerCoin.minted} ${t("von")} 100 ${t("ausgegeben")}` : t("Noch kein Coin ausgegeben.")}</span></div>
+      </div>
+      <div class="krVertraege"><small>${t("Fremde Coins auf deiner Börse")}</small>
+        ${fremde.length ? fremde.map(c => { const hat = krListet(state, bId, c.firmaId);
+          return `<div class="krVertrag"><span>${name(c.firmaId)}</span><b class="mono">${fp(c.kurs)}</b>${hat
+            ? `<button type="button" class="mini" data-krkuend="${c.firmaId}">${t("Kündigen")}</button>`
+            : `<button type="button" class="mini" data-krvertrag="${c.firmaId}">${t("Vertrag schließen")}</button>`}</div>`; }).join("")
+          : `<div class="bwLeer">${t("Keine andere Firma hat einen Coin.")}</div>`}
+        <span>${t("Für fremde Coins behältst du 30 % der Gebühr, der Rest geht an die Firma des Coins. Verträge sind jederzeit kündbar.")}</span>
+      </div>
+    </section>` : "";
+
+  /* Während man tippt, nicht neu aufbauen — sonst springt der Fokus */
+  const tippt = document.activeElement && fenster.contains(document.activeElement) && document.activeElement.tagName === "INPUT";
+  netzSetze(".netzInhalt", `<div class="bwLayout"><aside class="bwListe"><div class="bwListeKopf"><b>${t("Coins")}</b><small>${t("Kurs · Trend · Orders")}</small></div><div class="bwListeInhalt"></div></aside><div class="bwHaupt"></div></div>`, "krLayout");
+  { const el = fenster.querySelector(".bwListeInhalt"), y = el?.scrollTop || 0;
+    netzSetze(".bwListeInhalt", liste, "krListe" + bId + NETZ.krCoin + JSON.stringify(coins.map(c => c.kurs)));
+    if (el) el.scrollTop = y; }
+  if (!tippt) netzSetze(".bwHaupt", detail + form + buchTeil + meineTeil + verwaltung, "krHaupt");
+  netzSetze(".sfFuss", `${logoHtml(bId, "sfFussLogo", farbe)}<span>${t("Diese Börse betreibt")} <b>${name(bId)}</b> · ${t("Coins sind ungedeckt — ihr Wert kommt allein aus dem Handel.")}</span>`, "krFuss" + bId);
+}
+
+/* ---- Klicks auf der Krypto-Seite ---- */
 document.addEventListener("click", e => {
-  const b = e.target.closest("#kryptobody [data-kr]"); if (!b) return;
-  const v = id => document.getElementById(id)?.value;
-  const boerse = b.dataset.boerse || null;
-  switch (b.dataset.kr) {
-    case "boerse": return act("coinBoerse", { gebuehr: +v("kr-gebuehr") / 100 });
-    case "ausgeben": return act("coinAusgeben", { menge: +v("kr-menge") });
-    case "konto": return act("coinKonto", { boerseId: boerse, aktion: "eröffnen" });
-    case "einzahlen": return act("coinKonto", { boerseId: boerse, aktion: "einzahlen", betrag: +v("kr-betrag") });
-    case "auszahlen": return act("coinKonto", { boerseId: boerse, aktion: "auszahlen", betrag: +v("kr-betrag") });
-    case "order": return act("coinOrder", { boerseId: document.getElementById("kryptobody").dataset.boerse, coinId: v("kr-coin"), side: v("kr-seite"), qty: +v("kr-qty"), price: +v("kr-price") });
-    case "storno": return act("coinCancel", { orderId: b.dataset.order });
-    case "vertrag": return act("coinVertrag", { coinId: b.dataset.coin });
-    case "kuendigen": return act("coinVertrag", { coinId: b.dataset.coin, kuendigen: true });
+  if (!NETZ.offen || !String(NETZ.seite || "").startsWith("krypto:")) return;
+  const bId = NETZ.seite.slice(7);
+  const wert = id => +document.getElementById(id)?.value || 0;
+  const neu = () => { NETZ.sig = {}; netzZeichnen(); };
+  const schick = (ev, daten, ok) => socket.emit(ev, daten, r => {
+    if (r?.error) return toast(r.error, true);
+    if (ok) toast(ok);
+    NETZ.sig = {}; render(store.get());
+  });
+
+  const c = e.target.closest("[data-krcoin]");
+  if (c) { NETZ.krCoin = c.dataset.krcoin; NETZ.krPreis = null; return neu(); }
+  const s = e.target.closest("[data-krseite]");
+  if (s) { NETZ.krSeite = s.dataset.krseite; return neu(); }
+  const pr = e.target.closest("[data-krpreis]");
+  if (pr) { NETZ.krPreis = +pr.dataset.krpreis; return neu(); }
+  if (e.target.closest("[data-krkonto]")) return schick("coinKonto", { boerseId: bId, aktion: "eröffnen" }, t("Konto eröffnet"));
+  if (e.target.closest("[data-krein]")) { NETZ.krBetrag = wert("krBetrag"); return schick("coinKonto", { boerseId: bId, aktion: "einzahlen", betrag: NETZ.krBetrag }, t("Eingezahlt")); }
+  if (e.target.closest("[data-kraus]")) { NETZ.krBetrag = wert("krBetrag"); return schick("coinKonto", { boerseId: bId, aktion: "auszahlen", betrag: NETZ.krBetrag }, t("Ausgezahlt")); }
+  if (e.target.closest("[data-krsenden]")) {
+    NETZ.krMenge = wert("krMenge"); NETZ.krPreis = wert("krPreis");
+    return schick("coinOrder", { boerseId: bId, coinId: NETZ.krCoin, side: NETZ.krSeite || "buy", qty: NETZ.krMenge, price: NETZ.krPreis }, t("Auftrag eingestellt"));
   }
+  const st = e.target.closest("[data-krstorno]");
+  if (st) return schick("coinCancel", { orderId: st.dataset.krstorno }, t("Auftrag zurückgenommen"));
+  if (e.target.closest("[data-krgebuehr]")) return schick("coinBoerse", { gebuehr: wert("krGebuehr") / 100 }, t("Gebühr gesetzt"));
+  if (e.target.closest("[data-krausgeben]")) return schick("coinAusgeben", { menge: wert("krAusgabe") }, t("Coins ausgegeben"));
+  const vt = e.target.closest("[data-krvertrag]");
+  if (vt) return schick("coinVertrag", { coinId: vt.dataset.krvertrag }, t("Vertrag geschlossen"));
+  const kd = e.target.closest("[data-krkuend]");
+  if (kd) return schick("coinVertrag", { coinId: kd.dataset.krkuend, kuendigen: true }, t("Vertrag gekündigt"));
+});
+
+/* Eine Software-Firma ohne Börse eröffnet sie auf ihrer eigenen Seite. */
+document.addEventListener("click", e => {
+  if (!e.target.closest("[data-krneu]")) return;
+  const g = +document.getElementById("krNeuGebuehr")?.value || 2;
+  socket.emit("coinBoerse", { gebuehr: g / 100 }, r => {
+    if (r?.error) return toast(r.error, true);
+    toast(t("Krypto-Börse eröffnet"));
+    NETZ.sig = {}; render(store.get());
+  });
 });
