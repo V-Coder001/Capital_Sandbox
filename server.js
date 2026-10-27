@@ -93,6 +93,23 @@ const BOOT_ID = crypto.randomUUID();
  * der oeffentlichen Runden Bots als Mitspieler: "7/8" bei drei Menschen und
  * vier Bots liest sich wie eine fast volle Runde. */
 const BOT_TOKEN = crypto.randomUUID();
+/* Öffentliche Ansicht der Krypto-Börsen (ohne Konten und ohne Login).
+ * Handeln geht nur im Spiel; die Seite zeigt Kurse, Orderbuch und Verträge. */
+app.get("/api/boersen", (_req, res) => {
+  const coins = Object.values(G.coins || {}).map(c => ({
+    id: c.firmaId, name: G.players[c.firmaId]?.name ?? "Firma", kurs: c.kurs, fundament: c.fundament,
+    umlauf: c.minted, boerse: !!G.boersen?.[c.firmaId]?.aktiv,
+  }));
+  const buecher = {};
+  for (const o of G.coinOrders || []) {
+    const b = (buecher[o.coinId] ??= { kauf: [], verkauf: [] });
+    (o.side === "buy" ? b.kauf : b.verkauf).push({ preis: o.price, menge: o.qty });
+  }
+  const boersen = Object.values(G.boersen || {}).map(b => ({
+    id: b.firmaId, name: G.players[b.firmaId]?.name ?? "Firma", gebuehr: b.gebuehr, aktiv: b.aktiv,
+  }));
+  res.json({ boersen, coins, buecher, vertraege: (G.coinVertraege || []).filter(v => v.aktiv) });
+});
 app.get("/api/invite", (_req, res) => {
   /* hof: die Bestenliste für den Startbildschirm — dort gibt es noch keinen
    * Socket-Spielzustand, also kommt sie über diesen ohnehin geladenen Weg. */
