@@ -31,6 +31,9 @@ function kryptoRendern(state) {
   kryptoVerlauf(state);
 }
 
+/* Bekanntheit in Worten und als Balken — der Wert selbst sagt Spielern nichts. */
+const krHypeWort = h => h >= 0.55 ? t("im Trend") : h >= 0.2 ? t("bekannt") : h >= -0.1 ? t("kaum beachtet") : t("vergessen");
+const krHypeBalken = h => { const n = Math.max(0, Math.min(5, Math.round((h + 0.35) / 0.31))); return "▮".repeat(n) + "▯".repeat(5 - n); };
 const coinName = c => escapeHtml(rohText(c?.name || "—"));
 const krBoerseVon = (state, id) => (state.krypto?.boersen || []).find(b => b.firmaId === id);
 const krCoinVon = (state, id) => (state.krypto?.coins || []).find(c => c.id === id);
@@ -70,7 +73,7 @@ function kryptoSeite(fenster, state, me, myId) {
     const h = KR_HIST[c.id] || [], tr = h.length > 1 && h[0] ? (c.kurs / h[0] - 1) * 100 : 0;
     const offen = (state.krypto.orders || []).filter(o => o.coinId === c.id && o.boerseId === bId).length;
     return `<button type="button" class="bwZeile${c.id === NETZ.krCoin ? " on" : ""}" data-krcoin="${c.id}">
-      <span class="bwName">${coinName(c)}${c.firmaId === bId ? "" : ` <em class="krFremd">${t("Vertrag")}</em>`}</span>
+      <span class="bwName">${coinName(c)}${c.trend ? ` <em class="krTrend">${t("Trend")}</em>` : ""}${c.firmaId === bId ? "" : ` <em class="krFremd">${t("Vertrag")}</em>`}</span>
       <b class="mono">${fp(c.kurs)}</b>
       <span class="bwTrend">${Math.abs(tr) < 0.5 ? "" : `<span style="color:${tr > 0 ? "var(--up)" : "var(--down)"};font-size:11px">${tr > 0 ? "+" : ""}${tr.toFixed(0)} %</span>`}</span>
       <span class="bwAnz">${offen || ""}</span></button>`;
@@ -113,6 +116,7 @@ function kryptoSeite(fenster, state, me, myId) {
         <div><small>${t("Bestes Angebot")}</small><b class="mono">${angebote[0] ? fp(angebote[0].price) : "—"}</b><span>${angebote[0] ? `${angebote[0].qty}× ${t("verfügbar")}` : t("niemand verkauft")}</span></div>
         <div><small>${t("Bestes Gesuch")}</small><b class="mono">${gesuche[0] ? fp(gesuche[0].price) : "—"}</b><span>${gesuche[0] ? `${gesuche[0].qty}× ${t("gesucht")}` : t("niemand sucht")}</span></div>
         <div><small>${t("Ausgegeben")}</small><b class="mono">${coin.minted}</b><span>${t("von")} 100</span></div>
+        <div><small>${t("Bekanntheit")}</small><b class="mono">${krHypeWort(coin.hype)}</b><span>${krHypeBalken(coin.hype)}</span></div>
       </div>
       <div class="bwChart">${verlaufChart(KR_HIST[coin.id], t("Kursverlauf"))}</div>
     </section>` : `<section class="bwDetail"><div class="bwLeer">${t("Diese Börse führt noch keinen Coin.")}</div></section>`;
@@ -150,7 +154,8 @@ function kryptoSeite(fenster, state, me, myId) {
           <span>${eigene.length ? `${eigene.length} ${t("von")} 5 ${t("Coins aufgelegt")} · ${t("Mehr Stück eines bestehenden Coins gibst du in der Liste darunter aus.")}` : t("Dein erster Coin. Der Name steht auf der Börse.")} ${t("Ausgegebene Stück gehen sofort als Angebot ins Buch.")}</span></div>
       </div>
       <div class="krVertraege"><small>${t("Deine Coins")}</small>
-        ${eigene.length ? eigene.map(c => `<div class="krVertrag"><span>${coinName(c)} <small>${c.minted} ${t("von")} 100</small></span><b class="mono">${fp(c.kurs)}</b>
+        ${eigene.length ? eigene.map(c => `<div class="krVertrag"><span>${coinName(c)} <small>${krHypeWort(c.hype)} · ${c.minted} ${t("von")} 100</small></span><b class="mono">${fp(c.kurs)}</b>
+          <button type="button" class="mini" data-krwerben="${c.id}" ${c.werbungFrei ? "disabled" : ""}>${c.werbungFrei ? `${c.werbungFrei} s` : `${t("Bewerben")} ${fmt(state.krypto.werbung?.kosten || 0)}`}</button>
           <button type="button" class="mini" data-krnach="${c.id}" ${c.minted >= 100 ? "disabled" : ""}>${t("10 nachlegen")}</button></div>`).join("")
           : `<div class="bwLeer">${t("Noch kein eigener Coin.")}</div>`}
       </div>
@@ -203,6 +208,8 @@ document.addEventListener("click", e => {
   if (st) return schick("coinCancel", { orderId: st.dataset.krstorno }, t("Auftrag zurückgenommen"));
   if (e.target.closest("[data-krgebuehr]")) return schick("coinBoerse", { gebuehr: wert("krGebuehr") / 100 }, t("Gebühr gesetzt"));
   if (e.target.closest("[data-krausgeben]")) return schick("coinAusgeben", { menge: wert("krAusgabe"), name: document.getElementById("krNeuName")?.value }, t("Coin aufgelegt"));
+  const wrb = e.target.closest("[data-krwerben]");
+  if (wrb) return schick("coinWerbung", { coinId: wrb.dataset.krwerben }, t("Kampagne läuft"));
   const nach = e.target.closest("[data-krnach]");
   if (nach) return schick("coinAusgeben", { menge: 10, coinId: nach.dataset.krnach }, t("Coins nachgelegt"));
   const vt = e.target.closest("[data-krvertrag]");

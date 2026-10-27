@@ -12,7 +12,7 @@ import { Server } from "socket.io";
 import path from "path";
 import { fileURLToPath } from "url";
 import { statisch, cacheKoepfe } from "./statisch.js";
-import { COIN, coinBuerger, boerseEroeffnen, gebuehrSetzen, kontoEroeffnen, einzahlen, auszahlen, coinAusgeben, vertragSchliessen, vertragKuendigen, coinOrder, coinStorno, coinTick, coinsWert } from "./coins.js";
+import { COIN, coinBuerger, coinWerben, trendCoin, boerseEroeffnen, gebuehrSetzen, kontoEroeffnen, einzahlen, auszahlen, coinAusgeben, vertragSchliessen, vertragKuendigen, coinOrder, coinStorno, coinTick, coinsWert } from "./coins.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -6746,8 +6746,13 @@ function snapshot() {
         konten: Object.keys(b.konten || {}).filter(x => !String(x).startsWith("buerger")).length, plaetze: rzStufen(b.firmaId) })),
       coins: Object.values(G.coins || {}).map(c => ({ id: c.id, name: c.name, firmaId: c.firmaId, kurs: c.kurs, fundament: c.fundament, minted: c.minted,
         volumen: Math.round((c.volumen || 0) * 100) / 100, trades: c.trades || 0,
+        hype: Math.round((c.hype ?? 0) * 100) / 100, trend: (c.hype ?? 0) >= COIN.HYPE_TREND,
+        werbungFrei: Math.max(0, COIN.WERBUNG_PAUSE - (G.tick - (c.werbungTick ?? -COIN.WERBUNG_PAUSE))),
+        kampagnen: c.kampagnen || 0,
         fremdErtrag: Math.round((c.fremdErtrag || 0) * 100) / 100 })),
       vertraege: (G.coinVertraege || []).filter(v => v.aktiv),
+      trend: trendCoin(G)?.id || null,
+      werbung: { kosten: COIN.WERBUNG_KOSTEN, pause: COIN.WERBUNG_PAUSE },
       orders: (G.coinOrders || []).map(o => ({ id: o.id, boerseId: o.boerseId, coinId: o.coinId, side: o.side, qty: o.qty, price: o.price, playerId: o.playerId })),
     },
   };
@@ -8685,6 +8690,15 @@ io.on("connection", socket => {
   socket.on("coinAusgeben", guard((p, { menge, name, coinId }, ack) => {
     if (!istSoftwareFirma(p)) return ack?.({ error: "Nur Software-Firmen geben Coins aus" });
     ack?.(coinAusgeben(G, p, menge, name, coinId));
+  }));
+  socket.on("coinWerbung", guard((p, { coinId }, ack) => {
+    if (!istSoftwareFirma(p)) return ack?.({ error: "Nur Software-Firmen bewerben Coins" });
+    /* Eine eigene Website trägt die Kampagne weiter: ihre Version zählt. */
+    const w = webEigenes(p);
+    const reichweite = w ? Math.min(1, (w.version || 0) / (WEBSITE.STUFEN?.length || 3)) : 0;
+    const r = coinWerben(G, p, coinId, G.tick, reichweite);
+    if (!r.error && r.trend) marktLog("software", `${G.coins[coinId]?.name} ist in aller Munde`, { firmaId: p.id });
+    ack?.(r);
   }));
   socket.on("coinVertrag", guard((p, { coinId, kuendigen }, ack) => {
     ack?.(kuendigen ? vertragKuendigen(G, p.id, coinId) : vertragSchliessen(G, p.id, coinId));
@@ -11326,6 +11340,10 @@ async function spawnBot(cfg, lvl = BOT_LEVELS[BOT_LEVEL_DEFAULT]) {
                   await em("coinOrder", { boerseId: myId, coinId: c.id, side: "sell", qty: Math.min(5, bestand),
                     price: Math.round(c.kurs * (1.01 + Math.random() * 0.04) * 100) / 100 });
               }
+              /* Werbung: der Bot trommelt für seinen bekanntesten Coin, solange
+               * Geld da ist — ohne Aufmerksamkeit verliert ein Coin an Wert. */
+              const werbeZiel = meineCoins.filter(c => !c.werbungFrei).sort((x, y) => (y.hype || 0) - (x.hype || 0))[0];
+              if (werbeZiel && me.cash > 4000 && Math.random() < .3) await em("coinWerbung", { coinId: werbeZiel.id });
               /* Verträge: fremde Coins aufs eigene Parkett holen, das bringt 30 % */
               const fremd = (st.krypto?.coins || []).filter(c => c.firmaId !== myId
                 && !(st.krypto?.vertraege || []).some(v => v.boerseId === myId && v.coinId === c.id));

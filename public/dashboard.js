@@ -32,6 +32,7 @@ function dashboardSeite(fenster, state, me, myId) {
   const eigene = (state.krypto?.coins || []).filter(c => c.firmaId === pid);
   const coin = eigene[0] || null;
   const coinName = c => escapeHtml(rohText(c?.name || "—"));
+  const hypeWort = h => h >= 0.55 ? t("im Trend") : h >= 0.2 ? t("bekannt") : h >= -0.1 ? t("kaum beachtet") : t("vergessen");
   const coinVon = id => (state.krypto?.coins || []).find(c => c.id === id);
   const orders = (state.krypto?.orders || []).filter(o => o.boerseId === pid);
   const konto = me?.kryptoKonto?.[pid] || null;
@@ -77,10 +78,11 @@ function dashboardSeite(fenster, state, me, myId) {
     </section>`;
 
   const meineCoins = `<section class="dsTabelle">
-      <div class="dsTabelleKopf"><b>${t("Deine Coins")}</b><small>${eigene.length} ${t("von")} 5</small></div>
-      ${eigene.length ? eigene.map(c => `<div class="dsZeile"><span class="dsWer">${coinName(c)}</span>
+      <div class="dsTabelleKopf"><b>${t("Deine Coins")}</b><small>${t("Wer nicht wirbt, wird vergessen — und verliert an Wert")}</small></div>
+      ${eigene.length ? eigene.map(c => `<div class="dsZeile dsCoin"><span class="dsWer">${coinName(c)}${c.trend ? ` <em class="dsTrend">${t("Trend")}</em>` : ""}</span>
         <span class="mono">${fp(c.kurs)}</span>
-        <span class="dsStatus">${c.minted} ${t("von")} 100 · ${c.trades || 0} ${t("Abschlüsse")}</span>
+        <span class="dsStatus">${hypeWort(c.hype)} · ${c.minted} ${t("von")} 100 · ${c.kampagnen || 0} ${t("Kampagnen")}</span>
+        <button type="button" class="buyb" data-dswerben="${c.id}" ${c.werbungFrei ? "disabled" : ""}>${c.werbungFrei ? `${t("Werbung")} ${c.werbungFrei} s` : `${t("Bewerben")} · ${fmt(state.krypto?.werbung?.kosten || 0)}`}</button>
         <button type="button" class="mini" data-dsnach="${c.id}" ${c.minted >= 100 ? "disabled" : ""}>${t("10 nachlegen")}</button></div>`).join("")
         : `<div class="bwLeer">${t("Noch kein Coin aufgelegt.")}</div>`}
     </section>`;
@@ -147,6 +149,8 @@ document.addEventListener("click", e => {
   if (e.target.closest("[data-dsneu]")) return schick("coinBoerse", { gebuehr: wert("dsNeuGebuehr") / 100 }, t("Krypto-Börse eröffnet"));
   if (e.target.closest("[data-dsgebuehr]")) return schick("coinBoerse", { gebuehr: wert("dsGebuehr") / 100 }, t("Gebühr gesetzt"));
   if (e.target.closest("[data-dsausgeben]")) return schick("coinAusgeben", { menge: wert("dsAusgabe"), name: document.getElementById("dsNeuName")?.value }, t("Coin aufgelegt"));
+  const wrb = e.target.closest("[data-dswerben]");
+  if (wrb) return schick("coinWerbung", { coinId: wrb.dataset.dswerben }, t("Kampagne läuft"));
   const nach = e.target.closest("[data-dsnach]");
   if (nach) return schick("coinAusgeben", { menge: 10, coinId: nach.dataset.dsnach }, t("Coins nachgelegt"));
   const vt = e.target.closest("[data-dsvertrag]");

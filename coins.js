@@ -47,6 +47,22 @@ export const COIN = {
   BUERGER_GEBUEHR_SCHEU: 6, // eine teure Börse schreckt die Bewohner ab — die Gebühr ist kein Selbstläufer
   BUERGER_SAETTIGUNG: 25, // ab so vielen Coins im Bestand lässt die Kauflust nach
   KURS_START: 10,         // Startkurs einer frischen Ausgabe; zugleich Startfundament
+
+  /* Bekanntheit: Wer für seinen Coin nichts tut, wird vergessen. Der Wert läuft
+   * je Tick gegen HYPE_BODEN, steigt durch Werbung und durch Handel, und geht
+   * direkt in die Kauflust der Bewohner ein. */
+  HYPE_START: 0.25,       // frisch aufgelegt redet die Stadt kurz darüber
+  HYPE_BODEN: -0.35,      // ohne Zutun rutscht ein Coin ins Vergessen
+  HYPE_TRAEGHEIT: 0.994,  // wie schnell er dorthin rutscht (je Tick)
+  HYPE_JE_HANDEL: 0.004,  // jeder Abschluss bringt ein wenig Gerede
+  HYPE_MAX: 1.2,
+  HYPE_TREND: 0.55,       // ab hier gilt ein Coin als Trend-Coin
+  HYPE_WERT: 0.6,         // wie stark Bekanntheit den Wert eines ungedeckten Coins trägt
+  BETA_BUCH: 0.06,        // offene Nachfrage im Buch hebt den Kurs auch ohne Abschluss
+  WERBUNG_KOSTEN: 450,    // $ je Kampagne
+  WERBUNG_HYPE: 0.45,     // so viel Aufmerksamkeit bringt sie
+  WERBUNG_PAUSE: 90,      // Ticks, bis die nächste Kampagne möglich ist
+  WERBUNG_REICHWEITE: 0.5,// zusätzlicher Anteil, den eine starke Website beisteuert
 };
 
 /* G.boersen[firmaId]   = Börse { firmaId, gebuehr, aktiv, konten: { pid: { cash, coins: { coinId: n } } } }
@@ -137,6 +153,7 @@ export function coinAusgeben(G, firma, menge, name, coinId) {
     c = G.coins[id] = {
       id, firmaId: firma.id, name: sauber, kurs: COIN.KURS_START, fundament: COIN.KURS_START,
       feeStock: COIN.KURS_START * COIN.UMLAUF, netVol: 0, minted: 0, tagStart: COIN.KURS_START, tagTick: 0,
+      hype: COIN.HYPE_START, werbungTick: -COIN.WERBUNG_PAUSE, kampagnen: 0,
     };
   }
   if (c.minted + m > COIN.UMLAUF) return { error: `Höchstens ${COIN.UMLAUF - c.minted} Stück mehr ausgeben` };
@@ -264,6 +281,7 @@ function fuelle(G, c, kauf, verkauf, menge, preis) {
   bk.volumen = (bk.volumen || 0) + wert;
   c.volumen = (c.volumen || 0) + wert;
   c.trades = (c.trades || 0) + 1;
+  c.hype = Math.min(COIN.HYPE_MAX, (c.hype ?? COIN.HYPE_START) + COIN.HYPE_JE_HANDEL);
   c.netVol += menge;
   /* Das Fundament hängt am Umschlag in Stück, nicht am Geldwert: sonst trüge
    * ein hoher Kurs über die Gebühr seinen eigenen Wert und liefe davon. */
@@ -277,10 +295,22 @@ export function coinTick(G, tick) {
   for (const c of Object.values(G.coins || {})) {
     if (tick - c.tagTick >= COIN.TAG) { c.tagTick = tick; c.tagStart = c.kurs; }
     c.feeStock *= COIN.ZERFALL;
-    c.fundament = Math.max(0.01, c.feeStock / COIN.UMLAUF);
+    /* Bekanntheit verfliegt: ohne Werbung und ohne Handel geht sie Richtung Boden. */
+    c.hype = COIN.HYPE_BODEN + ((c.hype ?? COIN.HYPE_START) - COIN.HYPE_BODEN) * COIN.HYPE_TRAEGHEIT;
+    /* Ein ungedeckter Coin ist wert, was er umsetzt — mal dem, was die Stadt
+     * von ihm hält. Bekanntheit ist hier kein Beiwerk, sondern der halbe Wert. */
+    c.fundament = Math.max(0.01, c.feeStock / COIN.UMLAUF) * Math.max(0.2, 1 + COIN.HYPE_WERT * (c.hype ?? 0));
     const druck = c.netVol / umlauf(G, c);
     c.netVol = 0;
-    let k = c.kurs * (1 + COIN.BETA * druck);
+    /* Auch unerfüllte Nachfrage bewegt: liegen mehr Gebote als Angebote im
+     * Buch, zieht der Kurs an, ohne dass ein Abschluss zustande kommt. */
+    let kaufOffen = 0, verkaufOffen = 0;
+    for (const o of G.coinOrders || []) {
+      if (o.coinId !== c.id) continue;
+      if (o.side === "buy") kaufOffen += o.qty; else verkaufOffen += o.qty;
+    }
+    const buchDruck = (kaufOffen - verkaufOffen) / umlauf(G, c);
+    let k = c.kurs * (1 + COIN.BETA * druck + COIN.BETA_BUCH * Math.max(-1, Math.min(1, buchDruck)));
     k += COIN.ALPHA * (c.fundament - k);
     const lo = c.tagStart * (1 - COIN.TAGESGRENZE), hi = c.tagStart * (1 + COIN.TAGESGRENZE);
     c.kurs = Math.max(0.01, Math.min(hi, Math.max(lo, k)));
@@ -348,8 +378,19 @@ export function coinBuerger(G, tick) {
         if (Math.random() > COIN.BUERGER_LUST) continue;
         const k = b.konten[g.id];
         const bestand = k.coins[c.id] || 0;
-        const satt = Math.min(1, bestand / COIN.BUERGER_SAETTIGUNG);
+        /* Sättigung am freien Umlauf messen: Wer seinen Anteil schon hat, kauft
+         * nicht weiter, und wer deutlich darüber liegt, nimmt Gewinne mit.
+         * Ohne das hätte ein Trend-Coin irgendwann nur noch Käufer, der Handel
+         * käme zum Erliegen und der Kurs wäre mangels Umsatz gefallen. */
+        const anteil = bestand / Math.max(1, umlauf(G, c) / COIN.BUERGER_GRUPPEN.length);
+        const satt = Math.min(1, anteil);
+        /* Bekanntheit ist der stärkste Treiber: Wovon alle reden, das kaufen
+         * sie. Was keiner kennt, geben sie ab. Der Rechner lässt sich davon
+         * am wenigsten beeindrucken, der Trendläufer am meisten. */
+        const hypeGewicht = 0.6 + 0.6 * Math.max(0, g.gier);
         const laune = g.basis * (1 - satt) + g.gier * trend + (1 - Math.abs(g.gier)) * bewertung
+          + hypeGewicht * (c.hype ?? 0) * (1 - satt)
+          - 0.8 * Math.max(0, anteil - 1)
           - b.gebuehr * COIN.BUERGER_GEBUEHR_SCHEU
           + (Math.random() - 0.5) * 0.5;
 
@@ -377,4 +418,28 @@ export function coinBuerger(G, tick) {
       if (o.alter > 6) coinStorno(G, o);
     }
   }
+}
+
+/* Werbekampagne für einen Coin. Kostet die Firma Geld und bringt Aufmerksamkeit;
+ * eine starke Website trägt die Botschaft weiter (reichweite 0 … 1). */
+export function coinWerben(G, firma, coinId, tick, reichweite = 0) {
+  coinsInit(G);
+  const c = G.coins[coinId];
+  if (!c) return { error: "Den Coin gibt es nicht" };
+  if (c.firmaId !== firma.id) return { error: "Das ist nicht dein Coin" };
+  if (tick - (c.werbungTick ?? -COIN.WERBUNG_PAUSE) < COIN.WERBUNG_PAUSE)
+    return { error: `Die nächste Kampagne geht in ${COIN.WERBUNG_PAUSE - (tick - c.werbungTick)} s` };
+  if ((firma.cash || 0) < COIN.WERBUNG_KOSTEN) return { error: `Dafür fehlen ${Math.ceil(COIN.WERBUNG_KOSTEN - firma.cash)} $` };
+  firma.cash -= COIN.WERBUNG_KOSTEN;
+  c.werbungTick = tick;
+  c.kampagnen = (c.kampagnen || 0) + 1;
+  const wirkung = COIN.WERBUNG_HYPE * (1 + COIN.WERBUNG_REICHWEITE * Math.max(0, Math.min(1, reichweite)));
+  c.hype = Math.min(COIN.HYPE_MAX, (c.hype ?? COIN.HYPE_START) + wirkung);
+  return { ok: true, hype: c.hype, trend: c.hype >= COIN.HYPE_TREND };
+}
+
+/* Der bekannteste Coin der Stadt, wenn er die Trendschwelle erreicht. */
+export function trendCoin(G) {
+  const alle = Object.values(G.coins || {}).filter(c => (c.hype ?? 0) >= COIN.HYPE_TREND);
+  return alle.sort((a, b) => (b.hype || 0) - (a.hype || 0))[0] || null;
 }

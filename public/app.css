@@ -1885,3 +1885,6 @@ em.auf,.bankZeile em.auf{color:#15803d}em.ab,.bankZeile em.ab{color:#b91c1c}
 #netzFenster .krBoxForm input[maxlength]{min-width:0;flex:1 1 90px}
 .krVertrag small{color:#94a3b8;font-weight:400;font-size:11px}
 .dsWer small{color:#94a3b8;font-weight:400;font-size:11px}
+.krTrend{font-style:normal;background:#fef3c7;color:#92400e;border-radius:5px;padding:1px 5px;font-size:10px;font-weight:700;letter-spacing:.3px}
+.dsTrend{font-style:normal;background:#fef3c7;color:#92400e;border-radius:5px;padding:1px 6px;font-size:10.5px;font-weight:700}
+.dsZeile.dsCoin{grid-template-columns:minmax(0,1fr) auto minmax(0,auto) auto auto}
