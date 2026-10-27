@@ -1821,3 +1821,185 @@ em.auf,.bankZeile em.auf{color:#15803d}em.ab,.bankZeile em.ab{color:#b91c1c}
 .genMehr>summary{cursor:pointer;font-size:11.5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#4b5563}
 .fw-dunkel .fwFaq p,.fw-dunkel .fwTeam small,.fw-dunkel .fwKontakt small,.fw-dunkel .fwZahlen span{color:#cbd5e1}
 .fw-dunkel .fwTeam b,.fw-dunkel .fwKontakt b{color:#f3f4f6}
+
+/* ================================================================
+ * Renntag-Meldung im Stadtnetz
+ * Frueher sprang der Renntag als Overlay ueber die ganze Karte. Jetzt steht
+ * er als eine Zeile auf jeder Seite des Stadtnetzes — sichtbar, aber im Weg
+ * ist er niemandem.
+ * ================================================================ */
+.netzRenn{display:flex;align-items:center;gap:12px;flex-shrink:0;padding:10px 20px;
+  background:linear-gradient(90deg,#fef3c7,#fffbeb);border-bottom:1px solid #fcd34d;color:#78350f}
+.netzRenn[hidden]{display:none}
+.netzRennFlagge{width:28px;height:28px;border-radius:8px;flex:none;display:grid;place-items:center;
+  background:rgba(180,83,9,.14);font-size:14px}
+.netzRennText{flex:1;min-width:0;font-size:13.5px}
+.netzRennUhr{flex:none;font-size:13px;font-weight:600;padding:3px 9px;border-radius:7px;
+  background:rgba(180,83,9,.12)}
+.netzRenn button{flex:none;border:0;border-radius:9px;padding:7px 14px;cursor:pointer;
+  font:600 13px var(--font);background:#b45309;color:#fff}
+.netzRenn button:hover{background:#92400e}
+.casBrowser .netzRenn{background:linear-gradient(90deg,rgba(233,196,106,.18),rgba(233,196,106,.05));
+  border-bottom-color:rgba(233,196,106,.28);color:#f6e7bf}
+.casBrowser .netzRennFlagge{background:rgba(233,196,106,.18)}
+.casBrowser .netzRennUhr{background:rgba(233,196,106,.14);color:#e9c46a}
+.casBrowser .netzRenn button{background:#e9c46a;color:#23190a}
+
+/* ================================================================
+ * Stadt-Casino (casino.cs)
+ * Eigene dunkle Marke im hellen Stadtnetz-Browser: Nachtblau, Champagner-Gold
+ * fuer das Haus, Smaragd fuer Gewinn, Rubin fuer Verlust.
+ * ================================================================ */
+.casBrowser{--casNacht:#080b14;--casFlaeche:#111726;--casHoch:#222b43;
+  --casLinie:rgba(148,174,220,.14);--casLinie2:rgba(148,174,220,.26);
+  --casText:#e8eefb;--casDim:#8a97b4;--casDim2:#616e8c;
+  --casGold:#e9c46a;--casSmaragd:#2dd4a7;--casRubin:#f0536b}
+.casBrowser .sfKopf{background:linear-gradient(135deg,#141a2e,#0d1222 55%,#161124);
+  color:var(--casText);border-bottom:1px solid var(--casLinie)}
+.casBrowser .sfKopf b{color:var(--casText)}
+.casBrowser .sfKopf small{color:var(--casDim)}
+.casBrowser .netzInhalt{background:
+  radial-gradient(900px 400px at 10% -10%,rgba(45,212,167,.05),transparent 60%),var(--casNacht);
+  color:var(--casText)}
+.casBrowser .sfFuss{background:#0b101d;color:var(--casDim2);border-top:1px solid var(--casLinie)}
+.casBrowser .netzAbschnittKopf b{color:var(--casText)}
+.casBrowser .netzAbschnittKopf small{color:var(--casDim2)}
+.casBrowser .netzBox{background:var(--casFlaeche);border:1px solid var(--casLinie);
+  box-shadow:none;color:var(--casText)}
+.casBrowser .netzBox>b{color:var(--casText)}
+.casBrowser .anlLeer{color:var(--casDim2)}
+.casLogo{background:linear-gradient(160deg,#f3d58c,#c99b3a)!important;color:#23190a!important}
+.casBadge{background:rgba(45,212,167,.16)!important;color:#5eead4!important}
+
+.casLayout{display:grid;grid-template-columns:minmax(0,1fr) 280px;gap:16px;align-items:start}
+.casHaupt{display:flex;flex-direction:column;gap:13px;min-width:0}
+.casSeite{display:flex;flex-direction:column;gap:13px}
+.casHinweisText{margin:2px 0 0;font-size:12.5px;line-height:1.5;color:var(--casDim)}
+
+.casKarten{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:14px}
+.casKarte{display:flex;flex-direction:column;padding:0;border:1px solid var(--casLinie);
+  border-radius:16px;overflow:hidden;background:var(--casFlaeche);cursor:pointer;
+  font:inherit;color:var(--casText);text-align:left;transition:transform .15s,border-color .15s}
+.casKarte:hover{transform:translateY(-2px);border-color:var(--casLinie2)}
+.casBild{position:relative;height:124px;display:grid;place-items:center;overflow:hidden}
+.casQuote{position:absolute;right:11px;top:11px;font-size:10.5px;font-weight:600;font-style:normal;
+  padding:3px 8px;border-radius:999px;background:rgba(8,11,20,.55);color:#fff;
+  border:1px solid rgba(255,255,255,.18)}
+.casName{position:absolute;left:14px;bottom:10px;font-size:19px;font-weight:700;color:#fff;
+  text-shadow:0 2px 10px rgba(0,0,0,.55)}
+.casFuss{display:flex;align-items:center;gap:7px;padding:9px 13px 10px;font-size:11.5px;
+  color:var(--casDim);border-top:1px solid var(--casLinie)}
+.casPunkt{width:6px;height:6px;border-radius:50%;background:var(--casSmaragd);flex:none;
+  box-shadow:0 0 7px rgba(45,212,167,.8)}
+.casFuss em{margin-left:auto;font-style:normal;font-size:11px;color:var(--casDim2)}
+
+.casLogZeile{display:flex;align-items:center;gap:9px;font-size:12.5px}
+.casLogZeile b{display:block;font-size:13px;color:var(--casText)}
+.casLogZeile small{display:block;font-size:11px;color:var(--casDim2)}
+.casLogZeile>span:nth-child(2){flex:1;min-width:0}
+.casLogZeile em{font-style:normal;font-size:12px;font-weight:600}
+.casLogPunkt{width:7px;height:7px;border-radius:50%;flex:none}
+.casKasse strong{font-size:22px;color:#5eead4}
+.casKasse small{font-size:11.5px;color:var(--casDim2)}
+
+/* ---- Spielansicht ---- */
+.casSpiel{display:grid;grid-template-columns:minmax(0,1fr) 282px;gap:16px;align-items:start}
+.casTisch{position:relative;border-radius:18px;padding:52px 26px 56px;min-height:300px;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;
+  background:radial-gradient(520px 320px at 50% 38%,#1b2440,#0b101d 78%);
+  border:1px solid var(--casLinie);overflow:hidden}
+.casTischKopf{position:absolute;top:16px;left:20px;right:20px;display:flex;align-items:center;gap:9px}
+.casTischKopf b{font-size:14px;color:var(--casText)}
+.casTischKopf em{font-style:normal;font-size:11px;font-weight:600;color:var(--casGold);
+  padding:3px 9px;border-radius:999px;background:rgba(233,196,106,.12);
+  border:1px solid rgba(233,196,106,.25)}
+.casFair{margin-left:auto;font-size:10.5px;color:var(--casDim2)}
+
+.casMuenze{position:relative;width:140px;height:140px;border-radius:50%;display:grid;place-items:center;
+  background:radial-gradient(circle at 34% 28%,#fbeec0,#f0d492 22%,#d8ad50 52%,#a97c28 80%,#7d5a1c);
+  box-shadow:0 20px 46px rgba(0,0,0,.6),inset 0 0 0 7px rgba(255,255,255,.14),
+    inset 0 -8px 20px rgba(0,0,0,.3)}
+.casMuenze.faellt{animation:casFlip .75s cubic-bezier(.3,.7,.3,1)}
+.casMuenzeZahl{font-size:54px;font-weight:700;color:#6b4b14}
+@keyframes casFlip{
+  0%{transform:rotateX(0) translateY(0)}
+  45%{transform:rotateX(900deg) translateY(-34px)}
+  100%{transform:rotateX(1800deg) translateY(0)}}
+
+.casWuerfel{position:relative;width:132px;height:132px;border-radius:22px;
+  background:linear-gradient(145deg,#fff,#cfd9e8);box-shadow:0 20px 46px rgba(0,0,0,.55)}
+.casWuerfel.rollt{animation:casRoll .6s ease-out}
+.casWuerfel i{position:absolute;width:19px;height:19px;border-radius:50%;background:#0a5c4e;
+  transform:translate(-50%,-50%)}
+.casWartet{position:absolute;inset:0;display:grid;place-items:center;font-size:54px;
+  font-weight:700;color:#8a97b4}
+@keyframes casRoll{
+  0%{transform:rotate(0) scale(.85)}
+  60%{transform:rotate(290deg) scale(1.06)}
+  100%{transform:rotate(360deg) scale(1)}}
+
+.casWalzen{display:flex;gap:11px}
+.casWalzen span{width:84px;height:104px;border-radius:12px;display:grid;place-items:center;
+  font-size:42px;background:linear-gradient(180deg,#faf3e4,#e4d7bd);
+  box-shadow:inset 0 -6px 14px rgba(0,0,0,.15),0 14px 30px rgba(0,0,0,.45)}
+.casWalzen.dreht span{animation:casSpin .6s cubic-bezier(.2,.8,.3,1) both}
+@keyframes casSpin{
+  0%{transform:translateY(-120%);filter:blur(5px);opacity:.2}
+  70%{transform:translateY(7%);filter:blur(0);opacity:1}
+  100%{transform:translateY(0)}}
+
+.casRadBox{position:relative;width:172px;height:172px;display:grid;place-items:center}
+.casRadZeiger{position:absolute;top:-9px;left:50%;transform:translateX(-50%);z-index:2;
+  width:0;height:0;border-left:10px solid transparent;border-right:10px solid transparent;
+  border-top:17px solid var(--casGold);filter:drop-shadow(0 2px 4px rgba(0,0,0,.5))}
+.casRad{border-radius:50%;box-shadow:0 18px 40px rgba(0,0,0,.55)}
+.casRad.dreht{animation:casRadDreh 1.5s cubic-bezier(.17,.67,.2,1) both}
+@keyframes casRadDreh{
+  from{transform:rotate(calc(var(--dreh) - 1080deg))}
+  to{transform:rotate(var(--dreh))}}
+
+.casErgebnis{margin-top:20px;text-align:center;font-size:19px;font-weight:700}
+.casErgebnis small{display:block;margin-top:4px;font-size:12px;font-weight:500;color:var(--casDim)}
+.casErgebnis.gut{color:var(--casSmaragd);text-shadow:0 0 24px rgba(45,212,167,.35)}
+.casErgebnis.halb{color:var(--casGold)}
+.casErgebnis.schlecht{color:var(--casRubin)}
+.casErgebnis.warte{font-size:13.5px;font-weight:500;color:var(--casDim2)}
+
+.casPanel{display:flex;flex-direction:column;gap:12px;border-radius:18px;padding:16px;
+  background:var(--casFlaeche);border:1px solid var(--casLinie)}
+.casZurueck{align-self:flex-start;border:0;background:none;padding:0;cursor:pointer;
+  font:600 12px var(--font);color:var(--casDim)}
+.casZurueck:hover{color:var(--casText)}
+.casLbl{display:block;margin-bottom:6px;font:500 10.5px var(--mono);letter-spacing:.1em;
+  text-transform:uppercase;color:var(--casDim2)}
+.casFeld{display:flex;align-items:center;gap:8px;padding:8px 13px;border-radius:11px;
+  background:#0b101d;border:1px solid var(--casLinie2)}
+.casFeld input{flex:1;min-width:0;border:0!important;background:none!important;padding:0;
+  font:600 20px var(--mono);color:var(--casText)!important}
+.casFeld input:focus{outline:none;box-shadow:none!important}
+.casFeld span{color:var(--casDim2);font-size:13px}
+.casChips{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+.casChips button{border:1px solid transparent;border-radius:9px;padding:7px 0;cursor:pointer;
+  font:600 12px var(--mono);background:rgba(148,174,220,.08);color:var(--casDim)}
+.casChips button.on{background:rgba(233,196,106,.16);color:var(--casGold);
+  border-color:rgba(233,196,106,.35)}
+.casTipps{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.casTipps button{border:1px solid var(--casLinie2);border-radius:12px;padding:12px 0;cursor:pointer;
+  font:700 14px var(--font);background:rgba(148,174,220,.07);color:var(--casDim)}
+.casTipps button.rot{background:rgba(180,38,60,.22);color:#fca5b5}
+.casTipps button.schwarz{background:rgba(28,35,53,.9);color:#b8c4dc}
+.casTipps button.on{background:linear-gradient(160deg,#f3d58c,#c99b3a);color:#23190a;
+  border-color:transparent;box-shadow:0 8px 20px rgba(201,155,58,.28)}
+.casTippsRad{grid-template-columns:repeat(4,1fr);gap:6px}
+.casTippsRad button{padding:9px 0;font-size:13px}
+.casTippsRad button:nth-child(-n+2){grid-column:span 2;font-size:14px}
+.casAus{display:flex;justify-content:space-between;align-items:baseline;font-size:12.5px;
+  color:var(--casDim)}
+.casAus b{font-size:13px;color:var(--casSmaragd)}
+.casSetzen{border:0;border-radius:12px;padding:13px;cursor:pointer;font:700 15px var(--font);
+  background:var(--casSmaragd);color:#05251c;box-shadow:0 10px 26px rgba(45,212,167,.25)}
+.casSetzen:hover{filter:brightness(1.06)}
+.casRegel{font-size:11.5px;line-height:1.5;color:var(--casDim2)}
+@media (max-width:860px){
+  .casLayout,.casSpiel{grid-template-columns:minmax(0,1fr)}
+  .casTisch{padding:52px 16px 48px}}
