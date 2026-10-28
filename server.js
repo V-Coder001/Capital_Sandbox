@@ -9975,9 +9975,14 @@ io.on("connection", socket => {
  * Läuft komplett in try/catch: ein einzelner Bug in einem Tick darf niemals den
  * ganzen Prozess (und damit die Runde für alle Spieler) abschießen — Node killt
  * den Prozess sonst standardmäßig bei jeder unabgefangenen Exception im Timer. */
+/* Test-Zeitraffer: nur mit BOERSE_TEST=1 und ZEITRAFFER=<Faktor> — führt je
+ * Sekunde mehrere Ticks aus, damit eine Testrunde in Minuten statt Stunden läuft. */
+const ZEITRAFFER = process.env.BOERSE_TEST ? Math.max(1, +process.env.ZEITRAFFER || 1) : 1;
 setInterval(() => {
   const _t0 = PERF ? process.hrtime.bigint() : 0n;
-  try { runTick(); } catch (e) { console.error("Tick-Fehler (übersprungen):", e); }
+  for (let i = 0; i < ZEITRAFFER; i++) {
+    try { runTick(); } catch (e) { console.error("Tick-Fehler (übersprungen):", e); }
+  }
   if (PERF) perf.maxTickMs = Math.max(perf.maxTickMs, Number(process.hrtime.bigint() - _t0) / 1e6);
 }, 1000);
 function runTick() {
