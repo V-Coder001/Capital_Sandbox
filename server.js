@@ -12340,7 +12340,7 @@ async function spawnBot(cfg, lvl = BOT_LEVELS[BOT_LEVEL_DEFAULT]) {
         if (++eingestellt >= 2) break;   // zwei Waren je Zyklus statt einer
       }
     } catch {} finally { laeuft = false; }
-  }, lvl.takt + Math.random() * 8000);
+  }, (lvl.takt + Math.random() * 8000) / ZEITRAFFER);
   botHandles.push({ socket: s, timer });
 }
 
