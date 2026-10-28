@@ -24,10 +24,10 @@ export const COIN = {
   VERTRAG_ANTEIL: 0.30,   // Anteil der Börse an der Gebühr fremder Coins
   BETA: 0.35,             // Kursreaktion pro Handel (Aktien: 0,5)
   ALPHA: 0.25,            // Rückkehr zum Fundament je Tick (1 Tick = 1 s)
-  TAGESGRENZE: 0.15,      // ±15 % je Markttag
+  TAGESGRENZE: 0.50,      // ±50 % je Markttag (vorher 15 %; Tempo des Anstiegs, nicht die Höhe)
   TAG: 60,                // Ticks je Markttag (wie MARKT.TAG)
   ZERFALL: 0.999,         // Gebührenstock fällt je Tick — ohne Handel sinkt der Wert von allein
-  HEBEL: 300,             // Gebühren zählen vielfach: das Fundament ist die kapitalisierte Einnahme,
+  HEBEL: 3000,             // Gebühren zählen vielfach: das Fundament ist die kapitalisierte Einnahme,
                           // nicht die Summe der Gebühren. Mit ZERFALL ergibt das ein Gleichgewicht —
                           // ein lebhaft gehandelter Coin trägt sich und steigt, ein toter fällt.
   BUERGER: "buerger",     // Kennung der Bewohner-Konten; die Gruppen heißen buerger1 … buerger4
