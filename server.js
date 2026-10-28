@@ -10602,7 +10602,7 @@ function runTick() {
   stadtTick();
   if (G.tick % MARKT.TAG === 0) marktTag();   // Aktienkurse: F messen, P nachführen
   coinTick(G, G.tick);                          // Krypto-Kurse: Fundament, Volumen, Tagesgrenze
-  coinBuerger(G, G.tick);                       // Stadtbewohner handeln die Coins
+  coinBuerger(G, G.tick, G.stadt?.einwohner || 300);   // Stadtbewohner handeln die Coins
   /* Kurswetten: Annahme → Laufzeit → Abrechnung */
   wettTick();
   /* Fahrergehälter: eine laufende Verpflichtung, kein Einmalkauf. Wer nicht

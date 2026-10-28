@@ -40,8 +40,8 @@ export const COIN = {
   BUERGER_TAKT: 5,        // alle 5 Ticks überlegen die Stadtbewohner neu
   BUERGER_ZUFLUSS: 30,    // $ je Takt und Börse, die aus der Stadt in den Coin-Handel fließen
   BUERGER_KASSE_MAX: 6000,// mehr Geld hält die Stadt nicht im Coin-Handel
-  BUERGER_LUST: 0.55,     // wie oft ein Takt überhaupt zu einem Auftrag führt
-  BUERGER_MENGE: 4,       // größte Stückzahl je Auftrag
+  BUERGER_LUST: 0.8,     // wie oft ein Takt überhaupt zu einem Auftrag führt
+  BUERGER_MENGE: 6,       // größte Stückzahl je Auftrag
   BUERGER_GIER: 0.6,      // Gewicht des Trends gegenüber der Bewertung
   BUERGER_BASIS: 0.3,     // Grundneugier: ein neuer Coin wird erst einmal gekauft
   BUERGER_GEBUEHR_SCHEU: 6, // eine teure Börse schreckt die Bewohner ab — die Gebühr ist kein Selbstläufer
@@ -351,16 +351,18 @@ export function coinsWert(G, pid) {
  * Börsenkasse und ist gedeckelt (BUERGER_KASSE_MAX je Börse).
  * ============================================================ */
 
-export function coinBuerger(G, tick) {
+export function coinBuerger(G, tick, einwohner = 300) {
   coinsInit(G);
   if (tick % COIN.BUERGER_TAKT) return;
+  /* Je größer die Stadt, desto mehr Geld fließt in den Coin-Handel. */
+  const stadt = Math.max(1, einwohner / 300);
   for (const b of Object.values(G.boersen)) {
     if (!b.aktiv) continue;
     /* Zufluss aus der Stadt, gedeckelt, gleichmäßig auf die Gruppen verteilt */
-    const je = COIN.BUERGER_ZUFLUSS / COIN.BUERGER_GRUPPEN.length;
+    const je = (COIN.BUERGER_ZUFLUSS * stadt) / COIN.BUERGER_GRUPPEN.length;
     for (const g of COIN.BUERGER_GRUPPEN) {
       const k = (b.konten[g.id] ??= { cash: 0, coins: {} });
-      if (k.cash < COIN.BUERGER_KASSE_MAX) k.cash += je;
+      if (k.cash < COIN.BUERGER_KASSE_MAX * stadt) k.cash += je;
     }
 
     for (const c of Object.values(G.coins)) {
