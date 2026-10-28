@@ -769,7 +769,21 @@ input.autoname::placeholder{color:var(--fg);opacity:.95;font-weight:700}
 /* Kaufen und Verkaufen tragen dieselbe Farbsprache wie das Orderbuch an der
  * Börse — vorher sahen beide Formulare identisch aus und man musste die
  * Überschrift lesen, um zu wissen, was der blaue Knopf gleich auslöst. */
-.bhandel{display:flex;flex-direction:column;gap:10px;margin-bottom:6px}
+.bhandel{display:grid;grid-template-columns:repeat(auto-fit,minmax(248px,1fr));gap:10px;margin-bottom:6px}
+/* Schnellwahl für Menge und Gebot. Beides hing vorher am Kopfrechnen: Wer 25
+ * Aktien zum Kurs wollte, musste Kurs × Menge selbst ausrechnen und abtippen. */
+.bSchnell{display:flex;gap:5px}
+.bSchnell button{flex:1;padding:5px 2px;border-radius:7px;border:1px solid var(--line);
+  background:rgba(12,18,28,.5);color:var(--dim);font-family:var(--font);font-size:11.5px;
+  font-weight:600;cursor:pointer;transition:all .14s}
+.bSchnell button:hover{color:var(--text);border-color:var(--accent)}
+/* Vorschau: was der Auftrag kostet und wie weit er vom Kurs abweicht. */
+.bVorschau{display:flex;justify-content:space-between;align-items:baseline;gap:8px;
+  padding:7px 10px;border-radius:8px;background:rgba(12,18,28,.55);border:1px solid var(--line);
+  font-family:var(--mono);font-size:12px;color:var(--dim)}
+.bVorschau b{color:var(--text);font-size:13px;white-space:nowrap}
+.bVorschau b.plus{color:var(--up)} .bVorschau b.minus{color:var(--down)}
+.bVorschau em{font-style:normal;font-size:11px;opacity:.85}
 .bseite{border:1px solid var(--line);border-radius:11px;padding:10px 12px 11px}
 .bseite.verkauf{border-color:rgba(251,113,133,.3);background:rgba(251,113,133,.05)}
 .bseite.kauf{border-color:rgba(52,211,153,.3);background:rgba(52,211,153,.05)}
@@ -784,6 +798,8 @@ input.autoname::placeholder{color:var(--fg);opacity:.95;font-weight:700}
 .bknopf.verkauf:hover{background:rgba(251,113,133,.15)}
 .bknopf.kauf{color:var(--up);border-color:rgba(52,211,153,.5)}
 .bknopf.kauf:hover{background:rgba(52,211,153,.15)}
+.bknopf.zur{color:var(--accent);border-color:var(--accent)}
+.bknopf.zur:hover{background:rgba(14,116,144,.15)}
 .bseite .meta{margin-top:6px}
 /* Aufgeklappte Firma in der Kurstafel */
 .firmdetail{margin:-4px 0 10px;padding:2px 12px 10px;border:1px solid var(--line);border-top:0;
@@ -793,6 +809,96 @@ input.autoname::placeholder{color:var(--fg);opacity:.95;font-weight:700}
 .kzrow:last-of-type{border-bottom:0}
 .kzrow b{font-family:var(--mono);white-space:nowrap}
 .firmrow:hover{border-color:var(--accent)}
+/* Kurstafel als Tabelle statt als Kachelliste. Die alten Zeilen waren 70 px
+ * hoch und zeigten vier Angaben auf zwei Ebenen; dieselben Zahlen stehen jetzt
+ * in Spalten, die über alle Firmen hinweg untereinander fluchten — erst damit
+ * kann man zwei Aktien vergleichen, ohne sie nacheinander zu lesen. */
+/* Die Zahlenspalten sind bewusst knapp: Im Stadtnetz steht die Tafel in der
+ * linken Spalte eines 880 px breiten Fensters, und jedes Pixel, das die Zahlen
+ * mehr nehmen, fehlt dem Firmennamen — der sonst als „Montan & Ba…" endet. */
+.bzeile{display:grid;align-items:center;gap:8px;padding:8px 10px;cursor:pointer;
+  grid-template-columns:minmax(0,1fr) 52px 86px 58px 82px 88px;
+  border-bottom:1px solid rgba(36,48,68,.45);transition:background .14s}
+.bzeile:hover{background:rgba(255,255,255,.03)}
+.bzeile.auf{background:rgba(255,255,255,.04)}
+.bzeile.kopf{cursor:default;padding-bottom:6px;font-size:10px;letter-spacing:.07em;
+  text-transform:uppercase;color:var(--dim);font-weight:600}
+.bzeile.kopf:hover{background:none}
+.bzeile.kopf .bzKurs,.bzeile.kopf .bzAend,.bzeile.kopf .bzMwert{text-align:right}
+.bzFirma{display:flex;align-items:center;gap:9px;min-width:0}
+.bzLogo{width:28px;height:28px;border-radius:8px;flex:none;display:grid;place-items:center;
+  color:#fff;font-weight:800;font-size:13px;object-fit:contain;background:#0e1620}
+.bzLogo.hatBild{padding:3px}
+.bzText{min-width:0;flex:1}
+.bzText>b{display:block;font-size:13.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bzText small{display:block;font-size:11px;color:var(--dim);overflow:hidden;
+  text-overflow:ellipsis;white-space:nowrap}
+.bzDu{color:var(--dim);font-weight:400}
+.bzHalt{color:var(--accent);font-weight:600}
+.bzSpark{display:flex;justify-content:center;min-width:0}
+.bzKurs{text-align:right;font-family:var(--mono);font-size:13px;white-space:nowrap}
+.bzLuecke{display:block;font-style:normal;font-size:10.5px;font-family:var(--font)}
+.bzAend{text-align:right;font-family:var(--mono);font-size:12.5px;font-weight:600;white-space:nowrap}
+.bzAend.auf{color:var(--up)} .bzAend.ab{color:var(--down)} .bzAend.null{color:var(--dim)}
+.bzMwert{text-align:right;font-family:var(--mono);font-size:12.5px;color:var(--dim);white-space:nowrap}
+.bzTat{display:flex;align-items:center;justify-content:flex-end;gap:7px}
+.bzKauf{padding:5px 11px;border-radius:8px;border:1px solid rgba(52,211,153,.5);
+  background:transparent;color:var(--up);font-family:var(--font);font-size:12px;
+  font-weight:600;cursor:pointer;white-space:nowrap;transition:all .14s}
+.bzKauf:hover{background:rgba(52,211,153,.15)}
+.bzKauf.aus{border-color:var(--line);color:var(--dim)}
+.bzKauf.aus:hover{background:rgba(255,255,255,.05);color:var(--text)}
+.bzLeer{color:var(--dim)}
+.bzPfeil{font-style:normal;width:9px;text-align:center;color:var(--dim);font-size:11px}
+/* Depotposition: Logo, Bestand, Wert und Gewinn in einer Zeile. */
+.bpos{display:flex;align-items:center;gap:11px;padding:10px 10px;
+  border-bottom:1px solid rgba(36,48,68,.45)}
+.bpos:last-child{border-bottom:0}
+.bposText{min-width:0;flex:1}
+.bposText b{display:block;font-size:13.5px}
+.bposText small{display:block;font-size:11.5px;color:var(--dim)}
+.bposFusion{color:var(--accent);font-size:11px;font-weight:600}
+.bposWert{text-align:right;font-family:var(--mono);white-space:nowrap}
+.bposWert b{display:block;font-size:14px}
+.bposWert em{font-style:normal;font-size:11.5px}
+.bposTat{display:flex;gap:5px;align-items:center}
+/* Leerer Zustand als Karte mit Ausweg statt als Satz im Nichts. */
+.bLeer{display:flex;flex-direction:column;align-items:flex-start;gap:6px;padding:16px;
+  border:1px dashed var(--line);border-radius:11px;background:rgba(12,18,28,.4)}
+.bLeer b{font-size:13.5px} .bLeer span{font-size:12.5px;color:var(--dim);max-width:46ch}
+.bLeer .bknopf{margin-top:4px}
+/* Kurstafel und Depot als eine Karte — sonst stehen Spaltenköpfe und Zeilen in
+ * zwei Kästen und fluchten nicht. */
+.bTafel{border:1px solid var(--line);border-radius:12px;background:rgba(12,18,28,.45);
+  padding:10px 2px 2px;margin-bottom:10px;overflow:hidden;
+  container:bTafel / inline-size}
+.bTafel .sec{padding-left:10px;padding-right:10px}
+.bTafel .bond{margin:0 8px 8px}
+.bTafel .bLeer{margin:0 8px 8px}
+.bTafel .bzeile:last-child{border-bottom:0}
+/* Randspalte der Handelsseite im Stadtnetz */
+.bankTipp h4{margin:0 0 6px;font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:var(--dim)}
+.bankTipp p{margin:0;font-size:12.5px;line-height:1.5}
+.bankTipp p b.auf{color:var(--up)}
+/* Die Tafel steht mal in einem 880 px breiten Browserfenster, mal im schmalen
+ * Panel über der Karte — der Bildschirm sagt darüber nichts. Deshalb Container-
+ * statt Bildschirmabfragen: Es zählt, wie breit die Karte selbst ist. Marktwert
+ * und Verlauf fallen zuerst weg, Kurs und Veränderung bleiben immer. */
+@container bTafel (max-width:620px){
+  .bzeile{grid-template-columns:minmax(0,1fr) 52px 86px 58px 88px}
+  .bzMwert{display:none}
+}
+@container bTafel (max-width:520px){
+  .bzeile{grid-template-columns:minmax(0,1fr) 80px 56px 34px;gap:7px}
+  .bzSpark{display:none}
+  .bzTat .bzKauf,.bzTat .bzLeer{display:none}
+}
+@supports not (container-type:inline-size){
+  @media (max-width:760px){
+    .bzeile{grid-template-columns:minmax(0,1fr) 80px 56px 34px;gap:7px}
+    .bzSpark,.bzMwert,.bzTat .bzKauf,.bzTat .bzLeer{display:none}
+  }
+}
 /* Orderbuch-Zeile: Pfeil | Menge×Preis | Firma | Knopf */
 .obrow{display:grid;grid-template-columns:13px auto 1fr auto;align-items:center;gap:9px;
   padding:3px 2px;border-bottom:1px solid rgba(36,48,68,.4)}
@@ -1574,6 +1680,30 @@ em.auf,.bankZeile em.auf{color:#15803d}em.ab,.bankZeile em.ab{color:#b91c1c}
 .panel.imNetz .wRichtung button{background:#fff;border-color:#d4d8e2;color:#374151}
 .panel.imNetz .wRichtung button.on{background:#e0f2f7;border-color:#0e7490;color:#0f172a}
 .panel.imNetz .wSchnell button{background:#f1f5f9;color:#111827;border-color:#d4d8e2}
+/* Kurstafel, Depot und Formulare im hellen Stil von bank.cs */
+.panel.imNetz .bTafel{background:#fff;border:0;box-shadow:0 1px 2px rgba(16,24,40,.06),0 6px 18px rgba(16,24,40,.05);
+  border-radius:16px;padding:12px 6px 4px}
+.panel.imNetz .bzeile{border-bottom-color:#eef0f4}
+.panel.imNetz .bzeile:hover,.panel.imNetz .bzeile.auf{background:#f8fafc}
+.panel.imNetz .bzeile.kopf{color:#64748b}
+.panel.imNetz .bzLogo{background:#e2e8f0}
+.panel.imNetz .bzKauf{border-color:#0e7490;color:#0e7490;background:#fff}
+.panel.imNetz .bzKauf:hover{background:#e0f2f7}
+.panel.imNetz .bzKauf.aus{border-color:#d4d8e2;color:#64748b}
+.panel.imNetz .bpos{border-bottom-color:#eef0f4}
+.panel.imNetz .bSchnell button{background:#f1f5f9;color:#334155;border-color:#d4d8e2}
+.panel.imNetz .bSchnell button:hover{border-color:#0e7490;color:#0f172a}
+.panel.imNetz .bVorschau{background:#f1f5f9;border-color:#e3e6ee;color:#475569}
+.panel.imNetz .bLeer{background:#f8fafc;border-color:#d4d8e2}
+.panel.imNetz .bknopf.zur{background:#0e7490;border-color:#0e7490;color:#fff}
+/* Die Handelsseite läuft im selben Raster wie Marktübersicht und Aktien. */
+.bankHaupt .bankSlot{min-width:0}
+.bankRand .bankTipp{background:#fff;border-radius:16px;padding:14px 16px;
+  box-shadow:0 1px 2px rgba(16,24,40,.06),0 6px 18px rgba(16,24,40,.05);color:#18202e}
+.bankRand .bankTipp h4{color:#64748b}
+.bankRand .bankTipp p{color:#374151}
+.bankRand .bankTipp .mono{font-family:var(--mono);color:#111827}
+.bankRand .bankTipp b.auf{color:#15803d}
 /* Anleihenmarkt (anleihen.cs) */
 .anlLayout{display:grid;grid-template-columns:minmax(0,1fr) 290px;gap:16px;align-items:start}
 .anlHaupt,.anlSeite{display:flex;flex-direction:column;gap:14px;min-width:0}
