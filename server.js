@@ -3556,6 +3556,39 @@ function fondsAusschuetten() {
 /* Private Fonds reichen ihre Dividenden an die Anteilseigner weiter — wie
  * die Branchenfonds. Nur Spieler halten Anteile (für v1 kein Bürgerdepot,
  * kein Finanzamt-Automat). */
+/* Der private Fonds kauft Aktien seiner Firmen — gleiche Regel wie die
+ * Branchenfonds (fondsInvestieren): je Firma das Zielgewicht nach dem
+ * Fundamentalwert. Erst das günstigste offene Angebot bis zum Wert je Aktie,
+ * sonst eine Kaufanfrage an die Firma. */
+function pbfInvestieren(venueId) {
+  const ba = G.boerseApp?.[venueId], f = ba?.fonds; if (!f || !f.cash || f.cash < 1) return;
+  const hid = pbfHolderId(venueId);
+  const fi = (f.firmen || []).map(fid => G.players[fid]).filter(Boolean);
+  if (!fi.length) return;
+  const Fs = fi.map(fundament), sumF = Fs.reduce((a, b) => a + b, 0) || 1, nav = pbfWert(venueId);
+  fi.forEach((co, i) => {
+    const P = kursVon(co), Fa = Fs[i] / AKTIEN;
+    if (!(P > 0)) return;
+    let fehlt = Math.floor((nav * Fs[i] / sumF - pbfAktien(venueId, co) * P) / P);
+    fehlt = Math.min(fehlt, MARKT.MAX_ANTEIL - pbfAktien(venueId, co));
+    if (fehlt < 1) return;
+    /* a) günstigstes offenes Angebot bis zum Wert F je Aktie */
+    const l = G.shareListings.filter(x => x.companyId === co.id && !x.toId && x.sellerId !== hid && x.count <= fehlt && x.price / x.count <= Fa)
+      .sort((a, b) => a.price / a.count - b.price / b.count)[0];
+    if (l && l.price <= f.cash) { institutionKauftAngebot(hid, l); return; }
+    /* b) Kaufanfrage an die Firma — eine je Firma, Eigentümer bleibt über 50 % */
+    const n = Math.min(fehlt, MARKT.SCHRITT * MARKT.MAX_SCHRITTE);
+    if ((co.equity[co.id] || 0) - n < AKTIEN / 2) return;
+    if (G.shareBids.some(b => b.companyId === co.id && b.bidderId === hid)) return;
+    const preis = Math.round(n * P * 1.02 * 100) / 100;
+    if (preis > f.cash) return;
+    G.shareBids.push({ id: id(), companyId: co.id, bidderId: hid, count: n, price: preis, ttl: SHARE_BID_TTL });
+    if (!co.bot) emitTo(co.id, "notice", { text: `Der Fonds ${f.name} bietet ${Math.round(preis)} $ für ${n} Aktien deiner Firma — an der Stadtbank entscheiden.` });
+  });
+}
+function pbfInvestierenAlle() {
+  for (const [vid, ba] of Object.entries(G.boerseApp || {})) if (ba.fonds) pbfInvestieren(vid);
+}
 function pbfAusschuetten() {
   for (const [vid, ba] of Object.entries(G.boerseApp || {})) {
     const f = ba.fonds; if (!f) continue;
@@ -5298,6 +5331,7 @@ function distributeDividends() {
     p.revenue = 0;
   }
   fondsAusschuetten();   // die Fonds reichen ihre Dividenden gleich weiter
+  pbfInvestierenAlle();  // private Fonds kaufen Aktien ihrer Firmen nach
   pbfAusschuetten();     // private Fonds der Software-Börsen
 }
 
@@ -9862,6 +9896,7 @@ io.on("connection", socket => {
     p.cash -= b; f.cash += b; f.anteile += n;
     (p.pbf ??= {})[venueId] = (p.pbf[venueId] || 0) + n;
     logTx(p, "Fonds", `${f.name}: Einlage ${Math.round(n * 100) / 100} Anteile`, -b);
+    pbfInvestieren(venueId);
     ack?.({ ok: true, anteile: n, preis });
   }));
 
@@ -9881,6 +9916,7 @@ io.on("connection", socket => {
     if (owner && geb > 0 && owner.id !== p.id) { owner.cash += geb; addRevenue(owner, geb); (ba.eb ??= [0])[0] += geb;
       logTx(owner, "Fonds", `Anteilsgebühr von ${p.name} über ${f.name}`, geb); }
     logTx(p, "Fonds", `${f.name}: Kauf ${Math.round(n * 100) / 100} Anteile`, -b);
+    pbfInvestieren(venueId);
     ack?.({ ok: true, anteile: n, preis, gebuehr: geb });
   }));
 
