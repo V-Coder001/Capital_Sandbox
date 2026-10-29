@@ -11278,11 +11278,11 @@ const BOT_CFGS = [
    * das Stadtportal. */
   { name: "Byteforge",       industry: "software",  color: "#60a5fa",
     plan: ["rechenzentrum", "entwicklerstudio"], needs: ["strom", "elektronik"], vorrat: { strom: 150, elektronik: 5 },
-    sw: { name: "KassenKlick", paint: "PixelPinsel", paintPreis: 800, boerse: "TradeBot", boersePreis: 1000, app: "KlickTalk", job: "KlickJobs", steuerAbo: 30, anzeigenPreis: 60,
+    sw: { name: "KassenKlick", paint: "PixelPinsel", paintPreis: 800, boerse: "TradeBot", boersePreis: 1000, fonds: "ByteDepot", app: "KlickTalk", job: "KlickJobs", steuerAbo: 30, anzeigenPreis: 60,
           leit: { thema: "industrie", anzeige: "ziffern", schrift: "mono", effekt: "scan", titel: "KassenKlick Control", meldung: "Läuft wie geschmiert — Byteforge-Support rund um die Uhr", akzent: "#fbbf24" }, einrichtung: 300, gebuehr: 5, abo: 120, module: ["bewertungen", "lieferung"] } },
   { name: "Pixelwerk",       industry: "software",  color: "#f472b6",
     plan: ["entwicklerstudio", "rechenzentrum"], needs: ["strom", "elektronik"], vorrat: { strom: 150, elektronik: 5 },
-    sw: { name: "ShopStern", paint: "MalMeister", paintPreis: 1200, boerse: "Aktienfuchs", boersePreis: 1500, app: "SternStream", job: "SternJobs", steuerAbo: 50, anzeigenPreis: 100,
+    sw: { name: "ShopStern", paint: "MalMeister", paintPreis: 1200, boerse: "Aktienfuchs", boersePreis: 1500, fonds: "SternFonds", app: "SternStream", job: "SternJobs", steuerAbo: 50, anzeigenPreis: 100,
           leit: { thema: "neon", anzeige: "ringe", schrift: "modern", effekt: "funken", titel: "ShopStern Cockpit", meldung: "Pixelwerk ✦ mehr Ausstoß, weniger Sorgen", akzent: "#a78bfa" }, einrichtung: 600, gebuehr: 6, abo: 180, module: ["lieferung", "bewertungen"] } },
 ];
 let botsStarted = false;
@@ -11738,6 +11738,30 @@ async function spawnBot(cfg, lvl = BOT_LEVELS[BOT_LEVEL_DEFAULT]) {
           if (cfg.sw.boerse && laden) {
             if (!ba) await em("boerseEinstellen", { name: cfg.sw.boerse, preis: cfg.sw.boersePreis || 900 });
             else if (!ba.entwicklung && ba.version < BOERSE_APP.STUFEN.length && me.cash > 1500) await em("boerseEntwickeln", {});
+          }
+          /* Sobald die Börse v1 läuft, bittet der Bot zwei fremde Firmen um
+           * Zulassung. Nach einer kurzen Pause legt er einen Fonds auf und
+           * seedet ihn aus eigenem Kapital — so bekommt der Markt auch in
+           * reinen Bot-Runden private Fonds, in die Spieler einzahlen können. */
+          if (ba?.version >= 1) {
+            const kandidaten = Object.values(st.players || {}).filter(k => k.id !== myId
+              && !ba.zugelassen?.some?.(z => z.id === k.id)
+              && !ba.anfragen?.some?.(a => a.id === k.id));
+            const zugLen = (ba.zugelassen || []).length;
+            if (zugLen < 3 && kandidaten.length && Math.random() < .2) {
+              const ziel = kandidaten[Math.floor(Math.random() * kandidaten.length)];
+              await em("boerseZulassungAnfragen", { companyId: ziel.id });
+            }
+            /* Fonds anlegen, wenn mindestens eine Zulassung vorliegt und noch
+             * keiner existiert. Danach eine Einlage, damit der Fonds nicht
+             * leer bleibt — orientiert sich am freien Kapital. */
+            if (!ba.fonds && zugLen >= 1 && me.cash > BOERSE_APP.FONDS_MIN_SEED * 2) {
+              const firmen = (ba.zugelassen || []).map(z => z.id);
+              await em("boerseFondsAnlegen", { venueId: ba.id, name: cfg.sw.fonds || `${(cfg.sw.boerse || "Fonds").split(" ")[0]} Fonds`,
+                gebuehr: BOERSE_APP.FONDS_GEB_START, firmen });
+            } else if (ba.fonds && me.cash > BOERSE_APP.FONDS_MIN_SEED * 3 && ba.fonds.wert < me.cash / 4 && Math.random() < .1) {
+              await em("boerseFondsEinlegen", { venueId: ba.id, betrag: Math.min(Math.floor(me.cash / 8), 10000) });
+            }
           }
         }
         /* Etappe 5: Bürger-App und Jobbörse, sobald das eigene System steht */
