@@ -6630,6 +6630,10 @@ document.getElementById("p-bank").addEventListener("click", e => {
   if (bidNo) { act("declineShareBid", { bidId: +bidNo.dataset.bidno }); return; }
   const bidCancel = e.target.closest("[data-bidcancel]");
   if (bidCancel) { act("cancelShareBid", { bidId: +bidCancel.dataset.bidcancel }); return; }
+  const zulJa = e.target.closest("[data-bazulja]");
+  if (zulJa) { socket.emit("boerseZulassungEntscheiden", { venueId: zulJa.dataset.bazulja, ok: true }, r => { if (r?.error) return toast(r.error, true); toast("Börse zugelassen"); render(store.get()); }); return; }
+  const zulNein = e.target.closest("[data-bazulnein]");
+  if (zulNein) { socket.emit("boerseZulassungEntscheiden", { venueId: zulNein.dataset.bazulnein, ok: false }, r => { if (r?.error) return toast(r.error, true); toast("Abgelehnt"); render(store.get()); }); return; }
 });
 /* ---------- Finanzamt-Panel ---------- */
 /* ---------- Software-Panel ----------
@@ -6727,7 +6731,32 @@ function boerseAppHtml(state, me, eigene) {
         <div class="swBalken"><i style="width:${Math.min(100, dev.ep / dev.ziel * 100).toFixed(1)}%"></i></div>
         <div class="note" style="margin:4px 0 0">Neu: ${stufeText(STUFEN[dev.version - 1])}${eigene.entwicklung ? " · teilt sich das Studio mit dem Shop-System" : ""}</div></div>`
       : naechste ? `<button class="tmHaupt" id="baEntwickeln"><span>${escapeHtml(rohText(ba.name))} v${(ba.version || 0) + 1} entwickeln</span><small>${naechste.ep} EP · ${stufeText(naechste)}${eigene.entwicklung ? " · teilt sich das Studio mit dem Shop-System" : ""}</small></button>`
-      : `<div class="note">Voll ausgebaut: ${stufeText(STUFEN[STUFEN.length - 1])}.</div>`) : ""}`;
+      : `<div class="note">Voll ausgebaut: ${stufeText(STUFEN[STUFEN.length - 1])}.</div>`) : ""}
+    ${ba?.version >= 1 ? boerseHandelsplatzHtml(state, eigene, ba) : ""}`;
+}
+/* Handelsplatz der eigenen Börse: fremde Aktien anbieten (mit Zulassung der
+ * Firma), eine selbst gesetzte Handelsgebühr je Handel kassieren. */
+function boerseHandelsplatzHtml(state, eigene, ba) {
+  const gMin = 0.1, gMax = 3;
+  const g = ba.handelGebuehr ?? 1;
+  const zug = ba.zugelassen || [], anf = ba.anfragen || [];
+  const schonAngefragt = new Set([...zug.map(z => z.id), ...anf.map(a => a.id), eigene.ownerId]);
+  const kandidaten = Object.values(state.players || {}).filter(p => p.id !== eigene.ownerId && !schonAngefragt.has(p.id));
+  return `<div class="sec" style="margin-top:14px">Handelsplatz · fremde Aktien anbieten</div>
+    <div class="note" style="margin:0 0 8px">Mit Zustimmung einer Firma bietest du ihre Aktien an deiner Börse an und kassierst je Handel eine Gebühr. Firmen-Bots sagen nur zu, wenn über deine Börse schon viel läuft — mach Werbung für sie.</div>
+    <div class="swForm">
+      <label><span>Handelsgebühr %</span><input id="baGebuehr" type="number" min="${gMin}" max="${gMax}" step="0.1" value="${String(g).replace(".", ",")}"></label>
+      <button class="mini" id="baGebuehrSetzen">Gebühr übernehmen</button>
+    </div>
+    ${kandidaten.length ? `<div class="swForm" style="margin-top:6px">
+      <label class="breit"><span>Firma um Zulassung bitten</span><select id="baZulFirma">${kandidaten.map(p => `<option value="${p.id}">${escapeHtml(rohText(p.name))}${p.bot ? " · KI" : ""}</option>`).join("")}</select></label>
+      <button class="buyb" id="baZulAnfragen">Anfragen</button>
+    </div>` : `<div class="note" style="margin-top:6px">Alle Firmen sind angefragt oder zugelassen.</div>`}
+    ${anf.length ? `<div class="note" style="margin:8px 0 2px">Anfrage läuft: ${anf.map(a => escapeHtml(rohText(a.name))).join(", ")}</div>` : ""}
+    ${zug.length ? `<div class="sec" style="margin-top:8px;font-size:11px">Zugelassen (${zug.length})</div>
+      ${zug.map(z => `<div class="bond"><div><b>${escapeHtml(rohText(z.name))}</b><div class="meta">Aktien an deiner Börse handelbar</div></div>
+        <button class="mini" data-bazulende="${z.id}">Beenden</button></div>`).join("")}` : `<div class="note" style="margin-top:6px">Noch keine Firma zugelassen.</div>`}
+    ${ba.handelProvision ? `<div class="note" style="margin-top:6px">Aus Handelsgebühren bisher: <b style="color:var(--up)">${fmt(ba.handelProvision)}</b></div>` : ""}`;
 }
 const paintEntwurf = {};
 /* Malprogramm: das zweite Produkt einer Software-Firma, verkauft als Lizenz
@@ -8582,6 +8611,24 @@ document.getElementById("p-software").addEventListener("click", e => {
     socket.emit("boerseEntwickeln", {}, r => { if (r?.error) return toast(r.error, true); toast(`Entwicklung gestartet: ${r.ep} EP`); render(store.get()); });
     return;
   }
+  if (e.target.closest("#baGebuehrSetzen")) {
+    const g = (document.getElementById("baGebuehr")?.value || "").replace(",", ".");
+    socket.emit("boerseGebuehrSetzen", { gebuehr: g }, r => { if (r?.error) return toast(r.error, true); toast(`Handelsgebühr ${String(r.gebuehr).replace(".", ",")} %`); render(store.get()); });
+    return;
+  }
+  if (e.target.closest("#baZulAnfragen")) {
+    const companyId = document.getElementById("baZulFirma")?.value;
+    socket.emit("boerseZulassungAnfragen", { companyId }, r => {
+      if (r?.error) return toast(r.error, true);
+      toast(r.auto === "zugelassen" ? "Firma hat zugelassen" : r.auto === "abgelehnt" ? "Firma lehnt ab — mehr Umsatz nötig" : "Anfrage gesendet"); render(store.get());
+    });
+    return;
+  }
+  const bze = e.target.closest("[data-bazulende]");
+  if (bze) {
+    socket.emit("boerseZulassungBeenden", { companyId: bze.dataset.bazulende }, r => { if (r?.error) return toast(r.error, true); toast("Zulassung beendet"); render(store.get()); });
+    return;
+  }
   if (e.target.closest("#mpMalen")) return malOeffnen();
   const sa = e.target.closest("[data-shopauf]");
   if (sa) { const [x, y] = sa.dataset.shopauf.split(",").map(Number); return shopOeffnen(x, y); }
@@ -9612,7 +9659,8 @@ document.getElementById("shKurs").addEventListener("click", () => {
 document.getElementById("shList").addEventListener("click", () => act("listShares", {
   companyId: document.getElementById("shCompany").value || null,
   count: document.getElementById("shCount").value, price: document.getElementById("shPrice").value,
-  toId: document.getElementById("shTo").value || null }));
+  toId: document.getElementById("shTo").value || null,
+  venueId: document.getElementById("shVenue")?.value || null }));
 document.getElementById("chatform").addEventListener("submit", e => {
   e.preventDefault(); const inp = document.getElementById("chatin");
   if (inp.value.trim()) act("chat", { room: store.get().room, text: inp.value });
@@ -12395,6 +12443,17 @@ function render({ state, me, myId, chat, room }) {
     shToSel.innerHTML = `<option value="">Offener Markt (alle)</option>` + Object.values(state.players)
       .filter(p => p.id !== myId).map(p => `<option value="${p.id}">Nur an ${p.name}</option>`).join("");
     shToSel.value = shToPrev;
+    /* Handelsplatz-Auswahl: private Börsen, die die Aktien der gewählten Firma
+     * zugelassen haben. Nur anzeigen, wenn es überhaupt eine gibt. */
+    const shVenueSel = document.getElementById("shVenue"), shVenuePrev = shVenueSel?.value;
+    if (shVenueSel) {
+      const venues = (state.boerseApp || []).filter(ba => ba.ownerId !== myId
+        && (ba.zugelassen || []).some(z => z.id === shCo.value));
+      document.getElementById("shVenueWrap").hidden = !venues.length;
+      shVenueSel.innerHTML = `<option value="">Stadtbank (offen)</option>` + venues.map(ba =>
+        `<option value="${ba.id}">${escapeHtml(rohText(ba.name))} · ${String(ba.handelGebuehr).replace(".", ",")} % Gebühr</option>`).join("");
+      if (venues.some(ba => ba.id === shVenuePrev)) shVenueSel.value = shVenuePrev;
+    }
 
     /* Kurstafel: jede Firma aufklappbar — Wertverlauf, Dividende je Block und
      * die daraus gerechnete Rendite. Der Blockpreis allein sagt naemlich nicht,
@@ -12437,7 +12496,7 @@ function render({ state, me, myId, chat, room }) {
           <div class="kzrow"><span>Dividendenrendite zum Kurs</span><b style="color:${urteil?.farbe || "var(--dim)"}">${rend == null ? "—" : rend.toFixed(1) + " %"}${urteil ? ` <span style="font-weight:400">· ${urteil.text}</span>` : ""}</b></div>
           ${angebote.length ? `<div class="bAngebote"><div class="bAngKopf">Angebote</div>${angebote.map(l => {
               const fair = (p.kurs || 0) * l.count, diff = fair ? Math.round((l.price / fair - 1) * 100) : 0;
-              return `<div class="bAng"><span>${l.count} Aktien · ${l.isIssue ? "Emission" : `von ${l.seller}`}${l.toId ? " · <b>nur für dich</b>" : ""}
+              return `<div class="bAng"><span>${l.count} Aktien · ${l.isIssue ? "Emission" : `von ${l.seller}`}${l.venueName ? ` · <b>über ${escapeHtml(rohText(l.venueName))}</b> (+${String(l.venueGebuehr).replace(".", ",")} %)` : ""}${l.toId ? " · <b>nur für dich</b>" : ""}
                 <em class="${diff <= 0 ? "plus" : diff > 25 ? "minus" : ""}">${diff > 0 ? "+" : ""}${diff} % zum Kurs</em></span>
                 <b>${fmt(l.price)}<span class="meta"> · ${fk(l.price / l.count)} je Aktie</span></b>${shKaufZeile(l)}</div>`; }).join("")}</div>` : ""}
           ${p.id !== myId && (p.ownPct ?? 0) > 0 ? `<button type="button" class="mini bAnfrage" data-zu-handeln="${p.id}">Kaufanfrage an ${p.name} stellen</button>` : ""}
@@ -12467,7 +12526,7 @@ function render({ state, me, myId, chat, room }) {
       return ` · <span style="color:${col}">${diff > 0 ? "+" : ""}${diff} % zum Kurs</span>`;
     };
     const offerRow = l => `<div class="bond">
-      <div><b>${l.company}</b><div class="meta">${l.count} Aktien · ${l.isIssue ? "Emission der Firma" : `von ${l.seller}`}${priceTag(l)}</div></div>
+      <div><b>${l.company}</b><div class="meta">${l.count} Aktien · ${l.isIssue ? "Emission der Firma" : `von ${l.seller}`}${l.venueName ? ` · über ${escapeHtml(rohText(l.venueName))} (+${String(l.venueGebuehr).replace(".", ",")} %)` : ""}${priceTag(l)}</div></div>
       <div style="display:flex;align-items:center;gap:8px"><span style="font-family:var(--mono)">${fmt(l.price)}<span class="meta"> · ${fk(l.price / l.count)} je Aktie</span></span>
       ${shKaufZeile(l)}</div></div>`;
     document.getElementById("sharelist").innerHTML =
@@ -12511,7 +12570,13 @@ function render({ state, me, myId, chat, room }) {
     const bids = state.shareBids || [];
     const bidsToMe = bids.filter(b => b.companyId === myId);
     const myBids = bids.filter(b => b.bidderId === myId);
+    const boAnf = me.boerseAnfragen || [];
     document.getElementById("bidlist").innerHTML =
+      (boAnf.length ? `<div class="sec">Zulassung an fremder Börse</div>` + boAnf.map(a => `<div class="bond">
+        <div><b>${escapeHtml(rohText(a.anbieter))}</b><div class="meta">will eure Aktien an <b>${escapeHtml(rohText(a.name))}</b> anbieten · ${String(a.gebuehr).replace(".", ",")} % Handelsgebühr</div></div>
+        <div style="display:flex;align-items:center;gap:8px">
+        <button class="buyb" data-bazulja="${a.venueId}">Zulassen</button>
+        <button class="mini" data-bazulnein="${a.venueId}">Ablehnen</button></div></div>`).join("") : "") +
       (bidsToMe.length ? `<div class="sec">Anfragen an dich</div>` + bidsToMe.map(b => `<div class="bond">
         <div><b>${b.bidder}</b><div class="meta">will ${b.count} Aktien deiner Firma · zum Kurs ${fmt((me.kurs || 0) * b.count)} · noch ${b.ttl}s</div></div>
         <div style="display:flex;align-items:center;gap:8px"><span style="font-family:var(--mono)">${fmt(b.price)}</span>
@@ -12521,7 +12586,7 @@ function render({ state, me, myId, chat, room }) {
         <div><b>${b.company}</b><div class="meta">${b.count} Aktien für ${fmt(b.price)} · wartet auf Antwort · noch ${b.ttl}s</div></div>
         <button class="mini" data-bidcancel="${b.id}">Zurückziehen</button></div>`).join("") : "");
 
-    document.getElementById("bReiterHandeln").textContent = bidsToMe.length ? bidsToMe.length : "";
+    document.getElementById("bReiterHandeln").textContent = (bidsToMe.length + boAnf.length) ? (bidsToMe.length + boAnf.length) : "";
     document.getElementById("bReiterDepot").textContent = me.portfolio?.length ? me.portfolio.length : "";
     kurswettenRendern();
     bankReiterZeigen();

@@ -4044,6 +4044,13 @@ const BOERSE_APP = {
     { ep: 340, bewohner: 20, provision: 1.5 },   // v3
   ],
   PREIS_MIN: 100, PREIS_MAX: 6000, PREIS_START: 900,
+  /* Handelsplatz: Eine Software-Firma darf fremde Aktien an ihrer eigenen
+   * Börse anbieten — mit Zustimmung der Firma. Je Handel nimmt sie eine
+   * selbst gesetzte Gebühr (GEBUEHR_MIN … GEBUEHR_MAX, Start GEBUEHR_START).
+   * Firmen-Bots sagen nur zu, wenn über die Börse schon spürbar gehandelt
+   * wird — unter BOT_UMSATZ 10-min-Provision lehnen sie ab. */
+  GEBUEHR_MIN: 0.1, GEBUEHR_MAX: 3, GEBUEHR_START: 1,
+  BOT_UMSATZ: 400, ZULASSUNG_TTL: 180,
 };
 const boerseVon = id => G.boerseApp?.[id] || null;
 const boerseEigenes = p => Object.values(G.boerseApp || {}).find(x => x.ownerId === p.id) || null;
@@ -4064,6 +4071,12 @@ function boersePublic() {
       verkauft: x.verkauft || 0, einnahmen10: Math.round((x.eb || []).reduce((a, b) => a + b, 0)), laeden,
       reichweite: reichweite.find(r => r.ba === x)?.r || 0, nutzer: Object.values(G.players).filter(k => k.boerseLizenz === x.id && k.id !== x.ownerId).length,
       provisionGesamt: Math.round(x.provisionGesamt || 0),
+      handelGebuehr: x.handelGebuehr ?? BOERSE_APP.GEBUEHR_START,
+      handelProvision: Math.round(x.handelProvision || 0),
+      zugelassen: Object.keys(x.zugelassen || {}).filter(cid => (x.zugelassen[cid]) && G.players[cid])
+        .map(cid => ({ id: cid, name: G.players[cid]?.name ?? "—", farbe: G.players[cid]?.color })),
+      anfragen: Object.keys(x.anfragen || {}).filter(cid => G.players[cid])
+        .map(cid => ({ id: cid, name: G.players[cid]?.name ?? "—" })),
       stufe: x.version >= 1 ? BOERSE_APP.STUFEN[x.version - 1] : null,
       entwicklung: x.entwicklung ? { version: x.entwicklung.version, ep: Math.floor(x.entwicklung.ep), ziel: x.entwicklung.ziel } : null };
   });
@@ -4083,8 +4096,18 @@ function boerseVeroeffentlichen(x, p) {
  * keinem Aktienregister, und durch einen falschen Aufruf (kursVon mit der
  * Firmen-ID statt der Firma) war jeder Kurs NaN: Es wurde nie gehandelt. */
 function boerseAppTick() {
+  /* Offene Zulassungsanfragen laufen je Sekunde ab — sonst stünde eine nie
+   * beantwortete Anfrage für immer im Panel der Firma. */
+  for (const x of Object.values(G.boerseApp || {})) {
+    if (!x.anfragen) continue;
+    for (const cid of Object.keys(x.anfragen)) if (--x.anfragen[cid] <= 0) delete x.anfragen[cid];
+  }
   if (G.tick % 60 === 0) for (const x of Object.values(G.boerseApp || {})) {
-    if (!G.players[x.ownerId]) { delete G.boerseApp[x.id]; continue; }
+    if (!G.players[x.ownerId]) {
+      /* Börse verschwindet mit ihrer Firma: laufende Angebote zurück ans offene Buch. */
+      for (const l of G.shareListings) if (l.venueId === x.id) l.venueId = null;
+      delete G.boerseApp[x.id]; continue;
+    }
     (x.eb ??= [0]).unshift(0); if (x.eb.length > 10) x.eb.length = 10;
   }
 }
@@ -6777,7 +6800,10 @@ function snapshot() {
       company: G.players[l.companyId]?.name ?? "—",
       seller: istInstitution(l.sellerId) ? institutionName(l.sellerId) : (G.players[l.sellerId ?? l.companyId]?.name ?? "—"),
       isIssue: (l.sellerId ?? l.companyId) === l.companyId,   // Emission der Firma statt Weiterverkauf
-      toName: l.toId ? (G.players[l.toId]?.name ?? "—") : null })),
+      toName: l.toId ? (G.players[l.toId]?.name ?? "—") : null,
+      venueId: l.venueId || null,
+      venueName: l.venueId ? (G.boerseApp?.[l.venueId]?.name ?? null) : null,
+      venueGebuehr: l.venueId ? (G.boerseApp?.[l.venueId]?.handelGebuehr ?? BOERSE_APP.GEBUEHR_START) : null })),
     nextDividendIn: G.nextDividendIn,
     wettrunde: wettrundePublic(),
     finanzamt: finanzamtPublic(),
@@ -6905,6 +6931,11 @@ function privateState(p) {
     steuer: finanzamtAktiv() ? { ...steuerSchaetzung(p), letzter: p.steuerLetzter || null,
       schuld: Math.round(p.steuerSchuld || 0), gezahlt: Math.round(p.stats.steuern || 0) } : null,
     ownPct: Math.round((p.equity[p.id] || 0) / AKTIEN * 1000) / 10, ownAktien: p.equity[p.id] || 0, aktien: AKTIEN,
+    /* Zulassungsanfragen fremder Börsen: Eine Software-Firma will die Aktien
+     * DIESER Firma an ihrer Börse anbieten — hier zum Annehmen/Ablehnen. */
+    boerseAnfragen: Object.values(G.boerseApp || {}).filter(x => x.anfragen?.[p.id] && G.players[x.ownerId])
+      .map(x => ({ venueId: x.id, name: x.name, anbieter: G.players[x.ownerId]?.name ?? "—",
+        gebuehr: x.handelGebuehr ?? BOERSE_APP.GEBUEHR_START })),
     portfolio, revenue: Math.round(p.revenue), ausschuettung: p.ausschuettung,
     swEp: Math.floor(p.swEp || 0),
     /* Konten dieser Firma bei den Krypto-Börsen (ein Konto je Börse, siehe coins.js) */
@@ -8993,20 +9024,28 @@ io.on("connection", socket => {
     ack?.({ ok: true });
   }));
 
-  socket.on("listShares", guard((p, { companyId, count, price, toId }, ack) => {
+  socket.on("listShares", guard((p, { companyId, count, price, toId, venueId }, ack) => {
     companyId = companyId || p.id;   // ohne Angabe: eigene Anteile emittieren (Rückwärtskompatibilität)
-    count = Math.floor(+count); price = +price; toId = toId || null;
+    count = Math.floor(+count); price = +price; toId = toId || null; venueId = venueId || null;
     const company = G.players[companyId];
     if (!company) return ack?.({ error: "Firma unbekannt" });
     if (!(count >= 1 && count <= AKTIEN)) return ack?.({ error: `1–${AKTIEN} Aktien` });
     if (!(price > 0)) return ack?.({ error: "Ungültiger Preis" });
+    /* Angebot über eine private Börse: Sie muss die Aktien dieser Firma
+     * zugelassen haben. Die Handelsgebühr zahlt später der Käufer an die
+     * Börse (siehe buyShares). */
+    if (venueId) {
+      const ba = boerseVon(venueId);
+      if (!ba || !(ba.version >= 1)) return ack?.({ error: "Börse unbekannt" });
+      if (!ba.zugelassen?.[companyId]) return ack?.({ error: `${ba.name} bietet die Aktien von ${company.name} nicht an` });
+    }
     /* Verkaufen darf jeder, der die Anteile hält — die Firma ihre eigenen (Emission)
      * genauso wie ein Aktionär seine zugekauften (Weiterverkauf). */
     if ((company.equity[p.id] || 0) < count)
       return ack?.({ error: `So viele Aktien von ${company.name} hältst du nicht` });
     if (toId && (toId === p.id || !G.players[toId])) return ack?.({ error: "Ungültiger Empfänger" });
     company.equity[p.id] -= count;   // in Verwahrung, bis gekauft oder zurückgezogen
-    const listing = { id: id(), companyId, sellerId: p.id, count, price, ts: Date.now(), toId };
+    const listing = { id: id(), companyId, sellerId: p.id, count, price, ts: Date.now(), toId, venueId };
     G.shareListings.push(listing);
     const what = companyId === p.id ? "eigene Aktien" : `Aktien von ${company.name}`;
     if (toId) {
@@ -9166,6 +9205,20 @@ io.on("connection", socket => {
       seller.cash += preis;
       logTx(seller, "Aktien", `${n} Aktien von ${company.name} an ${p.name} verkauft`, preis);
       emitTo(sellerId, "notice", { text: `${p.name} hat deine ${n} Aktien von ${company.name} für ${Math.round(preis)} $ gekauft.` });
+    }
+    /* Läuft der Kauf über eine private Börse, zahlt der Käufer zusätzlich
+     * deren Handelsgebühr an die anbietende Software-Firma. */
+    const venue = l.venueId ? boerseVon(l.venueId) : null, venueOwner = venue && G.players[venue.ownerId];
+    if (venue && venueOwner && venueOwner.id !== p.id) {
+      const g = venue.handelGebuehr ?? BOERSE_APP.GEBUEHR_START;
+      const geb = Math.round(preis * g) / 100;
+      if (geb > 0 && p.cash >= geb) {
+        p.cash -= geb; p.stats.ausgaben += geb;
+        venueOwner.cash += geb; addRevenue(venueOwner, geb);
+        venue.handelProvision = (venue.handelProvision || 0) + geb; (venue.eb ??= [0])[0] += geb;
+        logTx(p, "Aktien", `Handelsgebühr ${venue.name}`, -geb);
+        logTx(venueOwner, "Aktien", `Handelsgebühr von ${p.name} über ${venue.name}`, geb);
+      }
     }
     io.emit("notice", { text: `${p.name} kauft ${n} Aktien von ${company.name} für ${Math.round(preis)} $` });
     ack?.({ ok: true });
@@ -9587,6 +9640,76 @@ io.on("connection", socket => {
     emitTo(haendler.id, "notice", { text: `${p.name} hat eine Lizenz für ${ba.name} gekauft (+${Math.round(summe - gebuehr - steuer).toLocaleString("de-DE")} $).` });
     ack?.({ ok: true, summe, gebuehr, steuer, steuerSatz: Math.round(satzBoerse() * SW.HANDELSSTEUER * 1000) / 10, system: sys.name, programm: ba.name, version: ba.version });
   }));
+
+  /* --- Eigener Handelsplatz: Die Software-Firma darf fremde Aktien an ihrer
+   * Börse anbieten. Drei Schritte: Gebühr setzen, Firma um Zulassung bitten,
+   * die Firma entscheidet. Erst nach Zustimmung darf dort gehandelt werden. --- */
+  socket.on("boerseGebuehrSetzen", guard((p, { gebuehr } = {}, ack) => {
+    const ba = boerseEigenes(p);
+    if (!ba || !(ba.version >= 1)) return ack?.({ error: "Du hast noch keine eigene Börsen-App" });
+    const g = Math.min(BOERSE_APP.GEBUEHR_MAX, Math.max(BOERSE_APP.GEBUEHR_MIN, +gebuehr || BOERSE_APP.GEBUEHR_START));
+    ba.handelGebuehr = Math.round(g * 100) / 100;
+    ack?.({ ok: true, gebuehr: ba.handelGebuehr });
+  }));
+
+  socket.on("boerseZulassungAnfragen", guard((p, { companyId } = {}, ack) => {
+    const ba = boerseEigenes(p);
+    if (!ba || !(ba.version >= 1)) return ack?.({ error: "Du hast noch keine eigene Börsen-App" });
+    const co = G.players[companyId];
+    if (!co) return ack?.({ error: "Firma unbekannt" });
+    if (companyId === p.id) return ack?.({ error: "Deine eigenen Aktien bietest du ohnehin an" });
+    if (ba.zugelassen?.[companyId]) return ack?.({ error: `${co.name} ist schon zugelassen` });
+    if (ba.anfragen?.[companyId]) return ack?.({ error: "Anfrage läuft schon" });
+    (ba.anfragen ??= {})[companyId] = BOERSE_APP.ZULASSUNG_TTL;
+    /* Firmen-Bots sagen nur zu, wenn über die Börse schon spürbar gehandelt
+     * wird — unter der Umsatzschwelle lehnen sie sofort ab. */
+    if (co.bot) {
+      const umsatz = (ba.eb || []).reduce((a, b) => a + b, 0);
+      delete ba.anfragen[companyId];
+      if (umsatz >= BOERSE_APP.BOT_UMSATZ) {
+        (ba.zugelassen ??= {})[companyId] = true;
+        emitTo(p.id, "notice", { text: `${co.name} lässt ${ba.name} zu — du darfst ihre Aktien anbieten.` });
+        return ack?.({ ok: true, auto: "zugelassen" });
+      }
+      emitTo(p.id, "notice", { text: `${co.name} lehnt ab — über ${ba.name} wird noch zu wenig gehandelt. Mach Werbung und komm wieder.` });
+      return ack?.({ ok: true, auto: "abgelehnt" });
+    }
+    emitTo(companyId, "notice", { text: `${p.name} möchte eure Aktien an der Börse ${ba.name} anbieten — an der Stadtbank entscheiden.` });
+    ack?.({ ok: true });
+  }));
+
+  socket.on("boerseZulassungEntscheiden", guard((p, { venueId, ok: zusagen } = {}, ack) => {
+    const ba = boerseVon(venueId);
+    if (!ba || !ba.anfragen?.[p.id]) return ack?.({ error: "Keine offene Anfrage" });
+    delete ba.anfragen[p.id];
+    if (zusagen) {
+      (ba.zugelassen ??= {})[p.id] = true;
+      emitTo(ba.ownerId, "notice", { text: `${p.name} lässt ${ba.name} zu — du darfst ihre Aktien anbieten.` });
+    } else {
+      emitTo(ba.ownerId, "notice", { text: `${p.name} lehnt eine Zulassung für ${ba.name} ab.` });
+    }
+    ack?.({ ok: true });
+  }));
+
+  socket.on("boerseZulassungBeenden", guard((p, { companyId } = {}, ack) => {
+    const ba = boerseEigenes(p);
+    if (!ba) return ack?.({ error: "Du hast keine Börsen-App" });
+    /* Beenden darf die Börse (der Anbieter) für eine Firma, oder die Firma
+     * selbst ihre Zulassung bei fremder Börse (companyId === p.id, venueId). */
+    if (ba.zugelassen?.[companyId]) { delete ba.zugelassen[companyId]; ack?.({ ok: true }); }
+    else ack?.({ error: "Nicht zugelassen" });
+  }));
+
+  socket.on("boerseZulassungZuruecknehmen", guard((p, { venueId } = {}, ack) => {
+    const ba = boerseVon(venueId);
+    if (!ba || !ba.zugelassen?.[p.id]) return ack?.({ error: "Keine aktive Zulassung" });
+    delete ba.zugelassen[p.id];
+    /* Angebote dieser Firma, die über diese Börse laufen, zurück ans offene Buch. */
+    for (const l of G.shareListings) if (l.venueId === venueId && l.companyId === p.id) l.venueId = null;
+    emitTo(ba.ownerId, "notice", { text: `${p.name} zieht die Zulassung für ${ba.name} zurück.` });
+    ack?.({ ok: true });
+  }));
+
   /* --- Software: Website-Design des Shop-Systems --- */
   socket.on("softwareDesign", guard((p, d = {}, ack) => {
     const prod = istSoftwareFirma(p) && swEigenes(p);
