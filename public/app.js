@@ -6423,7 +6423,7 @@ addEventListener("keydown", e => {
 });
 
 /* ---- Dock & Panels ---- */
-const DOCK = [["karte","Karte"],["plan","Planbüro"],["kartell","Kartell"],["lager","Lager"],["boerse","Börse"],["bonds","Finanzen"],["firma","Firma"],["netz","Stadtnetz"],["touristik","Touristik"],["motorsport","Motorsport"],["lexikon","Lexikon"],["chat","Chat"]];
+const DOCK = [["karte","Karte"],["plan","Planbüro"],["kartell","Kartell"],["lager","Lager"],["boerse","Börse"],["bonds","Finanzen"],["firma","Firma"],["hauptsitz","Hauptsitz"],["netz","Stadtnetz"],["touristik","Touristik"],["motorsport","Motorsport"],["lexikon","Lexikon"],["chat","Chat"]];
 const dock = document.getElementById("dock");
 DOCK.forEach(([pid, label]) => { const b = document.createElement("button");
   b.className = "dockbtn"; b.dataset.p = pid; b.textContent = label;
@@ -6436,6 +6436,7 @@ DOCK.forEach(([pid, label]) => { const b = document.createElement("button");
   if (pid === "boerse") b.id = "dockBoerse";
   /* Motorsport erscheint erst mit dem ersten eigenen Rennstall — vorher wäre
    * es ein Knopf, hinter dem nichts steht. */
+  if (pid === "hauptsitz") { b.id = "dockHQ"; b.style.display = "none"; }
   if (pid === "motorsport") { b.id = "dockMotor"; b.style.display = "none"; }
   /* Touristik: erst mit eigenem Campingplatz oder Strandhotel (Etappe 6) */
   if (pid === "touristik") { b.id = "dockTour"; b.style.display = "none"; }
@@ -10482,6 +10483,58 @@ function statBalken(basis, jetzt) {
     </div>`;
 }
 
+function hauptsitzRendern(state, me, myId) {
+  const knopf = document.getElementById("dockHQ");
+  const hqTile = (state.map || []).find(t => t.owner === myId && (BTYPES()[t.btype] || {}).hauptsitz);
+  if (knopf) knopf.style.display = hqTile ? "" : "none";
+  const body = document.getElementById("hqbody");
+  if (!body || !document.getElementById("p-hauptsitz").classList.contains("open")) return;
+  if (!hqTile) { body.innerHTML = `<div class="note">${t("Baue einen Hauptsitz im Zentrum, um Rollen zu besetzen.")}</div>`; return; }
+  const cfg = state.hqCfg;
+  if (!cfg) return;
+  const hq = me?.hq;
+  const besetzt = hq?.besetzt || {};
+  const stufe = hq?.stufe || (hqTile.level || 1);
+  const lohn = hq?.lohn || 0;
+  const myPlayer = state.players?.[myId];
+  const meineIndustrien = myPlayer?.industries || [myPlayer?.industry];
+  const extras = (hq?.extras || []);
+  let html = `<div class="sec">${t("Hauptsitz")} · ${t("Stufe")} ${stufe}</div>`;
+  html += `<div class="swZahlen"><div><b>${Object.values(besetzt).filter(Boolean).length}</b><span>${t("Rollen besetzt")}</span></div>`;
+  html += `<div><b>${lohn} $</b><span>${t("Gehälter/Min")}</span></div></div>`;
+  html += `<div class="sec" style="margin-top:12px">${t("Grundrollen")} <span class="meta">(${t("ab Stufe 1")})</span></div>`;
+  for (const [key, def] of Object.entries(cfg.rollen)) {
+    const aktiv = !!besetzt[key];
+    html += `<div class="hqRolle" style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--line,#e0e0e0)">`;
+    html += `<div style="flex:1"><b>${t(def.name)}</b> <span class="meta">${def.lohn} $/min</span><br><span class="meta">${t(def.beschreibung)}</span></div>`;
+    if (aktiv) html += `<button class="btn bad hqFire" data-rolle="${key}">${t("Entlassen")}</button>`;
+    else html += `<button class="btn hqHire" data-rolle="${key}">${t("Einstellen")}</button>`;
+    html += `</div>`;
+  }
+  const verfuegbar = Object.entries(cfg.extras).filter(([ind]) => meineIndustrien.includes(ind));
+  if (verfuegbar.length) {
+    html += `<div class="sec" style="margin-top:12px">${t("Branchen-Extras")} <span class="meta">(${t("ab Stufe 2")})</span></div>`;
+    for (const [ind, def] of verfuegbar) {
+      const key = def.rolle;
+      const aktiv = !!besetzt[key];
+      const gesperrt = stufe < 2;
+      html += `<div class="hqRolle" style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--line,#e0e0e0)">`;
+      html += `<div style="flex:1"><b>${t(def.name)}</b> <span class="meta">${def.lohn} $/min · ${iname(ind)}</span><br><span class="meta">${t(def.beschreibung)}</span></div>`;
+      if (gesperrt) html += `<button class="btn" disabled>${t("Stufe 2")}</button>`;
+      else if (aktiv) html += `<button class="btn bad hqFire" data-rolle="${key}">${t("Entlassen")}</button>`;
+      else html += `<button class="btn hqHire" data-rolle="${key}">${t("Einstellen")}</button>`;
+      html += `</div>`;
+    }
+  }
+  body.innerHTML = html;
+  body.querySelectorAll(".hqHire").forEach(b => b.addEventListener("click", () => {
+    socket.emit("hqEinstellen", { rolle: b.dataset.rolle }, r => { if (r?.error) meldung(r.error); });
+  }));
+  body.querySelectorAll(".hqFire").forEach(b => b.addEventListener("click", () => {
+    socket.emit("hqEntlassen", { rolle: b.dataset.rolle }, r => { if (r?.error) meldung(r.error); });
+  }));
+}
+
 function motorsportRendern(state, me, myId) {
   const knopf = document.getElementById("dockMotor");
   const meta = store.get().meta || {};
@@ -12507,6 +12560,7 @@ function render({ state, me, myId, chat, room }) {
       !typingIn(document.getElementById("p-software"))) softwareRendern(state, me, myId);
   /* Touristik: Dock-Knopf immer, das Panel nur offen und ohne Eingabe */
   if (!typingIn(document.getElementById("p-touristik"))) touristikRendern(state, me, myId);
+  hauptsitzRendern(state, me, myId);
   if (HOTEL.offen && !typingIn(document.getElementById("hotelFenster"))) hotelZeichnen();
   if (RZW.offen && !typingIn(document.getElementById("rzFenster"))) rzZeichnen();
   { const dn = document.getElementById("dockNetz"); if (dn) { dn.style.display = state.stadt ? "" : "none"; dn.classList.toggle("neu", ((state.news || [])[0]?.ts || 0) > KURIER.gelesen); }
