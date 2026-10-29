@@ -6543,6 +6543,24 @@ document.getElementById("p-bank").addEventListener("click", e => {
   if (zulJa) { socket.emit("boerseZulassungEntscheiden", { venueId: zulJa.dataset.bazulja, ok: true }, r => { if (r?.error) return toast(r.error, true); toast("Börse zugelassen"); render(store.get()); }); return; }
   const zulNein = e.target.closest("[data-bazulnein]");
   if (zulNein) { socket.emit("boerseZulassungEntscheiden", { venueId: zulNein.dataset.bazulnein, ok: false }, r => { if (r?.error) return toast(r.error, true); toast("Abgelehnt"); render(store.get()); }); return; }
+  const pbfK = e.target.closest("[data-pbfkauf]");
+  if (pbfK) {
+    const betrag = +document.getElementById(pbfK.dataset.input)?.value;
+    socket.emit("boerseFondsKaufen", { venueId: pbfK.dataset.pbfkauf, betrag }, r => {
+      if (r?.error) return toast(r.error, true);
+      toast(`Gekauft: ${r.anteile.toFixed(2)} Anteile für ${fmt(betrag)}`); SFX.spiel("kasse"); render(store.get());
+    });
+    return;
+  }
+  const pbfV = e.target.closest("[data-pbfverkauf]");
+  if (pbfV) {
+    const anteile = +(document.getElementById(pbfV.dataset.input)?.value || "").replace(",", ".");
+    socket.emit("boerseFondsVerkaufen", { venueId: pbfV.dataset.pbfverkauf, anteile }, r => {
+      if (r?.error) return toast(r.error, true);
+      toast(`Verkauft: ${fmt(r.netto)} erhalten`); SFX.spiel("kasse"); render(store.get());
+    });
+    return;
+  }
 });
 /* ---------- Finanzamt-Panel ---------- */
 /* ---------- Software-Panel ----------
@@ -6665,8 +6683,56 @@ function boerseHandelsplatzHtml(state, eigene, ba) {
     ${zug.length ? `<div class="sec" style="margin-top:8px;font-size:11px">Zugelassen (${zug.length})</div>
       ${zug.map(z => `<div class="bond"><div><b>${escapeHtml(rohText(z.name))}</b><div class="meta">Aktien an deiner Börse handelbar</div></div>
         <button class="mini" data-bazulende="${z.id}">Beenden</button></div>`).join("")}` : `<div class="note" style="margin-top:6px">Noch keine Firma zugelassen.</div>`}
-    ${ba.handelProvision ? `<div class="note" style="margin-top:6px">Aus Handelsgebühren bisher: <b style="color:var(--up)">${fmt(ba.handelProvision)}</b></div>` : ""}`;
+    ${ba.handelProvision ? `<div class="note" style="margin-top:6px">Aus Handelsgebühren bisher: <b style="color:var(--up)">${fmt(ba.handelProvision)}</b></div>` : ""}
+    ${boerseFondsEigenHtml(state, ba)}`;
 }
+
+/* Eigener Fonds einer Börse — Sicht des Eigentümers. Zeigt entweder das
+ * Anlegen-Formular (wenn noch kein Fonds besteht) oder die laufenden
+ * Kennzahlen plus die Aktionen Einlage, Firmen bearbeiten, Gebühr ändern
+ * und Fonds auflösen. */
+function boerseFondsEigenHtml(state, ba) {
+  const cfg = state.boerseAppCfg || {}, gMin = cfg.fondsGebMin ?? 0.5, gMax = cfg.fondsGebMax ?? 3, gStart = cfg.fondsGebStart ?? 1, minSeed = cfg.fondsMinSeed ?? 2000;
+  const zug = ba.zugelassen || [];
+  const f = ba.fonds;
+  if (!f) {
+    if (!zug.length) return `<div class="sec" style="margin-top:14px">Fonds · dein zweiter Vermögensbereich</div>
+      <div class="note">Du brauchst zuerst mindestens eine zugelassene Firma, dann kannst du einen Fonds auflegen.</div>`;
+    const e = fondsEntwurf;
+    e.firmen ??= new Set(zug.map(z => z.id));
+    return `<div class="sec" style="margin-top:14px">Fonds · dein zweiter Vermögensbereich</div>
+      <div class="note" style="margin:0 0 8px">Lege einen eigenen Fonds auf, der Aktien deiner zugelassenen Firmen hält. Beim Kauf und Verkauf von Fondsanteilen nimmst du die Gebühr. Dividenden fließen zu 80 % an die Anteilseigner weiter.</div>
+      <div class="swForm">
+        <label class="breit"><span>Name</span><input id="pbfName" maxlength="24" value="${escapeHtml(rohText(e.name || ""))}" placeholder="z. B. ByteFund"></label>
+        <label><span>Gebühr %</span><input id="pbfGebuehr" type="number" min="${gMin}" max="${gMax}" step="0.1" value="${String(e.gebuehr ?? gStart).replace(".", ",")}"></label>
+      </div>
+      <div class="note" style="margin-top:8px">Firmen im Fonds</div>
+      ${zug.map(z => `<label class="bond pbfPick" style="cursor:pointer" data-pbfpick="${z.id}"><input type="checkbox" ${e.firmen.has(z.id) ? "checked" : ""} style="margin:0 10px 0 0;width:auto"><b>${escapeHtml(rohText(z.name))}</b></label>`).join("")}
+      <div style="display:flex;justify-content:flex-end;margin-top:10px"><button class="buyb" id="pbfAnlegen">Fonds anlegen</button></div>`;
+  }
+  const wert = f.wert || 0, preis = f.preis || cfg.fondsStartPreis || 100;
+  const einlegen = fondsEntwurf.einlage ?? "";
+  return `<div class="sec" style="margin-top:14px">Fonds · ${escapeHtml(rohText(f.name))}</div>
+    <div class="swZahlen">
+      <div><b class="mono">${fmt(preis)}</b><span>Anteilspreis</span></div>
+      <div><b class="mono">${(f.anteile || 0).toLocaleString("de-DE", { maximumFractionDigits: 2 })}</b><span>Anteile gesamt</span></div>
+      <div><b class="mono" style="color:var(--up)">${fmt(wert)}</b><span>Fondswert</span></div>
+      <div><b class="mono">${fmt(f.kasse || 0)}</b><span>Barreserve</span></div>
+    </div>
+    ${f.aktien?.length ? f.aktien.map(h => `<div class="bond"><div><b>${escapeHtml(rohText(h.firma))}</b><div class="meta">${h.aktien} Aktien im Fonds</div></div></div>`).join("")
+      : `<div class="note" style="margin-top:4px">Der Fonds hält noch keine Aktien — kaufe welche über das Verkaufsformular der Stadtbank an deine Börse (Handelsplatz wählen) oder lass die Firma ihre Anteile hier anbieten.</div>`}
+    ${f.ausschuettungGesamt ? `<div class="note" style="margin-top:6px">Letzte Ausschüttung <b style="color:var(--up)">${fmt(f.ausschuettung)}</b> · bisher insgesamt <b>${fmt(f.ausschuettungGesamt)}</b></div>` : ""}
+    <div class="swForm" style="margin-top:10px">
+      <label><span>Einlage $</span><input id="pbfEinlage" type="number" min="${minSeed}" step="100" value="${einlegen || minSeed}" placeholder="min. ${minSeed}"></label>
+      <label><span>Gebühr %</span><input id="pbfGebuehrNeu" type="number" min="${gMin}" max="${gMax}" step="0.1" value="${String(f.gebuehr).replace(".", ",")}"></label>
+      <button class="buyb" id="pbfEinlegen">Einlegen</button>
+    </div>
+    <div class="aktion" style="display:flex;gap:8px;margin-top:8px">
+      <button class="mini" id="pbfGebuehrSetzen">Gebühr übernehmen</button>
+      <button class="mini" id="pbfSchliessen" style="color:var(--down);border-color:var(--down);background:transparent">Fonds auflösen</button>
+    </div>`;
+}
+const fondsEntwurf = {};
 const paintEntwurf = {};
 /* Malprogramm: das zweite Produkt einer Software-Firma, verkauft als Lizenz
  * im eigenen Online-Shop. */
@@ -8516,6 +8582,60 @@ document.getElementById("p-software").addEventListener("click", e => {
   const bze = e.target.closest("[data-bazulende]");
   if (bze) {
     socket.emit("boerseZulassungBeenden", { companyId: bze.dataset.bazulende }, r => { if (r?.error) return toast(r.error, true); toast("Zulassung beendet"); render(store.get()); });
+    return;
+  }
+  /* --- Eigener Fonds (Software-Panel) --- */
+  const pbfPick = e.target.closest("[data-pbfpick]");
+  if (pbfPick) {
+    fondsEntwurf.firmen ??= new Set();
+    const id = pbfPick.dataset.pbfpick;
+    fondsEntwurf.firmen.has(id) ? fondsEntwurf.firmen.delete(id) : fondsEntwurf.firmen.add(id);
+    fondsEntwurf.name = document.getElementById("pbfName")?.value || fondsEntwurf.name;
+    fondsEntwurf.gebuehr = document.getElementById("pbfGebuehr")?.value || fondsEntwurf.gebuehr;
+    render(store.get());
+    return;
+  }
+  if (e.target.closest("#pbfAnlegen")) {
+    const myId = store.get().myId, eigene = (store.get().state?.boerseApp || []).find(x => x.ownerId === myId);
+    if (!eigene) return toast("Keine eigene Börse", true);
+    const name = document.getElementById("pbfName")?.value;
+    const geb = (document.getElementById("pbfGebuehr")?.value || "").replace(",", ".");
+    const firmen = [...(fondsEntwurf.firmen || [])];
+    socket.emit("boerseFondsAnlegen", { venueId: eigene.id, name, gebuehr: geb, firmen }, r => {
+      if (r?.error) return toast(r.error, true);
+      for (const k of Object.keys(fondsEntwurf)) delete fondsEntwurf[k];
+      toast(`Fonds ${r.fonds.name} angelegt`); render(store.get());
+    });
+    return;
+  }
+  if (e.target.closest("#pbfEinlegen")) {
+    const myId = store.get().myId, eigene = (store.get().state?.boerseApp || []).find(x => x.ownerId === myId);
+    if (!eigene) return toast("Keine eigene Börse", true);
+    const betrag = +document.getElementById("pbfEinlage")?.value;
+    socket.emit("boerseFondsEinlegen", { venueId: eigene.id, betrag }, r => {
+      if (r?.error) return toast(r.error, true);
+      toast(`Einlage: ${r.anteile.toFixed(2)} Anteile`); SFX.spiel("kasse"); render(store.get());
+    });
+    return;
+  }
+  if (e.target.closest("#pbfGebuehrSetzen")) {
+    const myId = store.get().myId, eigene = (store.get().state?.boerseApp || []).find(x => x.ownerId === myId);
+    if (!eigene) return toast("Keine eigene Börse", true);
+    const g = (document.getElementById("pbfGebuehrNeu")?.value || "").replace(",", ".");
+    socket.emit("boerseFondsBearbeiten", { venueId: eigene.id, gebuehr: g }, r => {
+      if (r?.error) return toast(r.error, true);
+      toast(`Anteilsgebühr ${String(r.fonds.gebuehr).replace(".", ",")} %`); render(store.get());
+    });
+    return;
+  }
+  if (e.target.closest("#pbfSchliessen")) {
+    const myId = store.get().myId, eigene = (store.get().state?.boerseApp || []).find(x => x.ownerId === myId);
+    if (!eigene) return toast("Keine eigene Börse", true);
+    if (!confirm("Fonds wirklich auflösen? Der Fonds darf keine Aktien und keine fremden Anteilseigner mehr haben.")) return;
+    socket.emit("boerseFondsSchliessen", { venueId: eigene.id }, r => {
+      if (r?.error) return toast(r.error, true);
+      toast("Fonds aufgelöst"); render(store.get());
+    });
     return;
   }
   if (e.target.closest("#mpMalen")) return malOeffnen();
@@ -12470,6 +12590,25 @@ function render({ state, me, myId, chat, room }) {
         <div><b>${b.company}</b><div class="meta">${b.count} Aktien für ${fmt(b.price)} · wartet auf Antwort · noch ${b.ttl}s</div></div>
         <button class="mini" data-bidcancel="${b.id}">Zurückziehen</button></div>`).join("") : "");
 
+    /* --- Private Fonds: Kauf-/Verkauf-Karten in der Stadtbank ---
+     * Für jede Software-Börse, die einen Fonds anbietet, eine Karte mit
+     * Kennzahlen und einem Mini-Formular. Eigener Fonds ohne Formular. */
+    const fonds = (state.boerseApp || []).filter(x => x.fonds).map(x => ({ venueId: x.id, venue: x.name, anbieter: x.anbieter, ownerId: x.ownerId, farbe: x.farbe, ...x.fonds }));
+    const pbfBoard = document.getElementById("pbfBoard");
+    if (pbfBoard) {
+      pbfBoard.innerHTML = fonds.length ? `<div class="sec">Fonds privater Börsen</div>` + fonds.map(f => {
+        const halt = me.pbf?.[f.venueId] || 0, selbst = f.ownerId === myId;
+        const bidK = "pbfk_" + f.venueId, bidV = "pbfv_" + f.venueId;
+        return `<div class="bond pbfKarte"><div style="flex:1">
+          <b>${escapeHtml(rohText(f.name))}</b><div class="meta">über ${escapeHtml(rohText(f.venue))} · ${f.firmen.map(x => escapeHtml(rohText(x.name))).join(", ") || "—"} · Gebühr ${String(f.gebuehr).replace(".", ",")} %</div>
+          <div class="meta" style="margin-top:4px"><span class="mono">${fmt(f.preis)}</span> je Anteil · Fondswert <span class="mono">${fmt(f.wert)}</span>${halt ? ` · dein Bestand <b class="mono" style="color:var(--up)">${halt.toLocaleString("de-DE", { maximumFractionDigits: 2 })} Anteile</b>` : ""}</div></div>
+          ${selbst ? `<div class="meta" style="align-self:center">Dein eigener Fonds — Einlage im Software-Panel</div>` : `<div style="display:flex;gap:6px;align-items:center">
+          <input class="pbfBetrag" id="${bidK}" type="number" min="1" step="100" value="500" style="width:88px" placeholder="$">
+          <button class="buyb" data-pbfkauf="${f.venueId}" data-input="${bidK}">Kaufen</button>
+          ${halt ? `<input class="pbfBetrag" id="${bidV}" type="number" min="0.01" step="0.1" value="${halt.toFixed(2)}" style="width:88px" placeholder="Anteile">
+            <button class="mini" data-pbfverkauf="${f.venueId}" data-input="${bidV}">Verkaufen</button>` : ""}</div>`}</div>`;
+      }).join("") : "";
+    }
     document.getElementById("bReiterHandeln").textContent = (bidsToMe.length + boAnf.length) ? (bidsToMe.length + boAnf.length) : "";
     document.getElementById("bReiterDepot").textContent = me.portfolio?.length ? me.portfolio.length : "";
     kurswettenRendern();

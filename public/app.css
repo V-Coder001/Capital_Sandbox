@@ -2069,3 +2069,10 @@ em.auf,.bankZeile em.auf{color:#15803d}em.ab,.bankZeile em.ab{color:#b91c1c}
 @media (max-width:860px){
   .casLayout,.casSpiel{grid-template-columns:minmax(0,1fr)}
   .casTisch{padding:52px 16px 48px}}
+
+/* Private Fonds einer Software-Börse — Karten in der Stadtbank und Picker im Software-Panel */
+.pbfKarte{flex-wrap:wrap;align-items:flex-start}
+.pbfKarte>div:last-child{flex-wrap:wrap;justify-content:flex-end}
+.pbfBetrag{width:88px}
+.pbfPick{cursor:pointer}
+.pbfPick input[type=checkbox]{margin:0 10px 0 0;width:auto}
