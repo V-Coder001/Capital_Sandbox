@@ -1127,6 +1127,20 @@ td:first-child{font-family:var(--font)}
 #tutWait{font-size:11.5px;color:var(--accent2);display:none;align-items:center;gap:6px}
 @keyframes tutpulse{0%,100%{opacity:.4}50%{opacity:1}}
 #tutWait::before{content:"●";animation:tutpulse 1.2s infinite}
+/* ---- Tutorial-Scheinwerfer ----
+ * Hebt das UI-Element hervor, von dem der aktuelle Schritt spricht: ein
+ * pulsierender Ring, und der Rest der Seite wird abgedunkelt (Loch per
+ * riesigem Schatten). pointer-events:none — der Spieler kann das Element
+ * weiter anklicken, der Schritt hakt sich dann selbst ab. */
+#tutSpot{position:fixed;z-index:29;border-radius:12px;pointer-events:none;display:none;
+  box-shadow:0 0 0 9999px rgba(8,12,20,.60), 0 0 0 3px var(--accent), 0 0 22px 6px color-mix(in srgb,var(--accent) 70%,transparent);
+  transition:top .22s ease,left .22s ease,width .22s ease,height .22s ease}
+#tutSpot.on{display:block;animation:tutspot 1.4s ease-in-out infinite}
+@keyframes tutspot{0%,100%{box-shadow:0 0 0 9999px rgba(8,12,20,.60), 0 0 0 3px var(--accent), 0 0 14px 3px color-mix(in srgb,var(--accent) 55%,transparent)}
+  50%{box-shadow:0 0 0 9999px rgba(8,12,20,.60), 0 0 0 3px var(--accent), 0 0 26px 9px color-mix(in srgb,var(--accent) 80%,transparent)}}
+/* Zeigt der Schritt nach unten (Dock, Statusleiste unten), rückt die Mentor-Box
+ * nach oben, damit sie den Ring nicht verdeckt. */
+#tut.oben{top:84px;bottom:auto}
 #toasts{position:fixed;top:86px;left:50%;transform:translateX(-50%);z-index:40;display:flex;flex-direction:column;gap:6px;align-items:center}
 .toast{background:var(--panel2);border:1px solid var(--line);border-left:3px solid var(--accent);border-radius:9px;padding:8px 14px;font-size:12.5px;animation:tin .25s}
 .toast.err{border-left-color:var(--down)}

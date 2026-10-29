@@ -9946,8 +9946,8 @@ const TUT_IND = {
       p: `Klick deinen Marktplatz an und wähl ein <b>Shop-System</b>. Ohne System verkauft er nichts.<br><br>Das <b>Stadtportal</b> ist immer da, nimmt aber 8 % je Verkauf. Systeme der Software-Firmen sind meist günstiger und verkaufen schneller.` },
     { t: "Leg Obst ins Regal", warte: (st, me, id) => tutRegal(st, id, ["obst", "honig", "saft", "gebaeck", "kannabis", "medizin"]), wartetext: "Warte auf ein belegtes Regal …",
       p: `Belege im Marktplatz ein <b>Regal</b> mit Obst. Den Preis bestimmst du.<br><br>Faustregel: nah am <b>Ø-Kurs</b> (steht oben im Ticker). Billiger macht kaum schneller, kostet aber bei jedem Stück Geld.` },
-    { t: "Hol dir den Boost", warte: (st, me, id) => tutGekauft(st, me, id, ["wasser", "strom"]), wartetext: "Warte auf Wasser oder Strom …",
-      p: `Liegen <b>Wasser</b> und <b>Strom</b> im Lager, wächst deine Farm bis zu <b>150 % schneller</b>. Beides verkaufen die Versorger.<br><br>Öffne das <b>Stadtnetz</b> (Knopf unten) → <b>Warenbörse</b>, wähl Wasser oder Strom und kauf ein paar Stück.` },
+    { t: "Hol dir den Boost", warte: (st, me, id) => tutGekauft(st, me, id, ["wasser", "strom"]), wartetext: "Warte auf Wasser oder Strom …", ziel: '.dockbtn[data-p="netz"]',
+      p: `Liegen <b>Wasser</b> und <b>Strom</b> im Lager, wächst deine Farm bis zu <b>150 % schneller</b>. Beides verkaufen die Versorger.<br><br>Öffne das <b>Stadtnetz</b> (Knopf unten hervorgehoben) → <b>Warenbörse</b>, wähl Wasser oder Strom und kauf ein paar Stück.` },
     { t: "Veredle deine Ernte", warte: (st, me, id) => tutHat(st, id, "imkerei", "saftpresse", "plantage", "baeckerei"), wartetext: "Warte auf eine Imkerei, Saftpresse oder Plantage …",
       p: `Rohes Obst bringt wenig. Mehr verdienst du mit Veredelung: Die <b>Imkerei</b> liefert Honig, die <b>Saftpresse</b> macht aus Obst Saft, die <b>Plantage</b> Kannabis für das Pharma-Labor. Später backt die <b>Bäckerei</b> aus Obst und Honig Gebäck — das teuerste Lebensmittel.` },
     { t: "Deine Kunden in der Stadt",
@@ -9958,12 +9958,12 @@ const TUT_IND = {
       p: `Deine Gebäude stehen in der <em>braunen Industrie-Zone</em>. Klick eine gesperrte Kachel an, schalte sie frei und bau eine <b>Mine</b>. Sie fördert <b>Erze</b> — den Grundstoff für Ziegel, Beton und Stahl.` },
     { t: "Bau eine Ziegelei", build: "ziegelei", wartetext: "Warte auf die Ziegelei …",
       p: `Die <b>Ziegelei</b> macht aus Erzen und Wasser <b>Ziegel</b>. Und Ziegel braucht <b>jede Firma für jedes Gebäude</b> — und die Stadt für jeden Wohnblock. Du sitzt an der Quelle des ganzen Wachstums.` },
-    { t: "Wasser, Strom und Öl", warte: (st, me, id) => tutGekauft(st, me, id, ["wasser", "strom", "oel"]), wartetext: "Warte auf einen Einkauf …",
-      p: `Die Ziegelei braucht <b>Wasser</b>, die Mine läuft mit <b>Strom und Öl</b> bis zu 150 % schneller. Kauf beides bei den Versorgern: <b>Stadtnetz</b> → <b>Warenbörse</b>.` },
-    { t: "Verkauf deine Ziegel", warte: (st, me, id) => tutVerkauft(st, me, id, ["ziegel", "erze", "beton", "stahl"]), wartetext: "Warte auf ein Angebot …",
-      p: `Ziegel verkaufst du am besten an der <b>Warenbörse</b>: Dort suchen andere Firmen laufend welche. Stell eine <b>Verkaufsorder</b> zum Ø-Kurs ein — oder bau einen Online-Marktplatz und leg sie ins Regal.` },
-    { t: "Liefer an die Stadt", warte: () => TUT_GESEHEN.has("finanzamt"), wartetext: "Warte, bis du die Stadtübersicht öffnest …",
-      p: `Die Stadt baut Wohnblöcke und bestellt das Baumaterial bei euch — <b>15 % über Kurs</b>, sofort bezahlt. Klick oben auf die <b>Einwohnerzahl</b>: In der Stadtübersicht stehen die offenen <b>Wohnbau-Aufträge</b>, dort lieferst du direkt.` },
+    { t: "Wasser, Strom und Öl", warte: (st, me, id) => tutGekauft(st, me, id, ["wasser", "strom", "oel"]), wartetext: "Warte auf einen Einkauf …", ziel: '.dockbtn[data-p="netz"]',
+      p: `Die Ziegelei braucht <b>Wasser</b>, die Mine läuft mit <b>Strom und Öl</b> bis zu 150 % schneller. Kauf beides bei den Versorgern: <b>Stadtnetz</b> (unten) → <b>Warenbörse</b>.` },
+    { t: "Verkauf deine Ziegel", warte: (st, me, id) => tutVerkauft(st, me, id, ["ziegel", "erze", "beton", "stahl"]), wartetext: "Warte auf ein Angebot …", ziel: '.dockbtn[data-p="netz"]',
+      p: `Ziegel verkaufst du am besten an der <b>Warenbörse</b> (Stadtnetz): Dort suchen andere Firmen laufend welche. Stell eine <b>Verkaufsorder</b> zum Ø-Kurs ein — oder bau einen Online-Marktplatz und leg sie ins Regal.` },
+    { t: "Liefer an die Stadt", warte: () => TUT_GESEHEN.has("finanzamt"), wartetext: "Warte, bis du die Stadtübersicht öffnest …", ziel: "#einw, #players",
+      p: `Die Stadt baut Wohnblöcke und bestellt das Baumaterial bei euch — <b>15 % über Kurs</b>, sofort bezahlt. Klick oben auf die <b>Einwohnerzahl</b> (hervorgehoben): In der Stadtübersicht stehen die offenen <b>Wohnbau-Aufträge</b>, dort lieferst du direkt.` },
     { t: "Dein Weg nach oben",
       p: `Sobald Geld da ist: <b>Betonwerk</b> (Erze und Öl → Beton) und <b>Stahlwerk</b> (Erze und Öl → Stahl). Beton brauchen große Gebäude und Wohnblöcke, Stahl die Autowerke und die Rüstung.<br><br>Mit dem Website-Modul <b>Branchenportal</b> wird deine Seite zum <b>Baustoff-Portal</b>: +5 % auf jede Wohnbau-Lieferung.` },
   ],
@@ -9972,10 +9972,10 @@ const TUT_IND = {
       p: `Starte günstig: Bau auf einer <em>grünen Agrar-Kachel</em> einen <b>Brunnen</b>. Er fördert <b>Wasser</b> — das brauchen Farmen, Ziegeleien, Hotels und jeder Haushalt der Stadt.` },
     { t: "Bau ein E-Werk", build: "ewerk", wartetext: "Warte auf das E-Werk …",
       p: `Schalte in der <em>braunen Industrie-Zone</em> eine Kachel frei und bau ein <b>E-Werk</b>. <b>Strom</b> braucht fast jede Branche: Chipfabriken, Rechenzentren, Hotels, Minen für den Boost.` },
-    { t: "Verkauf an der Börse", warte: (st, me, id) => tutVerkauft(st, me, id, ["strom", "wasser", "oel", "diesel"]), wartetext: "Warte auf ein Angebot …",
-      p: `Deine Kunden sind die anderen Firmen. Stell an der <b>Warenbörse</b> (Stadtnetz) eine <b>Verkaufsorder</b> für Strom oder Wasser zum Ø-Kurs ein. Liegt ein passendes Gesuch im Buch, verkaufst du sofort.` },
-    { t: "Die Stadt kauft bei dir", warte: () => TUT_GESEHEN.has("finanzamt"), wartetext: "Warte, bis du die Stadtübersicht öffnest …",
-      p: `Jede Minute kauft die Stadt für ihre Haushalte <b>Strom und Wasser</b> — direkt aus den Lagern der Firmen, zu mindestens 70 % des Grundpreises. Je mehr du auf Lager hast, desto mehr geht an dich.<br><br>Klick oben auf die <b>Einwohnerzahl</b>: Unter „Grundbedarf“ siehst du, was die Stadt braucht.` },
+    { t: "Verkauf an der Börse", warte: (st, me, id) => tutVerkauft(st, me, id, ["strom", "wasser", "oel", "diesel"]), wartetext: "Warte auf ein Angebot …", ziel: '.dockbtn[data-p="netz"]',
+      p: `Deine Kunden sind die anderen Firmen. Stell an der <b>Warenbörse</b> (Stadtnetz, unten) eine <b>Verkaufsorder</b> für Strom oder Wasser zum Ø-Kurs ein. Liegt ein passendes Gesuch im Buch, verkaufst du sofort.` },
+    { t: "Die Stadt kauft bei dir", warte: () => TUT_GESEHEN.has("finanzamt"), wartetext: "Warte, bis du die Stadtübersicht öffnest …", ziel: "#einw, #players",
+      p: `Jede Minute kauft die Stadt für ihre Haushalte <b>Strom und Wasser</b> — direkt aus den Lagern der Firmen, zu mindestens 70 % des Grundpreises. Je mehr du auf Lager hast, desto mehr geht an dich.<br><br>Klick oben auf die <b>Einwohnerzahl</b> (hervorgehoben): Unter „Grundbedarf“ siehst du, was die Stadt braucht.` },
     { t: "Dein Ausbau",
       p: `Mit Kapital: <b>Wasserwerk</b> für mehr Wasser, an der Küste <b>Windpark</b> und <b>Ölpumpe</b>, dazu die <b>Raffinerie</b> (Öl → Diesel für Autowerke und Panzer).<br><br>Mit dem Website-Modul <b>Branchenportal</b> wird deine Seite zum <b>Kundenportal</b>: Rechenzentren und Hotels kaufen dort Strom und Wasser direkt bei dir.` },
   ],
@@ -9984,10 +9984,10 @@ const TUT_IND = {
       p: `Schalte in der <em>braunen Industrie-Zone</em> eine Kachel frei und bau die <b>Siliziummine</b>. Sie fördert <b>Silizium</b>, deinen Rohstoff.` },
     { t: "Bau eine Chipfabrik", build: "chipfabrik", wartetext: "Warte auf die Chipfabrik …",
       p: `Die <b>Chipfabrik</b> macht aus Silizium und Strom <b>Elektronik</b>. Elektronik braucht <b>jede Firma</b>, um ihre Gebäude auszubauen — je größer die Stadt, desto größer die Nachfrage.` },
-    { t: "Strom für die Fabrik", warte: (st, me, id) => tutGekauft(st, me, id, ["strom"]), wartetext: "Warte auf Strom …",
-      p: `Ohne <b>Strom</b> steht die Chipfabrik still. Kauf ihn bei den Versorgern: <b>Stadtnetz</b> → <b>Warenbörse</b> → Strom.` },
-    { t: "Verkauf deine Elektronik", warte: (st, me, id) => tutVerkauft(st, me, id, ["elektronik", "silizium"]), wartetext: "Warte auf ein Angebot …",
-      p: `Stell an der <b>Warenbörse</b> eine Verkaufsorder für Elektronik ein — oder leg sie in einem Online-Marktplatz ins Regal. Elektronik ist teuer (rund 100 $), schon kleine Mengen bringen viel.` },
+    { t: "Strom für die Fabrik", warte: (st, me, id) => tutGekauft(st, me, id, ["strom"]), wartetext: "Warte auf Strom …", ziel: '.dockbtn[data-p="netz"]',
+      p: `Ohne <b>Strom</b> steht die Chipfabrik still. Kauf ihn bei den Versorgern: <b>Stadtnetz</b> (unten) → <b>Warenbörse</b> → Strom.` },
+    { t: "Verkauf deine Elektronik", warte: (st, me, id) => tutVerkauft(st, me, id, ["elektronik", "silizium"]), wartetext: "Warte auf ein Angebot …", ziel: '.dockbtn[data-p="netz"]',
+      p: `Stell an der <b>Warenbörse</b> (Stadtnetz) eine Verkaufsorder für Elektronik ein — oder leg sie in einem Online-Marktplatz ins Regal. Elektronik ist teuer (rund 100 $), schon kleine Mengen bringen viel.` },
     { t: "Bau selbst aus", warte: (st, me, id) => st.map.some(t => t.owner === id && (t.level || 1) >= 2), wartetext: "Warte auf einen Ausbau …",
       p: `Klick eines deiner Gebäude an und bau es auf <b>Stufe 2</b> aus. Jede Stufe bringt 30 % mehr Ausstoß auf derselben Kachel — und du hast die Elektronik dafür selbst.` },
     { t: "Dein Weg nach oben",
@@ -9996,15 +9996,15 @@ const TUT_IND = {
   touristik: [
     { t: "Bau einen Campingplatz", build: "campingplatz", wartetext: "Warte auf den Campingplatz …",
       p: `Bau auf einer freien <em>grünen Agrar-Kachel</em> einen <b>Campingplatz</b>. Er braucht keine Zutaten und liefert sofort <b>Zimmer</b> (Übernachtungen) — dein Einstieg ohne Handelspartner.` },
-    { t: "Dein Touristik-Panel", warte: () => TUT_GESEHEN.has("touristik"), wartetext: "Warte, bis du das Touristik-Panel öffnest …",
-      p: `Unten erscheint jetzt der Knopf <b>Touristik</b>. Öffne ihn.<br><br>Jede Minute kommen <b>Gäste</b> in die Stadt — mehr, je größer und zufriedener sie ist. Sie wählen ein Hotel nach <b>Bewertung</b> und <b>Zimmerpreis</b> und zahlen direkt an dich. Den Preis stellst du dort ein.` },
+    { t: "Dein Touristik-Panel", warte: () => TUT_GESEHEN.has("touristik"), wartetext: "Warte, bis du das Touristik-Panel öffnest …", ziel: '.dockbtn[data-p="touristik"]',
+      p: `Unten erscheint jetzt der Knopf <b>Touristik</b> (hervorgehoben). Öffne ihn.<br><br>Jede Minute kommen <b>Gäste</b> in die Stadt — mehr, je größer und zufriedener sie ist. Sie wählen ein Hotel nach <b>Bewertung</b> und <b>Zimmerpreis</b> und zahlen direkt an dich. Den Preis stellst du dort ein.` },
     { t: "Bau ein Strandhotel", build: "strandhotel", wartetext: "Warte auf das Strandhotel …",
       p: `Das eigentliche Geschäft: das <b>Strandhotel</b> an der <em>Küste</em> (Kachel freischalten). Es macht aus Wasser und Strom viel mehr Zimmer als der Campingplatz und startet mit <b>2 Sternen</b>.` },
-    { t: "Wasser und Strom fürs Hotel", warte: (st, me, id) => tutGekauft(st, me, id, ["wasser", "strom"]), wartetext: "Warte auf Wasser oder Strom …",
-      p: `Ohne Nachschub steht das Hotel still. Kauf <b>Wasser und Strom</b> an der <b>Warenbörse</b> im Stadtnetz — beides liegt dort meist reichlich.` },
+    { t: "Wasser und Strom fürs Hotel", warte: (st, me, id) => tutGekauft(st, me, id, ["wasser", "strom"]), wartetext: "Warte auf Wasser oder Strom …", ziel: '.dockbtn[data-p="netz"]',
+      p: `Ohne Nachschub steht das Hotel still. Kauf <b>Wasser und Strom</b> an der <b>Warenbörse</b> im Stadtnetz (unten) — beides liegt dort meist reichlich.` },
     { t: "Renovier auf 3 Sterne", warte: (st, me, id) => st.map.some(t => t.owner === id && t.btype === "strandhotel" && (t.sterne || 2) >= 3), wartetext: "Warte auf die Renovierung …",
       p: `Mehr Sterne = bessere Bewertung = mehr Gäste oder höhere Preise. Klick dein Strandhotel an und <b>renovier auf 3 Sterne</b> (1.500 $).` },
-    { t: "Frühstück einkaufen", warte: (st, me, id) => ["obst", "honig", "saft", "gebaeck"].some(g => (me.inv?.[g] || 0) >= 1) || tutGekauft(st, me, id, ["obst", "honig", "saft", "gebaeck"]), wartetext: "Warte auf Lebensmittel im Lager …",
+    { t: "Frühstück einkaufen", warte: (st, me, id) => ["obst", "honig", "saft", "gebaeck"].some(g => (me.inv?.[g] || 0) >= 1) || tutGekauft(st, me, id, ["obst", "honig", "saft", "gebaeck"]), wartetext: "Warte auf Lebensmittel im Lager …", ziel: '.dockbtn[data-p="netz"]',
       p: `Ab 3 Sternen erwarten deine Gäste <b>Frühstück</b>: Obst, Honig, Saft oder Gebäck aus deinem Lager. Fehlt es, sinkt die Bewertung. Kauf <b>Obst</b> an der Warenbörse — oder direkt im <b>Hofladen</b> einer Agrar-Firma im Stadtnetz.` },
     { t: "Feste und deine Buchungsseite",
       p: `Im Touristik-Panel veranstaltest du <b>Stadtfeste</b>: Strandfest, Konzert oder Festival locken für einige Minuten viel mehr Gäste in die Stadt — du bekommst den größten Teil. Halte vorher genug Zimmer auf Lager.<br><br>Deine <b>Buchungsseite</b> zeigt allen deine Häuser, Preise und Gästebewertungen.` },
@@ -10028,13 +10028,13 @@ const TUT_IND = {
   ruestung: [
     { t: "Bau eine Munitionsfabrik", build: "munitionsfabrik", wartetext: "Warte auf die Munitionsfabrik …",
       p: `Schalte in der <em>braunen Industrie-Zone</em> eine Kachel frei und bau die <b>Munitionsfabrik</b>. Sie macht aus Erzen und Öl <b>Munition</b> — billig im Bau, damit früh Geld hereinkommt.` },
-    { t: "Erze und Öl einkaufen", warte: (st, me, id) => tutGekauft(st, me, id, ["erze", "oel"]), wartetext: "Warte auf Erze oder Öl …",
-      p: `Du stellst nichts aus dem Nichts her: <b>Erze</b> kommen von der Rohstoff-Industrie, <b>Öl</b> von den Versorgern. Kauf beides an der <b>Warenbörse</b> im Stadtnetz.` },
+    { t: "Erze und Öl einkaufen", warte: (st, me, id) => tutGekauft(st, me, id, ["erze", "oel"]), wartetext: "Warte auf Erze oder Öl …", ziel: '.dockbtn[data-p="netz"]',
+      p: `Du stellst nichts aus dem Nichts her: <b>Erze</b> kommen von der Rohstoff-Industrie, <b>Öl</b> von den Versorgern. Kauf beides an der <b>Warenbörse</b> im Stadtnetz (unten).` },
     { t: "Dein Laden mit Shop-System", warte: (st, me, id) => tutShop(st, id), wartetext: "Warte auf Laden und Shop-System …",
       p: `Bau im Zentrum einen <b>Online-Marktplatz</b> und installier ein Shop-System — am besten eins mit <b>Rüstungs-Baum</b>, es verkauft Waffen schneller.` },
-    { t: "Verkauf deine Munition", warte: (st, me, id) => tutVerkauft(st, me, id, ["munition", "pistole", "panzer"]), wartetext: "Warte auf ein Angebot …",
-      p: `Leg <b>Munition</b> ins Regal oder stell eine Verkaufsorder an der Börse ein. Polizei, Stadtwache und Schützenverein kaufen in der Stadt.` },
-    { t: "Ausschreibungen", warte: () => TUT_GESEHEN.has("firma"), wartetext: "Warte, bis du das Firma-Panel öffnest …",
+    { t: "Verkauf deine Munition", warte: (st, me, id) => tutVerkauft(st, me, id, ["munition", "pistole", "panzer"]), wartetext: "Warte auf ein Angebot …", ziel: '.dockbtn[data-p="netz"]',
+      p: `Leg <b>Munition</b> ins Regal oder stell eine Verkaufsorder an der Börse (Stadtnetz) ein. Polizei, Stadtwache und Schützenverein kaufen in der Stadt.` },
+    { t: "Ausschreibungen", warte: () => TUT_GESEHEN.has("firma"), wartetext: "Warte, bis du das Firma-Panel öffnest …", ziel: '.dockbtn[data-p="firma"]',
       p: `Dein größtes Geschäft: <b>Ausschreibungen</b> der Stadt. Polizei, Stadtwache oder Grenzschutz suchen größere Mengen; du gibst 60 Sekunden lang ein verdecktes Gebot ab (80–140 % des Listenpreises). Wer liefert, steigert seinen Lieferruf. Geboten wird im <b>Firma</b>-Panel — öffne es einmal.` },
     { t: "Bau die Waffenschmiede", build: "waffenschmiede", wartetext: "Warte auf die Waffenschmiede …",
       p: `Die <b>Waffenschmiede</b> macht Pistolen aus Stahl, Elektronik und Munition. Stahl kaufst du bei der Rohstoff-, Elektronik bei der Technik-Branche. Kauf die Vorprodukte früh, bevor andere sie wegkaufen.` },
@@ -10054,14 +10054,14 @@ function buildTut(ind) {
     ruestung: "Du belieferst Polizei, Stadtwache und Grenzschutz — mit Ausschreibungen als großem Geschäft.",
   };
   return [
-    { t: "Willkommen bei Capital Sandbox",
-      p: `Ich habe diese Stadt dreißig Jahre lang als CEO geführt — jetzt zeige ich <b>dir</b>, wie man in der <b>${IND_NAME[ind] || ind}</b> groß wird.<br><br>${ROLLE[ind] || ""}<br><br>Dein Ziel: als Erster das <b>Vermögensziel</b> erreichen (oben links). Ganz oben läuft der <b>Kursticker</b> mit den Ø-Kursen aller Waren.` },
-    { t: "Die Stadt und deine Leute",
+    { t: "Willkommen bei Capital Sandbox", ziel: "#networth",
+      p: `Ich habe diese Stadt dreißig Jahre lang als CEO geführt — jetzt zeige ich <b>dir</b>, wie man in der <b>${IND_NAME[ind] || ind}</b> groß wird.<br><br>${ROLLE[ind] || ""}<br><br>Dein Ziel: als Erster das <b>Vermögensziel</b> erreichen (oben links — hervorgehoben). Ganz oben läuft der <b>Kursticker</b> mit den Ø-Kursen aller Waren.` },
+    { t: "Die Stadt und deine Leute", ziel: "#einw, #players",
       p: `Die Stadt wächst mit euch: Oben neben deinem Geld steht die <b>Einwohnerzahl</b>. Die Bewohner arbeiten in euren Gebäuden und kaufen in euren Läden.<br><br>Jedes Gebäude braucht <b>Arbeiter</b>. Sind sie knapp, gehen sie zur Firma mit dem besseren Lohn — den stellst du im <b>Firma</b>-Panel ein. Du baust nur Gebäude <b>deiner</b> Branche; alles andere kaufst du von den anderen.` },
     ...(TUT_IND[ind] || TUT_IND.agrar),
-    { t: "Das Stadtnetz", warte: () => TUT_GESEHEN.has("netz"), wartetext: "Warte, bis du das Stadtnetz öffnest …",
-      p: `Unten findest du das <b>Stadtnetz</b> — das Internet der Stadt. Öffne es.<br><br>Dort sind der <b>Stadtkurier</b> (Nachrichten alle zwei Minuten), die <b>Warenbörse</b>, die <b>Stadtbank</b> (Aktien und Fonds), der <b>Anleihenmarkt</b> und die Websites aller Firmen. Eine eigene <b>Website</b> bringt dir Reichweite — bestellen kannst du sie bei einer Software-Firma.` },
-    { t: "Bring dein Vermögen auf 16.000 $", warte: (st, me, id) => (st.players[id]?.netWorth || 0) >= 16000, wartetext: "Warte, bis dein Nettovermögen 16.000 $ erreicht …",
+    { t: "Das Stadtnetz", warte: () => TUT_GESEHEN.has("netz"), wartetext: "Warte, bis du das Stadtnetz öffnest …", ziel: '.dockbtn[data-p="netz"]',
+      p: `Unten findest du das <b>Stadtnetz</b> — das Internet der Stadt. Öffne es (unten hervorgehoben).<br><br>Dort sind der <b>Stadtkurier</b> (Nachrichten alle zwei Minuten), die <b>Warenbörse</b>, die <b>Stadtbank</b> (Aktien und Fonds), der <b>Anleihenmarkt</b> und die Websites aller Firmen. Eine eigene <b>Website</b> bringt dir Reichweite — bestellen kannst du sie bei einer Software-Firma.` },
+    { t: "Bring dein Vermögen auf 16.000 $", warte: (st, me, id) => (st.players[id]?.netWorth || 0) >= 16000, wartetext: "Warte, bis dein Nettovermögen 16.000 $ erreicht …", ziel: "#networth",
       p: `Jetzt läuft alles zusammen: produzieren, verkaufen, nachkaufen, ausbauen.<br><br>Dein <b>Nettovermögen</b> (oben links) ist Bargeld plus Lager plus Gebäude minus Schulden. Bring es von 9.500 $ auf <b>16.000 $</b> — mit einem zweiten Gebäude, Preisen nah am Ø-Kurs und vollem Lager bei den Zutaten.` },
     { t: "Jetzt gehört die Stadt dir",
       p: `Das war der Rundgang. Was dir im Spiel noch begegnet, erklären kurze <b>Hinweise</b> genau dann, wenn es wichtig wird. Im <b>Lexikon</b> steht jede Regel nach.<br><br>Mein letzter Rat: Schau regelmäßig in den <b>Stadtkurier</b>. Wer zuerst weiß, welche Ware knapp wird, verdient am meisten.` },
@@ -10123,13 +10123,15 @@ const TUT_SPIEL = [
         || st.orders.some(o => o.playerId === id && o.side === "buy" && o.good === g);
       return hat("wasser") && hat("strom");
     },
-    p: `Öffne die <b>Börse</b> unten und besorge dir <b>Wasser</b> und <b>Strom</b> — entweder direkt aus einem Angebot oder über eine eigene Kauforder, falls gerade nichts im Buch steht.<br><br>Liegen beide im Lager, läuft deine Farm mit bis zu <b>+150 % Tempo</b> — sie werden dabei verbraucht. Das ist der größte Hebel im frühen Spiel und kostet fast nichts.` },
+    ziel: '.dockbtn[data-p="boerse"], .dockbtn[data-p="netz"]',
+    p: `Öffne die <b>Börse</b> unten (hervorgehoben) und besorge dir <b>Wasser</b> und <b>Strom</b> — entweder direkt aus einem Angebot oder über eine eigene Kauforder, falls gerade nichts im Buch steht.<br><br>Liegen beide im Lager, läuft deine Farm mit bis zu <b>+150 % Tempo</b> — sie werden dabei verbraucht. Das ist der größte Hebel im frühen Spiel und kostet fast nichts.` },
 
   { t: "Zwischenstopp — Deine Leute",
     p: `Jedes Gebäude braucht <b>Arbeiter</b> aus der Stadt. Klick eins deiner Gebäude an: Unter <b>Belegschaft</b> siehst du, wie viele da sind — mit 3 von 5 läuft es zu 60 %.<br><br>Sind Leute knapp, gehen sie zur Firma mit dem besten Lohn. Den stellst du im <b>Firma</b>-Panel ein. Wie viele Einwohner die Stadt hat, steht oben neben deinem Bargeld.` },
 
   { t: "Schritt 6 — Stelle eine eigene Order ein",
     warte: (st, me, id) => st.orders.some(o => o.playerId === id),
+    ziel: '.dockbtn[data-p="boerse"], .dockbtn[data-p="netz"]',
     p: `Bisher hast du aus dem Buch gekauft. Jetzt umgekehrt: Stelle an der Börse eine <b>eigene Order</b> ein — verkaufe Obst oder suche eine Ware, die du brauchst.<br><br>Deine Order bleibt stehen, bis jemand sie bedient. Ware und Geld liegen so lange treuhänderisch fest, niemand kann dich hängen lassen.` },
 
   { t: "Schritt 7 — Bring dein Vermögen auf 16.000 $",
@@ -10177,6 +10179,7 @@ const TUT_EINSTEIGER = [
 
   { t: "Schritt 4 — Lies den Kursticker",
     warte: () => TUT_GESEHEN.has("boerse"),
+    ziel: "#ticker",
     p: `Öffne die <b>Börse</b> — im Sandkasten die Website <b>boerse.cs</b> im Stadtnetz (Knopf unten).<br><br>Oben im Ticker steht zu jeder Ware ein Ø-Kurs mit Trendpfeil. Der Wert steht bewusst <b>30 Sekunden still</b>, bevor er nachzieht — eine Zahl, die im Sekundentakt zappelt, taugt nicht, um den eigenen Preis danach zu setzen. Der Pfeil vergleicht deshalb 30 Sekunden gegen 30 Sekunden.` },
 
   { t: "Schritt 5 — Kauf etwas an der Börse",
@@ -10189,26 +10192,32 @@ const TUT_EINSTEIGER = [
         || st.orders.some(o => o.playerId === id && o.side === "buy" && o.good === g);
       return hat("wasser") || hat("strom");
     },
+    ziel: '.dockbtn[data-p="boerse"], .dockbtn[data-p="netz"]',
     p: `Kauf dir <b>Wasser</b> oder <b>Strom</b> — direkt aus einem Angebot, oder über eine eigene Kauforder, falls das Buch gerade leer ist.<br><br>Liegen beide im Lager, läuft deine Produktion mit bis zu <b>+150 % Tempo</b>. Sie werden dabei verbraucht. Das ist der größte Hebel im frühen Spiel und kostet fast nichts.` },
 
   { t: "Schritt 6 — Stell eine eigene Order ein",
     warte: (st, me, id) => st.orders.some(o => o.playerId === id),
+    ziel: '.dockbtn[data-p="boerse"], .dockbtn[data-p="netz"]',
     p: `Bisher hast du aus dem Buch gekauft. Jetzt andersherum: Stell eine <b>eigene Order</b> ein — verkauf deine Ware oder such etwas, das du brauchst.<br><br>Sie bleibt stehen, bis jemand sie bedient. Ware und Geld liegen so lange treuhänderisch fest; niemand kann dich hängen lassen.` },
 
   { t: "Schritt 7 — Schau ins Lager",
     warte: () => TUT_GESEHEN.has("lager"),
-    p: `Öffne das <b>Lager</b>.<br><br>Hier steht jede Ware mit Bestand — und hier findest du die <b>Großaufträge</b> der Städte: feste Mengen zum doppelten Ø-Kurs, an denen sich alle Spieler gemeinsam beteiligen. Der Preis ist bei Auftragsvergabe fixiert, egal wohin der Markt danach läuft.` },
+    ziel: '.dockbtn[data-p="lager"]',
+    p: `Öffne das <b>Lager</b> (unten hervorgehoben).<br><br>Hier steht jede Ware mit Bestand — und hier findest du die <b>Großaufträge</b> der Städte: feste Mengen zum doppelten Ø-Kurs, an denen sich alle Spieler gemeinsam beteiligen. Der Preis ist bei Auftragsvergabe fixiert, egal wohin der Markt danach läuft.` },
 
   { t: "Schritt 8 — Lies die Nachrichten",
     warte: () => TUT_GESEHEN.has("news") || TUT_GESEHEN.has("kurier"),
+    ziel: '.dockbtn[data-p="netz"]',
     p: `Öffne die <b>Nachrichten</b> — im Sandkasten den <b>Stadtkurier</b> im Stadtnetz (Knopf unten).<br><br>Dort laufen Marktberichte und Ereignisse: welche Ware knapp wird, wo Preise anziehen, was die anderen Firmen treiben. Wer den Bericht liest, bevor er den Ladenpreis setzt, verdient schlicht mehr.` },
 
   { t: "Schritt 9 — Kauf Anteile an einer Firma",
     warte: (st, me, id) => (me.portfolio || []).length > 0 || (me.balance?.holdings || 0) > 0,
+    ziel: '.dockbtn[data-p="bank"], .dockbtn[data-p="netz"]',
     p: `Geh zur <b>Stadtbank</b> — im Sandkasten die Website <b>bank.cs</b> im Stadtnetz; das Bankgebäude mitten im Zentrum führt auch dorthin.<br><br>Dort handelst du <b>Anteile</b> anderer Firmen. Wächst eine Firma, wächst dein Anteil mit, ohne dass du selbst baust. Kauf dir ein Paket von irgendjemandem.` },
 
   { t: "Schritt 10 — Wirf einen Blick auf die Finanzen",
     warte: () => TUT_GESEHEN.has("bonds"),
+    ziel: '.dockbtn[data-p="bonds"], .dockbtn[data-p="netz"]',
     p: `Öffne <b>Finanzen</b> — im Sandkasten die Website <b>anleihen.cs</b> im Stadtnetz.<br><br>Hier gibst du <b>Anleihen</b> aus: Geld sofort, Rückzahlung mit Zins über die Laufzeit. Nützlich, um schneller zu wachsen — aber bei Verzug wird gepfändet. Ich sage nicht, dass du eine aufnehmen sollst. Du sollst nur wissen, dass es sie gibt.` },
 
   { t: "Schritt 11 — Bau ein Gebäude aus",
@@ -10234,7 +10243,7 @@ function tutShow(i) {
   else if (i === 0 && store.get().state?.mode !== "kartell" && TUT.length && TUT[0].t === "Willkommen in der Kartellwirtschaft")
     TUT = buildTut(store.get().meta?.industry || "agrar");
   tutIdx = i;
-  if (i < 0 || i >= TUT.length) { tutEl.style.display = "none"; return; }
+  if (i < 0 || i >= TUT.length) { tutEl.style.display = "none"; tutSpotSetzen(null); return; }
   const s = TUT[i];
   tutEl.style.display = "block";
   document.getElementById("tutStep").textContent = `Tutorial ${i + 1}/${TUT.length}`;
@@ -10252,8 +10261,61 @@ function tutShow(i) {
    * Knopf in einer zweiten Runde ab Schritt 1 noch das "Los geht's!" der
    * vorigen. */
   document.getElementById("tutNext").textContent = t(i === TUT.length - 1 ? "Los geht's!" : "Weiter");
+  tutSpotSetzen(s.ziel);
 }
-function tutDone() { tutIdx = -1; tutEl.style.display = "none"; try { localStorage.setItem("cs_tut_done", "1"); } catch {} }
+/* ---- Scheinwerfer auf das passende Bedienelement ----
+ * Jeder Schritt kann ein `ziel` (CSS-Auswahl) tragen. Dann legt sich ein
+ * pulsierender Ring um dieses Element und der Rest wird abgedunkelt — so sieht
+ * der Spieler sofort, wovon der Text spricht, und kann es anklicken. Der Ring
+ * folgt dem Element per Lauf, denn Dock und Statusleiste verschieben sich beim
+ * Öffnen von Panels oder beim Drehen des Geräts. */
+let tutZielSel = null, tutSpotLauf = 0;
+function tutSpotEl() {
+  let el = document.getElementById("tutSpot");
+  if (!el) { el = document.createElement("div"); el.id = "tutSpot"; el.setAttribute("aria-hidden", "true"); document.body.append(el); }
+  return el;
+}
+function tutSpotPositionieren() {
+  const spot = tutSpotEl();
+  /* `ziel` darf mehrere Auswahlen tragen (durch Komma) — genommen wird die
+   * erste, die wirklich sichtbar ist. So kann ein Schritt im Sandkasten den
+   * Stadtnetz-Knopf und im Einsteiger-Modus den Börsen-Knopf meinen. */
+  let ziel = null, r = null;
+  if (tutZielSel && tutIdx >= 0) {
+    for (const sel of tutZielSel.split(",")) {
+      const el = document.querySelector(sel.trim());
+      if (!el) continue;
+      const rr = el.getBoundingClientRect();
+      if (rr.width || rr.height) { ziel = el; r = rr; break; }
+    }
+  }
+  if (!ziel) { spot.classList.remove("on"); tutEl.classList.remove("oben"); return; }
+  const pad = 7;
+  spot.style.top = (r.top - pad) + "px";
+  spot.style.left = (r.left - pad) + "px";
+  spot.style.width = (r.width + pad * 2) + "px";
+  spot.style.height = (r.height + pad * 2) + "px";
+  spot.classList.add("on");
+  /* Zeigt das Ziel in die untere Bildschirmhälfte (Dock, Statusleiste), würde
+   * die Mentor-Box unten links den Ring verdecken — dann nach oben rücken. */
+  tutEl.classList.toggle("oben", (r.top + r.height / 2) > window.innerHeight * 0.58);
+}
+function tutSpotSetzen(sel) {
+  tutZielSel = sel || null;
+  const spot = tutSpotEl();
+  if (!tutZielSel) { spot.classList.remove("on"); tutEl.classList.remove("oben"); if (tutSpotLauf) { cancelAnimationFrame(tutSpotLauf); tutSpotLauf = 0; } return; }
+  tutSpotPositionieren();
+  /* Laufende Nachführung, solange ein Ziel aktiv ist. */
+  if (!tutSpotLauf) {
+    const tick = () => {
+      if (!tutZielSel || tutIdx < 0) { tutSpotLauf = 0; return; }
+      tutSpotPositionieren();
+      tutSpotLauf = requestAnimationFrame(tick);
+    };
+    tutSpotLauf = requestAnimationFrame(tick);
+  }
+}
+function tutDone() { tutIdx = -1; tutEl.style.display = "none"; tutSpotSetzen(null); try { localStorage.setItem("cs_tut_done", "1"); } catch {} }
 document.getElementById("tutNext").addEventListener("click", () => {
   if (tutIdx < TUT.length - 1) return tutShow(tutIdx + 1);
   /* Im Einsteiger-Modus endet die Runde mit dem Tutorial — sonst bleibt sie
@@ -10272,7 +10334,7 @@ document.getElementById("help").addEventListener("click", () => tutShow(0));
 function tutCheck(state, myId) {
   /* Das Tutorial erklärt Börse und Stadtbank — in der Planwirtschaft
    * führt es in die Irre, dort bleibt es aus. */
-  if (state?.mode === "plan") { document.getElementById("tut").style.display = "none"; return; }
+  if (state?.mode === "plan") { document.getElementById("tut").style.display = "none"; tutSpotSetzen(null); return; }
   if (tutIdx < 0 || !state) return;
   const s = TUT[tutIdx];
   if (!s) return;
