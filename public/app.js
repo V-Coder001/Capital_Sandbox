@@ -100,6 +100,23 @@ function sparklineVon(h, breite = 62, hoehe = 18) {
     <polyline points="${pts}" fill="none" stroke="${farbe}" stroke-width="1.4" stroke-linejoin="round" stroke-linecap="round"/></svg>`;
 }
 const sparkline = (g, breite = 62, hoehe = 18) => sparklineVon(priceHist[g], breite, hoehe);
+/* Veränderung über die letzten 10 Minuten. Ein Punkt je 10 Sekunden, also 60
+ * Punkte — über den GANZEN Verlauf gerechnet stand am Rundenanfang überall
+ * dieselbe Zahl, weil der Startwert nie aus dem Fenster fällt. */
+function aend10(h) {
+  if (!h || h.length < 2) return null;
+  const a = h[Math.max(0, h.length - 61)];
+  return a ? (h[h.length - 1] / a - 1) * 100 : null;
+}
+/* Logo-Kachel einer Firma in der Kurstafel: gemaltes Logo, sonst der
+ * Anfangsbuchstabe auf der Firmenfarbe. Bewusst immer dieselbe Größe — die
+ * freigestellten Wortmarken der Bots waren in der Tafel mal 42 px breit, mal
+ * 180, und der Firmenname verschwand im weißen Bildhintergrund. */
+function bankAvatar(p) {
+  const bild = logoBild(p.id);
+  return bild ? `<img class="bzLogo hatBild" src="${bild}" alt="">`
+              : `<span class="bzLogo" style="background:${p.color || "#64748b"}">${rohText(p.name || "?").slice(0, 1)}</span>`;
+}
 /* Welche Firmen in der Kurstafel gerade aufgeklappt sind. Muss ausserhalb des
  * Renderns leben: die Tafel wird jede Sekunde neu gebaut, ein Zustand im DOM
  * waere danach jedes Mal weg. */
@@ -6502,6 +6519,50 @@ document.getElementById("bIssue").addEventListener("click", () => act("issueBond
  * Sonst kann ein Zustandsupdate zwischen Maus-runter und Maus-hoch den Knopf
  * austauschen — dann entsteht gar kein click-Event und der Klick verpufft. */
 let BANK_REITER = "markt";
+/* Vorschau und Hinweis unter den beiden Handelsformularen. Steht bewusst
+ * ausserhalb von render(): Wer gerade in einem Feld tippt, bekommt keinen
+ * Neuaufbau des Panels (sonst waere die Eingabe weg) — die Vorschau muss sich
+ * trotzdem bei jedem Tastendruck mitbewegen, sonst rechnet man im Kopf weiter. */
+function handelVorschau() {
+  const { state, me, myId, meta } = store.get();
+  if (!state || !me) return;
+  const geb = meta?.shareFee ?? 0;
+  /* Kaufseite */
+  const bidCo = document.getElementById("bidCompany"), bidV = document.getElementById("bidVorschau");
+  const ziel = state.players?.[bidCo?.value];
+  const bn = Math.max(1, +(document.getElementById("bidCount")?.value) || 1);
+  const bp = Math.max(0, +(document.getElementById("bidPrice")?.value) || 0);
+  if (bidV) {
+    const fair = (ziel?.kurs || 0) * bn;
+    const diff = fair ? Math.round((bp / fair - 1) * 100) : null;
+    bidV.innerHTML = ziel
+      ? `<span>${bn} × ${fk(ziel.kurs || 0)} = ${fmt(fair)}</span><b class="${diff == null ? "" : diff <= 0 ? "plus" : "minus"}">${fmt(bp)}${diff == null ? "" : ` <em>${diff >= 0 ? "+" : "−"}${Math.abs(diff)} %</em>`}</b>`
+      : `<span>Keine Firma wählbar</span>`;
+  }
+  const bidHint = document.getElementById("bidHint");
+  if (bidHint) bidHint.textContent = ziel
+    ? `${ziel.name} hält noch ${Math.round((ziel.ownPct || 0) * AKTIEN_JE_FIRMA() / 100)} eigene Aktien. Unter dem Kurs lehnen die meisten ab.`
+    : "Alle Firmen haben ihre eigenen Aktien bereits vollständig abgegeben.";
+  /* Verkaufsseite */
+  const shCo = document.getElementById("shCompany"), shV = document.getElementById("shVorschau");
+  const eigen = shCo?.value === myId;
+  const pos = eigen ? null : (me.portfolio || []).find(h => h.id === shCo?.value);
+  const kurs = eigen ? (me.kurs || 0) : (pos?.kurs || 0);
+  const hat = eigen ? (me.ownAktien ?? 0) : (pos?.count || 0);
+  const sn = Math.max(1, Math.min(hat || 1, +(document.getElementById("shCount")?.value) || 1));
+  const sp = Math.max(0, +(document.getElementById("shPrice")?.value) || 0);
+  if (shV) {
+    const fair = kurs * sn;
+    const diff = fair ? Math.round((sp / fair - 1) * 100) : null;
+    shV.innerHTML = hat
+      ? `<span>${sn} × ${fk(kurs)} = ${fmt(fair)}</span><b class="${diff == null ? "" : diff >= 0 ? "plus" : "minus"}">${fmt(sp)}${diff == null ? "" : ` <em>${diff >= 0 ? "+" : "−"}${Math.abs(diff)} %</em>`}</b>`
+      : `<span>Keine Aktien zum Abgeben</span>`;
+  }
+  const shHint = document.getElementById("shHint");
+  if (shHint) shHint.textContent = hat
+    ? `Du hältst ${hat} ${eigen ? "eigene" : "fremde"} Aktien${geb ? ` · ${Math.round(geb * 100)} % Börsengebühr` : ""}.`
+    : "Du hältst gerade keine Aktien zum Verkauf.";
+}
 function bankReiterZeigen() {
   document.querySelectorAll("#p-bank [data-breiter]").forEach(b => b.classList.toggle("on", b.dataset.breiter === BANK_REITER));
   document.querySelectorAll("#p-bank [data-bseite]").forEach(sx => sx.hidden = sx.dataset.bseite !== BANK_REITER);
@@ -6517,9 +6578,39 @@ document.getElementById("p-bank").addEventListener("click", e => {
   const wf = e.target.closest("[data-wfirma]");
   if (wf) { document.getElementById("wFirma").value = wf.dataset.wfirma; kurswettenRendern(); SFX.spiel("klick"); return; }
   const zuHandeln = e.target.closest("[data-zu-handeln]");
-  if (zuHandeln) { BANK_REITER = "handeln"; bankReiterZeigen();
+  if (zuHandeln) { BANK_REITER = "handeln"; bankReiterZeigen(); SFX.spiel("klick");
     const sel = document.getElementById("bidCompany"); if ([...sel.options].some(o => o.value === zuHandeln.dataset.zuHandeln)) sel.value = zuHandeln.dataset.zuHandeln;
+    render(store.get());
     return; }
+  /* „Anbieten" in der eigenen Zeile der Kurstafel: gleicher Reiter, aber die
+   * Verkaufsseite — von dort gibt man eigene Aktien ab. */
+  if (e.target.closest("[data-zu-verkauf]")) { BANK_REITER = "handeln"; bankReiterZeigen(); SFX.spiel("klick");
+    document.getElementById("shCount")?.focus();
+    return; }
+  /* Schnellwahl in den Handelsformularen. Menge und Gebot hängen am Kurs der
+   * gerade gewählten Firma — den holen wir frisch aus dem State, nicht aus dem
+   * zuletzt gerenderten Text. */
+  const bidAnteil = e.target.closest("[data-bidanteil]");
+  if (bidAnteil) {
+    const st = store.get().state, ziel = st?.players?.[document.getElementById("bidCompany").value];
+    const max = ziel ? Math.round((ziel.ownPct || 0) * AKTIEN_JE_FIRMA() / 100) : AKTIEN_JE_FIRMA();
+    const w = bidAnteil.dataset.bidanteil;
+    document.getElementById("bidCount").value = Math.max(1, w === "max" ? max : Math.min(+w, max || +w));
+    handelVorschau(); return;
+  }
+  const bidAuf = e.target.closest("[data-bidauf]");
+  if (bidAuf) {
+    const st = store.get().state, ziel = st?.players?.[document.getElementById("bidCompany").value];
+    const n = Math.max(1, +document.getElementById("bidCount").value || 1);
+    document.getElementById("bidPrice").value = Math.max(1, Math.round((ziel?.kurs || 0) * n * (1 + +bidAuf.dataset.bidauf / 100)));
+    handelVorschau(); return;
+  }
+  const shAnteil = e.target.closest("[data-shanteil]");
+  if (shAnteil) {
+    const feld = document.getElementById("shCount"), max = +feld.max || 1, w = shAnteil.dataset.shanteil;
+    feld.value = Math.max(1, w === "max" ? max : Math.min(+w, max));
+    handelVorschau(); return;
+  }
   const yes = e.target.closest("[data-merge-yes]");
   if (yes) { act("mergeCompany", { targetId: yes.dataset.mergeYes }); pendingMerge = null; render(store.get()); return; }
   if (e.target.closest("[data-merge-no]")) { pendingMerge = null; render(store.get()); return; }
@@ -7692,8 +7783,33 @@ function netzZeichnen() {
     fenster.querySelector(".sfBanner").hidden = true;
     fenster.querySelector(".sfHinweis").hidden = true;
     netzSetze(".sfFuss", `<span class="sfFussLogo">🏦</span><span>${t("Die Stadtbank wird von der Stadt betrieben · das Gebäude im Zentrum führt hierher")}</span>`, "fussBank");
+    /* Anzeige: Werbenetz, sonst Hinweis für Firmen */
+    const anz = (state.anzeigen || [])[Math.floor(state.tick / 20) % Math.max(1, (state.anzeigen || []).length)];
+    const anzFirma = anz && state.players[anz.firmaId];
+    const anzeige = anz ? `<button type="button" class="bankAnzeige" data-netzauf="${anz.firmaId}" style="--af:${anzFirma?.color || "#0e7490"}"><small>${t("ANZEIGE")}</small>${logoHtml(anz.firmaId, "bankAnzLogo", anzFirma?.color)}<b>${escapeHtml(rohText(anz.firma))}</b><span>${escapeHtml(rohText(anz.text))}</span><em>${t("Website besuchen")}</em></button>`
+      : `<div class="bankAnzeige leer"><small>${t("ANZEIGE")}</small><b>${t("Hier könnte Ihre Firma stehen")}</b><span>${t("Anzeigen buchen Firmen über das Werbenetz der Software-Firmen.")}</span></div>`;
     if (tab === "handeln") {
-      netzSetze(".netzInhalt", `<div class="bankSlot"></div>`, "inhaltBankHandeln");
+      /* Handelsseite im selben Raster wie Marktübersicht und Aktien: Inhalt
+       * links, schmale Spalte rechts. Ohne sie stand ein Drittel der
+       * Fensterbreite leer, während die Kurstafel sich links quetschte. */
+      /* Das Gerüst bleibt Zeichen für Zeichen gleich, sonst baut netzSetze es
+       * bei jeder geänderten Zahl neu — und reißt dabei das Panel samt
+       * halb ausgefülltem Formular aus dem DOM. Die beweglichen Teile bekommen
+       * eigene Aufrufe. */
+      netzSetze(".netzInhalt", `<div class="bankPortal">
+        <div class="bankHaupt"><div class="bankSlot"></div></div>
+        <aside class="bankRand">
+          <section class="bankKarte bankTipp" id="bankTippDiv"></section>
+          <section class="bankKarte bankTipp"><h4>${t("Wert F")}</h4>
+            <p>${t("Liegt der Kurs unter dem Wert F, holt er meist auf. Die Kurstafel zeigt die Lücke je Firma.")}</p></section>
+          <div class="bankAnzSlot"></div></aside></div>`, "inhaltBankHandeln");
+      const meF = state.players[myId], rend = meF ? aktienRendite(meF) : null;
+      const divJe = meF ? aktienDividende(meF) : null;
+      const eigene = me?.ownAktien ?? 0;
+      netzSetze("#bankTippDiv", `<h4>${t("Dividende")}</h4>
+        <p>${!divJe ? t("Deine Firma schüttet noch nichts aus — dafür braucht sie Umsatz. Ausgeschüttet wird ein Teil des Umsatzes, verteilt auf alle Aktien.")
+          : `${t("Je Aktie fließen")} <b class="mono">${fk(divJe)}</b> ${t("je Ausschüttung zurück")}${eigene ? `, ${t("auf deine")} ${eigene} ${t("eigenen Aktien also")} <b class="mono">${fmt(divJe * eigene)}</b>` : ""}.${rend == null ? "" : ` ${t("Rendite zum Kurs")}: <b class="${rend >= 4 ? "auf" : ""}">${rend.toFixed(1).replace(".", ",")} %</b>.`}`}</p>`, "bankTippDiv");
+      netzSetze(".bankAnzSlot", anzeige, "bankAnzHandeln");
       const slot = fenster.querySelector(".bankSlot");
       if (slot && BANK_EL.parentElement !== slot) { slot.appendChild(BANK_EL); BANK_EL.classList.add("imNetz", "open"); render(store.get()); }
       return;
@@ -7719,11 +7835,6 @@ function netzZeichnen() {
     const pz = d => `${d >= 0 ? "+" : "−"}${Math.abs(d).toFixed(2).replace(".", ",")} %`;
     const wahl = kacheln.find(k => k.id === NETZ.bankWahl), dW = aend(wahl.h);
     const chart = bankChart(wahl.h, wahl.fmtW);
-    /* Anzeige: Werbenetz, sonst Hinweis für Firmen */
-    const anz = (state.anzeigen || [])[Math.floor(state.tick / 20) % Math.max(1, (state.anzeigen || []).length)];
-    const anzFirma = anz && state.players[anz.firmaId];
-    const anzeige = anz ? `<button type="button" class="bankAnzeige" data-netzauf="${anz.firmaId}" style="--af:${anzFirma?.color || "#0e7490"}"><small>${t("ANZEIGE")}</small>${logoHtml(anz.firmaId, "bankAnzLogo", anzFirma?.color)}<b>${escapeHtml(rohText(anz.firma))}</b><span>${escapeHtml(rohText(anz.text))}</span><em>${t("Website besuchen")}</em></button>`
-      : `<div class="bankAnzeige leer"><small>${t("ANZEIGE")}</small><b>${t("Hier könnte Ihre Firma stehen")}</b><span>${t("Anzeigen buchen Firmen über das Werbenetz der Software-Firmen.")}</span></div>`;
     if (tab === "markt") {
       const analysen = kurierArtikel(state).filter(a => a.ressort === "Börse" || a.ressort === "Wirtschaft").slice(0, 3);
       netzSetze(".netzInhalt", `<div class="bankPortal">
@@ -9492,9 +9603,12 @@ document.getElementById("shKurs").addEventListener("click", () => {
   const n = Math.max(1, Math.floor(+document.getElementById("shCount").value) || 1);
   if (!shKursSel) return toast("Erst eine Firma mit Aktien wählen", true);
   document.getElementById("shPrice").value = Math.max(1, Math.round(shKursSel * n));
-  document.getElementById("shHint").textContent = `Kurs ${fk(shKursSel)} je Aktie → ${n} Aktien ≈ ${fmt(shKursSel * n)}. Angeboten zum Kurs.`;
+  handelVorschau();
   SFX.spiel("klick");
 });
+/* Jede Eingabe in den Handelsformularen rechnet die Vorschau neu. */
+["bidCompany", "bidCount", "bidPrice", "shCompany", "shCount", "shPrice"].forEach(id =>
+  document.getElementById(id)?.addEventListener("input", handelVorschau));
 document.getElementById("shList").addEventListener("click", () => act("listShares", {
   companyId: document.getElementById("shCompany").value || null,
   count: document.getElementById("shCount").value, price: document.getElementById("shPrice").value,
@@ -12274,12 +12388,8 @@ function render({ state, me, myId, chat, room }) {
       || `<option value="">Keine Aktien</option>`;
     if (sellable.some(o => o.id === shCoPrev)) shCo.value = shCoPrev;
     const sel = sellable.find(o => o.id === shCo.value);
-    const shN = Math.max(1, Math.min(sel?.aktien || 1, +document.getElementById("shCount").value || 1));
     document.getElementById("shCount").max = sel?.aktien || 1;
     shKursSel = sel?.kurs || 0;
-    document.getElementById("shHint").textContent = sel
-      ? `Kurs ${fk(sel.kurs)} je Aktie → ${shN} Aktien ≈ ${fmt(sel.kurs * shN)}. Du hältst ${sel.aktien}.`
-      : "Du hältst gerade keine Aktien zum Verkauf.";
 
     const shToSel = document.getElementById("shTo"), shToPrev = shToSel.value;
     shToSel.innerHTML = `<option value="">Offener Markt (alle)</option>` + Object.values(state.players)
@@ -12301,16 +12411,22 @@ function render({ state, me, myId, chat, room }) {
         const angebote = state.shareListings.filter(l => l.companyId === p.id && l.sellerId !== myId && (!l.toId || l.toId === myId))
           .sort((a, b) => a.price / a.count - b.price / b.count);
         const guenstig = angebote[0];
-        return `<div class="bond firmrow" data-firm="${p.id}" style="cursor:pointer">
-          <div style="min-width:0;flex:1">${firmenMarke(p.name, p.color, 42)}${p.id === myId ? ` <span class="meta">(du)</span>` : ""}
-            <div class="meta">Marktwert ${fmt(p.marketValue || 0)}${held ? ` · <b style="color:var(--accent)">du: ${held} %</b>` : ""}
-              ${angebote.length ? ` · <span class="bAngebotChip">${angebote.length} Angebot${angebote.length > 1 ? "e" : ""} ab ${fk(guenstig.price / guenstig.count)}/Aktie</span>` : ""}
-              · ${lueckeHtml(p.luecke)}</div></div>
-          <span style="display:flex;align-items:center;gap:8px">
-            ${firmHist[p.id] ? sparklineVon(firmHist[p.id], 52, 16) : ""}
-            <span class="fpreis">${fk(p.kurs || 0)}<span class="meta"> /Aktie</span></span>
-            <span class="meta" style="width:9px;text-align:center">${auf ? "⌃" : "⌄"}</span>
-          </span>
+        /* Veränderung über die letzten 10 Minuten (60 Punkte à 10 s). Ohne diese
+         * Spalte sagte die Tafel nur, was eine Aktie kostet — nicht, wohin sie
+         * läuft, und genau danach sucht man beim Überfliegen. */
+        const d10 = aend10(firmHist[p.id]);
+        return `<div class="bzeile${auf ? " auf" : ""}" data-firm="${p.id}">
+          <span class="bzFirma">${bankAvatar(p)}<span class="bzText">
+            <b>${escapeHtml(rohText(p.name))}${p.id === myId ? ` <span class="bzDu">(du)</span>` : ""}</b>
+            <small>${t(BRANCHE_NAME[p.industry] || "")}${held ? ` · <b class="bzHalt">du: ${held} %</b>` : ""}${angebote.length ? ` · <span class="bAngebotChip">${angebote.length} Angebot${angebote.length > 1 ? "e" : ""} ab ${fk(guenstig.price / guenstig.count)}</span>` : ""}</small></span></span>
+          <span class="bzSpark">${firmHist[p.id] ? sparklineVon(firmHist[p.id], 52, 20) : ""}</span>
+          <span class="bzKurs">${fk(p.kurs || 0)}${p.luecke != null && Math.abs(p.luecke) > 0.01 ? ` <em class="bzLuecke">${lueckeHtml(p.luecke)}</em>` : ""}</span>
+          <span class="bzAend ${d10 == null ? "null" : d10 > 0.05 ? "auf" : d10 < -0.05 ? "ab" : "null"}">${d10 == null ? "—" : `${d10 >= 0 ? "+" : "−"}${Math.abs(d10).toFixed(1).replace(".", ",")} %`}</span>
+          <span class="bzMwert">${fmt(p.marketValue || 0)}</span>
+          <span class="bzTat">${p.id !== myId && (p.ownPct ?? 0) > 0
+            ? `<button type="button" class="bzKauf" data-zu-handeln="${p.id}">Kaufen</button>`
+            : p.id === myId ? `<button type="button" class="bzKauf aus" data-zu-verkauf="1">Anbieten</button>` : `<span class="bzLeer">—</span>`}
+            <i class="bzPfeil">${auf ? "⌃" : "⌄"}</i></span>
         </div>` + (auf ? `<div class="firmdetail">
           ${verlaufChart(firmHist[p.id], "Marktwert (Kurs × Aktien)", fmt)}
           <div class="kzrow"><span>Kurs je Aktie</span><b>${fk(p.kurs || 0)}</b></div>
@@ -12328,7 +12444,10 @@ function render({ state, me, myId, chat, room }) {
           <div class="meta" style="padding-top:4px">${p.ausschuettung != null ? `${p.name} schüttet fest ${fmt(p.ausschuettung)}` : `Ausgeschüttet werden ${Math.round((store.get().meta?.dividendRate ?? 0) * 100)} % des Umsatzes`} je ${takt} Minuten, verteilt auf ${AKTIEN_JE_FIRMA()} Aktien. Der Kurs folgt dem Wert F mit Verzögerung.</div>
         </div>` : "");
       }).join("");
-    document.querySelectorAll("[data-firm]").forEach(el => el.addEventListener("click", () => {
+    document.querySelectorAll("[data-firm]").forEach(el => el.addEventListener("click", e => {
+      /* Die Knöpfe in der Zeile führen zum Handeln-Reiter — sie dürfen die
+       * Zeile nicht nebenbei auf- oder zuklappen. */
+      if (e.target.closest("[data-zu-handeln],[data-zu-verkauf]")) return;
       const id = el.dataset.firm;
       firmenAuf.has(id) ? firmenAuf.delete(id) : firmenAuf.add(id);
       SFX.spiel("klick");
@@ -12356,7 +12475,8 @@ function render({ state, me, myId, chat, room }) {
         `<div class="bond"><div><b>${l.company}</b><div class="meta">${l.count} Aktien für ${fmt(l.price)}${l.toId ? ` · nur für ${l.toName}` : " · offener Markt"}</div></div>
          <button class="mini" data-shcancel="${l.id}">${t("Storno")}</button></div>`).join("") : "") +
       (toMe.length ? `<div class="sec">Nur für dich</div>` + toMe.map(offerRow).join("") : "") +
-      `<div class="sec bTafelKopf"><span>Kurstafel</span><span class="meta">${open.length ? `${open.length} offene Angebote — Firma antippen` : "keine offenen Angebote"}</span></div>`;
+      `<div class="sec bTafelKopf"><span>Kurstafel</span><span class="meta">${Object.keys(state.players).length} Firmen · ${open.length ? `${open.length} offene Angebote — Firma antippen` : "keine offenen Angebote"}</span></div>
+       <div class="bzeile kopf"><span class="bzFirma">Firma</span><span class="bzSpark">Verlauf</span><span class="bzKurs">Kurs</span><span class="bzAend">10 min</span><span class="bzMwert">Marktwert</span><span class="bzTat"></span></div>`;
     /* Branchen-ETFs: Index je Branche (Kurse gewichtet nach Wert F, Start 100) */
     const etfs = state.etf || [];
     document.getElementById("etfboard").innerHTML = etfs.length ? `<div class="sec bTafelKopf"><span>Branchen-ETFs</span><span class="meta">ein Kauf streut über alle Firmen der Branche</span></div>` +
@@ -12386,11 +12506,7 @@ function render({ state, me, myId, chat, room }) {
     bidCo.innerHTML = targets.map(p => `<option value="${p.id}">${p.name} (hält ${Math.round(p.ownPct * AKTIEN_JE_FIRMA() / 100)} eigene Aktien)</option>`).join("")
       || `<option value="">Keine Firma hält noch eigene Aktien</option>`;
     if (targets.some(p => p.id === bidCoPrev)) bidCo.value = bidCoPrev;
-    const bidTarget = targets.find(p => p.id === bidCo.value);
-    const bidCount = +document.getElementById("bidCount").value || 1;
-    document.getElementById("bidHint").textContent = bidTarget
-      ? `Kurs ${fk(bidTarget.kurs || 0)} je Aktie → ${bidCount} Aktien ≈ ${fmt((bidTarget.kurs || 0) * bidCount)}. Darunter lehnen die meisten ab.`
-      : "Alle Firmen haben ihre eigenen Aktien bereits vollständig abgegeben.";
+    handelVorschau();
 
     const bids = state.shareBids || [];
     const bidsToMe = bids.filter(b => b.companyId === myId);
@@ -12424,16 +12540,13 @@ function render({ state, me, myId, chat, room }) {
           const gv = h.einstand > 0 ? h.value - h.einstand : null;
           const gvFarbe = gv == null ? "var(--dim)" : gv >= 0 ? "var(--up)" : "var(--down)";
           const gvProz = h.einstand > 0 ? (h.value / h.einstand - 1) * 100 : null;
-          return `<div class="bond">
-            <div style="min-width:0">${firmenMarke(h.company, "var(--text)", 38)}${h.pct >= 100 ? ` <b style="color:var(--accent)">· bereit zur Fusion</b>` : ""}
-              <div class="depotzahlen">
-                <span>${h.count} Aktien (${h.pct} %)</span>
-                <span>Einstand <b>${h.einstand > 0 ? fmt(h.einstand) : "—"}</b></span>
-                <span>zum Kurs <b>${fmt(h.value)}</b></span>
-                <span class="meta">Buchwert ${fmt(h.buchwert || 0)}</span>
-                ${gv == null ? "" : `<span style="color:${gvFarbe}">${gv >= 0 ? "+" : "−"}${fmt(Math.abs(gv))} (${gvProz >= 0 ? "+" : ""}${gvProz.toFixed(0)} %)</span>`}
-              </div></div>
-            <div style="display:flex;gap:5px">${mergeUi}</div></div>`;
+          const firma = state.players[h.id] || { id: h.id, name: h.company };
+          return `<div class="bpos">
+            ${bankAvatar(firma)}
+            <span class="bposText"><b>${escapeHtml(rohText(h.company))}${h.pct >= 100 ? ` <span class="bposFusion">bereit zur Fusion</span>` : ""}</b>
+              <small>${h.count} Aktien · ${h.pct} % · Einstand ${h.einstand > 0 ? fmt(h.einstand) : "—"} · Buchwert ${fmt(h.buchwert || 0)}</small></span>
+            <span class="bposWert"><b>${fmt(h.value)}</b>${gv == null ? "" : `<em style="color:${gvFarbe}">${gv >= 0 ? "+" : "−"}${fmt(Math.abs(gv))} · ${gvProz >= 0 ? "+" : "−"}${Math.abs(gvProz).toFixed(0)} %</em>`}</span>
+            ${mergeUi ? `<span class="bposTat">${mergeUi}</span>` : ""}</div>`;
         }).join("") + (() => {
           /* Depotsumme: Einzelposten sagen nichts darueber, wie das Depot als
            * Ganzes steht — und das ist die Zahl, die man mit dem Bargeld
@@ -12446,7 +12559,9 @@ function render({ state, me, myId, chat, room }) {
             <span><b>${fmt(wert)}</b>${einst > 0 ? ` <span class="meta">Einstand ${fmt(einst)}</span>` : ""}
               ${gv == null ? "" : `<b style="color:${gv >= 0 ? "var(--up)" : "var(--down)"}">${gv >= 0 ? "+" : "−"}${fmt(Math.abs(gv))}</b>`}</span></div>`;
         })()
-      : `<span class="meta">Du hältst keine fremden Aktien. Kauf welche — liegt der Kurs unter dem Wert F, holt er meist auf, und du kannst teurer weiterverkaufen.</span>`;
+      : `<div class="bLeer"><b>Noch keine fremden Aktien</b>
+          <span>Kauf welche — liegt der Kurs unter dem Wert F, holt er meist auf, und du kannst teurer weiterverkaufen.</span>
+          <button type="button" class="bknopf zur" data-breiter="markt">Zur Kurstafel</button></div>`;
     /* ETF-Bestände */
     if ((me.etf || []).length) document.getElementById("bankdepot").insertAdjacentHTML("beforeend",
       `<div class="sec">Branchen-ETFs</div>` + me.etf.map(x => {
