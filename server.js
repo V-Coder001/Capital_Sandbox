@@ -3296,15 +3296,23 @@ const faGesamt = co => faBestand(co) + faVerwahrt(co);
 const faBuchwert = () => Object.entries(G.faEtf || {}).reduce((a, [br, n]) => a + n * (etfPreis(br, true) || 0), 0);
 /* Institutionen als Aktionäre: das Finanzamt, die Branchenfonds und das
  * Bürgerdepot der Stadtbewohner. */
-const istInstitution = hid => hid === FA_ID || hid === DEPOT_ID || istFonds(hid);
-const institutionName = hid => hid === FA_ID ? "Finanzamt" : hid === DEPOT_ID ? "Bürgerdepot" : `${INDUSTRIES[fondsBranche(hid)]?.name ?? "?"}-Fonds`;
+const istInstitution = hid => hid === FA_ID || hid === DEPOT_ID || istFonds(hid) || istPbf(hid);
+const institutionName = hid => hid === FA_ID ? "Finanzamt" : hid === DEPOT_ID ? "Bürgerdepot"
+  : istPbf(hid) ? (pbfVon(hid)?.name || "Fonds") : `${INDUSTRIES[fondsBranche(hid)]?.name ?? "?"}-Fonds`;
 function institutionZahlt(hid, betrag) {
-  if (hid === FA_ID) G.stadtkasse -= betrag; else if (hid === DEPOT_ID) depotVon().cash -= betrag; else fondsVon(fondsBranche(hid)).cash -= betrag;
+  if (hid === FA_ID) G.stadtkasse -= betrag;
+  else if (hid === DEPOT_ID) depotVon().cash -= betrag;
+  else if (istPbf(hid)) { const f = pbfVon(hid); if (f) f.cash -= betrag; }
+  else fondsVon(fondsBranche(hid)).cash -= betrag;
 }
 function institutionErhaelt(hid, betrag) {
-  if (hid === FA_ID) G.stadtkasse += betrag; else if (hid === DEPOT_ID) depotVon().cash += betrag; else fondsVon(fondsBranche(hid)).cash += betrag;
+  if (hid === FA_ID) G.stadtkasse += betrag;
+  else if (hid === DEPOT_ID) depotVon().cash += betrag;
+  else if (istPbf(hid)) { const f = pbfVon(hid); if (f) f.cash += betrag; }
+  else fondsVon(fondsBranche(hid)).cash += betrag;
 }
-const institutionFrei = hid => hid === FA_ID ? faFrei() : hid === DEPOT_ID ? depotVon().cash : fondsVon(fondsBranche(hid)).cash;
+const institutionFrei = hid => hid === FA_ID ? faFrei() : hid === DEPOT_ID ? depotVon().cash
+  : istPbf(hid) ? (pbfVon(hid)?.cash || 0) : fondsVon(fondsBranche(hid)).cash;
 const faKauftAngebot = l => institutionKauftAngebot(FA_ID, l);
 /* Kauf eines offenen Angebots durch eine Institution */
 function institutionKauftAngebot(hid, l) {
@@ -3423,6 +3431,32 @@ const FONDS_PREFIX = "__etf_";
 const fondsId = br => FONDS_PREFIX + br;
 const istFonds = holderId => typeof holderId === "string" && holderId.startsWith(FONDS_PREFIX);
 const fondsBranche = holderId => holderId.slice(FONDS_PREFIX.length);
+/* Private Fonds einer Software-Börse: eigener Holder-Prefix, damit Aktien
+ * in company.equity[] erfasst sind und Kursbildung, Übertragung und das
+ * Dividendenregister unverändert funktionieren. Die Dividende wird im
+ * Ausschüttungs-Takt an die Anteilseigner weitergereicht (pbfAusschuetten). */
+const PBF_PREFIX = "__pbf_";
+const pbfHolderId = venueId => PBF_PREFIX + venueId;
+const istPbf = hid => typeof hid === "string" && hid.startsWith(PBF_PREFIX);
+const pbfVenueId = hid => hid.slice(PBF_PREFIX.length);
+const pbfVon = hid => G.boerseApp?.[pbfVenueId(hid)]?.fonds || null;
+const pbfVonVenue = venueId => G.boerseApp?.[venueId]?.fonds || null;
+function pbfAktien(venueId, co) {
+  const hid = pbfHolderId(venueId);
+  return (co.equity[hid] || 0)
+    + G.shareListings.filter(l => l.companyId === co.id && l.sellerId === hid).reduce((a, l) => a + l.count, 0);
+}
+function pbfWert(venueId) {
+  const ba = G.boerseApp?.[venueId], f = ba?.fonds; if (!f) return 0;
+  let wert = f.cash || 0;
+  for (const fid of f.firmen || []) { const co = G.players[fid]; if (co) wert += pbfAktien(venueId, co) * (kursVon(co) || 0); }
+  return wert;
+}
+function pbfPreis(venueId) {
+  const f = pbfVonVenue(venueId); if (!f) return 0;
+  if (!(f.anteile > 1e-9)) return BOERSE_APP.FONDS_START_PREIS;
+  return Math.max(0.01, pbfWert(venueId) / f.anteile);
+}
 const fondsVon = br => ((G.fonds ??= {})[br] ??= { cash: 0, anteile: 0 });
 const etfFirmen = br => Object.values(G.players).filter(p => p.industry === br);
 const fondsAktien = (br, co) => (co.equity[fondsId(br)] || 0)
@@ -3516,6 +3550,30 @@ function fondsAusschuetten() {
     f.letzteAusschuettung = bezahlt; f.ausgeschuettet = (f.ausgeschuettet || 0) + bezahlt;
     statPlus("fondsAus", bezahlt);
     marktLog("ausschuettung", `${name} schüttet ${Math.round(bezahlt).toLocaleString("de-DE")} $ aus (${je.toFixed(2)} $ je Anteil)`, { branche: br, betrag: Math.round(bezahlt) });
+  }
+}
+
+/* Private Fonds reichen ihre Dividenden an die Anteilseigner weiter — wie
+ * die Branchenfonds. Nur Spieler halten Anteile (für v1 kein Bürgerdepot,
+ * kein Finanzamt-Automat). */
+function pbfAusschuetten() {
+  for (const [vid, ba] of Object.entries(G.boerseApp || {})) {
+    const f = ba.fonds; if (!f) continue;
+    const pool = Math.min((f.divOffen || 0) * BOERSE_APP.FONDS_PASSTHROUGH, f.cash);
+    f.divOffen = 0;
+    if (!(pool > 1) || !(f.anteile > 1e-9)) continue;
+    const je = pool / f.anteile;
+    let bezahlt = 0;
+    for (const p of Object.values(G.players)) {
+      const n = p.pbf?.[vid] || 0; if (!(n > 0)) continue;
+      const x = n * je; p.cash += x; bezahlt += x;
+      p.stats.dividendeRein = (p.stats.dividendeRein || 0) + x;
+      logTx(p, "Dividende", `${f.name}: ${Math.round(n * 100) / 100} Anteile`, x);
+      if (x >= 1) emitTo(p.id, "notice", { text: `Ausschüttung ${f.name}: +${Math.round(x)} $` });
+    }
+    f.cash -= bezahlt;
+    f.letzteAusschuettung = bezahlt; f.ausgeschuettet = (f.ausgeschuettet || 0) + bezahlt;
+    marktLog("ausschuettung", `${f.name} schüttet ${Math.round(bezahlt).toLocaleString("de-DE")} $ aus (${je.toFixed(2)} $ je Anteil)`, { venueId: vid, betrag: Math.round(bezahlt) });
   }
 }
 
@@ -4051,6 +4109,16 @@ const BOERSE_APP = {
    * wird — unter BOT_UMSATZ 10-min-Provision lehnen sie ab. */
   GEBUEHR_MIN: 0.1, GEBUEHR_MAX: 3, GEBUEHR_START: 1,
   BOT_UMSATZ: 400, ZULASSUNG_TTL: 180,
+  /* Eigener Fonds einer Software-Börse. Die Börse legt einen Fonds auf, der
+   * Aktien ihrer zugelassenen Firmen hält. Beim Kauf/Verkauf von Anteilen
+   * nimmt die Börse FONDS_GEB (0,5 … 3 %, Start 1 %). Dividenden der
+   * gehaltenen Aktien reicht der Fonds zu FONDS_PASSTHROUGH an die
+   * Anteilseigner weiter — Rest bleibt als Puffer in der Fondskasse, damit
+   * Rückgaben bezahlt werden können. */
+  FONDS_GEB_MIN: 0.5, FONDS_GEB_MAX: 3, FONDS_GEB_START: 1,
+  FONDS_PASSTHROUGH: 0.8,
+  FONDS_START_PREIS: 100,
+  FONDS_MIN_SEED: 2000,   // Mindest-Einlage, damit der Fonds nicht aus Pfennigen entsteht
 };
 const boerseVon = id => G.boerseApp?.[id] || null;
 const boerseEigenes = p => Object.values(G.boerseApp || {}).find(x => x.ownerId === p.id) || null;
@@ -4078,7 +4146,13 @@ function boersePublic() {
       anfragen: Object.keys(x.anfragen || {}).filter(cid => G.players[cid])
         .map(cid => ({ id: cid, name: G.players[cid]?.name ?? "—" })),
       stufe: x.version >= 1 ? BOERSE_APP.STUFEN[x.version - 1] : null,
-      entwicklung: x.entwicklung ? { version: x.entwicklung.version, ep: Math.floor(x.entwicklung.ep), ziel: x.entwicklung.ziel } : null };
+      entwicklung: x.entwicklung ? { version: x.entwicklung.version, ep: Math.floor(x.entwicklung.ep), ziel: x.entwicklung.ziel } : null,
+      fonds: x.fonds ? { name: x.fonds.name, gebuehr: x.fonds.gebuehr,
+        firmen: (x.fonds.firmen || []).map(fid => ({ id: fid, name: G.players[fid]?.name ?? "—", farbe: G.players[fid]?.color })),
+        preis: Math.round(pbfPreis(x.id) * 100) / 100, anteile: Math.round(x.fonds.anteile * 100) / 100,
+        wert: Math.round(pbfWert(x.id)), kasse: Math.round(x.fonds.cash || 0),
+        aktien: (x.fonds.firmen || []).map(fid => ({ firma: G.players[fid]?.name ?? "—", aktien: G.players[fid] ? pbfAktien(x.id, G.players[fid]) : 0 })).filter(h => h.aktien > 0),
+        ausschuettung: Math.round(x.fonds.letzteAusschuettung || 0), ausschuettungGesamt: Math.round(x.fonds.ausgeschuettet || 0) } : null };
   });
 }
 function boerseVeroeffentlichen(x, p) {
@@ -4104,8 +4178,18 @@ function boerseAppTick() {
   }
   if (G.tick % 60 === 0) for (const x of Object.values(G.boerseApp || {})) {
     if (!G.players[x.ownerId]) {
-      /* Börse verschwindet mit ihrer Firma: laufende Angebote zurück ans offene Buch. */
+      /* Börse verschwindet mit ihrer Firma: laufende Angebote zurück ans offene Buch.
+       * Ein Fonds wird aufgelöst: gehaltene Aktien gehen ans Finanzamt (wie bei
+       * zerfallenden Firmen), damit sie nicht in company.equity[] verwaist bleiben. */
       for (const l of G.shareListings) if (l.venueId === x.id) l.venueId = null;
+      if (x.fonds) {
+        const hid = pbfHolderId(x.id);
+        for (const co of Object.values(G.players)) {
+          const n = co.equity?.[hid] || 0;
+          if (n > 0) { co.equity[FA_ID] = (co.equity[FA_ID] || 0) + n; delete co.equity[hid]; }
+        }
+        for (const k of Object.values(G.players)) if (k.pbf?.[x.id]) delete k.pbf[x.id];
+      }
       delete G.boerseApp[x.id]; continue;
     }
     (x.eb ??= [0]).unshift(0); if (x.eb.length > 10) x.eb.length = 10;
@@ -5179,6 +5263,13 @@ function distributeDividends() {
         const n = fondsAktien(br, p);
         if (n > 0) { const share = pool * (n / AKTIEN); p.cash -= share; paidOut += share; const f = fondsVon(br); f.cash += share; f.divOffen = (f.divOffen || 0) + share; }
       }
+      /* Private Fonds der Software-Börsen: wie die Branchenfonds, nur dass
+       * die Zuordnung über ihren Holder-Prefix läuft. */
+      for (const [vid, ba] of Object.entries(G.boerseApp || {})) {
+        if (!ba.fonds) continue;
+        const n = pbfAktien(vid, p);
+        if (n > 0) { const share = pool * (n / AKTIEN); p.cash -= share; paidOut += share; ba.fonds.cash += share; ba.fonds.divOffen = (ba.fonds.divOffen || 0) + share; }
+      }
       const dep = depotAktien(p);
       if (dep > 0) { const share = pool * (dep / AKTIEN); p.cash -= share; paidOut += share; const d = depotVon(); d.cash += share; d.divOffen += share; }
       for (const [holderId, count] of Object.entries(p.equity)) {
@@ -5207,6 +5298,7 @@ function distributeDividends() {
     p.revenue = 0;
   }
   fondsAusschuetten();   // die Fonds reichen ihre Dividenden gleich weiter
+  pbfAusschuetten();     // private Fonds der Software-Börsen
 }
 
 
@@ -6688,7 +6780,8 @@ function snapshot() {
     leitDesign: LEIT_DESIGN, leitDesignAb: LEIT_DESIGN_AB, leitFunktion: LEIT_FUNKTION, turbo: TURBO,
     anzeigen: anzeigenPublic(), anzeigeCfg: { preisMin: ANZEIGE.PREIS_MIN, preisMax: ANZEIGE.PREIS_MAX, dauer: ANZEIGE.DAUER, text: ANZEIGE.TEXT, maxJe: ANZEIGE.MAX_JE, max: ANZEIGE.MAX },
     buergerApp: buergerAppPublic(), buergerAppCfg: BUERGER_APP, touristik: touristikPublic(), touristikCfg: TOURISTIK, website: websitePublic(), websiteCfg: WEBSITE, rechenzentren: rechenzentrenPublic(), rzVerteilungStd: RZ_VERTEILUNG, jobboerse: jobboersePublic(), jobboerseCfg: JOBBOERSE,
-    boerseApp: boersePublic(), boerseAppCfg: { stufen: BOERSE_APP.STUFEN, abSystem: BOERSE_APP.AB_SYSTEM, preisMin: BOERSE_APP.PREIS_MIN, preisMax: BOERSE_APP.PREIS_MAX },
+    boerseApp: boersePublic(), boerseAppCfg: { stufen: BOERSE_APP.STUFEN, abSystem: BOERSE_APP.AB_SYSTEM, preisMin: BOERSE_APP.PREIS_MIN, preisMax: BOERSE_APP.PREIS_MAX,
+      fondsGebMin: BOERSE_APP.FONDS_GEB_MIN, fondsGebMax: BOERSE_APP.FONDS_GEB_MAX, fondsGebStart: BOERSE_APP.FONDS_GEB_START, fondsMinSeed: BOERSE_APP.FONDS_MIN_SEED, fondsStartPreis: BOERSE_APP.FONDS_START_PREIS },
     logoV: Object.fromEntries(Object.values(G.players).filter(p => p.logo).map(p => [p.id, p.logo.v])), swDesign: SW_DESIGN, swDesignAb: SW_DESIGN_AB, swCfg: { install: SW.INSTALL, portalInstall: SW.PORTAL_INSTALL, versionEp: SW.VERSION_EP, werbeBoost: SW.WERBE_BOOST, gebMin: SW.GEB_MIN, gebMax: SW.GEB_MAX, einrMax: SW.EINR_MAX, aboMin: SW.ABO_MIN, aboMax: SW.ABO_MAX, handelssteuer: Math.round(satzBoerse() * SW.HANDELSSTEUER * 1000) / 10, markenwert: SW.MARKENWERT },
     marktLog: (G.marktLog || []).slice(0, 20), marktCfg: { aktien: AKTIEN, tag: MARKT.TAG, beta: MARKT.BETA, bauDauer: MARKT.BAU_DAUER, afaDauer: MARKT.AFA_DAUER },
     /* Countdown bis zum naechsten Renntag — ohne ihn sieht man erst bei der
@@ -6936,6 +7029,9 @@ function privateState(p) {
     boerseAnfragen: Object.values(G.boerseApp || {}).filter(x => x.anfragen?.[p.id] && G.players[x.ownerId])
       .map(x => ({ venueId: x.id, name: x.name, anbieter: G.players[x.ownerId]?.name ?? "—",
         gebuehr: x.handelGebuehr ?? BOERSE_APP.GEBUEHR_START })),
+    /* Fondsanteile an privaten Fonds — {venueId: anzahl Anteile}. */
+    pbf: Object.fromEntries(Object.entries(p.pbf || {}).filter(([vid, n]) => n > 1e-6 && G.boerseApp?.[vid]?.fonds)
+      .map(([vid, n]) => [vid, Math.round(n * 100) / 100])),
     portfolio, revenue: Math.round(p.revenue), ausschuettung: p.ausschuettung,
     swEp: Math.floor(p.swEp || 0),
     /* Konten dieser Firma bei den Krypto-Börsen (ein Konto je Börse, siehe coins.js) */
@@ -9707,6 +9803,124 @@ io.on("connection", socket => {
     /* Angebote dieser Firma, die über diese Börse laufen, zurück ans offene Buch. */
     for (const l of G.shareListings) if (l.venueId === venueId && l.companyId === p.id) l.venueId = null;
     emitTo(ba.ownerId, "notice", { text: `${p.name} zieht die Zulassung für ${ba.name} zurück.` });
+    ack?.({ ok: true });
+  }));
+
+  /* --- Eigener Fonds einer Software-Börse ---
+   * Die Software-Firma legt EINEN Fonds auf ihrer Börse auf, wählt die
+   * Firmen (müssen zugelassen sein) und die Anteilsgebühr. Beim Kauf/Verkauf
+   * von Anteilen nimmt die Börse die Gebühr; Dividenden reicht der Fonds
+   * weiter. Startpreis des ersten Anteils: FONDS_START_PREIS. */
+  socket.on("boerseFondsAnlegen", guard((p, { venueId, name, gebuehr, firmen } = {}, ack) => {
+    const ba = boerseVon(venueId);
+    if (!ba || ba.ownerId !== p.id) return ack?.({ error: "Nicht deine Börse" });
+    if (!(ba.version >= 1)) return ack?.({ error: "Deine Börsen-App ist noch nicht veröffentlicht" });
+    if (ba.fonds) return ack?.({ error: `Fonds ${ba.fonds.name} besteht schon` });
+    const nm = sicherText(String(name || "").trim().slice(0, 24));
+    if (!nm) return ack?.({ error: "Name fehlt" });
+    const g = Math.min(BOERSE_APP.FONDS_GEB_MAX, Math.max(BOERSE_APP.FONDS_GEB_MIN, +gebuehr || BOERSE_APP.FONDS_GEB_START));
+    const liste = Array.isArray(firmen) ? firmen.filter(fid => ba.zugelassen?.[fid] && G.players[fid]) : [];
+    if (!liste.length) return ack?.({ error: "Mindestens eine zugelassene Firma wählen" });
+    ba.fonds = { name: nm, gebuehr: Math.round(g * 100) / 100, firmen: liste,
+      cash: 0, anteile: 0, divOffen: 0, ausgeschuettet: 0, letzteAusschuettung: 0, gegruendet: Date.now() };
+    marktLog("software", `${p.name} legt den Fonds ${nm} an (${liste.length} Firmen, ${ba.fonds.gebuehr} % Gebühr)`, { firmaId: p.id, venueId });
+    ack?.({ ok: true, fonds: ba.fonds });
+  }));
+
+  socket.on("boerseFondsBearbeiten", guard((p, { venueId, name, gebuehr, firmen } = {}, ack) => {
+    const ba = boerseVon(venueId);
+    if (!ba || ba.ownerId !== p.id) return ack?.({ error: "Nicht deine Börse" });
+    if (!ba.fonds) return ack?.({ error: "Noch kein Fonds angelegt" });
+    const f = ba.fonds;
+    if (name != null) { const nm = sicherText(String(name).trim().slice(0, 24)); if (nm) f.name = nm; }
+    if (gebuehr != null) f.gebuehr = Math.round(Math.min(BOERSE_APP.FONDS_GEB_MAX, Math.max(BOERSE_APP.FONDS_GEB_MIN, +gebuehr)) * 100) / 100;
+    if (Array.isArray(firmen)) {
+      /* Firmen dürfen NUR entfernt werden, wenn der Fonds keine Aktien von
+       * ihnen mehr hält — sonst würde eine Dividende ins Nichts laufen. */
+      const neu = firmen.filter(fid => ba.zugelassen?.[fid] && G.players[fid]);
+      const raus = (f.firmen || []).filter(fid => !neu.includes(fid));
+      for (const fid of raus) {
+        const co = G.players[fid]; if (co && pbfAktien(venueId, co) > 0)
+          return ack?.({ error: `${co.name} hält noch Aktien im Fonds — zuerst verkaufen` });
+      }
+      f.firmen = neu.length ? neu : f.firmen;   // leere Liste wird abgelehnt (siehe oben in Anlegen)
+      if (!neu.length) return ack?.({ error: "Mindestens eine Firma muss bleiben" });
+    }
+    ack?.({ ok: true, fonds: f });
+  }));
+
+  /* Einlage des Eigentümers: zahlt Cash in den Fonds und erhält Anteile zum
+   * NAV. Die Gebühr entfällt für den Eigentümer. */
+  socket.on("boerseFondsEinlegen", guard((p, { venueId, betrag } = {}, ack) => {
+    const ba = boerseVon(venueId);
+    if (!ba || ba.ownerId !== p.id) return ack?.({ error: "Nicht deine Börse" });
+    const f = ba.fonds; if (!f) return ack?.({ error: "Kein Fonds angelegt" });
+    const b = Math.floor(+betrag || 0);
+    if (!(b >= BOERSE_APP.FONDS_MIN_SEED)) return ack?.({ error: `Mindestens ${BOERSE_APP.FONDS_MIN_SEED} $ einlegen` });
+    if (p.cash < b) return ack?.({ error: "Zu wenig Kapital" });
+    const preis = pbfPreis(venueId), n = b / preis;
+    p.cash -= b; f.cash += b; f.anteile += n;
+    (p.pbf ??= {})[venueId] = (p.pbf[venueId] || 0) + n;
+    logTx(p, "Fonds", `${f.name}: Einlage ${Math.round(n * 100) / 100} Anteile`, -b);
+    ack?.({ ok: true, anteile: n, preis });
+  }));
+
+  /* Kauf von Fondsanteilen durch irgendeinen Spieler. Gebühr auf den
+   * Brutto-Betrag, geht an die Software-Firma (Börsen-Eigentümer). */
+  socket.on("boerseFondsKaufen", guard((p, { venueId, betrag } = {}, ack) => {
+    const ba = boerseVon(venueId);
+    if (!ba) return ack?.({ error: "Börse unbekannt" });
+    const f = ba.fonds; if (!f) return ack?.({ error: "Noch kein Fonds dieser Börse" });
+    const b = Math.floor(+betrag || 0);
+    if (!(b >= 1)) return ack?.({ error: "Betrag zu klein" });
+    if (p.cash < b) return ack?.({ error: "Zu wenig Kapital" });
+    const geb = Math.round(b * f.gebuehr) / 100, netto = b - geb, preis = pbfPreis(venueId), n = netto / preis;
+    p.cash -= b; f.cash += netto; f.anteile += n;
+    (p.pbf ??= {})[venueId] = (p.pbf[venueId] || 0) + n;
+    const owner = G.players[ba.ownerId];
+    if (owner && geb > 0 && owner.id !== p.id) { owner.cash += geb; addRevenue(owner, geb); (ba.eb ??= [0])[0] += geb;
+      logTx(owner, "Fonds", `Anteilsgebühr von ${p.name} über ${f.name}`, geb); }
+    logTx(p, "Fonds", `${f.name}: Kauf ${Math.round(n * 100) / 100} Anteile`, -b);
+    ack?.({ ok: true, anteile: n, preis, gebuehr: geb });
+  }));
+
+  socket.on("boerseFondsVerkaufen", guard((p, { venueId, anteile } = {}, ack) => {
+    const ba = boerseVon(venueId); if (!ba) return ack?.({ error: "Börse unbekannt" });
+    const f = ba.fonds; if (!f) return ack?.({ error: "Kein Fonds" });
+    const n = +anteile || 0, halt = p.pbf?.[venueId] || 0;
+    if (!(n > 0) || n > halt + 1e-6) return ack?.({ error: `Du hast nur ${Math.round(halt * 100) / 100} Anteile` });
+    const preis = pbfPreis(venueId), brutto = n * preis;
+    const geb = Math.round(brutto * f.gebuehr) / 100, netto = brutto - geb;
+    /* Der Fonds muss aus seiner Kasse auszahlen können — sonst „Markt ruht". */
+    if (f.cash < brutto) return ack?.({ error: "Fonds hat gerade zu wenig Barreserve — später erneut versuchen" });
+    f.cash -= brutto; f.anteile -= n; p.pbf[venueId] = halt - n;
+    if (p.pbf[venueId] < 1e-6) delete p.pbf[venueId];
+    p.cash += netto;
+    const owner = G.players[ba.ownerId];
+    if (owner && geb > 0 && owner.id !== p.id) { owner.cash += geb; addRevenue(owner, geb); (ba.eb ??= [0])[0] += geb;
+      logTx(owner, "Fonds", `Anteilsgebühr von ${p.name} über ${f.name}`, geb); }
+    logTx(p, "Fonds", `${f.name}: Verkauf ${Math.round(n * 100) / 100} Anteile`, netto);
+    ack?.({ ok: true, netto, preis, gebuehr: geb });
+  }));
+
+  socket.on("boerseFondsSchliessen", guard((p, { venueId } = {}, ack) => {
+    const ba = boerseVon(venueId);
+    if (!ba || ba.ownerId !== p.id) return ack?.({ error: "Nicht deine Börse" });
+    const f = ba.fonds; if (!f) return ack?.({ error: "Kein Fonds" });
+    /* Nur schließen, wenn kein fremder Anteilseigner mehr drin ist und der
+     * Fonds keine Aktien mehr hält. Für Komfort: eigene Anteile werden
+     * zurückgezahlt, sofern die Kasse reicht. */
+    for (const k of Object.values(G.players)) if (k.id !== p.id && (k.pbf?.[venueId] || 0) > 1e-6)
+      return ack?.({ error: `${k.name} hält noch Anteile — zuerst ausbezahlen oder warten` });
+    for (const fid of f.firmen || []) {
+      const co = G.players[fid]; if (co && pbfAktien(venueId, co) > 0)
+        return ack?.({ error: `Fonds hält noch Aktien von ${co.name} — zuerst verkaufen` });
+    }
+    const halt = p.pbf?.[venueId] || 0, auszahlung = Math.min(f.cash, halt * pbfPreis(venueId));
+    if (auszahlung > 0) { p.cash += auszahlung; logTx(p, "Fonds", `${f.name} aufgelöst — Restkasse`, auszahlung); }
+    if (p.pbf) delete p.pbf[venueId];
+    delete ba.fonds;
+    marktLog("software", `${p.name} löst den Fonds ${f.name} auf`, { firmaId: p.id, venueId });
     ack?.({ ok: true });
   }));
 
