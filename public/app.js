@@ -3149,7 +3149,15 @@ function tutErstBeiRundenstart() {
    * Schritten, ohne dass der Lernende sie je gesehen hat. */
   const vorbereiten = () => {
     TUT_GESEHEN.clear();
-    if (store.get().state?.mode === "einsteiger") TUT = TUT_EINSTEIGER;
+    const { state, myId, meta } = store.get();
+    const mode = state?.mode;
+    if (mode === "einsteiger") { TUT = TUT_EINSTEIGER; return; }
+    if (mode === "kartell") return;   // tutShow(0) baut das Kartell-Tutorial
+    /* Die Branche wird erst im Warteraum gewählt — also NACH der Registrierung,
+     * bei der TUT zuletzt gebaut wurde. Darum hier aus der tatsächlich
+     * gewählten Branche neu bauen, sonst zeigt z. B. Software den Agrar-Text. */
+    const ind = state?.players?.[myId]?.industry || meta?.industry || "agrar";
+    TUT = buildTut(ind);
   };
   if (store.get().state?.started) { vorbereiten(); tutShow(0); return; }
   const ab = store.subscribe(() => {
