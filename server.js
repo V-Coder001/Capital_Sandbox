@@ -2276,6 +2276,13 @@ const BTYPES = {
    * einziges Gebaeude im Spiel direkt Bargeld — der Ertrag laeuft deshalb
    * ueber addRevenue, damit Umsatz, Firmenwert und Rangliste stimmig bleiben. */
   fanhub:       { name: "Fan-Hub", en: "Fan hub",            cost: 4500, out: null, rate: 0, zone: "zentrum",   fanhub: true },
+  /* ---- Firmen-Hauptsitz ----
+   * Ein Verwaltungsgebäude im Zentrum: einer je Firma (wie der Rennstall).
+   * Hier stellt die Firma Führungskräfte ein (CEO, CFO, Lagerverwalter),
+   * die Routine-Aufgaben übernehmen. Dazu kommt je Branche ein eigenes
+   * Extra, das einzeln freigeschaltet wird. Die Mitarbeiter kommen aus der
+   * Jobbörse und kosten Lohn. */
+  hauptsitz:    { name: "Hauptsitz", en: "Headquarters", cost: 8000, out: null, rate: 0, zone: "zentrum", hauptsitz: true, arbeiter: 8 },
 };
 /* Verkaufstempo eines Shops: (Ø-Kurs / eigener Preis)² — gedeckelt bei ×2 */
 /* Verkaufstempo eines Shops: (Ø-Kurs / eigener Preis)² — gedeckelt bei ×2.
@@ -2294,6 +2301,64 @@ const shopSpeed = (good, price, ref = MM[good].price) => Math.min(2, Math.pow(re
  * fällt weiter). */
 const RETAIL_REF = 30, RETAIL_K = 0.75;
 const retailFlow = good => Math.min(STADT_FLOW_MAX[good] ?? 10, Math.max(0.30, Math.pow(RETAIL_REF / BASEP[good], RETAIL_K)));
+
+/* ---------- Firmen-Hauptsitz: Rollen und Branchen-Extras ----------
+ * Stufe 1 (Grundbau): CEO, CFO, Lagerverwalter — für alle Branchen gleich.
+ * Stufe 2 (Upgrade): schaltet das Branchen-Extra frei.
+ * Jede Rolle kostet Lohn (wird im Lohn-Tick mit den Arbeitern gezahlt).
+ * Die Wirkung tritt sofort ein, solange die Rolle besetzt ist. */
+const HQ_ROLLEN = {
+  ceo:   { name: "CEO",             en: "CEO",              lohn: 12, stufe: 1,
+           beschreibung: "Sammelübersicht: zeigt Kurs, Lager, Aufgaben und Warnungen auf einen Blick" },
+  cfo:   { name: "CFO",             en: "CFO",              lohn: 10, stufe: 1,
+           beschreibung: "Steuern und Lohnsteuer werden automatisch gezahlt; Kredit-Übersicht" },
+  lager: { name: "Lagerverwalter",  en: "Warehouse manager", lohn: 8,  stufe: 1,
+           beschreibung: "Kauft knappe Rohstoffe an der Börse nach, wenn der Bestand unter eine Schwelle fällt" },
+};
+/* Je Branche ein Extra, das ab Stufe 2 (Upgrade des Hauptsitzes) besetzbar wird. */
+const HQ_EXTRAS = {
+  agrar:     { rolle: "erntelogistik",  name: "Erntelogistik",          en: "Harvest logistics",      lohn: 8,
+               beschreibung: "Liefert geerntete Ware gebündelt an die eigenen Läden" },
+  rohstoff:  { rolle: "bauleitung",     name: "Bauleitung",             en: "Construction management", lohn: 10,
+               beschreibung: "Bauzeit neuer Gebäude −25 %, Baumaterial-Bedarf −15 %" },
+  versorger: { rolle: "netzsteuerung",  name: "Netzsteuerung",          en: "Grid control",            lohn: 9,
+               beschreibung: "Gleicht Strom, Wasser und Öl im Lager aus, bevor es knapp wird" },
+  tech:      { rolle: "forschung",      name: "Forschungsabteilung",    en: "R&D department",          lohn: 10,
+               beschreibung: "Elektronik-Produktion +15 %, Upgrade-Kosten −10 %" },
+  touristik: { rolle: "buchung",        name: "Buchungszentrale",       en: "Booking centre",          lohn: 8,
+               beschreibung: "Hotels und Campingplätze erhalten +20 % Gäste" },
+  ruestung:  { rolle: "sicherheit",     name: "Sicherheitsdienst",      en: "Security service",        lohn: 9,
+               beschreibung: "Senkt Überfall- und Schutzgeld-Verluste um 30 %" },
+  software:  { rolle: "rz_leitung",     name: "RZ-Leitstelle",          en: "Data centre ops",         lohn: 10,
+               beschreibung: "Rechenzentren verteilen Plätze automatisch nach Bedarf; Stromreserve" },
+  rennclub:      { rolle: "teamleitung", name: "Teamleitung",           en: "Team management",         lohn: 10,
+               beschreibung: "Koordiniert Fahrer, Wagen und Teile-Nachschub" },
+  rennindustrie: { rolle: "teamleitung", name: "Teamleitung",           en: "Team management",         lohn: 10,
+               beschreibung: "Koordiniert Produktion und Auslieferung der Rennteile" },
+};
+/* Hat der Spieler einen Hauptsitz gebaut? */
+const hatHQ = p => G.map.some(t => t.owner === p.id && t.btype === "hauptsitz" && !imBau(t));
+/* HQ-Stufe: 1 = Grundbau, 2+ = aufgelevelt (level der Kachel) */
+const hqStufe = p => { const t = G.map.find(t2 => t2.owner === p.id && t2.btype === "hauptsitz" && !imBau(t2)); return t ? (t.level || 1) : 0; };
+/* Ist eine Rolle besetzt? */
+const hqBesetzt = (p, rolle) => !!(p.hq && p.hq[rolle]);
+/* Gesamter HQ-Lohn je Minute (alle besetzten Rollen) */
+function hqLohn(p) {
+  if (!p.hq) return 0;
+  let summe = 0;
+  for (const [rolle, besetzt] of Object.entries(p.hq)) {
+    if (!besetzt) continue;
+    if (HQ_ROLLEN[rolle]) summe += HQ_ROLLEN[rolle].lohn;
+    else {
+      const extra = Object.values(HQ_EXTRAS).find(e => e.rolle === rolle);
+      if (extra) summe += extra.lohn;
+    }
+  }
+  return summe;
+}
+
+/* HQ-Bonus-Helfer: gibt den Bonus-Multiplikator für eine bestimmte Rolle */
+function hqBonus(p, rolle) { return hqBesetzt(p, rolle) ? 1 : 0; }
 
 /* ---------- Werbung ----------
  * Reichweite ist ein Vorrat, der laufend zerfällt: gebuchte Kampagnen füllen ihn
@@ -3036,6 +3101,8 @@ function newPlayer(pid, name, color, industry, socketId) {
     inv.obst = 150; inv.wasser = 150; inv.erze = 150; inv.kannabis = 80; inv.strom = 200; inv.elektronik = 20; }
   return { id: pid, name, color, industry, industries: [industry], cash: START_CASH, xp: 0, lvl: 1,
     inv,
+    hq: null,          // Hauptsitz-Rollen: {ceo: true, cfo: true, lager: true, <extra>: true} oder null
+    hqLohnGesamt: 0,   // Summe aller HQ-Löhne in der Runde (für Statistik)
     equityAvg: {},     // companyId -> Ø-Einstand je Aktie (Durchschnittsmethode)
     quests: {},        // Starter-Aufgaben: {id: {n, done}}
     tx: [],            // Transaktions-Log: {t, cat, text, amt}
@@ -4691,7 +4758,8 @@ function touristikTick() {
     Object.assign(k.f, { gaeste: 0, abgewiesen: 0, zimmer: Math.round(k.zimmer), bewertung: Math.round(k.bewertung * 10) / 10, sterne: Math.round(k.sterne * 10) / 10 });
     if (!(k.zimmer > 0)) continue;
     const score = tourQuali(k.bewertung) / Math.pow(k.f.preis / TOURISTIK.PREIS_REF, TOURISTIK.ELASTIZITAET) * (fest?.ownerId === p.id ? TOURISTIK.VERANSTALTER : 1)
-      * (1 + 2 * webBonus(p));   // Website: doppelte Reichweite bei Gästen
+      * (1 + 2 * webBonus(p))   // Website: doppelte Reichweite bei Gästen
+      * (hqBesetzt(p, "buchung") ? 1.2 : 1);   // Buchungszentrale: +20 % Gäste
     anbieter.push({ p, k, score, frei: Math.floor(p.inv.uebernachtung || 0), bekommt: 0 });
   }
   const summe = anbieter.reduce((a, x) => a + x.score, 0);
@@ -5757,6 +5825,15 @@ function loehneZahlen() {
     p.lohnVerzug = zahl < soll - 0.5;
     p.lohnLetzt = { arbeiter: n, soll, zahl, stufe, tick: G.tick };
     jobboerseGebuehr(p, n);
+    const hqL = hqLohn(p);
+    if (hqL > 0 && p.cash >= hqL) {
+      p.cash -= hqL; p.stats.ausgaben += hqL; p.stats.hqLoehne = (p.stats.hqLoehne || 0) + hqL;
+      p.hqLohnGesamt = (p.hqLohnGesamt || 0) + hqL;
+      logTx(p, "Hauptsitz", `HQ-Gehälter (${Object.keys(p.hq || {}).filter(r => p.hq[r]).length} Rollen)`, -hqL);
+    } else if (hqL > 0) {
+      p.hq = null;
+      emitTo(p.id, "notice", { text: "Hauptsitz-Mitarbeiter entlassen — Gehälter nicht bezahlbar." });
+    }
     if (!(zahl > 0)) continue;
     p.cash -= zahl; p.stats.ausgaben += zahl; p.stats.loehne = (p.stats.loehne || 0) + zahl;
     logTx(p, "Löhne", `Löhne für ${n} Arbeiter (${STADT.LOEHNE[stufe].name})`, -zahl);
@@ -6814,6 +6891,7 @@ function snapshot() {
     leitDesign: LEIT_DESIGN, leitDesignAb: LEIT_DESIGN_AB, leitFunktion: LEIT_FUNKTION, turbo: TURBO,
     anzeigen: anzeigenPublic(), anzeigeCfg: { preisMin: ANZEIGE.PREIS_MIN, preisMax: ANZEIGE.PREIS_MAX, dauer: ANZEIGE.DAUER, text: ANZEIGE.TEXT, maxJe: ANZEIGE.MAX_JE, max: ANZEIGE.MAX },
     buergerApp: buergerAppPublic(), buergerAppCfg: BUERGER_APP, touristik: touristikPublic(), touristikCfg: TOURISTIK, website: websitePublic(), websiteCfg: WEBSITE, rechenzentren: rechenzentrenPublic(), rzVerteilungStd: RZ_VERTEILUNG, jobboerse: jobboersePublic(), jobboerseCfg: JOBBOERSE,
+    hqCfg: { rollen: HQ_ROLLEN, extras: HQ_EXTRAS },
     boerseApp: boersePublic(), boerseAppCfg: { stufen: BOERSE_APP.STUFEN, abSystem: BOERSE_APP.AB_SYSTEM, preisMin: BOERSE_APP.PREIS_MIN, preisMax: BOERSE_APP.PREIS_MAX,
       fondsGebMin: BOERSE_APP.FONDS_GEB_MIN, fondsGebMax: BOERSE_APP.FONDS_GEB_MAX, fondsGebStart: BOERSE_APP.FONDS_GEB_START, fondsMinSeed: BOERSE_APP.FONDS_MIN_SEED, fondsStartPreis: BOERSE_APP.FONDS_START_PREIS },
     logoV: Object.fromEntries(Object.values(G.players).filter(p => p.logo).map(p => [p.id, p.logo.v])), swDesign: SW_DESIGN, swDesignAb: SW_DESIGN_AB, swCfg: { install: SW.INSTALL, portalInstall: SW.PORTAL_INSTALL, versionEp: SW.VERSION_EP, werbeBoost: SW.WERBE_BOOST, gebMin: SW.GEB_MIN, gebMax: SW.GEB_MAX, einrMax: SW.EINR_MAX, aboMin: SW.ABO_MIN, aboMax: SW.ABO_MAX, handelssteuer: Math.round(satzBoerse() * SW.HANDELSSTEUER * 1000) / 10, markenwert: SW.MARKENWERT },
@@ -7070,6 +7148,8 @@ function privateState(p) {
     swEp: Math.floor(p.swEp || 0),
     /* Konten dieser Firma bei den Krypto-Börsen (ein Konto je Börse, siehe coins.js) */
     kryptoKonto: Object.fromEntries(Object.values(G.boersen || {}).filter(b => b.konten?.[p.id]).map(b => [b.firmaId, b.konten[p.id]])),
+    hq: p.hq ? { besetzt: p.hq, stufe: hqStufe(p), lohn: hqLohn(p),
+      extras: (p.industries || [p.industry]).filter(ind => HQ_EXTRAS[ind]).map(ind => HQ_EXTRAS[ind].rolle) } : null,
     paintStufe: paintStufeVon(p), paintLizenz: p.paintLizenz || null,
     boerseStufe: boerseStufeVon(p), boerseLizenz: p.boerseLizenz || null,
     etf: Object.entries(p.etf || {}).map(([br, n]) => ({ branche: br, name: INDUSTRIES[br]?.name ?? br, anteile: Math.round(n * 100) / 100,
@@ -7768,7 +7848,8 @@ io.on("connection", socket => {
       io.emit("notice", { text: `💥 ${p.name} (${FAMILIEN[p.familie].name}) überfällt einen ${TRANSPORT_ARTEN[tr.art].name}: ${beuteText} erbeutet!` });
       ack?.({ ok: true, beute: beuteText });
     } else {
-      const kaution = Math.min(p.cash, 500);
+      const kautionBasis = 500;
+      const kaution = Math.min(p.cash, Math.round(kautionBasis * (hqBesetzt(p, "sicherheit") ? 0.7 : 1)));
       p.cash -= kaution;
       G.fahndung[p.familie] = (G.fahndung[p.familie] || 0) + 15;
       logTx(p, "Kartell", "Überfall vereitelt — Kaution gezahlt", -kaution);
@@ -8538,12 +8619,18 @@ io.on("connection", socket => {
       if (G.map.some(o => o.owner === p.id && BTYPES[o.btype]?.racing))
         return ack?.({ error: "Du betreibst bereits einen Rennstall — mehr als einer ist nicht erlaubt" });
     }
+    if (bt.hauptsitz) {
+      if (G.map.some(o => o.owner === p.id && BTYPES[o.btype]?.hauptsitz))
+        return ack?.({ error: "Du hast bereits einen Hauptsitz — mehr als einer ist nicht erlaubt" });
+    }
     /* Freischalten + Bauen in einem atomaren Schritt (kein Zeitfenster,
      * in dem eine gesperrte Kachel für andere sichtbar frei würde). */
     const unlockCost = t.locked ? t.unlockCost : 0;
     if (p.cash < bt.cost + unlockCost) return ack?.({ error: "Zu wenig Kapital" });
     /* Baumaterial prüfen & verbrauchen (kommt von der Bauindustrie via Börse) */
-    const mats = matCost(bt);
+    const matsRaw = matCost(bt);
+    const bauRabatt = hqBesetzt(p, "bauleitung") ? 0.85 : 1;
+    const mats = Object.fromEntries(Object.entries(matsRaw).map(([g, n]) => [g, Math.ceil(n * bauRabatt)]));
     const missing = Object.entries(mats).filter(([g, n]) => p.inv[g] < n);
     if (missing.length) return ack?.({ error: "Baumaterial fehlt: " +
       missing.map(([g, n]) => `${Math.ceil(n - p.inv[g])}× ${GOODS[g].name}`).join(", ") + " — an der Börse kaufen" });
@@ -8557,7 +8644,7 @@ io.on("connection", socket => {
     /* Geld und Material werden zur Anlage — der Buchwert bleibt gleich. Während
      * der Bauzeit ist es eine "Anlage in Arbeit" und produziert noch nichts. */
     t.anlagewert = bt.cost + unlockCost + matWert;
-    t.bauBis = G.tick + MARKT.BAU_DAUER;
+    t.bauBis = G.tick + Math.round(MARKT.BAU_DAUER * (hqBesetzt(p, "bauleitung") ? 0.75 : 1));
     p.stats.gebaut++; p.stats.ausgaben += bt.cost + unlockCost;
     investieren(p, bt.cost + unlockCost);
     marktLog("bau", `${p.name} baut ${bt.name}`, { firmaId: p.id, betrag: Math.round(t.anlagewert) });
@@ -8571,11 +8658,13 @@ io.on("connection", socket => {
     const t = tileAt(x, y), bt = t?.btype ? BTYPES[t.btype] : null;
     /* Der Rennstall produziert nichts, wird aber ausgebaut — jede Stufe ist
      * ein zusätzlicher Stellplatz statt +30 % Ausstoß. */
-    if (!t || t.owner !== p.id || !(bt?.out || bt?.proc || bt?.racing || bt?.fanhub || bt?.studio || bt?.rz || bt?.online))
+    if (!t || t.owner !== p.id || !(bt?.out || bt?.proc || bt?.racing || bt?.fanhub || bt?.studio || bt?.rz || bt?.online || bt?.hauptsitz))
       return ack?.({ error: "Kein eigenes Produktions- oder Rennstallgebäude" });
     const level = t.level || 1;
     if (level >= LEVEL_MAX) return ack?.({ error: `Bereits auf Höchststufe ${LEVEL_MAX}` });
-    const cost = upgradeCost(bt, level);
+    const rawCost = upgradeCost(bt, level);
+    const techRabatt = hqBesetzt(p, "forschung") ? 0.9 : 1;
+    const cost = { elektronik: Math.ceil(rawCost.elektronik * techRabatt), cash: Math.round(rawCost.cash * techRabatt) };
     if (p.inv.elektronik < cost.elektronik) return ack?.({ error: `Zu wenig Elektronik (${cost.elektronik} nötig)` });
     if (p.cash < cost.cash) return ack?.({ error: "Zu wenig Kapital" });
     p.inv.elektronik -= cost.elektronik; p.cash -= cost.cash; t.level = level + 1; gainXp(p, 25);
@@ -9601,6 +9690,29 @@ io.on("connection", socket => {
     if (p.jobAbo !== jb.id && jobAbonnenten(jb).length >= rzStufen(jb.ownerId) * JOBBOERSE.ABOS_JE_STUFE)
       return ack?.({ error: `${jb.name} ist ausgebucht — dem Anbieter fehlen Plätze im Rechenzentrum` });
     p.jobAbo = jb.id;
+    ack?.({ ok: true }); pushState();
+  }));
+  /* --- Hauptsitz: Rolle einstellen / entlassen --- */
+  socket.on("hqEinstellen", guard((p, { rolle } = {}, ack) => {
+    if (!hatHQ(p)) return ack?.({ error: "Du hast keinen Hauptsitz" });
+    const rDef = HQ_ROLLEN[rolle];
+    const eDef = !rDef ? Object.values(HQ_EXTRAS).find(e => e.rolle === rolle) : null;
+    if (!rDef && !eDef) return ack?.({ error: "Unbekannte Rolle" });
+    if (eDef) {
+      const ind = Object.entries(HQ_EXTRAS).find(([, v]) => v.rolle === rolle)?.[0];
+      if (!(p.industries || [p.industry]).includes(ind))
+        return ack?.({ error: "Diese Rolle passt nicht zu deiner Branche" });
+      if (hqStufe(p) < 2) return ack?.({ error: "Hauptsitz auf Stufe 2 ausbauen, um Branchen-Extras freizuschalten" });
+    }
+    p.hq ??= {};
+    if (p.hq[rolle]) return ack?.({ error: "Rolle ist bereits besetzt" });
+    p.hq[rolle] = true;
+    ack?.({ ok: true }); pushState();
+  }));
+  socket.on("hqEntlassen", guard((p, { rolle } = {}, ack) => {
+    if (!p.hq?.[rolle]) return ack?.({ error: "Diese Rolle ist nicht besetzt" });
+    delete p.hq[rolle];
+    if (!Object.keys(p.hq).length) p.hq = null;
     ack?.({ ok: true }); pushState();
   }));
   /* --- Baumaterial fuer einen Wohnblock der Stadt liefern (Etappe 3) --- */
@@ -10852,7 +10964,8 @@ function runTick() {
       const bedarf = bt.rate * stufe * TURBO.IN;
       if ((p.inv.strom || 0) >= bedarf) { p.inv.strom -= bedarf; plus += TURBO.OUT; }
     }
-    const menge = bt.rate * mult * stufe * SPERR * (1 + plus);   // Elektronik-Upgrade: +30 %/Stufe
+    const hqTech = (bt.industry === "tech" && hqBesetzt(p, "forschung")) ? 1.15 : 1;
+    const menge = bt.rate * mult * stufe * SPERR * (1 + plus) * hqTech;
     if (sb) t._mehr = (t._mehr || 0) + bt.rate * mult * stufe * SPERR * plus;
     p.inv[bt.out] += menge;
     p.stats.produziert[bt.out] = (p.stats.produziert[bt.out] || 0) + menge;
