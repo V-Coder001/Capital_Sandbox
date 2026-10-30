@@ -464,7 +464,7 @@ app.get("/api/lobby", (_req, res) => {
  * der laufenden Runde als JSON. Verändert nichts am Spiel. Über das Gateway
  * erreichbar als /r/<CODE>/api/markt, im Einzelbetrieb als /api/markt. */
 const r2 = x => Math.round(x * 100) / 100;
-app.get("/api/markt", (_req, res) => {
+app.get("/api/markt", (req, res) => {
   res.json({
     runde: {
       seed: G.seed, modus: MODE, gestartet: !!G.started, beendet: !!G.winner,
@@ -481,6 +481,7 @@ app.get("/api/markt", (_req, res) => {
       substanz: r2(substance(p)), fundament: r2(fundament(p)),
     })),
     ereignisse: (G.marktLog || []).slice(0, 20),
+    verlauf: (G.verlauf || []).filter(v => v.tick >= (+req.query.seit || 0)),
   });
 });
 
@@ -3363,6 +3364,10 @@ function marktTag() {
     if (panik) P *= 1 - MARKT.PANIK;
     m.kurs = Math.max(0.01, P);
   }
+  /* Kursverlauf für die Markt-API: ein Punkt je Markttag, die letzten 240. */
+  (G.verlauf ??= []).push({ tick: G.tick, waren: Object.fromEntries(Object.keys(GOODS).map(k => [k, r2(MM[k].price)])),
+    firmen: Object.fromEntries(Object.values(G.players).map(p => [p.id, r2(kursVon(p))])) });
+  if (G.verlauf.length > 240) G.verlauf.shift();
   finanzamtBoerse();   // feste Reihenfolge: erst F und P, dann die Reaktion des Finanzamts
   fondsTag();          // dann die Branchenfonds
   depotTag(panik);     // dann die Sparer der Stadt

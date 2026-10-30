@@ -18,6 +18,8 @@ Die Antwort enthält vier Blöcke:
 - **firmen**: je Firma `kurs`, `firmenwert` (Kurs × Aktien), `substanz`
   (Buchwert) und `fundament`.
 - **ereignisse**: die letzten 20 Einträge aus dem Marktlog (Flauten, Panik).
+- **verlauf**: ein Punkt je Markttag (rund 60 Sekunden) mit Warenpreisen und
+  Kursen je Firma, die letzten 240 Punkte. Mit `?seit=<tick>` gibt es nur neuere Punkte.
 
 ## Jede Runde ist anders
 
@@ -31,5 +33,3 @@ Seed macht also die Rundenereignisse nachvollziehbar, nicht den gesamten Verlauf
 
 - Nur GET. Die API verändert keinen Spielzustand.
 - Die Daytrading-App ist ein eigenes Projekt und nicht Teil dieses Repos.
-- Noch offen: Die App braucht eine Zeitreihe. Dafür muss die API später
-  mehrere Abrufe puffern oder einen Verlauf je Ware ausgeben.
