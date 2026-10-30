@@ -246,6 +246,21 @@ function connectToGame(serverUrl, playerName, industry) {
   }
 }
 
+function onRegistered(res, serverUrl, playerName) {
+  if (connected) return; // already handled
+  if (res) {
+    myPid = res.you;
+    goods = {};
+    if (res.goods) for (const g of res.goods) goods[g.key] = g;
+  }
+  connected = true;
+  apiUrl = serverUrl + "/api/markt";
+  hideLogin();
+  document.getElementById("status").textContent = "Verbunden als " + playerName;
+  populateGoodsSelect();
+  holeMarkt();
+}
+
 function doConnect(serverUrl, playerName, industry) {
   const meldung = document.getElementById("login-meldung");
 
@@ -263,23 +278,25 @@ function doConnect(serverUrl, playerName, industry) {
       botToken: null,
       familieWunsch: null
     }, (res) => {
-      if (res.error) {
+      if (res && res.error) {
         meldung.textContent = "Fehler: " + res.error;
         socket.disconnect();
         return;
       }
-      myPid = res.you;
-      goods = {};
-      if (res.goods) {
-        for (const g of res.goods) goods[g.key] = g;
-      }
-      connected = true;
-      apiUrl = serverUrl + "/api/markt";
-      hideLogin();
-      document.getElementById("status").textContent = "Verbunden als " + playerName;
-      populateGoodsSelect();
-      holeMarkt();
+      if (res) onRegistered(res, serverUrl, playerName);
     });
+  });
+
+  /* Fallback: wenn der Ack nicht feuert, erkennen wir die Registrierung
+     am ersten "me"-Event, das nur registrierten Spielern gesendet wird. */
+  socket.once("me", (data) => {
+    if (!connected) {
+      /* Registrierung hat geklappt, aber der Ack kam nicht durch.
+         Wir leiten die pid aus dem State ab. */
+      onRegistered(null, serverUrl, playerName);
+    }
+    myState = merge(myState, data);
+    updateFromMe();
   });
 
   socket.on("state", (data) => {
