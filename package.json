@@ -25,6 +25,7 @@
     "files": [
       "desktop/**",
       "server.js",
+      "coins.js",
       "statisch.js",
       "public/**",
       "maps/**",
