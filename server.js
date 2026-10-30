@@ -3364,10 +3364,6 @@ function marktTag() {
     if (panik) P *= 1 - MARKT.PANIK;
     m.kurs = Math.max(0.01, P);
   }
-  /* Kursverlauf für die Markt-API: ein Punkt je Markttag, die letzten 240. */
-  (G.verlauf ??= []).push({ tick: G.tick, waren: Object.fromEntries(Object.keys(GOODS).map(k => [k, r2(MM[k].price)])),
-    firmen: Object.fromEntries(Object.values(G.players).map(p => [p.id, r2(kursVon(p))])) });
-  if (G.verlauf.length > 240) G.verlauf.shift();
   finanzamtBoerse();   // feste Reihenfolge: erst F und P, dann die Reaktion des Finanzamts
   fondsTag();          // dann die Branchenfonds
   depotTag(panik);     // dann die Sparer der Stadt
@@ -11181,6 +11177,13 @@ function runTick() {
         io.emit("notice", { text: `${f.name} verlässt ${team.name}: Gehalt nicht bezahlt.` });
       }
     }
+  }
+  /* Kursverlauf für die Markt-API: alle 10 s ein Punkt, also sechs je Markttag
+   * (60 s). Die letzten 1440 Punkte entsprechen vier Stunden Spielzeit. */
+  if (G.tick % 10 === 0) {
+    (G.verlauf ??= []).push({ tick: G.tick, waren: Object.fromEntries(Object.keys(GOODS).map(k => [k, r2(MM[k].price)])),
+      firmen: Object.fromEntries(Object.values(G.players).map(p => [p.id, r2(kursVon(p))])) });
+    if (G.verlauf.length > 1440) G.verlauf.shift();
   }
   /* Nettovermögens-Verlauf (alle 10 s ein Punkt, max. 120 Punkte = 20 min) */
   if (G.tick % 10 === 0) for (const p of Object.values(G.players)) {

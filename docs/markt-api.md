@@ -18,8 +18,8 @@ Die Antwort enthält vier Blöcke:
 - **firmen**: je Firma `kurs`, `firmenwert` (Kurs × Aktien), `substanz`
   (Buchwert) und `fundament`.
 - **ereignisse**: die letzten 20 Einträge aus dem Marktlog (Flauten, Panik).
-- **verlauf**: ein Punkt je Markttag (rund 60 Sekunden) mit Warenpreisen und
-  Kursen je Firma, die letzten 240 Punkte. Mit `?seit=<tick>` gibt es nur neuere Punkte.
+- **verlauf**: alle 10 Sekunden ein Punkt, also sechs je Markttag (60 Sekunden),
+  mit Warenpreisen und Kursen je Firma. Gespeichert werden die letzten 1440 Punkte. Mit `?seit=<tick>` gibt es nur neuere Punkte.
 
 ## Jede Runde ist anders
 
