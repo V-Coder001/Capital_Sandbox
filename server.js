@@ -459,6 +459,34 @@ app.get("/api/lobby", (_req, res) => {
   });
 });
 
+/* ---------- Markt-API (nur lesen) ----------
+ * Für die separate Daytrading-App: Waren, Kurse, Firmenwerte und Ereignisse
+ * der laufenden Runde als JSON. Verändert nichts am Spiel. Über das Gateway
+ * erreichbar als /r/<CODE>/api/markt, im Einzelbetrieb als /api/markt. */
+const r2 = x => Math.round(x * 100) / 100;
+app.get("/api/markt", (req, res) => {
+  /* Die Börsen-Seite läuft als eigene Datei, also von einer anderen Herkunft. */
+  res.set("Access-Control-Allow-Origin", "*");
+  res.json({
+    runde: {
+      seed: G.seed, modus: MODE, gestartet: !!G.started, beendet: !!G.winner,
+      tick: G.tick, minute: Math.floor(G.tick / 60), gewinnziel: WIN_NW,
+      panikTag: G.panikTag ?? null,
+    },
+    waren: Object.keys(GOODS).map(k => ({
+      key: k, name: GOODS[k].name, preis: r2(MM[k].price), anker: r2(MM[k].anchor),
+      grundpreis: BASEP[k], band: r2(MM[k].band),
+    })),
+    firmen: Object.values(G.players).map(p => ({
+      id: p.id, name: p.name, bot: !!p.bot, aktien: AKTIEN,
+      kurs: r2(kursVon(p)), firmenwert: r2(companyValue(p)),
+      substanz: r2(substance(p)), fundament: r2(fundament(p)),
+    })),
+    ereignisse: (G.marktLog || []).slice(0, 20),
+    verlauf: (G.verlauf || []).filter(v => v.tick >= (+req.query.seit || 0)),
+  });
+});
+
 /* ---------- Bestenliste ----------
  * Bleibt über Server-Neustarts erhalten (leaderboard.json neben server.js):
  * Am Ende jeder Runde landet jeder menschliche Spieler mit Firmenname,
@@ -3016,7 +3044,23 @@ function renntagAusstatten(p) {
 }
 
 /* ---------- Spielzustand ---------- */
+/* Jede Runde bekommt einen eigenen Startwert. Ein Prozess = eine Runde, also
+ * ist der Seed je Runde einzigartig. Aus ihm kommen die rundenweiten Zufälle
+ * (z. B. der Panikschock), damit die Markt-API sie nachvollziehbar ausgeben kann. */
+const RUNDEN_SEED = crypto.randomInt(2 ** 31);
+/* mulberry32: kleiner, reproduzierbarer Zufallsgenerator aus einem Seed. */
+function seededRand(seed) {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+const rundeRand = seededRand(RUNDEN_SEED);
 const G = {
+  seed: RUNDEN_SEED,
   map: buildMap(),
   players: {},          // persistente Spieler-ID (Reconnect-Token) -> Player
   socketToPid: {},       // aktuelle socket.id -> persistente Spieler-ID
@@ -3305,7 +3349,7 @@ function marktLog(art, text, daten = {}) {
 /* Einmal je Markttag, feste Reihenfolge: F messen, dann P nachführen. */
 function marktTag() {
   const tag = Math.floor(G.tick / MARKT.TAG);
-  if (G.panikTag == null) G.panikTag = Math.floor((MARKT.PANIK_VON + Math.random() * (MARKT.PANIK_BIS - MARKT.PANIK_VON)) * 60 / MARKT.TAG);
+  if (G.panikTag == null) G.panikTag = Math.floor((MARKT.PANIK_VON + rundeRand() * (MARKT.PANIK_BIS - MARKT.PANIK_VON)) * 60 / MARKT.TAG);
   const panik = !G.panikErledigt && tag >= G.panikTag;
   for (const p of Object.values(G.players)) {
     const m = marktVon(p), F = fundament(p);
@@ -11135,6 +11179,13 @@ function runTick() {
         io.emit("notice", { text: `${f.name} verlässt ${team.name}: Gehalt nicht bezahlt.` });
       }
     }
+  }
+  /* Kursverlauf für die Markt-API: alle 10 s ein Punkt, also sechs je Markttag
+   * (60 s). Die letzten 1440 Punkte entsprechen vier Stunden Spielzeit. */
+  if (G.tick % 10 === 0) {
+    (G.verlauf ??= []).push({ tick: G.tick, waren: Object.fromEntries(Object.keys(GOODS).map(k => [k, r2(MM[k].price)])),
+      firmen: Object.fromEntries(Object.values(G.players).map(p => [p.id, r2(kursVon(p))])) });
+    if (G.verlauf.length > 1440) G.verlauf.shift();
   }
   /* Nettovermögens-Verlauf (alle 10 s ein Punkt, max. 120 Punkte = 20 min) */
   if (G.tick % 10 === 0) for (const p of Object.values(G.players)) {

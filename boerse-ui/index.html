@@ -1,0 +1,236 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Spielbörse</title>
+<style>
+:root{--violett:#5b2fc9;--violett-hell:#ece6fa;--text:#2a1d4a;--grau:#6b6880;--rot:#b3361d;--gruen:#1f8a5b;--karte:#fff;--hintergrund:#f2f2f5;--rand:#dedde8}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--violett:#b59cff;--violett-hell:#2a2142;--text:#ece8f7;--grau:#a29fb8;--rot:#ff8a73;--gruen:#5fd3a0;--karte:#1b1828;--hintergrund:#121019;--rand:#2e2a42}}
+:root[data-theme="dark"]{--violett:#b59cff;--violett-hell:#2a2142;--text:#ece8f7;--grau:#a29fb8;--rot:#ff8a73;--gruen:#5fd3a0;--karte:#1b1828;--hintergrund:#121019;--rand:#2e2a42}
+*{box-sizing:border-box}
+body{margin:0;background:var(--hintergrund);color:var(--text);font:15px/1.4 system-ui,-apple-system,"Segoe UI",sans-serif}
+nav{display:flex;align-items:center;gap:22px;background:var(--karte);padding:12px 20px;border-bottom:1px solid var(--rand);position:sticky;top:0}
+nav .menue{font-size:20px}
+nav a{color:var(--violett);font-weight:600;text-decoration:none}
+nav .suche{margin-left:auto;background:var(--violett-hell);border-radius:20px;padding:7px 14px;color:var(--grau);min-width:200px}
+.raster{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);gap:18px;padding:18px;max-width:1280px;margin:auto}
+@media (max-width:820px){.raster{grid-template-columns:1fr}}
+.karte{background:var(--karte);border:1px solid var(--rand);border-radius:14px;padding:16px 18px;overflow:hidden}
+h2{margin:4px 0 12px;font-size:22px;color:var(--violett);text-align:center}
+.reiter{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px}
+.reiter button{background:none;border:0;color:var(--violett);font:inherit;font-weight:600;padding:6px 14px;border-radius:20px;cursor:pointer}
+.reiter button.aktiv{background:var(--violett-hell)}
+table{width:100%;border-collapse:collapse}
+th{font-size:13px;color:var(--grau);font-weight:500;text-align:right;padding:8px 4px;border-bottom:1px solid var(--rand)}
+th:first-child,td:first-child{text-align:left}
+td{padding:11px 4px;border-bottom:1px solid var(--rand);text-align:right;font-variant-numeric:tabular-nums}
+td:first-child{color:var(--violett);font-weight:600;cursor:pointer}
+.plus{color:var(--gruen)} .minus{color:var(--rot)}
+.kacheln{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+@media (max-width:600px){.kacheln{grid-template-columns:repeat(2,1fr)}}
+.kachel{border-radius:8px;padding:9px 10px;font-size:13px;color:#fff}
+.kachel b{display:block;font-size:14px}
+.kurs{font-size:26px;font-weight:600;margin-top:4px}
+.ticket{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px}
+.ticket label{font-size:13px;color:var(--grau);display:block}
+input{width:100%;padding:8px;border:1px solid var(--rand);border-radius:8px;background:var(--karte);color:var(--text);font:inherit}
+.knopf{grid-column:span 2;background:var(--violett);color:#fff;border:0;border-radius:24px;padding:11px;font:600 15px system-ui;cursor:pointer}
+.knopf.zweit{background:none;color:var(--violett);border:1px solid var(--violett)}
+.meldung{font-size:13px;color:var(--grau);min-height:18px;grid-column:span 2}
+svg{width:100%;height:220px;display:block}
+.depot-zeile{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--rand)}
+</style>
+</head>
+<body>
+<nav>
+  <span class="menue">&#9776;</span>
+  <a href="#">Aktuell</a><a href="#">Mein Depot</a><a href="#">Spielgeld</a>
+  <form id="api-form" class="suche" style="display:flex;gap:6px;align-items:center;padding:4px 6px 4px 14px">
+    <label for="api" style="font-size:13px">API</label>
+    <input id="api" style="border:0;background:transparent;padding:4px;min-width:240px" placeholder="http://localhost:3000/api/markt">
+    <button class="knopf" style="padding:5px 12px;font-size:13px">Verbinden</button>
+  </form>
+  <span id="status" style="font-size:13px;color:var(--grau)">Demo-Kurse</span>
+</nav>
+
+<div class="raster">
+  <section class="karte">
+    <h2>Beliebteste Werte</h2>
+    <div class="reiter"><button class="aktiv">Aktien</button><button>Fonds &amp; ETF</button><button>Derivate</button><button>Anleihen</button></div>
+    <table>
+      <thead><tr><th>Name</th><th>Kurs aktuell</th><th>Performance</th></tr></thead>
+      <tbody id="werte"></tbody>
+    </table>
+  </section>
+
+  <section class="karte">
+    <h2>Marktübersicht</h2>
+    <div class="kacheln" id="kacheln"></div>
+    <div style="margin-top:18px">
+      <div style="display:flex;justify-content:space-between;align-items:baseline">
+        <div><div id="titel" style="font-weight:600;font-size:18px"></div><div class="kurs" id="kurs"></div></div>
+        <div id="delta" style="font-weight:600"></div>
+      </div>
+      <svg id="chart" viewBox="0 0 400 220" preserveAspectRatio="none"></svg>
+    </div>
+    <div class="ticket">
+      <div><label for="stueck">Stück</label><input id="stueck" type="number" min="1" value="10"></div>
+      <div><label>Spielgeld</label><div id="geld" style="padding:8px 0;font-weight:600"></div></div>
+      <button class="knopf" id="kaufen">Kaufen</button>
+      <button class="knopf zweit" id="verkaufen">Verkaufen</button>
+      <div class="meldung" id="meldung"></div>
+    </div>
+  </section>
+</div>
+
+<script>
+const START_GELD = 10000;
+const DEMO = [
+  { name: "Nordseeöl", kurs: 128.52, perf: -5.69 },
+  { name: "Stahlfaust", kurs: 251.7, perf: -0.26 },
+  { name: "Chipwerke", kurs: 928.0, perf: -5.31 },
+  { name: "Gruenhof", kurs: 26.58, perf: -1.56 },
+  { name: "Stadtwerke", kurs: 124.48, perf: -2.08 },
+  { name: "Montan", kurs: 202.9, perf: -0.49 },
+  { name: "Voltsilicon", kurs: 185.34, perf: -1.67 },
+  { name: "Küstenperle", kurs: 98.58, perf: 1.63 },
+];
+const INDEX = [
+  { name: "Stadt-Index", wert: "25.905,16", perf: -0.52 },
+  { name: "Industrie", wert: "25.895,87", perf: -0.75 },
+  { name: "Mittelstand", wert: "30.554,08", perf: -0.88 },
+  { name: "Technik", wert: "4.106,89", perf: -1.17 },
+  { name: "Rohstoffe", wert: "18.154,13", perf: -1.44 },
+  { name: "Europa 50", wert: "6.156,92", perf: -0.67 },
+  { name: "Öl Brent", wert: "113,38", perf: 1.69 },
+  { name: "Weltmarkt", wert: "7.643,82", perf: -0.99 },
+];
+/* Startverlauf: 40 Punkte Zufallsweg, damit der Chart nicht leer beginnt. */
+function startVerlauf(kurs) {
+  const v = [kurs];
+  for (let i = 0; i < 39; i++) v.unshift(v[0] * (1 + (Math.random() - 0.5) * 0.012));
+  return v.map(x => Math.round(x * 100) / 100);
+}
+let werte = DEMO.map(w => ({ ...w, verlauf: startVerlauf(w.kurs) }));
+let aktiv = 0;
+
+function lade() {
+  try { return JSON.parse(localStorage.getItem("boerse") || "null"); } catch { return null; }
+}
+function speichere(d) { try { localStorage.setItem("boerse", JSON.stringify(d)); } catch {} }
+let depot = lade() || { geld: START_GELD, bestand: {} };
+
+const f2 = n => n.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const klasse = p => (p >= 0 ? "plus" : "minus");
+const vorzeichen = p => (p >= 0 ? "+" : "") + f2(p) + " %";
+
+function zeigeWerte() {
+  document.getElementById("werte").innerHTML = werte.map((w, i) =>
+    `<tr><td data-i="${i}">${w.name}</td><td>${f2(w.kurs)} $</td><td class="${klasse(w.perf)}">${vorzeichen(w.perf)}</td></tr>`).join("");
+}
+function zeigeKacheln() {
+  document.getElementById("kacheln").innerHTML = INDEX.map(k => {
+    const farbe = k.perf >= 0 ? "#1f8a5b" : (k.perf < -1 ? "#c2410c" : "#d9776a");
+    return `<div class="kachel" style="background:${farbe}"><b>${k.name}</b>${k.wert}<br>${vorzeichen(k.perf)}</div>`;
+  }).join("");
+}
+function zeigeChart() {
+  const w = werte[aktiv], v = w.verlauf, lo = Math.min(...v), hi = Math.max(...v), span = hi - lo || 1;
+  const punkte = v.map((x, i) => `${(i / Math.max(1, v.length - 1)) * 400},${220 - ((x - lo) / span) * 200 - 10}`).join(" ");
+  document.getElementById("chart").innerHTML =
+    `<polygon fill="#e4572e" fill-opacity=".18" points="0,220 ${punkte} 400,220"/>` +
+    `<polyline fill="none" stroke="#e4572e" stroke-width="2" points="${punkte}"/>`;
+  document.getElementById("titel").textContent = w.name;
+  document.getElementById("kurs").textContent = f2(w.kurs) + " $";
+  const d = w.perf;
+  document.getElementById("delta").innerHTML = `<span class="${klasse(d)}">${vorzeichen(d)}</span>`;
+  document.getElementById("geld").textContent = f2(depot.geld) + " $";
+}
+function handeln(richtung) {
+  const w = werte[aktiv], stueck = Math.floor(+document.getElementById("stueck").value);
+  const meldung = document.getElementById("meldung");
+  if (!(stueck > 0)) { meldung.textContent = "Bitte eine Stückzahl über 0 eingeben."; return; }
+  const bestand = depot.bestand[w.name] || 0;
+  if (richtung === "kauf") {
+    const kosten = stueck * w.kurs;
+    if (kosten > depot.geld) { meldung.textContent = "Nicht genug Spielgeld."; return; }
+    depot.geld -= kosten; depot.bestand[w.name] = bestand + stueck;
+    meldung.textContent = `${stueck} × ${w.name} gekauft für ${f2(kosten)} $.`;
+  } else {
+    if (stueck > bestand) { meldung.textContent = `Du besitzt nur ${bestand} Stück.`; return; }
+    depot.geld += stueck * w.kurs; depot.bestand[w.name] = bestand - stueck;
+    meldung.textContent = `${stueck} × ${w.name} verkauft.`;
+  }
+  speichere(depot);
+  zeigeChart();
+}
+function ticke() {
+  if (live) return;
+  werte.forEach(w => {
+    const schritt = (Math.random() - 0.5) * 0.01;
+    const neu = Math.max(0.5, w.kurs * (1 + schritt));
+    w.perf = Math.round(((neu / DEMO.find(d => d.name === w.name).kurs - 1) * 100) * 100) / 100;
+    w.kurs = Math.round(neu * 100) / 100;
+    w.verlauf.push(w.kurs); if (w.verlauf.length > 60) w.verlauf.shift();
+  });
+  zeigeWerte(); zeigeChart();
+}
+
+document.getElementById("werte").addEventListener("click", e => {
+  const td = e.target.closest("td[data-i]"); if (!td) return;
+  aktiv = +td.dataset.i; zeigeChart();
+});
+document.getElementById("kaufen").onclick = () => handeln("kauf");
+document.getElementById("verkaufen").onclick = () => handeln("verkauf");
+/* ---------- Live-Daten aus dem Spiel ----------
+ * Die Adresse kommt aus ?api=… oder dem Eingabefeld und bleibt im Browser
+ * gespeichert. Klappt der Abruf nicht, laufen die Demo-Kurse weiter. */
+let apiUrl = new URLSearchParams(location.search).get("api");
+try { apiUrl = apiUrl || localStorage.getItem("boerse-api") || ""; } catch {}
+let live = false;
+const startKurs = {};
+
+async function holeMarkt() {
+  if (!apiUrl) return;
+  const status = document.getElementById("status");
+  try {
+    const d = await (await fetch(apiUrl, { cache: "no-store" })).json();
+    const verlauf = d.verlauf || [];
+    if (d.firmen?.length) {
+      const name = werte[aktiv]?.name;
+      werte = d.firmen.map(f => {
+        startKurs[f.id] ??= verlauf.find(v => v.firmen[f.id] != null)?.firmen[f.id] ?? f.kurs;
+        const v = verlauf.map(p => p.firmen[f.id]).filter(x => x != null);
+        return { name: f.name, kurs: f.kurs, perf: Math.round((f.kurs / startKurs[f.id] - 1) * 10000) / 100,
+                 verlauf: v.length ? v : [f.kurs] };
+      });
+      aktiv = Math.max(0, werte.findIndex(w => w.name === name));
+    }
+    /* Kacheln: Warenpreise gegenüber dem Grundpreis, die acht größten Ausschläge. */
+    INDEX.splice(0, INDEX.length, ...d.waren
+      .map(w => ({ name: w.name, wert: f2(w.preis), perf: Math.round((w.preis / w.grundpreis - 1) * 10000) / 100 }))
+      .sort((a, b) => Math.abs(b.perf) - Math.abs(a.perf)).slice(0, 8));
+    live = true;
+    status.textContent = d.firmen?.length ? `Live · Minute ${d.runde.minute}` : "Live · noch keine Firmen";
+    zeigeWerte(); zeigeKacheln(); zeigeChart();
+  } catch {
+    live = false;
+    status.textContent = "Keine Verbindung, Demo-Kurse";
+  }
+}
+document.getElementById("api").value = apiUrl;
+document.getElementById("api-form").addEventListener("submit", e => {
+  e.preventDefault();
+  apiUrl = document.getElementById("api").value.trim();
+  try { localStorage.setItem("boerse-api", apiUrl); } catch {}
+  holeMarkt();
+});
+
+zeigeWerte(); zeigeKacheln(); zeigeChart();
+holeMarkt();
+setInterval(ticke, 2000);
+setInterval(() => { if (live) holeMarkt(); }, 5000);
+</script>
+</body>
+</html>
