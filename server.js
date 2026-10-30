@@ -465,6 +465,8 @@ app.get("/api/lobby", (_req, res) => {
  * erreichbar als /r/<CODE>/api/markt, im Einzelbetrieb als /api/markt. */
 const r2 = x => Math.round(x * 100) / 100;
 app.get("/api/markt", (req, res) => {
+  /* Die Börsen-Seite läuft als eigene Datei, also von einer anderen Herkunft. */
+  res.set("Access-Control-Allow-Origin", "*");
   res.json({
     runde: {
       seed: G.seed, modus: MODE, gestartet: !!G.started, beendet: !!G.winner,
