@@ -123,27 +123,17 @@ svg{width:100%;height:220px;display:block}
   </section>
 
   <section class="karte">
-    <h2>Orderbuch (Waren)</h2>
-    <div class="reiter" id="order-reiter"></div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:8px">
-      <div>
-        <div style="font-size:13px;font-weight:600;color:var(--gruen)">Kaufgesuche</div>
-        <div id="order-buy"></div>
-      </div>
-      <div>
-        <div style="font-size:13px;font-weight:600;color:var(--rot)">Verkaufsangebote</div>
-        <div id="order-sell"></div>
-      </div>
-    </div>
-    <h3 style="font-size:16px;margin-top:18px">Neue Order</h3>
+    <h2>Auf Aktien bieten</h2>
+    <p style="font-size:13px;color:var(--grau)">Kaufanfrage an eine Firma stellen — sie entscheidet, ob sie annimmt:</p>
     <div class="ticket">
-      <div><label for="order-good">Ware</label><select id="order-good"></select></div>
-      <div><label for="order-side">Seite</label><select id="order-side"><option value="buy">Kaufen</option><option value="sell">Verkaufen</option></select></div>
-      <div><label for="order-qty">Menge</label><input id="order-qty" type="number" min="1" value="10"></div>
-      <div><label for="order-price">Preis/Stk</label><input id="order-price" type="number" min="0.01" step="0.01" value="10"></div>
-      <button class="knopf" id="btn-place-order" style="grid-column:span 2">Order aufgeben</button>
-      <div class="meldung" id="order-meldung"></div>
+      <div style="grid-column:span 2"><label for="bid-firma">Firma</label><select id="bid-firma"></select></div>
+      <div><label for="bid-count">Anzahl Aktien</label><input id="bid-count" type="number" min="1" max="100" value="10"></div>
+      <div><label for="bid-price">Gebot (gesamt $)</label><input id="bid-price" type="number" min="1" step="1" value="1000"></div>
+      <button class="knopf" id="btn-bid" style="grid-column:span 2">Gebot abgeben</button>
+      <div class="meldung" id="bid-meldung"></div>
     </div>
+    <h3 style="font-size:16px;margin-top:18px">Laufende Kaufanfragen</h3>
+    <div class="angebote-liste" id="bids-liste"></div>
   </section>
 </div>
 
@@ -174,7 +164,7 @@ let goods = {};             // key → {name, …}
 let connected = false;
 let aktiv = 0;              // selected firm index
 let firmen = [];            // [{id, name, kurs, firmenwert, …}]
-let selectedOrderGood = "";
+
 
 const f2 = n => (+n).toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const klasse = p => (p >= 0 ? "plus" : "minus");
@@ -327,17 +317,24 @@ function doConnect(serverUrl, playerName, industry) {
   });
 }
 
-/* ========== Populate goods select ========== */
+/* ========== Populate selects ========== */
 function populateGoodsSelect() {
-  const sel = document.getElementById("order-good");
+  /* Goods select entfernt — nur Firmen-Select für Gebote */
+  populateBidFirmaSelect();
+}
+function populateBidFirmaSelect() {
+  const sel = document.getElementById("bid-firma");
+  if (!sel) return;
+  const prev = sel.value;
   sel.innerHTML = "";
-  for (const [key, g] of Object.entries(goods)) {
+  for (const f of firmen) {
+    if (f.id === myPid) continue; // eigene Firma ausblenden
     const opt = document.createElement("option");
-    opt.value = key;
-    opt.textContent = g.name || key;
+    opt.value = f.id;
+    opt.textContent = f.name;
     sel.appendChild(opt);
   }
-  if (sel.options.length) selectedOrderGood = sel.options[0].value;
+  if (prev && [...sel.options].some(o => o.value === prev)) sel.value = prev;
 }
 
 /* ========== Update views from game state ========== */
@@ -358,13 +355,15 @@ function updateFromState() {
     `<tr><td data-i="${i}">${f.name}</td><td>${f2(f.firmenwert)} $</td><td>${f2(f.firmenwert)} $</td><td>${f2(f.eigene)} %</td></tr>`
   ).join("");
 
-  /* Waren-Kacheln */
-  if (s.orders) updateOrderBook(s.orders);
-
   /* Share listings */
   if (s.shareListings) updateShareListings(s.shareListings);
 
-  /* Warenpreise aus dem marktLog oder Kacheln — verwende API falls verfügbar */
+  /* Share bids */
+  if (s.shareBids) updateShareBids(s.shareBids);
+
+  /* Firma-Select für Gebote aktualisieren */
+  populateBidFirmaSelect();
+
   updateStatus(s);
 }
 
@@ -423,57 +422,55 @@ function kaufeAktien(listingId) {
   });
 }
 
-/* ========== Orderbuch (Waren) ========== */
-function updateOrderBook(orders) {
-  const buyDiv = document.getElementById("order-buy");
-  const sellDiv = document.getElementById("order-sell");
-
-  const good = document.getElementById("order-good")?.value || selectedOrderGood;
-  const buys = orders.filter(o => o.side === "buy" && (!good || o.good === good)).sort((a, b) => b.price - a.price);
-  const sells = orders.filter(o => o.side === "sell" && (!good || o.good === good)).sort((a, b) => a.price - b.price);
-
-  buyDiv.innerHTML = buys.slice(0, 10).map(o =>
-    `<div class="order-zeile">
-      <span>${o.player} · ${o.qty}×</span>
-      <span class="plus">${f2(o.price)} $</span>
-      ${o.playerId !== myPid ? `<button class="knopf" style="padding:3px 10px;font-size:12px" onclick="takeOrder('${o.id}',${o.qty})">Annehmen</button>` : ''}
-    </div>`
-  ).join("") || '<div style="color:var(--grau);font-size:13px">Keine</div>';
-
-  sellDiv.innerHTML = sells.slice(0, 10).map(o =>
-    `<div class="order-zeile">
-      <span>${o.player} · ${o.qty}×</span>
-      <span class="minus">${f2(o.price)} $</span>
-      ${o.playerId !== myPid ? `<button class="knopf" style="padding:3px 10px;font-size:12px" onclick="takeOrder('${o.id}',${o.qty})">Annehmen</button>` : ''}
-    </div>`
-  ).join("") || '<div style="color:var(--grau);font-size:13px">Keine</div>';
+/* ========== Kaufanfragen (shareBids) ========== */
+function updateShareBids(bids) {
+  const el = document.getElementById("bids-liste");
+  if (!el) return;
+  if (!bids.length) {
+    el.innerHTML = '<div style="padding:12px;color:var(--grau);text-align:center">Keine laufenden Kaufanfragen.</div>';
+    return;
+  }
+  el.innerHTML = bids.map(b => {
+    const isMine = b.bidderId === myPid;
+    const isMyCompany = b.companyId === myPid;
+    return `<div class="angebot">
+      <div class="info">
+        <b>${b.company}</b> · ${b.count} Aktien · ${f2(b.price)} $
+        <div style="font-size:12px;color:var(--grau)">Bieter: ${b.bidder}</div>
+      </div>
+      ${isMyCompany
+        ? `<button class="knopf" onclick="acceptBid('${b.id}')">Annehmen</button>`
+        : (isMine ? '<span style="font-size:12px;color:var(--grau)">Dein Gebot</span>' : '')}
+    </div>`;
+  }).join("");
 }
 
-function takeOrder(orderId, qty) {
+function acceptBid(bidId) {
   if (!socket) return;
-  const meldung = document.getElementById("order-meldung");
-  socket.emit("takeOrder", { orderId, qty }, (res) => {
-    if (res.error) meldung.textContent = "Fehler: " + res.error;
-    else meldung.textContent = "Order ausgeführt!";
+  const meldung = document.getElementById("bid-meldung");
+  socket.emit("acceptShareBid", { bidId }, (res) => {
+    if (res && res.error) meldung.textContent = "Fehler: " + res.error;
+    else meldung.textContent = "Anfrage angenommen!";
     setTimeout(() => meldung.textContent = "", 4000);
   });
 }
 
-/* ========== Neue Order aufgeben ========== */
-document.getElementById("btn-place-order").addEventListener("click", () => {
+/* ========== Gebot abgeben ========== */
+document.getElementById("btn-bid").addEventListener("click", () => {
   if (!socket) return;
-  const good = document.getElementById("order-good").value;
-  const side = document.getElementById("order-side").value;
-  const qty = Math.floor(+document.getElementById("order-qty").value);
-  const price = Math.round(+document.getElementById("order-price").value * 100) / 100;
-  const meldung = document.getElementById("order-meldung");
+  const companyId = document.getElementById("bid-firma").value;
+  const count = Math.floor(+document.getElementById("bid-count").value);
+  const price = Math.round(+document.getElementById("bid-price").value);
+  const meldung = document.getElementById("bid-meldung");
 
-  if (!good || qty < 1 || price <= 0) { meldung.textContent = "Bitte alle Felder ausfüllen."; return; }
+  if (!companyId) { meldung.textContent = "Bitte eine Firma wählen."; return; }
+  if (count < 1) { meldung.textContent = "Mindestens 1 Aktie."; return; }
+  if (price < 1) { meldung.textContent = "Gebot muss über 0 $ liegen."; return; }
 
-  meldung.textContent = "Sende…";
-  socket.emit("placeOrder", { side, good, qty, price }, (res) => {
-    if (res.error) meldung.textContent = "Fehler: " + res.error;
-    else meldung.textContent = `${side === "buy" ? "Kauf" : "Verkauf"}-Order aufgegeben!`;
+  meldung.textContent = "Sende Gebot…";
+  socket.emit("bidShares", { companyId, count, price }, (res) => {
+    if (res && res.error) meldung.textContent = "Fehler: " + res.error;
+    else meldung.textContent = `Gebot über ${count} Aktien für ${f2(price)} $ abgegeben!`;
     setTimeout(() => meldung.textContent = "", 4000);
   });
 });
@@ -519,10 +516,6 @@ document.getElementById("werte").addEventListener("click", e => {
   aktiv = +td.dataset.i;
 });
 
-/* Filter order book by selected good */
-document.getElementById("order-good")?.addEventListener("change", () => {
-  if (gameState.orders) updateOrderBook(gameState.orders);
-});
 
 /* ========== Hol Marktdaten über die API als Ergänzung ========== */
 let apiUrl = "";
