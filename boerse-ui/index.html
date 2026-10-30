@@ -10,10 +10,10 @@
 :root[data-theme="dark"]{--violett:#b59cff;--violett-hell:#2a2142;--text:#ece8f7;--grau:#a29fb8;--rot:#ff8a73;--gruen:#5fd3a0;--karte:#1b1828;--hintergrund:#121019;--rand:#2e2a42}
 *{box-sizing:border-box}
 body{margin:0;background:var(--hintergrund);color:var(--text);font:15px/1.4 system-ui,-apple-system,"Segoe UI",sans-serif}
-nav{display:flex;align-items:center;gap:22px;background:var(--karte);padding:12px 20px;border-bottom:1px solid var(--rand);position:sticky;top:0}
+nav{display:flex;align-items:center;gap:12px;background:var(--karte);padding:12px 16px;border-bottom:1px solid var(--rand);position:sticky;top:0;flex-wrap:wrap}
 nav .menue{font-size:20px}
-nav a{color:var(--violett);font-weight:600;text-decoration:none}
-nav .suche{margin-left:auto;background:var(--violett-hell);border-radius:20px;padding:7px 14px;color:var(--grau);min-width:200px}
+nav a{color:var(--violett);font-weight:600;text-decoration:none;cursor:pointer}
+nav a.aktiv{text-decoration:underline}
 .raster{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);gap:18px;padding:18px;max-width:1280px;margin:auto}
 @media (max-width:820px){.raster{grid-template-columns:1fr}}
 .karte{background:var(--karte);border:1px solid var(--rand);border-radius:14px;padding:16px 18px;overflow:hidden}
@@ -34,38 +34,74 @@ td:first-child{color:var(--violett);font-weight:600;cursor:pointer}
 .kurs{font-size:26px;font-weight:600;margin-top:4px}
 .ticket{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px}
 .ticket label{font-size:13px;color:var(--grau);display:block}
-input{width:100%;padding:8px;border:1px solid var(--rand);border-radius:8px;background:var(--karte);color:var(--text);font:inherit}
-.knopf{grid-column:span 2;background:var(--violett);color:#fff;border:0;border-radius:24px;padding:11px;font:600 15px system-ui;cursor:pointer}
+input,select{width:100%;padding:8px;border:1px solid var(--rand);border-radius:8px;background:var(--karte);color:var(--text);font:inherit}
+.knopf{background:var(--violett);color:#fff;border:0;border-radius:24px;padding:11px;font:600 15px system-ui;cursor:pointer}
 .knopf.zweit{background:none;color:var(--violett);border:1px solid var(--violett)}
+.knopf:disabled{opacity:.5;cursor:default}
 .meldung{font-size:13px;color:var(--grau);min-height:18px;grid-column:span 2}
 svg{width:100%;height:220px;display:block}
 .depot-zeile{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--rand)}
+#login-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:100}
+#login-box{background:var(--karte);border-radius:16px;padding:28px;max-width:380px;width:90%}
+#login-box h2{margin-top:0}
+#login-box label{display:block;margin:10px 0 4px;font-size:13px;color:var(--grau)}
+#login-box .knopf{width:100%;margin-top:16px}
+.angebote-liste{max-height:260px;overflow-y:auto}
+.angebot{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--rand);gap:8px}
+.angebot .info{flex:1;font-size:14px}
+.angebot .knopf{padding:6px 14px;font-size:13px}
+.tab-inhalt{display:none}
+.tab-inhalt.sichtbar{display:block}
+#orderbuch .order-zeile{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--rand);font-size:14px}
 </style>
 </head>
 <body>
+
+<!-- Login overlay -->
+<div id="login-overlay" style="display:none">
+  <div id="login-box">
+    <h2>Spielbörse verbinden</h2>
+    <label for="server-url">Server-Adresse</label>
+    <input id="server-url" placeholder="http://localhost:3000">
+    <label for="spieler-name">Firmenname</label>
+    <input id="spieler-name" placeholder="z.B. Handelskontor" maxlength="20">
+    <label for="industrie">Branche</label>
+    <select id="industrie">
+      <option value="agrar">Agrarwirtschaft</option>
+      <option value="rohstoff">Rohstoff- & Bauindustrie</option>
+      <option value="versorger">Grundbedürfnisse</option>
+      <option value="tech" selected>Technologie & Elektronik</option>
+      <option value="touristik">Touristik</option>
+      <option value="ruestung">Rüstungsindustrie</option>
+      <option value="software">Software & Digitales</option>
+    </select>
+    <button class="knopf" id="btn-login">Beitreten</button>
+    <div class="meldung" id="login-meldung" style="margin-top:8px;text-align:center"></div>
+  </div>
+</div>
+
 <nav>
   <span class="menue">&#9776;</span>
-  <a href="#">Aktuell</a><a href="#">Mein Depot</a><a href="#">Spielgeld</a>
-  <form id="api-form" class="suche" style="display:flex;gap:6px;align-items:center;padding:4px 6px 4px 14px">
-    <label for="api" style="font-size:13px">API</label>
-    <input id="api" style="border:0;background:transparent;padding:4px;min-width:240px" placeholder="http://localhost:3000/api/markt">
-    <button class="knopf" style="padding:5px 12px;font-size:13px">Verbinden</button>
-  </form>
-  <span id="status" style="font-size:13px;color:var(--grau)">Demo-Kurse</span>
+  <a class="nav-tab aktiv" data-tab="markt">Markt</a>
+  <a class="nav-tab" data-tab="aktien">Aktienhandel</a>
+  <a class="nav-tab" data-tab="depot">Mein Depot</a>
+  <span style="margin-left:auto"></span>
+  <span id="status" style="font-size:13px;color:var(--grau)">Nicht verbunden</span>
+  <span id="kapital" style="font-size:13px;font-weight:600"></span>
 </nav>
 
-<div class="raster">
+<!-- Tab: Markt -->
+<div class="raster tab-inhalt sichtbar" id="tab-markt">
   <section class="karte">
-    <h2>Beliebteste Werte</h2>
-    <div class="reiter"><button class="aktiv">Aktien</button><button>Fonds &amp; ETF</button><button>Derivate</button><button>Anleihen</button></div>
+    <h2>Firmen</h2>
     <table>
-      <thead><tr><th>Name</th><th>Kurs aktuell</th><th>Performance</th></tr></thead>
+      <thead><tr><th>Name</th><th>Kurs</th><th>Firmenwert</th><th>Eigene %</th></tr></thead>
       <tbody id="werte"></tbody>
     </table>
   </section>
 
   <section class="karte">
-    <h2>Marktübersicht</h2>
+    <h2>Warenpreise</h2>
     <div class="kacheln" id="kacheln"></div>
     <div style="margin-top:18px">
       <div style="display:flex;justify-content:space-between;align-items:baseline">
@@ -74,163 +110,448 @@ svg{width:100%;height:220px;display:block}
       </div>
       <svg id="chart" viewBox="0 0 400 220" preserveAspectRatio="none"></svg>
     </div>
+  </section>
+</div>
+
+<!-- Tab: Aktienhandel -->
+<div class="raster tab-inhalt" id="tab-aktien">
+  <section class="karte">
+    <h2>Aktien kaufen</h2>
+    <p style="font-size:13px;color:var(--grau)">Angebote anderer Spieler und Emissionen:</p>
+    <div class="angebote-liste" id="angebote"></div>
+    <div class="meldung" id="aktien-meldung" style="margin-top:8px"></div>
+  </section>
+
+  <section class="karte">
+    <h2>Orderbuch (Waren)</h2>
+    <div class="reiter" id="order-reiter"></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:8px">
+      <div>
+        <div style="font-size:13px;font-weight:600;color:var(--gruen)">Kaufgesuche</div>
+        <div id="order-buy"></div>
+      </div>
+      <div>
+        <div style="font-size:13px;font-weight:600;color:var(--rot)">Verkaufsangebote</div>
+        <div id="order-sell"></div>
+      </div>
+    </div>
+    <h3 style="font-size:16px;margin-top:18px">Neue Order</h3>
     <div class="ticket">
-      <div><label for="stueck">Stück</label><input id="stueck" type="number" min="1" value="10"></div>
-      <div><label>Spielgeld</label><div id="geld" style="padding:8px 0;font-weight:600"></div></div>
-      <button class="knopf" id="kaufen">Kaufen</button>
-      <button class="knopf zweit" id="verkaufen">Verkaufen</button>
-      <div class="meldung" id="meldung"></div>
+      <div><label for="order-good">Ware</label><select id="order-good"></select></div>
+      <div><label for="order-side">Seite</label><select id="order-side"><option value="buy">Kaufen</option><option value="sell">Verkaufen</option></select></div>
+      <div><label for="order-qty">Menge</label><input id="order-qty" type="number" min="1" value="10"></div>
+      <div><label for="order-price">Preis/Stk</label><input id="order-price" type="number" min="0.01" step="0.01" value="10"></div>
+      <button class="knopf" id="btn-place-order" style="grid-column:span 2">Order aufgeben</button>
+      <div class="meldung" id="order-meldung"></div>
     </div>
   </section>
 </div>
 
+<!-- Tab: Depot -->
+<div class="raster tab-inhalt" id="tab-depot">
+  <section class="karte">
+    <h2>Mein Depot</h2>
+    <div id="depot-info"></div>
+    <h3 style="font-size:16px;margin-top:14px">Aktienbesitz</h3>
+    <div id="depot-aktien"></div>
+    <h3 style="font-size:16px;margin-top:14px">Warenlager</h3>
+    <div id="depot-waren"></div>
+  </section>
+
+  <section class="karte">
+    <h2>Letzte Transaktionen</h2>
+    <div id="depot-tx" style="max-height:400px;overflow-y:auto"></div>
+  </section>
+</div>
+
 <script>
-const START_GELD = 10000;
-const DEMO = [
-  { name: "Nordseeöl", kurs: 128.52, perf: -5.69 },
-  { name: "Stahlfaust", kurs: 251.7, perf: -0.26 },
-  { name: "Chipwerke", kurs: 928.0, perf: -5.31 },
-  { name: "Gruenhof", kurs: 26.58, perf: -1.56 },
-  { name: "Stadtwerke", kurs: 124.48, perf: -2.08 },
-  { name: "Montan", kurs: 202.9, perf: -0.49 },
-  { name: "Voltsilicon", kurs: 185.34, perf: -1.67 },
-  { name: "Küstenperle", kurs: 98.58, perf: 1.63 },
-];
-const INDEX = [
-  { name: "Stadt-Index", wert: "25.905,16", perf: -0.52 },
-  { name: "Industrie", wert: "25.895,87", perf: -0.75 },
-  { name: "Mittelstand", wert: "30.554,08", perf: -0.88 },
-  { name: "Technik", wert: "4.106,89", perf: -1.17 },
-  { name: "Rohstoffe", wert: "18.154,13", perf: -1.44 },
-  { name: "Europa 50", wert: "6.156,92", perf: -0.67 },
-  { name: "Öl Brent", wert: "113,38", perf: 1.69 },
-  { name: "Weltmarkt", wert: "7.643,82", perf: -0.99 },
-];
-/* Startverlauf: 40 Punkte Zufallsweg, damit der Chart nicht leer beginnt. */
-function startVerlauf(kurs) {
-  const v = [kurs];
-  for (let i = 0; i < 39; i++) v.unshift(v[0] * (1 + (Math.random() - 0.5) * 0.012));
-  return v.map(x => Math.round(x * 100) / 100);
-}
-let werte = DEMO.map(w => ({ ...w, verlauf: startVerlauf(w.kurs) }));
-let aktiv = 0;
+/* ========== Globals ========== */
+let socket = null;
+let myPid = null;
+let myState = {};           // "me" event data (cash, inv, equity, tx, …)
+let gameState = {};         // "state" event data
+let goods = {};             // key → {name, …}
+let connected = false;
+let aktiv = 0;              // selected firm index
+let firmen = [];            // [{id, name, kurs, firmenwert, …}]
+let selectedOrderGood = "";
 
-function lade() {
-  try { return JSON.parse(localStorage.getItem("boerse") || "null"); } catch { return null; }
-}
-function speichere(d) { try { localStorage.setItem("boerse", JSON.stringify(d)); } catch {} }
-let depot = lade() || { geld: START_GELD, bestand: {} };
-
-const f2 = n => n.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const f2 = n => (+n).toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const klasse = p => (p >= 0 ? "plus" : "minus");
 const vorzeichen = p => (p >= 0 ? "+" : "") + f2(p) + " %";
 
-function zeigeWerte() {
-  document.getElementById("werte").innerHTML = werte.map((w, i) =>
-    `<tr><td data-i="${i}">${w.name}</td><td>${f2(w.kurs)} $</td><td class="${klasse(w.perf)}">${vorzeichen(w.perf)}</td></tr>`).join("");
+/* ========== Tab navigation ========== */
+document.querySelectorAll(".nav-tab").forEach(a => {
+  a.addEventListener("click", () => {
+    document.querySelectorAll(".nav-tab").forEach(t => t.classList.remove("aktiv"));
+    a.classList.add("aktiv");
+    document.querySelectorAll(".tab-inhalt").forEach(t => t.classList.remove("sichtbar"));
+    document.getElementById("tab-" + a.dataset.tab)?.classList.add("sichtbar");
+  });
+});
+
+/* ========== Merge partial state ========== */
+function merge(target, patch) {
+  if (!patch || !patch.teil) return patch || target;
+  const out = { ...target };
+  for (const k in patch) {
+    if (k === "teil") continue;
+    out[k] = patch[k];
+  }
+  return out;
 }
-function zeigeKacheln() {
-  document.getElementById("kacheln").innerHTML = INDEX.map(k => {
-    const farbe = k.perf >= 0 ? "#1f8a5b" : (k.perf < -1 ? "#c2410c" : "#d9776a");
-    return `<div class="kachel" style="background:${farbe}"><b>${k.name}</b>${k.wert}<br>${vorzeichen(k.perf)}</div>`;
+
+/* ========== Login ========== */
+const savedUrl = (() => { try { return localStorage.getItem("boerse-server") || ""; } catch { return ""; } })();
+document.getElementById("server-url").value = savedUrl || "http://localhost:3000";
+
+function showLogin() {
+  document.getElementById("login-overlay").style.display = "flex";
+}
+function hideLogin() {
+  document.getElementById("login-overlay").style.display = "none";
+}
+
+/* Auto-show login on load */
+showLogin();
+
+document.getElementById("btn-login").addEventListener("click", () => {
+  const url = document.getElementById("server-url").value.trim();
+  const name = document.getElementById("spieler-name").value.trim();
+  const industry = document.getElementById("industrie").value;
+  const meldung = document.getElementById("login-meldung");
+
+  if (!url) { meldung.textContent = "Bitte Server-Adresse eingeben."; return; }
+  if (!name) { meldung.textContent = "Bitte einen Firmennamen eingeben."; return; }
+
+  meldung.textContent = "Verbinde…";
+  try { localStorage.setItem("boerse-server", url); } catch {}
+
+  connectToGame(url, name, industry);
+});
+
+/* ========== Socket connection ========== */
+function connectToGame(serverUrl, playerName, industry) {
+  const meldung = document.getElementById("login-meldung");
+
+  /* Load socket.io client dynamically from game server */
+  if (typeof io === "undefined") {
+    const script = document.createElement("script");
+    script.src = serverUrl + "/socket.io/socket.io.js";
+    script.onload = () => doConnect(serverUrl, playerName, industry);
+    script.onerror = () => { meldung.textContent = "Socket.io konnte nicht geladen werden. Server erreichbar?"; };
+    document.head.appendChild(script);
+  } else {
+    doConnect(serverUrl, playerName, industry);
+  }
+}
+
+function doConnect(serverUrl, playerName, industry) {
+  const meldung = document.getElementById("login-meldung");
+
+  socket = io(serverUrl, { transports: ["websocket", "polling"] });
+
+  socket.on("connect", () => {
+    meldung.textContent = "Verbunden, registriere…";
+    socket.emit("register", {
+      name: playerName,
+      color: "#5b2fc9",
+      winGoal: 100000,
+      industry: industry,
+      bots: null,
+      botLevel: null,
+      botToken: null,
+      familieWunsch: null
+    }, (res) => {
+      if (res.error) {
+        meldung.textContent = "Fehler: " + res.error;
+        socket.disconnect();
+        return;
+      }
+      myPid = res.you;
+      goods = {};
+      if (res.goods) {
+        for (const g of res.goods) goods[g.key] = g;
+      }
+      connected = true;
+      apiUrl = serverUrl + "/api/markt";
+      hideLogin();
+      document.getElementById("status").textContent = "Verbunden als " + playerName;
+      populateGoodsSelect();
+      holeMarkt();
+    });
+  });
+
+  socket.on("state", (data) => {
+    gameState = merge(gameState, data);
+    updateFromState();
+  });
+
+  socket.on("me", (data) => {
+    myState = merge(myState, data);
+    updateFromMe();
+  });
+
+  socket.on("notice", (data) => {
+    /* Show notices briefly */
+    if (data.text) {
+      const el = document.getElementById("aktien-meldung");
+      if (el) { el.textContent = data.text; setTimeout(() => { if (el.textContent === data.text) el.textContent = ""; }, 5000); }
+    }
+  });
+
+  socket.on("disconnect", () => {
+    connected = false;
+    document.getElementById("status").textContent = "Verbindung getrennt";
+  });
+
+  socket.on("connect_error", () => {
+    meldung.textContent = "Verbindungsfehler – Server läuft?";
+  });
+}
+
+/* ========== Populate goods select ========== */
+function populateGoodsSelect() {
+  const sel = document.getElementById("order-good");
+  sel.innerHTML = "";
+  for (const [key, g] of Object.entries(goods)) {
+    const opt = document.createElement("option");
+    opt.value = key;
+    opt.textContent = g.name || key;
+    sel.appendChild(opt);
+  }
+  if (sel.options.length) selectedOrderGood = sel.options[0].value;
+}
+
+/* ========== Update views from game state ========== */
+function updateFromState() {
+  const s = gameState;
+
+  /* Firmen-Tabelle */
+  const players = s.players || {};
+  firmen = Object.values(players).map(p => ({
+    id: p.id, name: p.name, kurs: p.marketValue / 100,
+    firmenwert: p.marketValue, eigene: p.ownPct || 0,
+    equity: p.equity || {},
+    color: p.color
+  }));
+
+  const tbody = document.getElementById("werte");
+  tbody.innerHTML = firmen.map((f, i) =>
+    `<tr><td data-i="${i}">${f.name}</td><td>${f2(f.firmenwert)} $</td><td>${f2(f.firmenwert)} $</td><td>${f2(f.eigene)} %</td></tr>`
+  ).join("");
+
+  /* Waren-Kacheln */
+  if (s.orders) updateOrderBook(s.orders);
+
+  /* Share listings */
+  if (s.shareListings) updateShareListings(s.shareListings);
+
+  /* Warenpreise aus dem marktLog oder Kacheln — verwende API falls verfügbar */
+  updateStatus(s);
+}
+
+function updateStatus(s) {
+  const el = document.getElementById("status");
+  if (!connected) { el.textContent = "Nicht verbunden"; return; }
+  if (s.started) {
+    const min = s.tick ? Math.floor(s.tick / 60) : 0;
+    el.textContent = firmen.length ? `Live · Minute ${min}` : "Live · noch keine Firmen";
+  } else {
+    el.textContent = "Warteraum (Runde noch nicht gestartet)";
+  }
+}
+
+function updateFromMe() {
+  const m = myState;
+  const kapEl = document.getElementById("kapital");
+  if (m.cash != null) kapEl.textContent = f2(m.cash) + " $";
+
+  updateDepot(m);
+}
+
+/* ========== Aktien-Angebote (shareListings) ========== */
+function updateShareListings(listings) {
+  const el = document.getElementById("angebote");
+  if (!listings.length) {
+    el.innerHTML = '<div style="padding:12px;color:var(--grau);text-align:center">Keine Aktien-Angebote vorhanden.</div>';
+    return;
+  }
+  el.innerHTML = listings.map(l => {
+    const isMine = l.sellerId === myPid;
+    const restricted = l.toId && l.toId !== myPid;
+    return `<div class="angebot">
+      <div class="info">
+        <b>${l.company}</b> · ${l.count} Aktien · ${f2(l.price)} $
+        ${l.isIssue ? ' <span style="color:var(--gruen);font-size:12px">Emission</span>' : ''}
+        ${l.toName ? ` <span style="font-size:12px">→ ${l.toName}</span>` : ''}
+        <div style="font-size:12px;color:var(--grau)">Verkäufer: ${l.seller}</div>
+      </div>
+      ${!isMine && !restricted
+        ? `<button class="knopf" onclick="kaufeAktien('${l.id}')">Kaufen</button>`
+        : (isMine ? '<span style="font-size:12px;color:var(--grau)">Eigenes</span>'
+          : '<span style="font-size:12px;color:var(--grau)">Nicht für dich</span>')}
+    </div>`;
   }).join("");
 }
-function zeigeChart() {
-  const w = werte[aktiv], v = w.verlauf, lo = Math.min(...v), hi = Math.max(...v), span = hi - lo || 1;
+
+function kaufeAktien(listingId) {
+  if (!socket) return;
+  const meldung = document.getElementById("aktien-meldung");
+  meldung.textContent = "Kaufe…";
+  socket.emit("buyShares", { listingId, count: null }, (res) => {
+    if (res.error) meldung.textContent = "Fehler: " + res.error;
+    else meldung.textContent = "Aktien gekauft!";
+    setTimeout(() => meldung.textContent = "", 4000);
+  });
+}
+
+/* ========== Orderbuch (Waren) ========== */
+function updateOrderBook(orders) {
+  const buyDiv = document.getElementById("order-buy");
+  const sellDiv = document.getElementById("order-sell");
+
+  const good = document.getElementById("order-good")?.value || selectedOrderGood;
+  const buys = orders.filter(o => o.side === "buy" && (!good || o.good === good)).sort((a, b) => b.price - a.price);
+  const sells = orders.filter(o => o.side === "sell" && (!good || o.good === good)).sort((a, b) => a.price - b.price);
+
+  buyDiv.innerHTML = buys.slice(0, 10).map(o =>
+    `<div class="order-zeile">
+      <span>${o.player} · ${o.qty}×</span>
+      <span class="plus">${f2(o.price)} $</span>
+      ${o.playerId !== myPid ? `<button class="knopf" style="padding:3px 10px;font-size:12px" onclick="takeOrder('${o.id}',${o.qty})">Annehmen</button>` : ''}
+    </div>`
+  ).join("") || '<div style="color:var(--grau);font-size:13px">Keine</div>';
+
+  sellDiv.innerHTML = sells.slice(0, 10).map(o =>
+    `<div class="order-zeile">
+      <span>${o.player} · ${o.qty}×</span>
+      <span class="minus">${f2(o.price)} $</span>
+      ${o.playerId !== myPid ? `<button class="knopf" style="padding:3px 10px;font-size:12px" onclick="takeOrder('${o.id}',${o.qty})">Annehmen</button>` : ''}
+    </div>`
+  ).join("") || '<div style="color:var(--grau);font-size:13px">Keine</div>';
+}
+
+function takeOrder(orderId, qty) {
+  if (!socket) return;
+  const meldung = document.getElementById("order-meldung");
+  socket.emit("takeOrder", { orderId, qty }, (res) => {
+    if (res.error) meldung.textContent = "Fehler: " + res.error;
+    else meldung.textContent = "Order ausgeführt!";
+    setTimeout(() => meldung.textContent = "", 4000);
+  });
+}
+
+/* ========== Neue Order aufgeben ========== */
+document.getElementById("btn-place-order").addEventListener("click", () => {
+  if (!socket) return;
+  const good = document.getElementById("order-good").value;
+  const side = document.getElementById("order-side").value;
+  const qty = Math.floor(+document.getElementById("order-qty").value);
+  const price = Math.round(+document.getElementById("order-price").value * 100) / 100;
+  const meldung = document.getElementById("order-meldung");
+
+  if (!good || qty < 1 || price <= 0) { meldung.textContent = "Bitte alle Felder ausfüllen."; return; }
+
+  meldung.textContent = "Sende…";
+  socket.emit("placeOrder", { side, good, qty, price }, (res) => {
+    if (res.error) meldung.textContent = "Fehler: " + res.error;
+    else meldung.textContent = `${side === "buy" ? "Kauf" : "Verkauf"}-Order aufgegeben!`;
+    setTimeout(() => meldung.textContent = "", 4000);
+  });
+});
+
+/* ========== Depot-Ansicht ========== */
+function updateDepot(m) {
+  const info = document.getElementById("depot-info");
+  if (m.cash != null) {
+    info.innerHTML = `<div class="depot-zeile"><span>Kapital</span><b>${f2(m.cash)} $</b></div>`;
+  }
+
+  /* Aktienbesitz */
+  const aktienEl = document.getElementById("depot-aktien");
+  const eq = m.equity || {};
+  const players = gameState.players || {};
+  const zeilen = Object.entries(eq).filter(([, c]) => c > 0).map(([pid, count]) => {
+    const name = players[pid]?.name || pid;
+    const pct = (count / 100 * 100).toFixed(1);
+    return `<div class="depot-zeile"><span>${name}</span><span>${count} Aktien (${pct} %)</span></div>`;
+  });
+  aktienEl.innerHTML = zeilen.join("") || '<div style="color:var(--grau)">Keine Aktien</div>';
+
+  /* Warenlager */
+  const warenEl = document.getElementById("depot-waren");
+  const inv = m.inv || {};
+  const warenZeilen = Object.entries(inv).filter(([, c]) => c > 0).map(([key, count]) => {
+    const name = goods[key]?.name || key;
+    return `<div class="depot-zeile"><span>${name}</span><span>${count}</span></div>`;
+  });
+  warenEl.innerHTML = warenZeilen.join("") || '<div style="color:var(--grau)">Lager leer</div>';
+
+  /* Transaktionen */
+  const txEl = document.getElementById("depot-tx");
+  const tx = m.tx || [];
+  txEl.innerHTML = tx.slice(-20).reverse().map(t =>
+    `<div class="depot-zeile"><span>${t.label || t.what || "—"}</span><span class="${t.amount >= 0 ? 'plus' : 'minus'}">${t.amount >= 0 ? '+' : ''}${f2(t.amount)} $</span></div>`
+  ).join("") || '<div style="color:var(--grau)">Keine Transaktionen</div>';
+}
+
+/* ========== Firmen-Tabelle Klick ========== */
+document.getElementById("werte").addEventListener("click", e => {
+  const td = e.target.closest("td[data-i]"); if (!td) return;
+  aktiv = +td.dataset.i;
+});
+
+/* Filter order book by selected good */
+document.getElementById("order-good")?.addEventListener("change", () => {
+  if (gameState.orders) updateOrderBook(gameState.orders);
+});
+
+/* ========== Hol Marktdaten über die API als Ergänzung ========== */
+let apiUrl = "";
+async function holeMarkt() {
+  if (!apiUrl) return;
+  try {
+    const d = await (await fetch(apiUrl, { cache: "no-store" })).json();
+    /* Warenpreise als Kacheln */
+    if (d.waren?.length) {
+      const INDEX = d.waren
+        .map(w => ({ name: w.name, wert: f2(w.preis), perf: Math.round((w.preis / w.grundpreis - 1) * 10000) / 100 }))
+        .sort((a, b) => Math.abs(b.perf) - Math.abs(a.perf)).slice(0, 8);
+      document.getElementById("kacheln").innerHTML = INDEX.map(k => {
+        const farbe = k.perf >= 0 ? "#1f8a5b" : (k.perf < -1 ? "#c2410c" : "#d9776a");
+        return `<div class="kachel" style="background:${farbe}"><b>${k.name}</b>${k.wert}<br>${vorzeichen(k.perf)}</div>`;
+      }).join("");
+    }
+
+    /* Chart: Verlauf der ausgewählten Firma */
+    if (d.verlauf?.length && firmen[aktiv]) {
+      const fid = firmen[aktiv].id;
+      const v = d.verlauf.map(p => p.firmen?.[fid]).filter(x => x != null);
+      if (v.length > 1) zeichneChart(v, firmen[aktiv].name);
+    }
+  } catch {}
+}
+
+function zeichneChart(v, name) {
+  const lo = Math.min(...v), hi = Math.max(...v), span = hi - lo || 1;
   const punkte = v.map((x, i) => `${(i / Math.max(1, v.length - 1)) * 400},${220 - ((x - lo) / span) * 200 - 10}`).join(" ");
   document.getElementById("chart").innerHTML =
     `<polygon fill="#e4572e" fill-opacity=".18" points="0,220 ${punkte} 400,220"/>` +
     `<polyline fill="none" stroke="#e4572e" stroke-width="2" points="${punkte}"/>`;
-  document.getElementById("titel").textContent = w.name;
-  document.getElementById("kurs").textContent = f2(w.kurs) + " $";
-  const d = w.perf;
-  document.getElementById("delta").innerHTML = `<span class="${klasse(d)}">${vorzeichen(d)}</span>`;
-  document.getElementById("geld").textContent = f2(depot.geld) + " $";
-}
-function handeln(richtung) {
-  const w = werte[aktiv], stueck = Math.floor(+document.getElementById("stueck").value);
-  const meldung = document.getElementById("meldung");
-  if (!(stueck > 0)) { meldung.textContent = "Bitte eine Stückzahl über 0 eingeben."; return; }
-  const bestand = depot.bestand[w.name] || 0;
-  if (richtung === "kauf") {
-    const kosten = stueck * w.kurs;
-    if (kosten > depot.geld) { meldung.textContent = "Nicht genug Spielgeld."; return; }
-    depot.geld -= kosten; depot.bestand[w.name] = bestand + stueck;
-    meldung.textContent = `${stueck} × ${w.name} gekauft für ${f2(kosten)} $.`;
-  } else {
-    if (stueck > bestand) { meldung.textContent = `Du besitzt nur ${bestand} Stück.`; return; }
-    depot.geld += stueck * w.kurs; depot.bestand[w.name] = bestand - stueck;
-    meldung.textContent = `${stueck} × ${w.name} verkauft.`;
-  }
-  speichere(depot);
-  zeigeChart();
-}
-function ticke() {
-  if (live) return;
-  werte.forEach(w => {
-    const schritt = (Math.random() - 0.5) * 0.01;
-    const neu = Math.max(0.5, w.kurs * (1 + schritt));
-    w.perf = Math.round(((neu / DEMO.find(d => d.name === w.name).kurs - 1) * 100) * 100) / 100;
-    w.kurs = Math.round(neu * 100) / 100;
-    w.verlauf.push(w.kurs); if (w.verlauf.length > 60) w.verlauf.shift();
-  });
-  zeigeWerte(); zeigeChart();
+  document.getElementById("titel").textContent = name;
+  const last = v[v.length - 1], first = v[0];
+  document.getElementById("kurs").textContent = f2(last) + " $";
+  const perf = Math.round((last / first - 1) * 10000) / 100;
+  document.getElementById("delta").innerHTML = `<span class="${klasse(perf)}">${vorzeichen(perf)}</span>`;
 }
 
-document.getElementById("werte").addEventListener("click", e => {
-  const td = e.target.closest("td[data-i]"); if (!td) return;
-  aktiv = +td.dataset.i; zeigeChart();
-});
-document.getElementById("kaufen").onclick = () => handeln("kauf");
-document.getElementById("verkaufen").onclick = () => handeln("verkauf");
-/* ---------- Live-Daten aus dem Spiel ----------
- * Die Adresse kommt aus ?api=… oder dem Eingabefeld und bleibt im Browser
- * gespeichert. Klappt der Abruf nicht, laufen die Demo-Kurse weiter. */
-let apiUrl = new URLSearchParams(location.search).get("api");
-try { apiUrl = apiUrl || localStorage.getItem("boerse-api") || ""; } catch {}
-let live = false;
-const startKurs = {};
+/* ========== Start: Periodische Abfragen ========== */
+setInterval(() => {
+  if (connected && apiUrl) holeMarkt();
+}, 5000);
 
-async function holeMarkt() {
-  if (!apiUrl) return;
-  const status = document.getElementById("status");
-  try {
-    const d = await (await fetch(apiUrl, { cache: "no-store" })).json();
-    const verlauf = d.verlauf || [];
-    if (d.firmen?.length) {
-      const name = werte[aktiv]?.name;
-      werte = d.firmen.map(f => {
-        startKurs[f.id] ??= verlauf.find(v => v.firmen[f.id] != null)?.firmen[f.id] ?? f.kurs;
-        const v = verlauf.map(p => p.firmen[f.id]).filter(x => x != null);
-        return { name: f.name, kurs: f.kurs, perf: Math.round((f.kurs / startKurs[f.id] - 1) * 10000) / 100,
-                 verlauf: v.length ? v : [f.kurs] };
-      });
-      aktiv = Math.max(0, werte.findIndex(w => w.name === name));
-    }
-    /* Kacheln: Warenpreise gegenüber dem Grundpreis, die acht größten Ausschläge. */
-    INDEX.splice(0, INDEX.length, ...d.waren
-      .map(w => ({ name: w.name, wert: f2(w.preis), perf: Math.round((w.preis / w.grundpreis - 1) * 10000) / 100 }))
-      .sort((a, b) => Math.abs(b.perf) - Math.abs(a.perf)).slice(0, 8));
-    live = true;
-    status.textContent = d.firmen?.length ? `Live · Minute ${d.runde.minute}` : "Live · noch keine Firmen";
-    zeigeWerte(); zeigeKacheln(); zeigeChart();
-  } catch {
-    live = false;
-    status.textContent = "Keine Verbindung, Demo-Kurse";
-  }
-}
-document.getElementById("api").value = apiUrl;
-document.getElementById("api-form").addEventListener("submit", e => {
-  e.preventDefault();
-  apiUrl = document.getElementById("api").value.trim();
-  try { localStorage.setItem("boerse-api", apiUrl); } catch {}
-  holeMarkt();
-});
-
-zeigeWerte(); zeigeKacheln(); zeigeChart();
-holeMarkt();
-setInterval(ticke, 2000);
-setInterval(() => { if (live) holeMarkt(); }, 5000);
+/* apiUrl wird beim Login gesetzt */
 </script>
 </body>
 </html>
