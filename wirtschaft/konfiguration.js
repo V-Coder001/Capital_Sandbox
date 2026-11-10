@@ -51,4 +51,11 @@ export const KONFIG = Object.freeze({
   kartell: { marktanteilGrenze: 0.60, monopolabgabe: 0.10 },
   kartellModus: { waschverlust: 0.20, entdeckung: 0.05, strafe: 0.50 },
   insolvenzTage: 3,
+  /* Vorschläge für die offenen Punkte aus Abschnitt 16 (noch nicht kalibriert,
+   * die 500-Tage-Simulation steht aus). Lohn in $ je Arbeitsplatz und Markttag. */
+  vorschlag: {
+    lohnJeArbeitsplatz: { rohstoff: 8, veredelung: 14, hightech: 24, verkauf: 10, hauptsitz: 40 },
+    arbeitsplaetze: { farm: 3, mine: 4, fabrik: 6, laden: 3, hauptsitz: 3 },
+    bedarfsprofil: { lebensmittel: 0.35, energie: 0.20, baustoffe: 0.15, fahrzeuge: 0.10, elektronik: 0.10, freizeit: 0.10 },
+  },
 });

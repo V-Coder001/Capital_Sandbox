@@ -3057,7 +3057,6 @@ function lwModeSpiegeln() {
   document.getElementById("lwRenntagHint").style.display = lwMode === "renntag" ? "" : "none";
   /* Die Kartellwirtschaft behält das Vermögensziel — hier wird nur erklärt,
    * was zusätzlich erlaubt ist. */
-  document.getElementById("lwKartellHint").style.display = lwMode === "kartell" ? "" : "none";
   document.getElementById("lwFamilieRow").style.display = lwMode === "kartell" ? "" : "none";
   document.getElementById("lwFamilieHint").style.display = lwMode === "kartell" ? "" : "none";
   /* Im Renntag entscheidet die Meisterschaft — das Vermoegensziel waere dort
