@@ -5262,13 +5262,13 @@ const STADT = Object.assign({
    * 15 % Miete an die Stadt, 20 % ins Buergerdepot; der Rest ist Konsum und
    * steckt in der Ladennachfrage (stadtNachfrage). */
   ERWERBSQUOTE: 0.6,
-  ARBEIT_JE_DOLLAR: 1 / 250, ARBEIT_MIN: 2, ARBEIT_MAX: 30, ARBEIT_AUSBAU: 0.5,
+  ARBEIT_JE_DOLLAR: 1 / 400,   // v2: weniger Stellen je Bauwert, sonst fressen Löhne den Umsatz (10.11.2026) ARBEIT_MIN: 2, ARBEIT_MAX: 30, ARBEIT_AUSBAU: 0.5,
   ARBEIT_STOPP: 0.25,     // unter 25 % Besetzung steht ein Gebaeude still
   VERTEILUNG_TAKT: 10,    // Sekunden
   LOEHNE: {
-    spar:   { name: "Sparlohn",    lohn: 4, rang: 0 },
-    tarif:  { name: "Tariflohn",   lohn: 6, rang: 1 },
-    spitze: { name: "Spitzenlohn", lohn: 9, rang: 2 },
+    spar:   { name: "Sparlohn",    lohn: 2, rang: 0 },
+    tarif:  { name: "Tariflohn",   lohn: 3, rang: 1 },
+    spitze: { name: "Spitzenlohn", lohn: 4.5, rang: 2 },
   },
   KUENDIGUNG: 60,         // Sekunden, bis eine Lohnsenkung greift
   LOHNSTEUER: 0.15, MIETANTEIL: 0.15, SPARANTEIL: 0.2,
