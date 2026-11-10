@@ -65,8 +65,12 @@ export function gewinnTag({ erloesNetto, loehne, inputs, unterhalt, zinsen }) {
 /* ---- Preisbildung (Abschnitt 4) ---- */
 /* Preis folgt dem Lagerbestand. Schritt höchstens ±5 % je Markttag, dann ±2 % Rauschen,
  * Untergrenze 0,8 × Stückkosten, keine Obergrenze. */
-export function preisNeu(pAlt, lager, ziel, stueckkosten, rauschen = 0) {
-  const rel = ziel > 0 ? (ziel - lager) / ziel : 0;
+/* lagerGestern (optional): Mit der Dämpfung aus der Konfiguration zählt auch die
+ * Lageränderung seit gestern. Die reine Formel aus der Spezifikation schwingt
+ * sonst dauerhaft (siehe Simulation); ohne lagerGestern gilt sie unverändert. */
+export function preisNeu(pAlt, lager, ziel, stueckkosten, rauschen = 0, lagerGestern = null) {
+  let rel = ziel > 0 ? (ziel - lager) / ziel : 0;
+  if (lagerGestern != null && ziel > 0) rel -= K.preis.daempfung * (lager - lagerGestern) / ziel;
   const faktor = clamp(1 + K.preis.anpassung * rel, 1 - K.preis.begrenzung, 1 + K.preis.begrenzung);
   const mitRauschen = pAlt * faktor * (1 + clamp(rauschen, -1, 1) * K.preis.rauschen);
   return Math.max(mitRauschen, K.preis.untergrenzeStueckkosten * stueckkosten);

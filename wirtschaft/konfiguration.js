@@ -14,6 +14,9 @@ export const KONFIG = Object.freeze({
   preis: {
     anpassung: 0.05, begrenzung: 0.05, rauschen: 0.02,
     untergrenzeStueckkosten: 0.8, zielTage: 3,
+    /* Nicht in der Spezifikation: Gewicht der Lageränderung seit gestern in der
+     * Preisformel. 0 = Formel exakt wie spezifiziert (schwingt dauerhaft). */
+    daempfung: 16,
   },
   haushalte: { sparquoteBasis: 0.30, sparquoteMin: 0.20, sparquoteMax: 0.40 },
   firma: {
@@ -54,8 +57,20 @@ export const KONFIG = Object.freeze({
   /* Vorschläge für die offenen Punkte aus Abschnitt 16 (noch nicht kalibriert,
    * die 500-Tage-Simulation steht aus). Lohn in $ je Arbeitsplatz und Markttag. */
   vorschlag: {
-    lohnJeArbeitsplatz: { rohstoff: 8, veredelung: 14, hightech: 24, verkauf: 10, hauptsitz: 40 },
+    /* Lohn je Arbeitsplatz und Markttag. Kalibriert in der Simulation so, dass
+     * Löhne rund 50–65 % des Erlöses eines Gebäudes zum Basispreis ausmachen. */
+    lohnJeArbeitsplatz: { rohstoff: 30, veredelung: 40, hightech: 60, verkauf: 25, hauptsitz: 50 },
     arbeitsplaetze: { farm: 3, mine: 4, fabrik: 6, laden: 3, hauptsitz: 3 },
     bedarfsprofil: { lebensmittel: 0.35, energie: 0.20, baustoffe: 0.15, fahrzeuge: 0.10, elektronik: 0.10, freizeit: 0.10 },
+    /* Nicht in der Spezifikation: Die Haushalte entnehmen täglich diesen Teil ihres
+     * Sparkontos wieder. Ohne Entnahme sammelt sich das Ersparte dauerhaft im
+     * Bürgerdepot, der Kreislauf trocknet aus und alle Firmen gehen pleite. */
+    entsparenTag: 0.02,
+    /* Nicht in der Spezifikation: So viel ihres Kontos über dem Konsumbudget
+     * geben die Haushalte täglich zusätzlich aus (Startgeld von 30.000 $). */
+    vermoegenVerzehrTag: 0.003,
+    /* Nicht in der Spezifikation: Ab dieser Barquote (Anteil am Fondsvermögen)
+     * gibt ein Fonds überschüssiges Geld am Periodenende an das Depot zurück. */
+    fondsBarMax: 0.10,
   },
 });
