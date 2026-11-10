@@ -12902,20 +12902,31 @@ function render({ state, me, myId, chat, room }) {
         </span></div>`;
       if (kEl.dataset.sig !== html && !kEl.contains(document.activeElement)) { kEl.innerHTML = html; kEl.dataset.sig = html; }
     }
+    /* Wertverlauf des KI-Fonds als kleine Linie (SVG), grün über, rot unter dem Start. */
+    function kiSpark(v) {
+      if (!v || v.length < 2) return "";
+      const w = 320, h = 60, ys = v.map(x => x[1]), lo = Math.min(...ys), hi = Math.max(...ys), sp = hi - lo || 1;
+      const pts = ys.map((y, i) => `${(i / (ys.length - 1) * w).toFixed(1)},${(h - (y - lo) / sp * h).toFixed(1)}`).join(" ");
+      const farbe = ys[ys.length - 1] >= ys[0] ? "var(--up)" : "var(--down)";
+      return `<svg viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" style="display:block;margin:6px 0"><polyline fill="none" stroke="${farbe}" stroke-width="2" points="${pts}"/></svg>`;
+    }
     /* KI-Testfond: Schlüssel eintragen und ein-/ausschalten. Der Schlüssel
      * geht nur an den Server und kommt nie zurück — hier steht nur „gesetzt“. */
     const ki = store.get().state?.ki, kiEl = document.getElementById("bankKI");
     if (ki && kiEl) {
       const html = `<div class="bpos" style="flex-wrap:wrap;gap:8px">
         <span class="bposText"><b>KI-Testfond (Claude Haiku 5.5)</b>
-          <small>${ki.schluessel ? "API-Schlüssel gesetzt" : "Kein API-Schlüssel — der Fond ist aus"} · ${ki.aktiv ? "<b style=\"color:var(--up)\">handelt</b>" : "ruht"} · Bargeld ${fmt(ki.bargeld)} · Depot ${fmt(ki.depotwert)}</small>
-          <small>${ki.letzte ? `Tag ${ki.letzte.tag}: ${escapeHtml(ki.letzte.text)}` : "Noch keine Entscheidung"}${ki.fehler ? ` · ${ki.fehler}× Fallback` : ""}</small></span>
+          <small>${ki.schluessel ? "API-Schlüssel gesetzt" : "Kein API-Schlüssel — der Fond ist aus"} · ${ki.aktiv ? "<strong style=\"color:var(--up)\">handelt</strong>" : "ruht"} · Bargeld ${fmt(ki.bargeld)} · Depot ${fmt(ki.depotwert)}</small>
+          <small>Gesamtwert <strong>${fmt(ki.gesamt)}</strong> · <strong style="color:var(${ki.rendite >= 0 ? "--up" : "--down"})">${ki.rendite >= 0 ? "+" : ""}${(ki.rendite * 100).toFixed(2).replace(".", ",")} %</strong> seit Start${ki.fehler ? ` · ${ki.fehler}× Fallback` : ""}</small>
+          ${kiSpark(ki.verlauf)}
+          ${ki.bestand.length ? `<small>Bestand: ${ki.bestand.map(b => `${b.n}× ${escapeHtml(b.name)}`).join(", ")}</small>` : ""}
+          <small style="display:block;max-height:110px;overflow:auto">${ki.protokoll.length ? ki.protokoll.map(e => `Tag ${e.tag}: ${escapeHtml(e.text)}`).join("<br>") : "Noch keine Entscheidung"}</small></span>
         <span style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
           ${ki.schluessel
             ? `<button class="${ki.aktiv ? "mini" : "buyb"}" data-ki="${ki.aktiv ? "aus" : "an"}">${ki.aktiv ? "Ausschalten" : "Einschalten"}</button><button class="mini" data-ki="loeschen">Schlüssel löschen</button>`
             : `<input id="kiKey" type="password" placeholder="sk-ant-…" autocomplete="off" style="width:200px"><button class="buyb" data-ki="speichern">Speichern</button>`}
         </span></div>`;
-      if (kiEl.dataset.sig !== html && !kiEl.contains(document.activeElement)) { kiEl.innerHTML = html; kiEl.dataset.sig = html; }
+      if (kiEl.dataset.sig !== html && document.activeElement?.id !== "kiKey") { kiEl.innerHTML = html; kiEl.dataset.sig = html; }
     }
     /* Depot: was man an fremden Firmen hält, mit aktuellem Wert */
     document.getElementById("bankdepot").innerHTML = me.portfolio?.length

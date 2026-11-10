@@ -2637,16 +2637,27 @@ function unterhaltTag() {
  * (gitignored). Er geht nie an den Browser, der sieht nur „gesetzt ja/nein“. */
 const KI_DATEI = path.join(path.dirname(fileURLToPath(import.meta.url)), ".ki-schluessel.json");
 const KI_STATE = { key: process.env.ANTHROPIC_API_KEY || "", aktiv: false, laeuft: false,
-  fond: { bargeld: 20000, bestand: {} }, letzte: null, fehler: 0 };
+  fond: { bargeld: 20000, bestand: {} }, letzte: null, fehler: 0,
+  verlauf: [], protokoll: [], start: 20000 };   // Überwachung: Wert je Markttag, letzte Entscheidungen
 try { const d = JSON.parse(fs.readFileSync(KI_DATEI, "utf8")); if (d.key && !KI_STATE.key) KI_STATE.key = d.key; } catch {}
 function kiPublic() {
   const f = KI_STATE.fond;
   const wert = Object.entries(f.bestand).reduce((a, [pid, n]) => a + n * (G.players[pid] ? kursVon(G.players[pid]) : 0), 0);
+  const gesamt = f.bargeld + wert;
   return { schluessel: !!KI_STATE.key, aktiv: KI_STATE.aktiv, bargeld: Math.round(f.bargeld), depotwert: Math.round(wert),
+    gesamt: Math.round(gesamt), rendite: KI_STATE.start ? gesamt / KI_STATE.start - 1 : 0,
+    verlauf: KI_STATE.verlauf.slice(-120), protokoll: KI_STATE.protokoll.slice(-12).reverse(),
     bestand: Object.entries(f.bestand).filter(([, n]) => n).map(([pid, n]) => ({ name: G.players[pid]?.name ?? "—", n })),
     letzte: KI_STATE.letzte, fehler: KI_STATE.fehler };
 }
+function kiWertMerken(tag) {
+  const f = KI_STATE.fond;
+  const wert = Object.entries(f.bestand).reduce((a, [pid, n]) => a + n * (G.players[pid] ? kursVon(G.players[pid]) : 0), 0);
+  KI_STATE.verlauf.push([tag, Math.round(f.bargeld + wert)]);
+  if (KI_STATE.verlauf.length > 500) KI_STATE.verlauf.shift();
+}
 async function kiFondTag(tag) {
+  if (KI_STATE.aktiv) kiWertMerken(tag);
   if (!KI_STATE.aktiv || !KI_STATE.key || KI_STATE.laeuft) return;
   const firmen = Object.values(G.players).filter(p => marktVon(p)?.kurs > 0);
   if (!firmen.length) return;
@@ -2659,7 +2670,7 @@ async function kiFondTag(tag) {
   KI_STATE.laeuft = true;
   try {
     const text = await KI.agentFragen(lage, { apiKey: KI_STATE.key });
-    const orders = text ? KI.orderPruefen(text.replace(/^```(json)?|```$/g, "").trim(), { bestand: bestandN, bargeld: f.bargeld, kurse }) : null;
+    const orders = text ? KI.orderPruefen((text.match(/\{[\s\S]*\}/)?.[0] ?? text), { bestand: bestandN, bargeld: f.bargeld, kurse }) : null;
     if (!orders) { KI_STATE.fehler++; KI_STATE.letzte = { tag, text: "keine gültige Antwort, Fallback" }; return; }
     for (const o of orders) {
       const pid = nameZuId[o.firma], p = G.players[pid]; if (!p) continue;
@@ -2670,8 +2681,11 @@ async function kiFondTag(tag) {
     }
     KI_STATE.letzte = { tag, text: orders.length ? orders.map(o => `${o.menge > 0 ? "kauft" : "verkauft"} ${Math.abs(o.menge)}× ${o.firma}`).join(", ") : "hält still" };
     if (orders.length) marktLog("ki", `KI-Testfond ${KI_STATE.letzte.text}`);
+    KI_STATE.protokoll.push(KI_STATE.letzte); if (KI_STATE.protokoll.length > 200) KI_STATE.protokoll.shift();
   } finally { KI_STATE.laeuft = false; }
 }
+
+app.get("/ki-verlauf", (_req, res) => res.json({ ...kiPublic(), verlauf: KI_STATE.verlauf, protokoll: KI_STATE.protokoll }));
 
 function marktTag() {
   const tag = Math.floor(G.tick / MARKT.TAG);
