@@ -7699,6 +7699,7 @@ function netzZeichnen() {
   const { state, me, myId } = store.get();
   if (!state?.stadt) return netzSchliessen();
   const fenster = document.getElementById("netzFenster");
+  if (NETZ.seite !== "bank") fenster?.querySelector(".bankZb")?.remove();   // Zinsleiste nur auf bank.cs
   const W = state.rechenzentren?.websites || {}, cfg = state.websiteCfg;
   fenster.querySelector("[data-netzzurueck]").style.visibility = NETZ.seite ? "visible" : "hidden";
   const kopfEl = fenster.querySelector(".sfKopf");
@@ -7881,6 +7882,25 @@ function netzZeichnen() {
     netzSetze(".sfKopf", `<div class="sfMarke"><span class="sfLogo" style="background:#155e75">€</span><div><b>${t("Stadtbank")}</b><small>${t("Kurse, Fonds und Aktien der Stadt")}</small></div></div>
       <nav class="bankNav"><button type="button" data-banktab="markt">${t("Marktübersicht")}</button><button type="button" data-banktab="aktien">${t("Aktien")}</button><button type="button" data-banktab="handeln">${t("Handeln & Depot")}</button>
         <label class="bankSuche"><span class="sr">${t("Aktie suchen")}</span><input id="bankSuche" type="search" placeholder="${t("Aktie suchen …")}"></label></nav>`, "kopfBank");
+    /* Zentralbank (v2): Leitzins, Zielzins als Trendpfeil, Inflation — damit
+     * man eine Zinswende kommen sieht. Eigene Zeile, damit die Suche beim
+     * Aktualisieren nicht den Fokus verliert. */
+    const zb = state.zb;
+    if (zb) {
+      const pfeil = zb.zielzins > zb.leitzins + 1e-9 ? "▲" : zb.zielzins < zb.leitzins - 1e-9 ? "▼" : "▶";
+      const trend = zb.zielzins > zb.leitzins + 1e-9 ? "steigt" : zb.zielzins < zb.leitzins - 1e-9 ? "faellt" : "stabil";
+      const pz = x => (x * 100).toFixed(1).replace(".", ",") + " %";
+      let leiste = fenster.querySelector(".bankZb");
+      if (!leiste) { leiste = document.createElement("div"); leiste.className = "bankZb"; fenster.querySelector(".sfKopf").after(leiste); }
+      const html = `<span class="zbPosten"><small>${t("Leitzins")}</small><b>${pz(zb.leitzins)}</b></span>
+        <span class="zbPosten zbTrend ${trend}"><small>${t("Zielzins")}</small><b>${pfeil} ${pz(zb.zielzins)}</b></span>
+        <span class="zbPosten"><small>${t("Inflation (10 Tage)")}</small><b class="${zb.inflation > 0.03 ? "hoch" : zb.inflation < 0 ? "tief" : ""}">${zb.inflation >= 0 ? "+" : ""}${pz(zb.inflation)}</b></span>
+        <span class="zbPosten"><small>${t("Kreditzins")}</small><b>${pz(zb.kreditzins)}</b></span>
+        <span class="zbPosten"><small>${t("Sparzins")}</small><b>${pz(zb.sparzins)}</b></span>
+        <span class="zbPosten"><small>${t("Aktien-Multiple")}</small><b>${String(zb.multiple).replace(".", ",")}×</b></span>
+        ${zb.panik ? `<span class="zbPanik">${t("Panik an der Börse")}</span>` : ""}`;
+      if (leiste.dataset.sig !== html) { leiste.innerHTML = html; leiste.dataset.sig = html; }
+    }
     fenster.querySelectorAll(".bankNav [data-banktab]").forEach(b => b.classList.toggle("on", b.dataset.banktab === tab));
     const si = document.getElementById("bankSuche"); if (si && document.activeElement !== si && si.value !== (NETZ.bankSuche || "")) si.value = NETZ.bankSuche || "";
     fenster.querySelector(".sfBanner").hidden = true;

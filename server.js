@@ -12,6 +12,8 @@ import { Server } from "socket.io";
 import path from "path";
 import { fileURLToPath } from "url";
 import { statisch, cacheKoepfe } from "./statisch.js";
+import { KONFIG as WK } from "./wirtschaft/konfiguration.js";
+import * as WR from "./wirtschaft/regeln.js";
 import { COIN, coinBuerger, coinWerben, trendCoin, boerseEroeffnen, gebuehrSetzen, kontoEroeffnen, einzahlen, auszahlen, coinAusgeben, vertragSchliessen, vertragKuendigen, coinOrder, coinStorno, coinTick, coinsWert } from "./coins.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -1485,10 +1487,15 @@ const soldPressure = k => MM[k].sold * BASEP[k] / (4000 * (MARKT_TIEFE[k] || 1))
 /* Knappheit: Verbrauch in der Produktion zählt als Nachfrage und senkt `sold`
  * (negativer Druck hebt den Anker). Die Untergrenze ist so gewählt, dass der
  * Anker bei dauerhafter Knappheit bis zur 130-%-Grenze steigen kann. */
-const NACHFRAGE_FAKTOR = 0.5;   // Verbrauch wirkt halb so stark wie ein Verkauf
-const soldFloor = k => -1500 * (MARKT_TIEFE[k] || 1) / BASEP[k];   // −0,375 Druckpunkte = Anker 130 %
-function noteSold(k, qty) { MM[k].sold = Math.max(soldFloor(k), MM[k].sold + qty); }
-function noteDemand(k, qty) { MM[k].sold = Math.max(soldFloor(k), MM[k].sold - qty * NACHFRAGE_FAKTOR); }
+/* Wirtschaftssystem v2 (Abschnitt 4): Der Preis folgt dem Lagerbestand.
+ * Lager = alles, was die Firmen von einer Ware vorrätig haben. Verkäufe an die
+ * Stadt (Läden, Vertrieb) und Verbrauch als Input zählen als Abfluss — beides
+ * voll, die alte Halbgewichtung entfällt. Daraus wird je Periode das Ziel-Lager
+ * (Umsatz von 3 Markttagen) berechnet. */
+const soldFloor = k => -1500 * (MARKT_TIEFE[k] || 1) / BASEP[k];
+function noteSold(k, qty) { MM[k].sold = Math.max(soldFloor(k), MM[k].sold + qty); MM[k].abfluss = (MM[k].abfluss || 0) + qty; }
+function noteDemand(k, qty) { MM[k].sold = Math.max(soldFloor(k), MM[k].sold - qty); MM[k].abfluss = (MM[k].abfluss || 0) + qty; }
+function noteProduziert(k, qty) { if (MM[k]) MM[k].zufluss = (MM[k].zufluss || 0) + qty; }
 
 const BOOST_MULT = 0.75;   // je verfügbarem Boost-Rohstoff: +75 % Produktion
 
@@ -3331,53 +3338,136 @@ function ertragVon(p) {
   const alt = h[Math.max(0, h.length - 1 - MARKT.ERTRAG_FENSTER)], neu = [substance(p), p.stats.kapitalNetto || 0];
   return (neu[0] - alt[0]) - (neu[1] - alt[1]);
 }
-const fundament = p => Math.max(500, substance(p) + Math.max(0, ertragVon(p)) * MARKT.M_ERTRAG);
+/* Eigenkapital (v2, Abschnitt 6): Gebäude nur zu 70 % ihres Bauwerts. */
+const eigenkapitalV2 = p => substance(p) - (1 - WK.firma.gebaeudeImEigenkapital) * buildingValueOf(p.id);
+/* Fairer Firmenwert (v2): Eigenkapital + Gewinn der letzten 10 Markttage ×
+ * Multiple, Multiple = 1 / (Leitzins + Risikoaufschlag). Nie unter 0; die
+ * Untergrenze von 500 $ bleibt, damit jede Firma handelbar ist. */
+const fundament = p => Math.max(500, WR.fairerWert(eigenkapitalV2(p), ertragVon(p), G.zb?.leitzins ?? WK.zentralbank.neutralzins));
 /* Kurs je Aktie. Neue Firmen starten bei F — keine festen Startwerte. */
 function kursVon(p) { const m = marktVon(p); if (!(m.kurs > 0)) m.kurs = fundament(p) / AKTIEN; return m.kurs; }
 /* Marktwert = Kurs × Aktien. Heißt aus Kompatibilität weiter companyValue:
  * Kurswetten, Nachrichten und die Kurstafel laufen darüber. */
 const companyValue = p => kursVon(p) * AKTIEN;
 /* Ein Handel bewegt den Kurs: Kauf hebt, Verkauf senkt (β × Anteil). */
+/* v2: Ein Handel bewegt den Kurs erst am Ende des Markttags über die
+ * Netto-Orders (Kauf minus Verkauf, in Stück) in der Kursformel. */
 function kursWirkung(company, aktien, richtung) {
   const m = marktVon(company);
-  m.kurs = Math.max(0.01, kursVon(company) * (1 + richtung * MARKT.BETA * aktien / AKTIEN));
+  m.nettoOrders = (m.nettoOrders || 0) + richtung * aktien;
 }
 function marktLog(art, text, daten = {}) {
   (G.marktLog ??= []).unshift({ tick: G.tick, ts: Date.now(), art, text, ...daten });
   if (G.marktLog.length > 60) G.marktLog.length = 60;
 }
-/* Einmal je Markttag, feste Reihenfolge: F messen, dann P nachführen. */
+/* ============================================================
+ * Wirtschaftssystem v2: Warenpreise, Zentralbank, Kurse (einmal je Markttag)
+ * ============================================================ */
+/* Lagerbestand einer Ware: alles, was die Firmen vorrätig haben. */
+function warenLager(k) {
+  let n = 0;
+  for (const p of Object.values(G.players)) n += p.inv?.[k] || 0;
+  return n;
+}
+/* Stückkosten: Inputs zum Marktpreis je Stück Output; bei Rohstoffen ein
+ * Lohnanteil (Rohstoffe haben im Spiel keine Inputs). Günstigstes Rezept zählt. */
+const ROH_LOHNANTEIL = 0.3;
+function warenStueckkosten(k) {
+  let best = Infinity;
+  for (const bt of Object.values(BTYPES)) {
+    if (bt.proc?.out === k && bt.proc.rate > 0) {
+      let c = 0;
+      for (const [g, need] of Object.entries(bt.proc.in)) c += need * (MM[g]?.price ?? BASEP[g] ?? 0);
+      best = Math.min(best, c / bt.proc.rate);
+    } else if (bt.out === k) best = Math.min(best, BASEP[k] * ROH_LOHNANTEIL);
+  }
+  return Number.isFinite(best) ? best : BASEP[k] * ROH_LOHNANTEIL;
+}
+function warenpreisTag(tag) {
+  const neuePeriode = tag % WK.zeit.periodeTage === 0;
+  for (const k of Object.keys(GOODS)) {
+    const mm = MM[k];
+    const lager = warenLager(k);
+    mm.zuflussP = (mm.zuflussP || 0) + (mm.zufluss || 0);
+    mm.abflussP = (mm.abflussP || 0) + (mm.abfluss || 0);
+    mm.zufluss = 0; mm.abfluss = 0;
+    /* Ziel-Lager: Umsatz von 3 Markttagen (Mittel aus Produktion und Verbrauch).
+     * Bis zur ersten Periode gilt der Bestand selbst als Ziel. */
+    if (neuePeriode) {
+      const proTag = (mm.zuflussP + mm.abflussP) / 2 / WK.zeit.periodeTage;
+      mm.ziel = proTag > 0 ? proTag * WK.preis.zielTage : null;
+      mm.zuflussP = 0; mm.abflussP = 0;
+    }
+    const ziel = mm.ziel ?? Math.max(lager, 1);
+    /* Ohne Hersteller und ohne Abnehmer gibt es keinen Markt: Preis bleibt. */
+    if (mm.ziel == null && !(lager > 0)) { mm.lagerGestern = lager; continue; }
+    mm.price = Math.round(WR.preisNeu(mm.price, lager, ziel, warenStueckkosten(k), Math.random() * 2 - 1, mm.lagerGestern ?? null) * 100) / 100;
+    mm.anchor = mm.price;   // Kompatibilität: Admin-API und Anzeigen lesen den Anker
+    mm.lager = lager; mm.lagerGestern = lager;
+  }
+}
+/* Zentralbank (Abschnitt 8): Preisindex über die Waren der Haushalte, Inflation
+ * gegenüber dem Stand vor 10 Markttagen, Leitzins höchstens 0,5 Punkte je Tag. */
+const zbVon = () => (G.zb ??= { leitzins: WK.zentralbank.neutralzins, zielzins: WK.zentralbank.neutralzins, inflation: 0, index: [] });
+function preisIndexJetzt() {
+  let sum = 0, n = 0;
+  for (const k of Object.keys(GOODS)) if (BASEP[k] > 0 && !ILLEGAL.includes(k)) { sum += MM[k].price / BASEP[k]; n++; }
+  return n ? sum / n * 100 : 100;
+}
+function zentralbankTag(tag) {
+  const zb = zbVon();
+  zb.index.push(preisIndexJetzt()); if (zb.index.length > WK.zeit.periodeTage + 1) zb.index.shift();
+  const vor = zb.index[0];
+  zb.inflation = vor > 0 ? zb.index[zb.index.length - 1] / vor - 1 : 0;
+  if (tag <= WK.zentralbank.fixTage) { zb.leitzins = WK.zentralbank.neutralzins; zb.zielzins = zb.leitzins; return; }
+  zb.zielzins = WR.zielzins(zb.inflation);
+  const alt = zb.leitzins;
+  zb.leitzins = Math.round(WR.leitzinsSchritt(zb.leitzins, zb.zielzins) * 10000) / 10000;
+  if (Math.abs(zb.leitzins - alt) > 1e-9) marktLog("leitzins", `Leitzins ${zb.leitzins > alt ? "steigt" : "sinkt"} auf ${(zb.leitzins * 100).toFixed(1)} % (Inflation ${(zb.inflation * 100).toFixed(1)} %)`);
+}
+const leitzins = () => zbVon().leitzins;
+
+/* Einmal je Markttag, feste Reihenfolge wie Abschnitt 13: Preise, Firmen-
+ * abschluss (fairer Wert), Börse (Orders, Kurse, Crash), Zentralbank. */
 function marktTag() {
   const tag = Math.floor(G.tick / MARKT.TAG);
-  if (G.panikTag == null) G.panikTag = Math.floor((MARKT.PANIK_VON + rundeRand() * (MARKT.PANIK_BIS - MARKT.PANIK_VON)) * 60 / MARKT.TAG);
-  const panik = !G.panikErledigt && tag >= G.panikTag;
+  warenpreisTag(tag);
+  const cr = (G.crash ??= { aktivBis: -1, pauseBis: -1 });
+  const panik = tag <= cr.aktivBis;
   for (const p of Object.values(G.players)) {
     const m = marktVon(p), F = fundament(p);
     m.sHist.push([substance(p), p.stats.kapitalNetto || 0]); if (m.sHist.length > MARKT.ERTRAG_FENSTER + 1) m.sHist.shift();
     m.fHist.push(F); if (m.fHist.length > MARKT.DELAY + 1) m.fHist.shift();
-    const Fd = m.fHist.length > MARKT.DELAY ? m.fHist[0] : m.fHist[0];   // F vor d Tagen (anfangs der älteste)
-    let P = kursVon(p);
-    P += MARKT.ALPHA * (Fd / AKTIEN - P);
-    P *= 1 + (Math.random() * 2 - 1) * MARKT.NOISE;
-    if (Math.random() < MARKT.P_FLAUTE) {
-      P *= 1 - MARKT.FLAUTE;
-      marktLog("flaute", `Nachfrageflaute bei ${p.name}: −${Math.round(MARKT.FLAUTE * 100)} %`, { firmaId: p.id });
-    }
-    if (panik) P *= 1 - MARKT.PANIK;
-    m.kurs = Math.max(0.01, P);
+    /* Kursformel (Abschnitt 10): Rückzug zum fairen Wert plus Wirkung der
+     * Netto-Orders des Tages, dazu ±1 % Rauschen. In der Panik verkaufen
+     * Fonds und Bürgerdepot täglich 4 % ihrer Aktien. */
+    let netto = m.nettoOrders || 0;
+    if (panik) netto -= Math.round(((co => Object.entries(co.equity).filter(([h]) => istInstitution(h)).reduce((a, [, n]) => a + n, 0))(p)) * WK.crash.verkaufAnteil);
+    m.kurs = Math.max(0.01, WR.kursNeu(kursVon(p), F / AKTIEN, netto, AKTIEN, { rauschen: Math.random() * 2 - 1 }));
+    m.nettoOrders = 0;
   }
-  finanzamtBoerse();   // feste Reihenfolge: erst F und P, dann die Reaktion des Finanzamts
-  fondsTag();          // dann die Branchenfonds
-  depotTag(panik);     // dann die Sparer der Stadt
+  if (!panik) {
+    fondsTag();          // die Branchenfonds (in der Panik kaufen sie nichts)
+    depotTag(false);     // dann die Sparer der Stadt
+  }
   for (const br of Object.keys(INDUSTRIES)) {
     const pr = etfPreis(br); if (pr == null) continue;
     const h = ((G.etfHist ??= {})[br] ??= []); h.push(Math.round(pr * 100) / 100); if (h.length > 60) h.shift();
   }
-  if (panik) {
-    G.panikErledigt = true;
-    marktLog("panik", `Panik an der Börse: alle Kurse −${Math.round(MARKT.PANIK * 100)} %`);
-    io.emit("notice", { text: `PANIK an der Börse — alle Aktienkurse fallen um ${Math.round(MARKT.PANIK * 100)} %. Die Firmen selbst sind nicht weniger wert.` });
+  /* Crash-Auslöser statt festem Panikschock. */
+  if (tag > cr.pauseBis && !panik) {
+    const firmen = Object.values(G.players);
+    const markt = firmen.reduce((a, p) => a + kursVon(p) * AKTIEN, 0);
+    const fair = firmen.reduce((a, p) => a + fundament(p), 0);
+    const amLimit = firmen.filter(p => debtOf(p) > WK.crash.kreditAnteil * WR.kreditLimit(eigenkapitalV2(p))).length;
+    const ausloeser = (fair > 0 && markt > fair * (1 + WK.crash.schwelleMarkt)) || (firmen.length && amLimit > firmen.length * WK.crash.schwelleKredit);
+    if (ausloeser && Math.random() < WK.crash.chance) {
+      cr.aktivBis = tag + WK.crash.dauerTage - 1; cr.pauseBis = cr.aktivBis + WK.crash.pauseTage;
+      marktLog("panik", `Panik an der Börse: Fonds und Bürgerdepot verkaufen ${WK.crash.dauerTage} Markttage lang`);
+      io.emit("notice", { text: `PANIK an der Börse — Fonds und Bürgerdepot verkaufen ${WK.crash.dauerTage} Markttage lang täglich ${Math.round(WK.crash.verkaufAnteil * 100)} % ihrer Aktien.` });
+    }
   }
+  zentralbankTag(tag);
 }
 /* ---------- Finanzamt als Stabilisator ----------
  * Das Finanzamt hält eigene Aktien (Halter FA_ID) und zahlt aus der Stadtkasse,
@@ -3758,7 +3848,11 @@ function depotSparen(erloes) {
   if (!depotAktiv() || !(erloes > 0)) return;
   const d = depotVon();
   d.umsatzTag += erloes;
-  d.zufluss += erloes * MARKT.SPARQUOTE;
+  /* v2 (Abschnitt 5): Wer für c ausgibt, hat (1 − s) seines Einkommens
+   * ausgegeben und s gespart — also s / (1 − s) × Konsum. Bei 4 % Leitzins
+   * sind das 30 % Sparquote, rund 43 % des Konsums. */
+  const s = WR.sparquote(G.zb?.leitzins ?? WK.zentralbank.neutralzins);
+  d.zufluss += erloes * s / (1 - s);
 }
 /* Mehr Nachfrage in den Shops, solange die Sparer Dividenden ausgeben. */
 const konsumBoost = () => depotAktiv() ? (G.depot?.konsumBoost || 0) : 0;
@@ -3842,7 +3936,7 @@ function depotTag(panik) {
   const d = depotVon(), kanal = depotKanal();
   d.appAnteil = kanal.anteil;
   /* 1. Ersparnisse des Tages einsammeln — über Sparkasse oder Apps */
-  const unterDeckel = depotWert() < MARKT.DEPOT_MAX * boersenwert();
+  const unterDeckel = true;   // v2: die Obergrenze von 30 % des Börsenwerts entfällt
   if (d.zufluss > 0 && unterDeckel) {
     const viaApp = d.zufluss * kanal.anteil;
     const viaKasse = d.zufluss * (1 - kanal.anteil) * MARKT.SPARKASSE;
@@ -5396,7 +5490,9 @@ function distributeDividends() {
      * Umsatzes der Periode (wie bisher) oder ein fester Betrag — höchstens so
      * viel, wie in der Kasse liegt. Verteilt wird nach Aktien; was auf die
      * eigenen Aktien entfiele, bleibt einfach in der Firma. */
-    const wunsch = p.ausschuettung == null ? (p.revenue > 0 ? p.revenue * DIVIDEND_RATE : 0) : p.ausschuettung;
+    /* v2 (Abschnitt 6): 40 % des Nachsteuergewinns der Periode; bei Verlust
+     * oder ohne Cash keine Dividende. Ein fester Betrag des Spielers geht vor. */
+    const wunsch = p.ausschuettung == null ? WR.ausschuettung(p.nachsteuerPeriode ?? 0, p.cash).brutto : p.ausschuettung;
     const pool = Math.min(wunsch, Math.max(0, p.cash));
     let paidOut = 0;
     if (pool > 0.01) {
@@ -5423,10 +5519,14 @@ function distributeDividends() {
         const pct = Math.round(count / AKTIEN * 1000) / 10;
         const holder = G.players[holderId];
         if (!holder) continue;
-        p.cash -= share; holder.cash += share; paidOut += share;
-        holder.stats.dividendeRein += share;
-        logTx(holder, "Dividende", `${count} Aktien (${pct} %) an ${p.name}`, share);
-        emitTo(holderId, "notice", { text: `Dividende von ${p.name}: +${Math.round(share)} $ (${count} Aktien)` });
+        /* v2: 25 % Kapitalertragsteuer an die Stadt. */
+        const kest = share * WK.steuern.kapitalertrag, netto = share - kest;
+        p.cash -= share; holder.cash += netto; paidOut += share;
+        G.stadtkasse += kest; G.steuernGesamt += kest;
+        holder.stats.dividendeRein += netto;
+        holder.stats.steuern = (holder.stats.steuern || 0) + kest;
+        logTx(holder, "Dividende", `${count} Aktien (${pct} %) an ${p.name}, nach 25 % Kapitalertragsteuer`, netto);
+        emitTo(holderId, "notice", { text: `Dividende von ${p.name}: +${Math.round(netto)} $ (${count} Aktien, nach Kapitalertragsteuer)` });
       }
       if (paidOut > 0.01) {
         p.stats.dividendeRaus += paidOut;
@@ -5456,7 +5556,8 @@ function distributeDividends() {
  * ausgezahlte Dividenden − Zinsaufwand. Wettgewinne: 10 % auf den Reingewinn.
  * Bots zahlen genauso wie Spieler. Einnahmen: 40 % Bankreserve (Kurswetten),
  * 60 % Stadtkasse (Großauftrags-Prämien und Stadtprojekte). */
-const STEUER_SATZ = 0.08, STEUER_FREI = 1000, WETT_STEUER = 0.10;
+/* v2 (Abschnitt 7): feste Gewinnsteuer von 20 %, kein Freibetrag, Verlustvortrag. */
+const STEUER_SATZ = WK.steuern.gewinn, STEUER_FREI = 0, WETT_STEUER = 0.10;
 const STEUER_RESERVE_ANTEIL = 0.4, RESERVE_MAX_ANTEIL = 0.10;
 /* Grundstock der Stadt: Mit dieser Summe startet die Kasse, und sie bleibt als
  * eiserne Rücklage immer liegen. Prämien und Stadtprojekte zahlt die Stadt nur
@@ -5480,7 +5581,8 @@ const STADTPROJEKTE = [
 const finanzamtAktiv = () => MODE !== "kartell" && MODE !== "plan";
 /* Börsengebühr: der Verkäufer gibt einen Teil des Erlöses jedes Warenbörsen-
  * Handels an das Finanzamt ab (Basis 20 %, je nach Lage 15–25 %). */
-const BOERSE_GEBUEHR = 0.20;
+/* v2: 1 % Provision je Order (Abschnitt 10) statt 20 % Börsengebühr. */
+const BOERSE_GEBUEHR = WK.boerse.provision;
 /* Dynamische Sätze: Alle 60 s schaut das Finanzamt auf die Lage der Stadt —
  * Stadtkasse plus das, was die Bankreserve über ihrem Startwert hat (Kurswetten,
  * die für die Bank gut liefen, machen die Stadt reicher; schlecht gelaufene
@@ -5507,11 +5609,13 @@ const STUFE_TEXT = {
 const bankImEinsatz = () => G.wetten.reduce((a, w) => a + (w.bank ? w.einsatz : 0), 0);
 const stadtVermoegen = () => G.stadtkasse + faBuchwert() + wohnBuchwert() - stadtSchulden() + Math.max(-WETT_RESERVE, bankEigen() + bankImEinsatz() - WETT_RESERVE);
 const steuerStufe = () => STEUER_STUFEN[G.steuerStufe ?? 2];
-const steuerFaktor = () => steuerStufe().faktor;
+/* v2: Die Steuerstufen entfallen, die Sätze sind fest. */
+const steuerFaktor = () => 1;
 const satzGewinn = () => STEUER_SATZ * steuerFaktor();
 const satzWette  = () => WETT_STEUER * steuerFaktor();
 const satzBoerse = () => finanzamtAktiv() ? BOERSE_GEBUEHR * steuerFaktor() : 0;
 function steuerStufePruefen() {
+  return;   // v2: feste Steuersätze, keine Stufen mehr
   const v = stadtVermoegen();
   const ziel = STEUER_STUFEN.findIndex(st => v < st.bis);
   const alt = G.steuerStufe ?? 2;
@@ -5574,7 +5678,11 @@ function steuernErheben() {
     const basis = steuerBasis(p);
     const gewinn = basis - (p.steuerStand ?? 0);
     p.steuerStand = basis;
-    const faellig = Math.ceil(Math.max(0, gewinn - STEUER_FREI) * satzGewinn()) + (p.steuerSchuld || 0);
+    /* v2: Verluste werden vorgetragen und mit späteren Gewinnen verrechnet. */
+    const gs = WR.gewinnSteuer(gewinn, p.verlustVortrag || 0);
+    p.verlustVortrag = gs.verlustVortrag;
+    const faellig = Math.ceil(gs.steuer) + (p.steuerSchuld || 0);
+    p.nachsteuerPeriode = gewinn - gs.steuer;
     const zahl = Math.min(faellig, Math.max(0, Math.floor(p.cash)));
     p.cash -= zahl; p.steuerSchuld = faellig - zahl;
     p.stats.steuern = (p.stats.steuern || 0) + zahl;
@@ -6956,6 +7064,10 @@ function snapshot() {
     questDefs: QUESTSET(),
     started: G.started, hostId: G.hostId,
     mode: MODE, plan: MODE === "plan" ? G.plan : null,
+    /* Zentralbank (v2): Leitzins, Zielzins als Trend und Inflation je Periode */
+    zb: G.zb ? { leitzins: G.zb.leitzins, zielzins: G.zb.zielzins, inflation: Math.round(G.zb.inflation * 10000) / 10000,
+                 kreditzins: WR.kreditzins(G.zb.leitzins), sparzins: WR.sparzins(G.zb.leitzins), sparquote: WR.sparquote(G.zb.leitzins),
+                 multiple: Math.round(WR.multiple(G.zb.leitzins) * 10) / 10, panik: (G.crash?.aktivBis ?? -1) >= Math.floor(G.tick / MARKT.TAG) } : null,
     /* Wer mit wem gemeinsame Sache macht, ist öffentlich; wie heiß es dem
      * Kartell unter den Füßen wird, erfahren nur seine Mitglieder (privateState). */
     cartels: MODE === "kartell" ? G.cartels.map(kartellPublic) : null,
@@ -10508,7 +10620,7 @@ setInterval(() => {
   const _t0 = PERF ? process.hrtime.bigint() : 0n;
   try { runTick(); } catch (e) { console.error("Tick-Fehler (übersprungen):", e); }
   if (PERF) perf.maxTickMs = Math.max(perf.maxTickMs, Number(process.hrtime.bigint() - _t0) / 1e6);
-}, 1000);
+}, +process.env.TICK_MS || 1000);   // TICK_MS: Zeitraffer für Tests (Standard 1 s je Tick)
 function runTick() {
   if (!G.started) return;   // Warteraum: nichts produzieren, keine Fristen laufen lassen
   G.tick++;
@@ -10923,9 +11035,13 @@ function runTick() {
         if (slot.qty != null) q = Math.min(q, slot.qty);   // begrenzte Verkaufsmenge
         if (q <= 0) return;
         p.inv[slot.good] -= q;
-        const erloes = q * slot.price, gebuehr = swProd ? erloes * swProd.gebuehr / 100 : 0;
+        /* v2: Der Kunde zahlt brutto, 10/110 gehen als Umsatzsteuer an die Stadt. */
+        const brutto = q * slot.price, { ust } = WR.umsatzAufteilen(brutto);
+        const erloes = brutto - ust, gebuehr = swProd ? erloes * swProd.gebuehr / 100 : 0;
         p.cash += erloes - gebuehr; addRevenue(p, erloes);
-        depotSparen(erloes);   // die Stadtkunden legen zusätzlich etwas zurück
+        G.stadtkasse += ust; G.steuernGesamt += ust;
+        p.stats.steuern = (p.stats.steuern || 0) + ust;
+        depotSparen(brutto);   // die Stadtkunden sparen nach der Sparquote
         statPlus("stadtUmsatz", erloes);
         if (gebuehr) { p.stats.ausgaben += gebuehr; swGebuehr(swProd, gebuehr); }
         if (bt.online) { const l = (t._lauf ??= {}); const e = (l[slot.good] ??= { n: 0, b: 0 }); e.n += q; e.b += erloes; }
@@ -10983,6 +11099,7 @@ function runTick() {
         }
         p.inv[bt.proc.out] += menge;
         p.stats.produziert[bt.proc.out] = (p.stats.produziert[bt.proc.out] || 0) + menge;
+        noteProduziert(bt.proc.out, menge);
       }
       continue;
     }
@@ -10997,9 +11114,12 @@ function runTick() {
      * damit auch keine Fahrzeuge. Obendrein war der Handel für die Mine ein
      * sicheres Verlustgeschäft (8,80 $ Einsatz für 4,60 $ Mehrertrag) — sie tat
      * es trotzdem, weil der Verbrauch automatisch läuft. */
+    /* Abnehmender Boost (v2, Abschnitt 3): +75 %, +40 %, +20 %, weitere wirken nicht. */
+    let boostNr = 0;
     for (const r of bt.boosts || []) {
+      if (boostNr >= WK.produktion.boost.length) break;
       const bedarf = bt.rate * stufe * 0.5;
-      if ((p.inv[r] || 0) >= bedarf) { p.inv[r] -= bedarf; mult += BOOST_MULT; }
+      if ((p.inv[r] || 0) >= bedarf) { p.inv[r] -= bedarf; mult += WK.produktion.boost[boostNr++]; noteDemand(r, bedarf); }
     }
     /* Steuerungssoftware obendrauf; der Turbo braucht bei Förderbetrieben Strom */
     const sb = steuerBonus(t, bt);
@@ -11013,20 +11133,13 @@ function runTick() {
     if (sb) t._mehr = (t._mehr || 0) + bt.rate * mult * stufe * SPERR * plus;
     p.inv[bt.out] += menge;
     p.stats.produziert[bt.out] = (p.stats.produziert[bt.out] || 0) + menge;
+    noteProduziert(bt.out, menge);
   }
   /* Referenzkurs (Ticker/Bewertung): Anker folgt Angebot/Nachfrage, Kurs driftet im Band.
    * Reine Preis-Simulation ohne Gegenpartei — die Börse selbst ist ausschließlich P2P,
    * es gibt keinen Bot mehr, der Spieler-Orders automatisch kauft oder verkauft. */
-  for (const k of Object.keys(GOODS)) {
-    const mm = MM[k];
-    mm.sold *= 0.994;                                                   // Druck zerfällt (~2 min HWZ)
-    const targetAnchor = BASEP[k] * Math.min(1.3, Math.max(0.5, 1.15 - 0.4 * soldPressure(k)));
-    mm.anchor += (targetAnchor - mm.anchor) * 0.02;                     // Anker wandert langsam
-    mm.price += (Math.random() - 0.5) * mm.band * 0.15;                 // Zufallsdrift
-    if (G.lastTrade[k]) mm.price += (G.lastTrade[k] - mm.price) * 0.03; // echte Trades ziehen leicht
-    mm.price = Math.min(mm.anchor + mm.band, Math.max(mm.anchor - mm.band, mm.price)); // Band um Anker
-    mm.price = Math.round(mm.price * 100) / 100;
-  }
+  /* Warenpreise ändern sich nur noch einmal je Markttag (warenpreisTag). */
+  for (const k of Object.keys(GOODS)) MM[k].sold *= 0.994;
   /* Anleihen: Kupon pro Sekunde = principal * rate / 60 (Zins „pro Minute") */
   for (const b of [...G.bonds]) {
     if (!b.holderId) continue;
@@ -11127,7 +11240,7 @@ function runTick() {
   /* Kartellmodus: keine Nachrichtenzentrale — die Stadt redet nicht mit der Presse. */
   if (MODE !== "plan" && MODE !== "kartell" && G.tick > 60 && G.tick % NEWS_INTERVAL === 0) sendeMarktbericht();
   /* Aktien: Dividendenausschüttung alle 10 min */
-  if (--G.nextDividendIn <= 0) { distributeDividends(); steuernErheben(); G.nextDividendIn = DIVIDEND_INTERVAL; }
+  if (--G.nextDividendIn <= 0) { steuernErheben(); distributeDividends(); G.nextDividendIn = DIVIDEND_INTERVAL; }
   finanzamtTick();
   stadtTick();
   if (G.tick % MARKT.TAG === 0) marktTag();   // Aktienkurse: F messen, P nachführen
