@@ -6622,6 +6622,14 @@ document.getElementById("p-bank").addEventListener("click", e => {
   const yes = e.target.closest("[data-merge-yes]");
   if (yes) { act("mergeCompany", { targetId: yes.dataset.mergeYes }); pendingMerge = null; render(store.get()); return; }
   if (e.target.closest("[data-merge-no]")) { pendingMerge = null; render(store.get()); return; }
+  const kiB = e.target.closest("[data-ki]");
+  if (kiB) {
+    const w = kiB.dataset.ki;
+    if (w === "speichern") { const f = document.getElementById("kiKey"); act("kiSchluessel", { key: f.value }); f.value = ""; }
+    else if (w === "loeschen") act("kiSchluessel", { key: "" });
+    else act("kiAktiv", { an: w === "an" });
+    return;
+  }
   const kb = e.target.closest("[data-kredit]");
   if (kb) { act(kb.dataset.kredit === "auf" ? "kreditAufnehmen" : "kreditTilgen", { betrag: +document.getElementById("kreditBetrag").value }); return; }
   const zw = e.target.closest("[data-zwang]");
@@ -12893,6 +12901,21 @@ function render({ state, me, myId, chat, room }) {
           <select id="divQuote">${[0, 20, 40, 60, 80].map(q => `<option value="${q}"${Math.round(kv.quote * 100) === q ? " selected" : ""}>${q} % Dividende</option>`).join("")}</select>
         </span></div>`;
       if (kEl.dataset.sig !== html && !kEl.contains(document.activeElement)) { kEl.innerHTML = html; kEl.dataset.sig = html; }
+    }
+    /* KI-Testfond: Schlüssel eintragen und ein-/ausschalten. Der Schlüssel
+     * geht nur an den Server und kommt nie zurück — hier steht nur „gesetzt“. */
+    const ki = store.get().state?.ki, kiEl = document.getElementById("bankKI");
+    if (ki && kiEl) {
+      const html = `<div class="bpos" style="flex-wrap:wrap;gap:8px">
+        <span class="bposText"><b>KI-Testfond (Claude Haiku 5.5)</b>
+          <small>${ki.schluessel ? "API-Schlüssel gesetzt" : "Kein API-Schlüssel — der Fond ist aus"} · ${ki.aktiv ? "<b style=\"color:var(--up)\">handelt</b>" : "ruht"} · Bargeld ${fmt(ki.bargeld)} · Depot ${fmt(ki.depotwert)}</small>
+          <small>${ki.letzte ? `Tag ${ki.letzte.tag}: ${escapeHtml(ki.letzte.text)}` : "Noch keine Entscheidung"}${ki.fehler ? ` · ${ki.fehler}× Fallback` : ""}</small></span>
+        <span style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+          ${ki.schluessel
+            ? `<button class="${ki.aktiv ? "mini" : "buyb"}" data-ki="${ki.aktiv ? "aus" : "an"}">${ki.aktiv ? "Ausschalten" : "Einschalten"}</button><button class="mini" data-ki="loeschen">Schlüssel löschen</button>`
+            : `<input id="kiKey" type="password" placeholder="sk-ant-…" autocomplete="off" style="width:200px"><button class="buyb" data-ki="speichern">Speichern</button>`}
+        </span></div>`;
+      if (kiEl.dataset.sig !== html && !kiEl.contains(document.activeElement)) { kiEl.innerHTML = html; kiEl.dataset.sig = html; }
     }
     /* Depot: was man an fremden Firmen hält, mit aktuellem Wert */
     document.getElementById("bankdepot").innerHTML = me.portfolio?.length

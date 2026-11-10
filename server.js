@@ -13,6 +13,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { statisch, cacheKoepfe } from "./statisch.js";
 import { KONFIG as WK } from "./wirtschaft/konfiguration.js";
+import * as KI from "./wirtschaft/agent.js";
 import * as WR from "./wirtschaft/regeln.js";
 import { tokenPeriode, COIN, coinBuerger, coinWerben, trendCoin, boerseEroeffnen, gebuehrSetzen, kontoEroeffnen, einzahlen, auszahlen, coinAusgeben, vertragSchliessen, vertragKuendigen, coinOrder, coinStorno, coinTick, coinsWert } from "./coins.js";
 
@@ -2631,6 +2632,47 @@ function unterhaltTag() {
 
 /* Einmal je Markttag, feste Reihenfolge wie Abschnitt 13: Preise, Firmen-
  * abschluss (fairer Wert), Börse (Orders, Kurse, Crash), Zentralbank. */
+/* ---- KI-Testfond (Haiku 5.5) ----
+ * Schlüssel nur im Server: aus ANTHROPIC_API_KEY oder lokal in .ki-schluessel.json
+ * (gitignored). Er geht nie an den Browser, der sieht nur „gesetzt ja/nein“. */
+const KI_DATEI = path.join(path.dirname(fileURLToPath(import.meta.url)), ".ki-schluessel.json");
+const KI_STATE = { key: process.env.ANTHROPIC_API_KEY || "", aktiv: false, laeuft: false,
+  fond: { bargeld: 20000, bestand: {} }, letzte: null, fehler: 0 };
+try { const d = JSON.parse(fs.readFileSync(KI_DATEI, "utf8")); if (d.key && !KI_STATE.key) KI_STATE.key = d.key; } catch {}
+function kiPublic() {
+  const f = KI_STATE.fond;
+  const wert = Object.entries(f.bestand).reduce((a, [pid, n]) => a + n * (G.players[pid] ? kursVon(G.players[pid]) : 0), 0);
+  return { schluessel: !!KI_STATE.key, aktiv: KI_STATE.aktiv, bargeld: Math.round(f.bargeld), depotwert: Math.round(wert),
+    bestand: Object.entries(f.bestand).filter(([, n]) => n).map(([pid, n]) => ({ name: G.players[pid]?.name ?? "—", n })),
+    letzte: KI_STATE.letzte, fehler: KI_STATE.fehler };
+}
+async function kiFondTag(tag) {
+  if (!KI_STATE.aktiv || !KI_STATE.key || KI_STATE.laeuft) return;
+  const firmen = Object.values(G.players).filter(p => marktVon(p)?.kurs > 0);
+  if (!firmen.length) return;
+  const kurse = Object.fromEntries(firmen.map(p => [p.name, kursVon(p)]));
+  const nameZuId = Object.fromEntries(firmen.map(p => [p.name, p.id]));
+  const f = KI_STATE.fond;
+  const bestandN = Object.fromEntries(firmen.map(p => [p.name, f.bestand[p.id] || 0]));
+  const lage = KI.lageText({ tag, leitzins: leitzins(), inflation10: G.zb?.inflation || 0, kurse,
+    bestand: Object.values(bestandN).reduce((a, b) => a + b, 0), bargeld: f.bargeld });
+  KI_STATE.laeuft = true;
+  try {
+    const text = await KI.agentFragen(lage, { apiKey: KI_STATE.key });
+    const orders = text ? KI.orderPruefen(text.replace(/^```(json)?|```$/g, "").trim(), { bestand: bestandN, bargeld: f.bargeld, kurse }) : null;
+    if (!orders) { KI_STATE.fehler++; KI_STATE.letzte = { tag, text: "keine gültige Antwort, Fallback" }; return; }
+    for (const o of orders) {
+      const pid = nameZuId[o.firma], p = G.players[pid]; if (!p) continue;
+      const kosten = o.menge * kursVon(p);
+      if (kosten > f.bargeld) continue;
+      f.bargeld -= kosten; f.bestand[pid] = (f.bestand[pid] || 0) + o.menge;
+      const m = marktVon(p); m.nettoOrders = (m.nettoOrders || 0) + o.menge;
+    }
+    KI_STATE.letzte = { tag, text: orders.length ? orders.map(o => `${o.menge > 0 ? "kauft" : "verkauft"} ${Math.abs(o.menge)}× ${o.firma}`).join(", ") : "hält still" };
+    if (orders.length) marktLog("ki", `KI-Testfond ${KI_STATE.letzte.text}`);
+  } finally { KI_STATE.laeuft = false; }
+}
+
 function marktTag() {
   const tag = Math.floor(G.tick / MARKT.TAG);
   unterhaltTag();
@@ -2652,6 +2694,7 @@ function marktTag() {
     m.kurs = Math.max(0.01, WR.kursNeu(kursVon(p), F / AKTIEN, netto, AKTIEN, { rauschen: Math.random() * 2 - 1 }));
     m.nettoOrders = 0;
   }
+  kiFondTag(tag).catch(() => {});
   if (!panik) {
     fondsTag();          // die Branchenfonds (in der Panik kaufen sie nichts)
     depotTag(false);     // dann die Sparer der Stadt
@@ -6480,6 +6523,7 @@ function snapshot() {
     pflichtangebote: (G.pflichtangebote || []).map(o => ({ id: o.id, companyId: o.companyId, kaeuferId: o.kaeuferId, preis: o.preis, bisTag: o.bisTag })),
     haushalte: G.haushalte ? { cash: Math.round(G.haushalte.cash), budget: Math.round(G.haushalte.budget) } : null,
     /* Zentralbank (v2): Leitzins, Zielzins als Trend und Inflation je Periode */
+    ki: kiPublic(),
     zb: G.zb ? { leitzins: G.zb.leitzins, zielzins: G.zb.zielzins, inflation: Math.round(G.zb.inflation * 10000) / 10000,
                  kreditzins: WR.kreditzins(G.zb.leitzins), sparzins: WR.sparzins(G.zb.leitzins), sparquote: WR.sparquote(G.zb.leitzins),
                  multiple: Math.round(WR.multiple(G.zb.leitzins) * 10) / 10, panik: (G.crash?.aktivBis ?? -1) >= Math.floor(G.tick / MARKT.TAG) } : null,
@@ -8963,6 +9007,20 @@ io.on("connection", socket => {
   }));
 
   /* v2: Kredit bei der Stadtsparkasse aufnehmen und tilgen. */
+  socket.on("kiSchluessel", ({ key } = {}, ack) => {
+    const pid = G.socketToPid[socket.id];
+    if (!pid) return ack?.({ error: "Unbekannter Spieler" });
+    const k = String(key || "").trim();
+    if (k && !/^sk-ant-[\w-]{20,}$/.test(k)) return ack?.({ error: "Das sieht nicht wie ein Anthropic-Schlüssel aus (sk-ant-…)" });
+    KI_STATE.key = k; if (!k) KI_STATE.aktiv = false;
+    try { if (k) fs.writeFileSync(KI_DATEI, JSON.stringify({ key: k }), { mode: 0o600 }); else fs.rmSync(KI_DATEI, { force: true }); } catch {}
+    ack?.({ ok: true }); pushState();
+  });
+  socket.on("kiAktiv", ({ an } = {}, ack) => {
+    if (!G.socketToPid[socket.id]) return ack?.({ error: "Unbekannter Spieler" });
+    if (an && !KI_STATE.key) return ack?.({ error: "Erst einen API-Schlüssel eintragen" });
+    KI_STATE.aktiv = !!an; ack?.({ ok: true }); pushState();
+  });
   socket.on("kreditAufnehmen", guard((p, { betrag }, ack) => {
     const x = Math.floor(Number(betrag) || 0);
     const frei = Math.max(0, kreditLimitVon(p) - (p.kredit || 0));
