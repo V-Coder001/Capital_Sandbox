@@ -14,7 +14,7 @@ import { fileURLToPath } from "url";
 import { statisch, cacheKoepfe } from "./statisch.js";
 import { KONFIG as WK } from "./wirtschaft/konfiguration.js";
 import * as WR from "./wirtschaft/regeln.js";
-import { COIN, coinBuerger, coinWerben, trendCoin, boerseEroeffnen, gebuehrSetzen, kontoEroeffnen, einzahlen, auszahlen, coinAusgeben, vertragSchliessen, vertragKuendigen, coinOrder, coinStorno, coinTick, coinsWert } from "./coins.js";
+import { tokenPeriode, COIN, coinBuerger, coinWerben, trendCoin, boerseEroeffnen, gebuehrSetzen, kontoEroeffnen, einzahlen, auszahlen, coinAusgeben, vertragSchliessen, vertragKuendigen, coinOrder, coinStorno, coinTick, coinsWert } from "./coins.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -611,812 +611,6 @@ const BASEP = { strom: 1.8, wasser: 1.4, oel: 8, obst: 7, erze: 16, kannabis: 45
                  * Hehler zahlt genau diesen Basispreis, ohne Marktdynamik. */
                 schnaps: 90, falschgeld: 130, goldbarren: 260, zigaretten: 75 };
 
-/* ---------- Kartellmodus: die vier Familien ----------
- * Feste Familien statt frei gegründeter Banden: Jede hat Farbe, EIN illegales
- * Produkt und EIN Produktionsgebäude, das nur ihre Mitglieder bauen können.
- * Die Familie wird im Warteraum gewählt; wer keine wählt (auch Bots), wird
- * beim Rundenstart reihum zugeteilt. Hehler-Verkäufe bringen der Familie
- * Respekt — die Währung des Modus. */
-const FAMILIEN = {
-  famiglia: { name: "La Famiglia",  farbe: "#e74c3c", produkt: "schnaps",    gebaeude: "destille" },
-  syndikat: { name: "Das Syndikat", farbe: "#a78bfa", produkt: "falschgeld", gebaeude: "druckerei" },
-  bratwa:   { name: "Die Bratwa",   farbe: "#f5c542", produkt: "goldbarren", gebaeude: "goldschmelze" },
-  triade:   { name: "Die Triade",   farbe: "#2ecc71", produkt: "zigaretten", gebaeude: "schmuggellager" },
-};
-/* ---- Die Polizei: der Gegenspieler der Familien ----
- * Wählbar wie eine Familie (auch für KI), aber mit eigenen Regeln: Ihre
- * Gebäude zählen nie für Bezirkskontrolle, sie erpresst und überfällt nicht —
- * sie KONTROLLIERT Transporte (Beschlagnahme) und führt RAZZIEN gegen
- * kontrollierte Bezirke. Sold statt Schutzgeld; Sieg über Einsatzpunkte. */
-const POLIZEI = { id: "polizei", name: "Die Polizei", farbe: "#4a90d9" };
-const FAMILIE_MAX = 2;            // je Familie höchstens zwei Mitglieder (Mensch/Bot)
-const POLIZEI_ZIEL = 25;          // Einsatzpunkte bis zum Polizei-Sieg
-const RAZZIA_BEZIRK_CD = 90;      // Sekunden je Polizist zwischen Bezirks-Razzien
-const POLIZEI_SOLD = 150;         // $ Sold je Minute und Polizist
-const GESICHERT_DAUER = 60;       // so lange ist ein Bezirk nach einer Razzia „gesichert"
-const famDef = fid => fid === "polizei" ? POLIZEI : FAMILIEN[fid];
-const famAnzahl = fid => Object.values(G.players).filter(x => x.familie === fid).length;
-const famMenschen = fid => Object.values(G.players).filter(x => x.familie === fid && !x.bot).length;
-/* Ein echter Spieler verdrängt die KI: Ist die Familie nur wegen eines Bots
- * voll, packt der Bot seine Sachen — der Mensch übernimmt den Platz. */
-function famBotVerdraengen(fid) {
-  if (famAnzahl(fid) <= FAMILIE_MAX) return;
-  const bot = Object.values(G.players).find(x => x.familie === fid && x.bot);
-  if (!bot) return;
-  for (let i = botHandles.length - 1; i >= 0; i--) {
-    const h = botHandles[i];
-    if (G.socketToPid[h.socket.id] === bot.id) {
-      clearInterval(h.timer); h.socket.close(); botHandles.splice(i, 1);
-    }
-  }
-  if (G.familienBoss?.[fid] === bot.id) delete G.familienBoss[fid];
-  delete G.players[bot.id];
-  io.emit("notice", { text: `${bot.name} macht Platz für einen echten Mafioso und verlässt die Stadt.` });
-}
-/* ---- Casino Municipale ----
- * Das städtische Casino steht fest an der Piazza. Es GEHÖRT niemandem —
- * es gehorcht dem, der die Piazza Grande (Bezirk 4) kontrolliert: Die
- * Herrscher-Familie kassiert den Bürger-Umsatz, stellt die Quoten, baut
- * Stufen aus und verkauft unterm Tisch heiße Ware ans Volk (besser als der
- * Hehler, OHNE Paten-Abgabe). Gewinne der Gäste zahlt die Familie — gedeckelt
- * durch ihre Kassen, damit ein Glückstreffer sie nicht ruiniert. */
-const GCASINO_SPIELE = {
-  rot:     { name: "Roulette · Rot/Schwarz", chance: .48,  faktor: 2 },
-  zahl:    { name: "Roulette · Volle Zahl",  chance: .027, faktor: 30 },
-  wuerfel: { name: "Hohe Neun (Würfel)",     chance: .40,  faktor: 2.4 },
-  slots:   { name: "Slots „La Fortuna“",     chance: .15,  faktor: 6 },
-  baccara: { name: "Baccara",                chance: .44,  faktor: 2.2 },
-};
-const GCASINO_STILE = ["Spelunke", "Salon Rosso", "Belle Époque", "Art déco", "La Dorata"];
-const GCASINO_QUOTEN = {
-  fair:         { name: "faire Quoten",   netto: 100, chanceDelta: 0,    respekt: 0, fahndung: 0 },
-  gierig:       { name: "gierige Quoten", netto: 170, chanceDelta: -.03, respekt: 0, fahndung: 2 },
-  grosszuegig:  { name: "großzügige Quoten", netto: 50, chanceDelta: .03, respekt: 1, fahndung: 0 },
-};
-const GCASINO_BEZIRK = 4;             // Piazza Grande
-const GCASINO_EINSATZ_MAX = 2000;
-const GCASINO_SCHWARZPREIS = 1.3;     // Faktor auf den Hehler-Basispreis
-/* --- Wahrzeichen: ein interaktives Gebäude je Bezirk. Jeder kann es nutzen,
- * die Familie, die den Bezirk hält, verdient daran mit. --- */
-const WZ_DEF = {
-  kathedrale: { bezirk: 0, name: "Cattedrale",     icon: "\u26EA" },
-  depot:      { bezirk: 1, name: "Frachtdepot",    icon: "\u{1F682}" },
-  werft:      { bezirk: 2, name: "Alte Werft",     icon: "\u{1F3D7}" },
-  markthalle: { bezirk: 3, name: "Markthalle",     icon: "\u{1F3DB}" },
-  villa:      { bezirk: 5, name: "Villa del Capo", icon: "\u{1F3F0}" },
-  kai:        { bezirk: 6, name: "Schmuggelkai",   icon: "\u2693" },
-  yacht:      { bezirk: 7, name: "Yachtclub",      icon: "\u26F5" },
-  brunnen:    { bezirk: 8, name: "Wunschbrunnen",  icon: "\u26F2" },
-};
-const wzHerr = b => G.bezirke?.[b]?.kontrolle || G.besatzung?.[b]?.familie || null;
-/* Einnahmen eines Wahrzeichens an die kontrollierende Familie verteilen. */
-function wzKasse(bezirk, betrag, quelle) {
-  const fam = wzHerr(bezirk);
-  if (!fam || betrag <= 0) return;
-  const bank = Object.values(G.players).filter(m => m.familie === fam);
-  const teil = Math.round(betrag / Math.max(1, bank.length));
-  for (const m of bank) { m.cash += teil; logTx(m, "Kartell", `${quelle} (${BEZIRK_NAMEN[bezirk]})`, teil); }
-}
-/* Gewinne (Regatta) zahlt die kontrollierende Familie — gedeckelt wie im Casino. */
-function wzGewinn(p, bezirk, brutto, quelle) {
-  const fam = wzHerr(bezirk);
-  const bank = fam ? Object.values(G.players).filter(m => m.familie === fam) : [];
-  if (!bank.length) { p.cash += brutto; logTx(p, "Kartell", quelle, brutto); return brutto; }
-  let offen = brutto;
-  for (const m of bank) {
-    const teil = Math.min(m.cash, Math.ceil(offen / Math.max(1, bank.length)));
-    m.cash -= teil; offen -= teil;
-    logTx(m, "Kartell", `Auszahlung an ${p.name} (${quelle})`, -teil);
-    if (offen <= 0) break;
-  }
-  const gezahlt = brutto - Math.max(0, offen);
-  p.cash += gezahlt; logTx(p, "Kartell", quelle, gezahlt);
-  return gezahlt;
-}
-
-/* Eine Wahrzeichen-Aktion — Spieler (Socket) und Bots (Tick) gehen durch dieselbe Tür. */
-function wzAktion(p, { art, betrag, good, qty, yacht }) {
-  const def = WZ_DEF[art];
-  if (!def) return { error: "Dieses Wahrzeichen kennt die Stadt nicht" };
-  const bez = def.bezirk;
-  betrag = Math.floor(+betrag) || 0;
-
-  if (art === "kathedrale") {
-    if (p.familie === "polizei") return { error: "Der Commissario spendet dienstlich nicht" };
-    if (!(betrag >= 100 && betrag <= 2000)) return { error: "Spende zwischen 100 und 2000 $" };
-    if (p.cash < betrag) return { error: "Zu wenig Bargeld" };
-    p.cash -= betrag;
-    logTx(p, "Kartell", "Spende an die Cattedrale", -betrag);
-    G.fahndung[p.familie] = Math.max(0, (G.fahndung[p.familie] || 0) - betrag / 200);
-    const respekt = Math.round(betrag / 300);
-    G.familienRespekt[p.familie] = (G.familienRespekt[p.familie] || 0) + respekt;
-    wzKasse(bez, Math.round(betrag * .2), "Kollekte der Cattedrale");
-    return { ok: true, text: `Der Priester nickt — die Akten werden dünner. −${(betrag / 200).toFixed(1)} Fahndung, +${respekt} Respekt.` };
-  }
-  if (art === "depot") {
-    if (!GOODS[good] || ILLEGAL.includes(good)) return { error: "Das Depot liefert nur saubere Ware" };
-    qty = Math.min(50, Math.max(1, Math.floor(+qty) || 10));
-    const marktwert = Math.round(qty * MM[good].price);
-    const preis = Math.round(marktwert * 1.2);
-    if (p.cash < preis) return { error: `Expressfracht kostet ${preis} $` };
-    p.cash -= preis;
-    p.inv[good] = (p.inv[good] || 0) + qty;
-    logTx(p, "Kartell", `Expressfracht: ${qty}× ${GOODS[good].name}`, -preis);
-    wzKasse(bez, preis - marktwert, "Frachtmarge des Depots");
-    return { ok: true, text: `Der Zug pfeift — ${qty}× ${GOODS[good].name} liegen im Lager (${preis} $).` };
-  }
-  if (art === "werft") {
-    if (p.cash < 500) return { error: "Schrott ausschlachten kostet 500 $" };
-    p.cash -= 500;
-    const ziegel = 8 + Math.floor(Math.random() * 13), beton = 2 + Math.floor(Math.random() * 5);
-    p.inv.ziegel = (p.inv.ziegel || 0) + ziegel;
-    p.inv.beton = (p.inv.beton || 0) + beton;
-    logTx(p, "Kartell", `Alte Werft: Schrott ausgeschlachtet (+${ziegel} Ziegel, +${beton} Beton)`, -500);
-    wzKasse(bez, 500, "Werftgebühr");
-    return { ok: true, text: `Die Jungs schleppen an: +${ziegel} Ziegel, +${beton} Beton.` };
-  }
-  if (art === "markthalle") {
-    if (!GOODS[good] || ILLEGAL.includes(good)) return { error: "In der Halle zählt nur legale Ware" };
-    qty = Math.min(Math.floor(p.inv[good] || 0), Math.max(1, Math.floor(+qty) || Math.floor(p.inv[good] || 0)));
-    if (qty <= 0) return { error: `Kein ${GOODS[good].name} im Lager` };
-    const brutto = Math.round(qty * MM[good].price * 1.15);
-    const gebuehr = Math.round(brutto * .05);
-    p.inv[good] -= qty; p.cash += brutto - gebuehr;
-    logTx(p, "Kartell", `Großmarkt-Deal: ${qty}× ${GOODS[good].name} (+15 %, −5 % Standgebühr)`, brutto - gebuehr);
-    wzKasse(bez, gebuehr, "Standgebühr der Markthalle");
-    return { ok: true, text: `Deal! ${brutto - gebuehr} $ für ${qty}× ${GOODS[good].name}.` };
-  }
-  if (art === "villa") {
-    if (p.familie === "polizei") return { error: "Der Capo verhandelt nicht mit der Questura" };
-    if (p.cash < 800) return { error: "Ein Gefallen des Capo kostet 800 $ Tribut" };
-    p.cash -= 800;
-    logTx(p, "Kartell", "Tribut in der Villa del Capo", -800);
-    wzKasse(bez, 800, "Tribut an den Capo");
-    const kampf = Object.entries(G.revierKaempfe || {}).find(([, k]) => k.punkte?.[p.familie] != null);
-    if (kampf) {
-      kampf[1].punkte[p.familie] += 2;
-      return { ok: true, text: `Der Capo schickt zwei Schränke — +2 Punkte im Kampf um den ${BEZIRK_NAMEN[+kampf[0]]}.` };
-    }
-    G.familienRespekt[p.familie] = (G.familienRespekt[p.familie] || 0) + 3;
-    return { ok: true, text: "Der Capo legt ein gutes Wort ein — +3 Respekt für deine Familie." };
-  }
-  if (art === "kai") {
-    if (p.familie === "polizei") return { error: "Die Questura schmuggelt nicht — offiziell" };
-    if (!ILLEGAL.includes(good)) return { error: "Am Kai zählt nur heiße Ware" };
-    qty = Math.min(Math.floor(p.inv[good] || 0), Math.max(1, Math.floor(+qty) || Math.floor(p.inv[good] || 0)));
-    if (qty <= 0) return { error: `Kein ${GOODS[good].name} im Lager` };
-    const erloes = Math.round(qty * BASEP[good] * 1.4);
-    const zoll = Math.round(erloes * .1);
-    p.inv[good] -= qty; p.cash += erloes - zoll;
-    G.fahndung[p.familie] = (G.fahndung[p.familie] || 0) + 3;
-    logTx(p, "Kartell", `Nachtschmuggel am Kai: ${qty}× ${GOODS[good].name} (140 %, −10 % Zoll)`, erloes - zoll);
-    wzKasse(bez, zoll, "Hafenzoll");
-    questProg(p, "hehler");
-    return { ok: true, text: `Das Boot legt ab — ${erloes - zoll} $, keine Paten-Abgabe. Aber die Questura hört Motoren (+3 Fahndung).` };
-  }
-  if (art === "yacht") {
-    yacht = Math.floor(+yacht);
-    if (!(yacht >= 1 && yacht <= 3)) return { error: "Setz auf Yacht 1, 2 oder 3" };
-    if (!(betrag >= 100 && betrag <= 1000)) return { error: "Einsatz zwischen 100 und 1000 $" };
-    if (p.cash < betrag) return { error: "Zu wenig Bargeld" };
-    p.cash -= betrag;
-    logTx(p, "Kartell", `Regatta-Wette auf Yacht ${yacht}`, -betrag);
-    wzKasse(bez, betrag, "Wetteinnahme des Yachtclubs");
-    const sieger = 1 + Math.floor(Math.random() * 3);
-    if (sieger === yacht) {
-      const gezahlt = wzGewinn(p, bez, Math.round(betrag * 2.7), "Regatta gewonnen");
-      return { ok: true, gewonnen: true, sieger, betrag: gezahlt };
-    }
-    return { ok: true, gewonnen: false, sieger, betrag };
-  }
-  if (art === "brunnen") {
-    if (!(betrag >= 50 && betrag <= 500)) return { error: "Münzen zwischen 50 und 500 $" };
-    if (p.cash < betrag) return { error: "Zu wenig Bargeld" };
-    p.cash -= betrag; G.brunnenPot += betrag;
-    logTx(p, "Kartell", "Münze in den Wunschbrunnen", -betrag);
-    if (Math.random() < .07 && G.brunnenPot > betrag * 2) {
-      const fang = Math.round(G.brunnenPot * .7);
-      G.brunnenPot -= fang; p.cash += fang;
-      logTx(p, "Kartell", "Der Brunnen erhört dich!", fang);
-      io.emit("notice", { text: `\u26F2 ${p.name} fischt den Wunschbrunnen leer — ${fang} $!` });
-      if (fang >= 3000) io.emit("gcasinoEreignis", { art: "grossgewinn", name: p.name, betrag: fang });
-      return { ok: true, jackpot: fang, pot: G.brunnenPot };
-    }
-    return { ok: true, pot: G.brunnenPot };
-  }
-  return { error: "Diese Aktion kennt das Wahrzeichen nicht" };
-}
-
-/* ---- Familien-Hierarchie: Oberhaupt, Capos, Rekruten, Kasse, Soldaten ----
- * Das Oberhaupt verwaltet die Familienkasse, stellt den Tributsatz ein und
- * heuert Soldaten an — Bürger, die ausschließlich um Bezirke kämpfen. */
-const famMitglieder = fid => Object.values(G.players).filter(x => x.familie === fid);
-const famBoss = fid => G.familienBoss[fid] && G.players[G.familienBoss[fid]]?.familie === fid
-  ? G.familienBoss[fid] : null;
-const famRang = p => p.familie && famBoss(p.familie) === p.id ? "oberhaupt" : (G.familienRang[p.id] || "rekrut");
-function familienPflegen() {
-  for (const fid of Object.keys(FAMILIEN)) {
-    G.familienBank[fid] ??= 0;
-    G.familienTribut[fid] ??= .10;
-    G.soldaten[fid] ??= 0;
-    if (!famBoss(fid)) {
-      /* Boss fehlt: bevorzugt ein Mensch, sonst das erste Mitglied. */
-      const mit = famMitglieder(fid);
-      const neu = mit.find(m => !m.bot) || mit[0];
-      if (neu) {
-        G.familienBoss[fid] = neu.id;
-        io.emit("notice", { text: `\u{1F396} ${neu.name} führt jetzt ${FAMILIEN[fid].name} als Oberhaupt.` });
-      }
-    }
-  }
-  /* Tribut: Jede Minute zahlen alle außer dem Oberhaupt ihren Satz in die Kasse. */
-  if (G.tick % 60 === 0) for (const fid of Object.keys(FAMILIEN)) {
-    const satz = G.familienTribut[fid] || 0;
-    if (!satz) continue;
-    for (const m of famMitglieder(fid)) {
-      if (m.id === famBoss(fid)) continue;
-      const tribut = Math.floor(m.cash * satz);
-      if (tribut < 10) continue;
-      m.cash -= tribut;
-      G.familienBank[fid] += tribut;
-      logTx(m, "Kartell", `Tribut an die Familienkasse (${Math.round(satz * 100)} %)`, -tribut);
-    }
-  }
-  /* Bot-Oberhäupter regieren — jede Familie mit eigener Strategie:
-   * Triade & Bratwa rüsten für die Vendetta, La Famiglia hortet fürs
-   * Imperium, das Syndikat spielt ausgewogen. */
-  for (const fid of Object.keys(FAMILIEN)) {
-    const bossId = famBoss(fid), boss = bossId && G.players[bossId];
-    if (!boss?.bot) continue;
-    const krieger = fid === "triade" || fid === "bratwa";
-    const hortet = fid === "famiglia";
-    const soldatChance = krieger ? .025 : hortet ? .004 : .01;
-    if (G.familienBank[fid] >= SOLDAT_KOSTEN + 400 && G.soldaten[fid] < SOLDATEN_MAX && Math.random() < soldatChance)
-      famSoldatKaufen(fid);
-    else if (!hortet && G.familienBank[fid] > 4000 && Math.random() < .004) famAusschuetten(fid);
-  }
-}
-const SOLDAT_KOSTEN = 600, SOLDATEN_MAX = 5;
-function famSoldatKaufen(fid) {
-  if (G.familienBank[fid] < SOLDAT_KOSTEN || G.soldaten[fid] >= SOLDATEN_MAX) return false;
-  G.familienBank[fid] -= SOLDAT_KOSTEN;
-  G.soldaten[fid]++;
-  io.emit("notice", { text: `\u{1F94A} ${FAMILIEN[fid].name} heuert einen Soldaten an (${G.soldaten[fid]}/${SOLDATEN_MAX}) — mehr Schlagkraft in Revierkämpfen.` });
-  return true;
-}
-function famAusschuetten(fid) {
-  const mit = famMitglieder(fid);
-  if (!mit.length || G.familienBank[fid] < mit.length) return 0;
-  const teil = Math.floor(G.familienBank[fid] / mit.length);
-  for (const m of mit) { m.cash += teil; logTx(m, "Kartell", "Ausschüttung aus der Familienkasse", teil); }
-  G.familienBank[fid] -= teil * mit.length;
-  return teil;
-}
-/* Startpunkte im Revierkampf: Größe der Familie plus Soldaten. */
-const kampfStart = (fid, angreifer) =>
-  (angreifer ? 1 : 0) + Math.min(3, famMitglieder(fid).length) + Math.min(3, G.soldaten[fid] || 0);
-
-/* Wer führt das Haus? Die Familie, die die Piazza kontrolliert — und während
- * dort gekämpft wird, läuft der Laden beim Besatzer bzw. Verteidiger weiter:
- * Das Casino schließt erst, wenn die Piazza wirklich verloren oder verwaist ist. */
-const gcasinoHerrscher = () =>
-  G.bezirke?.[GCASINO_BEZIRK]?.kontrolle
-  || G.besatzung?.[GCASINO_BEZIRK]?.familie
-  || G.revierKaempfe?.[GCASINO_BEZIRK]?.verteidiger
-  || null;
-
-/* --- Live-Spieltische: gemeinsames Roulette-Rad & Blackjack-Tisch ---
- * Ergebnisse würfelt der Server; die Clients animieren nur, was feststeht. */
-const GROULETTE_ROT = new Set([1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36]);
-const KARTEN_WERTE = ["2","3","4","5","6","7","8","9","10","B","D","K","A"];
-const karteZiehen = () => {
-  const i = Math.floor(Math.random() * 13), f = "\u2660\u2665\u2666\u2663"[Math.floor(Math.random() * 4)];
-  return { txt: KARTEN_WERTE[i] + f, rot: f === "\u2665" || f === "\u2666",
-    bj: i <= 7 ? i + 2 : i === 12 ? 11 : 10,
-    bac: i <= 7 ? i + 2 : i === 12 ? 1 : 0 };
-};
-const bjSumme = karten => {
-  let s = karten.reduce((a, k) => a + k.bj, 0), asse = karten.filter(k => k.bj === 11).length;
-  while (s > 21 && asse-- > 0) s -= 10;
-  return s;
-};
-const bacSumme = karten => karten.reduce((a, k) => a + k.bac, 0) % 10;
-
-/* Poker braucht ein echtes Deck (keine doppelten Karten) und eine Handwertung. */
-const deckNeu = () => {
-  const d = [];
-  for (let i = 0; i < 13; i++) for (const f of "\u2660\u2665\u2666\u2663") d.push({
-    txt: KARTEN_WERTE[i] + f, rot: f === "\u2665" || f === "\u2666", f, w: i + 2,
-    bj: i <= 7 ? i + 2 : i === 12 ? 11 : 10, bac: i <= 7 ? i + 2 : i === 12 ? 1 : 0 });
-  for (let i = d.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [d[i], d[j]] = [d[j], d[i]]; }
-  return d;
-};
-const POKER_RAENGE = ["H\u00f6chste Karte", "Paar", "Zwei Paare", "Drilling", "Stra\u00dfe", "Flush", "Full House", "Vierling", "Straight Flush"];
-function pokerWert(karten) {   // 7 Karten -> Score-Array, lexikografisch vergleichbar
-  const ws = karten.map(k => k.w);
-  const byW = {}; for (const w of ws) byW[w] = (byW[w] || 0) + 1;
-  const byF = {}; for (const k of karten) (byF[k.f] = byF[k.f] || []).push(k.w);
-  const desc = a => [...a].sort((x, y) => y - x);
-  const strasseHoch = vals => {
-    const u = [...new Set(vals)].sort((a, b) => b - a);
-    if (u[0] === 14) u.push(1);
-    let run = 1;
-    for (let i = 1; i < u.length; i++) { if (u[i] === u[i - 1] - 1) { run++; if (run >= 5) return u[i] + 4; } else run = 1; }
-    return 0;
-  };
-  let flush = null; for (const f in byF) if (byF[f].length >= 5) flush = desc(byF[f]);
-  const sf = flush ? strasseHoch(flush) : 0;
-  if (sf) return [8, sf];
-  const grp = Object.entries(byW).map(([w, n]) => [n, +w]).sort((a, b) => b[0] - a[0] || b[1] - a[1]);
-  if (grp[0][0] === 4) return [7, grp[0][1], desc(ws.filter(w => w !== grp[0][1]))[0]];
-  if (grp[0][0] === 3 && grp[1] && grp[1][0] >= 2) return [6, grp[0][1], grp[1][1]];
-  if (flush) return [5, ...flush.slice(0, 5)];
-  const st = strasseHoch(ws); if (st) return [4, st];
-  if (grp[0][0] === 3) return [3, grp[0][1], ...desc(ws.filter(w => w !== grp[0][1])).slice(0, 2)];
-  if (grp[0][0] === 2 && grp[1] && grp[1][0] === 2)
-    return [2, grp[0][1], grp[1][1], desc(ws.filter(w => w !== grp[0][1] && w !== grp[1][1]))[0]];
-  if (grp[0][0] === 2) return [1, grp[0][1], ...desc(ws.filter(w => w !== grp[0][1])).slice(0, 3)];
-  return [0, ...desc(ws).slice(0, 5)];
-}
-const pokerVergleich = (a, b) => { for (let i = 0; i < Math.max(a.length, b.length); i++) { const d = (a[i] || 0) - (b[i] || 0); if (d) return d; } return 0; };
-const kartePub = k => ({ txt: k.txt, rot: k.rot });
-
-/* Einsatz wandert in die Familienkasse; Gewinne zahlt die Familie — anteilig,
- * gedeckelt auf das, was da ist (sonst gibt es Spott und Respektverlust). */
-function gcasinoEinsatz(p, einsatz, quelle) {
-  const herr = gcasinoHerrscher();
-  const bank = Object.values(G.players).filter(m => m.familie === herr);
-  p.cash -= einsatz;
-  const teil = Math.round(einsatz / Math.max(1, bank.length));
-  for (const m of bank) { m.cash += teil; logTx(m, "Casino", `Spieleinnahme (${quelle})`, teil); }
-  logTx(p, "Casino", `Einsatz im Casino Municipale (${quelle})`, -einsatz);
-}
-function gcasinoGewinn(p, brutto, quelle) {
-  const herr = gcasinoHerrscher();
-  const bank = herr ? Object.values(G.players).filter(m => m.familie === herr) : [];
-  if (!bank.length) {
-    /* Die Piazza ist gerade herrenlos: Laufende Runden spielt "die Stadt" zu
-     * Ende — voller Gewinn, niemandem tut es weh. */
-    p.cash += brutto;
-    logTx(p, "Casino", `Gewinn im Casino Municipale (${quelle})`, brutto);
-    return brutto;
-  }
-  let offen = brutto;
-  for (const m of bank) {
-    const teil = Math.min(m.cash, Math.ceil(offen / Math.max(1, bank.length)));
-    m.cash -= teil; offen -= teil;
-    logTx(m, "Casino", `Auszahlung an ${p.name} (${quelle})`, -teil);
-    if (offen <= 0) break;
-  }
-  const gezahlt = brutto - Math.max(0, offen);
-  p.cash += gezahlt;
-  logTx(p, "Casino", `Gewinn im Casino Municipale (${quelle})`, gezahlt);
-  if (offen > 0) {
-    G.familienRespekt[herr] = Math.max(0, (G.familienRespekt[herr] || 0) - 3);
-    io.emit("notice", { text: `\u{1F3B0} ${p.name} sprengt die Bank — ${famDef(herr).name} kann nicht voll auszahlen (−3 Respekt)!` });
-    io.emit("gcasinoEreignis", { art: "gesprengt", name: p.name, betrag: gezahlt });
-  } else if (brutto >= 3000) {
-    io.emit("notice", { text: `\u{1F3B0} Großer Abend im Casino Municipale: ${p.name} gewinnt ${brutto} $ bei ${quelle}.` });
-    io.emit("gcasinoEreignis", { art: "grossgewinn", name: p.name, betrag: brutto });
-  }
-  return gezahlt;
-}
-
-const bjSitzNeu = (p, einsatz) => ({ pid: p.id, name: p.name, farbe: p.color, einsatz, einsatz2: 0,
-  karten: [], karten2: null, aktiv: 1, fertig: false, fertig2: false, ergebnis: null });
-const bjSitzFertig = s => s.fertig && (!s.karten2 || s.fertig2);
-/* Eine Aktion auf der gerade aktiven Hand — vom Spieler wie vom Bot benutzt. */
-function gblackjackAktion(p, s, aktion) {
-  const B = G.gblackjack;
-  const hand = s.aktiv === 2 ? s.karten2 : s.karten;
-  const handZu = () => { if (s.aktiv === 1) { s.fertig = true; if (s.karten2 && !s.fertig2) { s.aktiv = 2; return; } } else s.fertig2 = true; };
-  if (aktion === "hit") {
-    hand.push(karteZiehen());
-    if (bjSumme(hand) >= 21) handZu();
-  } else if (aktion === "double") {
-    if (hand.length !== 2) return { error: "Verdoppeln geht nur mit den ersten zwei Karten" };
-    const grund = s.aktiv === 2 ? s.einsatz2 : s.einsatz;
-    if (p.cash < grund) return { error: "Zu wenig Bargeld zum Verdoppeln" };
-    gcasinoEinsatz(p, grund, "Blackjack (verdoppelt)");
-    if (s.aktiv === 2) s.einsatz2 *= 2; else s.einsatz *= 2;
-    hand.push(karteZiehen());
-    handZu();
-  } else if (aktion === "split") {
-    if (s.aktiv !== 1 || s.karten2 || s.karten.length !== 2 || s.karten[0].bj !== s.karten[1].bj)
-      return { error: "Splitten geht nur mit einem Paar als erste Hand" };
-    if (p.cash < s.einsatz) return { error: "Zu wenig Bargeld zum Splitten" };
-    gcasinoEinsatz(p, s.einsatz, "Blackjack (Split)");
-    s.einsatz2 = s.einsatz;
-    s.karten2 = [s.karten.pop(), karteZiehen()];
-    s.karten.push(karteZiehen());
-    if (bjSumme(s.karten) >= 21) handZu();
-  } else {   // stand
-    handZu();
-  }
-  if (bjSitzFertig(s)) gblackjackWeiter();
-  else B.endet = G.tick + 20;
-  return { ok: true };
-}
-/* Poker: eine Aktion des Spielers an der Reihe — Spieler und Bots nutzen dieselbe Tür. */
-function gpokerAktion(p, s, aktion) {
-  const P = G.gpoker;
-  const kosten = P.aktBet - s.gesetzt;
-  if (aktion === "fold") s.gefoldet = true;
-  else if (aktion === "check") {
-    if (kosten > 0) return { error: `Da liegt eine Erhöhung — mitgehen kostet ${kosten} $` };
-  } else if (aktion === "call") {
-    if (kosten <= 0) return { error: "Nichts zu callen — schieb (Check) oder erhöhe" };
-    if (p.cash < kosten) return { error: "Zu wenig Bargeld zum Mitgehen" };
-    p.cash -= kosten; P.pot += kosten; s.gesetzt = P.aktBet;
-    logTx(p, "Casino", "Poker: mitgegangen", -kosten);
-  } else if (aktion === "raise") {
-    if (P.raises >= 3) return { error: "Dreimal erhöht ist genug — Call, Check oder Fold" };
-    const gesamt = kosten + P.einsatz;
-    if (p.cash < gesamt) return { error: `Erhöhen kostet ${gesamt} $` };
-    p.cash -= gesamt; P.pot += gesamt;
-    P.aktBet += P.einsatz; s.gesetzt = P.aktBet; P.raises++;
-    for (const x of P.spieler) if (x !== s) x.dranWar = false;
-    logTx(p, "Casino", "Poker: erhöht", -gesamt);
-  } else return { error: "Diese Ansage kennt der Croupier nicht" };
-  s.dranWar = true;
-  gpokerWeiter();
-  return { ok: true };
-}
-function gpokerWeiter() {
-  const P = G.gpoker;
-  const aktive = P.spieler.filter(s => !s.gefoldet);
-  if (aktive.length <= 1) return gpokerShowdown();
-  for (let i = 1; i <= P.spieler.length; i++) {
-    const j = (P.dran + i) % P.spieler.length, s = P.spieler[j];
-    if (!s.gefoldet && (!s.dranWar || s.gesetzt < P.aktBet)) { P.dran = j; P.endet = G.tick + 25; return; }
-  }
-  /* Setzrunde vorbei -> nächste Straße oder Showdown */
-  P.strasse++;
-  for (const s of P.spieler) { s.gesetzt = 0; s.dranWar = false; }
-  P.aktBet = 0; P.raises = 0;
-  if (P.strasse === 1) P.board.push(P.deck.pop(), P.deck.pop(), P.deck.pop());
-  else if (P.strasse === 2 || P.strasse === 3) P.board.push(P.deck.pop());
-  else return gpokerShowdown();
-  P.dran = -1;
-  for (let i = 0; i < P.spieler.length; i++) if (!P.spieler[i].gefoldet) { P.dran = i; break; }
-  P.endet = G.tick + 25;
-}
-function gpokerShowdown() {
-  const P = G.gpoker;
-  const aktive = P.spieler.filter(s => !s.gefoldet);
-  let gewinner = aktive, rangName = null;
-  if (aktive.length > 1) {
-    for (const s of aktive) s.wert = pokerWert([...s.karten, ...P.board]);
-    let best = aktive[0].wert;
-    for (const s of aktive) if (pokerVergleich(s.wert, best) > 0) best = s.wert;
-    gewinner = aktive.filter(s => pokerVergleich(s.wert, best) === 0);
-    rangName = POKER_RAENGE[best[0]];
-  }
-  /* 5 % Rake ans Haus, der Rest an die Gewinner */
-  const herr = gcasinoHerrscher();
-  const rake = Math.round(P.pot * .05);
-  if (herr && rake > 0) {
-    const bank = Object.values(G.players).filter(m => m.familie === herr);
-    const teil = Math.round(rake / Math.max(1, bank.length));
-    for (const m of bank) { m.cash += teil; logTx(m, "Casino", "Poker-Rake", teil); }
-  }
-  const anteil = Math.floor((P.pot - rake) / gewinner.length);
-  for (const s of P.spieler) {
-    const pl = G.players[s.pid];
-    if (s.gefoldet) { s.ergebnis = "Gefoldet"; continue; }
-    if (gewinner.includes(s)) {
-      if (pl) { pl.cash += anteil; logTx(pl, "Casino", `Poker gewonnen${rangName ? ` (${rangName})` : ""}`, anteil); }
-      s.ergebnis = `+${anteil} $${rangName ? ` · ${rangName}` : ""}`;
-    } else s.ergebnis = s.wert ? POKER_RAENGE[s.wert[0]] : "Verloren";
-  }
-  io.emit("notice", { text: `\u{1F0A1} Poker: ${gewinner.map(s => s.name).join(" & ")} ${gewinner.length > 1 ? "teilen sich" : "holt"} den Pot von ${P.pot} $${rangName ? ` mit ${rangName}` : " — alle anderen gefoldet"}.` });
-  if (anteil >= 3000) io.emit("gcasinoEreignis", { art: "grossgewinn", name: gewinner.map(s => s.name).join(" & "), betrag: anteil });
-  P.phase = "vorbei"; P.endet = G.tick + 12;
-}
-function gblackjackWeiter() {
-  const B = G.gblackjack;
-  B.dran = B.spieler.findIndex((s, i) => i > B.dran && !bjSitzFertig(s));
-  if (B.dran >= 0) { B.endet = G.tick + 20; return; }
-  /* Alle fertig: Dealer zieht bis 17, dann wird abgerechnet. */
-  while (bjSumme(B.dealer) < 17) B.dealer.push(karteZiehen());
-  const d = bjSumme(B.dealer);
-  const handWerten = (pl, karten, einsatz, split) => {
-    const sum = bjSumme(karten);
-    if (sum > 21) return "Überkauft";
-    if (sum === 21 && karten.length === 2 && !split) {
-      if (pl) gcasinoGewinn(pl, Math.round(einsatz * 2.5), "Blackjack");
-      return "Blackjack!";
-    }
-    if (d > 21 || sum > d) { if (pl) gcasinoGewinn(pl, einsatz * 2, "Blackjack"); return "Gewonnen"; }
-    if (sum === d) { if (pl) gcasinoGewinn(pl, einsatz, "Blackjack"); return "Push"; }
-    return "Verloren";
-  };
-  for (const s of B.spieler) {
-    const pl = G.players[s.pid];
-    s.ergebnis = handWerten(pl, s.karten, s.einsatz, !!s.karten2);
-    if (s.karten2) s.ergebnis += " / " + handWerten(pl, s.karten2, s.einsatz2, true);
-  }
-  const sieger = B.spieler.filter(s => /Gewonnen|Blackjack/.test(s.ergebnis)).map(s => s.name);
-  io.emit("notice", { text: `\u{1F0CF} Blackjack: Der Dealer hat ${d > 21 ? d + " — überkauft!" : d}. ${sieger.length ? "Es gewinnen: " + sieger.join(", ") : "Der Tisch geht leer aus."}` });
-  B.phase = "vorbei"; B.endet = G.tick + 10;
-}
-
-/* Solo-Spiele: erst entscheidet die Quote über Sieg/Niederlage, dann werden
- * Würfel, Walzen oder Karten passend zum Ausgang erzeugt — die Animation im
- * Client zeigt also immer genau das, was zählt. */
-function gcasinoDetail(spiel, gewonnen) {
-  if (spiel === "wuerfel") {
-    let a, b;
-    do { a = 1 + Math.floor(Math.random() * 6); b = 1 + Math.floor(Math.random() * 6); }
-    while ((a + b >= 9) !== gewonnen);
-    return { wuerfel: [a, b] };
-  }
-  if (spiel === "slots") {
-    const SYM = ["\u{1F34B}", "\u{1F352}", "\u{1F514}", "\u2B50", "\u{1F347}", "7\uFE0F\u20E3"];
-    if (gewonnen) { const s = SYM[Math.floor(Math.random() * SYM.length)]; return { walzen: [s, s, s] }; }
-    let w;
-    do { w = [0, 0, 0].map(() => SYM[Math.floor(Math.random() * SYM.length)]); }
-    while (w[0] === w[1] && w[1] === w[2]);
-    return { walzen: w };
-  }
-  if (spiel === "baccara") {
-    for (let i = 0; i < 400; i++) {
-      const sp = [karteZiehen(), karteZiehen()], bk = [karteZiehen(), karteZiehen()];
-      if (bacSumme(sp) <= 4) sp.push(karteZiehen());
-      if (bacSumme(bk) <= 4) bk.push(karteZiehen());
-      if ((bacSumme(sp) > bacSumme(bk)) === gewonnen)
-        return { spieler: sp.map(k => ({ txt: k.txt, rot: k.rot })), bank: bk.map(k => ({ txt: k.txt, rot: k.rot })),
-                 ps: bacSumme(sp), bs: bacSumme(bk) };
-    }
-    return null;
-  }
-  if (spiel === "rot" || spiel === "zahl") {
-    let z;
-    do { z = Math.floor(Math.random() * 37); }
-    while (spiel === "rot" && (z !== 0 && GROULETTE_ROT.has(z)) !== gewonnen);
-    return { zahl: z, rot: GROULETTE_ROT.has(z) };
-  }
-  return null;
-}
-const MAFIA_BOT_NAMEN = {
-  famiglia: ["Don Salvatore", "Luca Moretti"],
-  syndikat: ["Viktor Kroll", "Greta Falk"],
-  bratwa:   ["Sergej Wolkow", "Anja Petrova"],
-  triade:   ["Onkel Chen", "Mei Ling"],
-};
-/* ---- Bezirke (Kartellmodus) ----
- * Die 26x26-Karte zerfällt in ein 3x3-Raster aus neun Bezirken. Wer in einem
- * Bezirk die meisten Gebäude stehen hat (mindestens zwei, und mehr als jede
- * andere Familie), kontrolliert ihn: Schutzgeld jede Minute plus Respekt.
- * Die Familie mit den meisten Bezirken stellt den PATEN — alle anderen
- * Familien zahlen ihm 10 % ihrer Hehler-Erlöse als Abgabe. */
-/* Italienische Viertel — die Karte des Kartellmodus ist eine alte
- * Mittelmeerstadt, ihre Bezirke heißen entsprechend. Reihenfolge = 3x3-Raster
- * von Nordwest nach Südost; die Zona Industriale liegt wirklich im Nordosten,
- * der Porto Vecchio wirklich an der Küste. */
-const BEZIRK_NAMEN = ["Borgo Antico", "Stazione", "Zona Industriale",
-                      "Mercato Vecchio", "Piazza Grande", "Collina",
-                      "Porto Vecchio", "Marina", "Giardini"];
-const SCHUTZGELD_JE_BEZIRK = 200;   // $ je Minute, unter den Mitgliedern aufgeteilt
-const PATEN_ABGABE = 0.10;          // Anteil der Hehler-Erlöse an den Paten
-const bezirkVon = (x, y) => Math.min(2, Math.floor(x / 9)) + 3 * Math.min(2, Math.floor(y / 9));
-function bezirkeBerechnen() {
-  const staerken = Array.from({ length: 9 }, () => ({}));
-  for (const t of G.map) {
-    /* Eine Straßensperre markiert Revier wie zwei Gebäude — Muskeln zeigen
-     * zählt in diesen Vierteln mehr als Mauern hochziehen. */
-    if (t.sperre) {
-      const b2 = bezirkVon(t.x, t.y);
-      staerken[b2][t.sperre.familie] = (staerken[b2][t.sperre.familie] || 0) + 2;
-    }
-    if (!t.btype || !t.owner) continue;
-    const fam = G.players[t.owner]?.familie;
-    if (!fam || fam === "polizei") continue;   // Polizeiwachen kontrollieren keine Reviere
-    const b = bezirkVon(t.x, t.y);
-    staerken[b][fam] = (staerken[b][fam] || 0) + 1;
-  }
-  G.bezirke = staerken.map((s, i) => {
-    const reihen = Object.entries(s).sort((a, b2) => b2[1] - a[1]);
-    let kontrolle = null;
-    if (reihen.length && reihen[0][1] >= 2 && (reihen.length === 1 || reihen[0][1] > reihen[1][1]))
-      kontrolle = reihen[0][0];
-    /* Tauziehen: Während des Kampfs ist die Kontrolle ausgesetzt (kein
-     * Schutzgeld, kein sicheres Erpressen). Eine BESATZUNG des Kampfsiegers
-     * überstimmt danach 5 min lang die Gebäudemehrheit. */
-    const kampf = G.revierKaempfe?.[i];
-    const bes = G.besatzung?.[i];
-    const gesichert = Math.max(0, (G.gesichert?.[i] || 0) - G.tick);
-    const umkaempft = kampf ? Math.max(0, kampf.bis - G.tick) : 0;
-    if (kampf) kontrolle = null;
-    else if (gesichert > 0) kontrolle = null;   // frisch von der Polizei ausgeräumt
-    else if (bes && bes.bis > G.tick) kontrolle = bes.familie;
-    return { id: i, name: BEZIRK_NAMEN[i], kontrolle, staerken: s, umkaempft,
-      gesichert,
-      kampf: kampf ? { angreifer: kampf.angreifer, verteidiger: kampf.verteidiger,
-        pa: kampf.punkte[kampf.angreifer], pv: kampf.punkte[kampf.verteidiger], rest: umkaempft } : null,
-      besatzung: bes && bes.bis > G.tick ? { familie: bes.familie, rest: bes.bis - G.tick } : null };
-  });
-  /* Mafia-Auftrag „Bezirk kontrollieren“: zählt für jedes Familienmitglied,
-   * sobald die Familie irgendeinen Bezirk hält (questProg ignoriert Erledigte). */
-  for (const b of G.bezirke) if (b.kontrolle)
-    for (const m of Object.values(G.players)) if (m.familie === b.kontrolle) questProg(m, "bezirk");
-  /* Der Pate wird nicht mehr ernannt, sondern GEWÄHLT — alle 20 Minuten,
-   * siehe pateWahlTick(). Hier passiert dafür nichts mehr. */
-}
-
-/* ---- Patenwahl in drei Phasen ----
- * 1. Kandidatur (45 s): Wer Pate werden will, wirft den Hut in den Ring.
- * 2. Versprechen (45 s): Jeder Kandidat gibt ein Wahlversprechen ab — das
- *    Versprechen des Siegers gilt als DEKRET für die ganze Amtszeit.
- * 3. Wahl (60 s): Offenes Votum. Bei Gleichstand an der Spitze folgt eine
- *    Stichwahl (30 s) zwischen den besten beiden. */
-const PATE_WAHL_INTERVALL = 1200;
-const PATE_DEKRETE = {
-  steuer: { name: "Steuersenkung",  text: "Die Paten-Abgabe sinkt von 10 % auf 5 %." },
-  schutz: { name: "Starke Familien", text: "Schutzgeld bringt allen Familien +25 %." },
-  brot:   { name: "Brot & Spiele",   text: "Sofort 500 $ für jeden, Casino-Bürgerumsatz +50 %." },
-  ruhe:   { name: "Ruhige Stadt",    text: "Sofort −25 Fahndung für alle Familien." },
-};
-function pateWahlErgebnis(stimmen, kandidaten) {
-  const zaehl = {};
-  for (const kid of Object.values(stimmen)) zaehl[kid] = (zaehl[kid] || 0) + 1;
-  return kandidaten
-    .map(k => [k, zaehl[k.pid] || 0])
-    .sort((a, b2) => b2[1] - a[1]
-      || (bezirkeVon(b2[0].familie) - bezirkeVon(a[0].familie))
-      || ((G.familienRespekt[b2[0].familie] || 0) - (G.familienRespekt[a[0].familie] || 0)));
-}
-const bezirkeVon = fid => (G.bezirke || []).filter(b => b.kontrolle === fid).length;
-function pateKroenen(k, stimmen) {
-  G.pate = k.familie; G.pateName = k.name; G.pateDekret = k.versprechen || null;
-  G.wahlSiege[k.familie] = (G.wahlSiege[k.familie] || 0) + 1;
-  const dek = k.versprechen && PATE_DEKRETE[k.versprechen];
-  io.emit("notice", { text: `\u{1F451} ${k.name} (${FAMILIEN[k.familie].name}) ist der neue Pate${stimmen != null ? ` — ${stimmen} Stimme${stimmen === 1 ? "" : "n"}` : " — ohne Gegenkandidat"}.${dek ? ` Dekret: „${dek.name}“ — ${dek.text}` : ""}` });
-  io.emit("pateGewaehlt", { familie: k.familie, name: `${k.name} (${FAMILIEN[k.familie].name})`, farbe: FAMILIEN[k.familie].farbe });
-  /* Einmal-Dekrete sofort vollstrecken */
-  if (k.versprechen === "brot")
-    for (const m of Object.values(G.players)) { m.cash += 500; logTx(m, "Kartell", "Dekret „Brot & Spiele“: Geschenk des Paten", 500); }
-  if (k.versprechen === "ruhe")
-    for (const fid of Object.keys(FAMILIEN)) G.fahndung[fid] = Math.max(0, (G.fahndung[fid] || 0) - 25);
-}
-function pateWahlTick() {
-  const W = G.pateWahl;
-  if (!W.naechste) W.naechste = G.tick + 120;
-  const bots = () => Object.values(G.players).filter(b => b.bot && b.familie && b.familie !== "polizei");
-  if (!W.phase && G.tick >= W.naechste) {
-    W.phase = "kandidatur"; W.endet = G.tick + 45; W.kandidaten = []; W.stimmen = {}; W.stich = null;
-    io.emit("notice", { text: "\u{1F3A9} PATENWAHL, Phase 1: Kandidatur! 45 Sekunden lang kann jeder Mafioso den Hut in den Ring werfen." });
-    return;
-  }
-  if (!W.phase) return;
-  if (W.phase === "kandidatur") {
-    /* Je Familie schickt höchstens ein Bot einen Kandidaten ins Rennen. */
-    for (const b of bots()) {
-      if (famBoss(b.familie) !== b.id) continue;   // nur Oberhäupter kandidieren
-      if (W.kandidaten.some(k => k.familie === b.familie)) continue;
-      if (Math.random() < .04)
-        W.kandidaten.push({ pid: b.id, name: b.name, familie: b.familie, versprechen: null });
-    }
-    if (G.tick < W.endet) return;
-    if (!W.kandidaten.length) {
-      W.phase = null; W.naechste = G.tick + PATE_WAHL_INTERVALL;
-      G.pate = null; G.pateName = null; G.pateDekret = null;
-      io.emit("notice", { text: "\u{1F3A9} Niemand will Pate sein — der Stuhl bleibt 20 Minuten verwaist." });
-      return;
-    }
-    if (W.kandidaten.length === 1) {
-      pateKroenen(W.kandidaten[0], null);
-      W.phase = null; W.naechste = G.tick + PATE_WAHL_INTERVALL;
-      return;
-    }
-    W.phase = "versprechen"; W.endet = G.tick + 45;
-    io.emit("notice", { text: `\u{1F4DC} Phase 2: Wahlversprechen! ${W.kandidaten.length} Kandidaten — 45 Sekunden für große Worte. Das Versprechen des Siegers gilt als Dekret.` });
-    return;
-  }
-  if (W.phase === "versprechen") {
-    for (const k of W.kandidaten) {
-      const pl = G.players[k.pid];
-      if (pl?.bot && !k.versprechen && Math.random() < .1) {
-        const arten = Object.keys(PATE_DEKRETE);
-        k.versprechen = arten[Math.floor(Math.random() * arten.length)];
-      }
-    }
-    if (G.tick < W.endet) return;
-    W.phase = "wahl"; W.endet = G.tick + 60; W.stimmen = {};
-    io.emit("notice", { text: "\u{1F5F3} Phase 3: Die Wahl! 60 Sekunden offenes Votum — jeder Mafioso hat eine Stimme." });
-    return;
-  }
-  if (W.phase === "wahl" || W.phase === "stichwahl") {
-    const wahlbar = W.stich ? W.kandidaten.filter(k => W.stich.includes(k.pid)) : W.kandidaten;
-    for (const b of bots()) {
-      if (W.stimmen[b.id] || Math.random() > .08) continue;
-      let ziel = wahlbar.find(k => k.familie === b.familie);
-      if (!ziel || Math.random() < .2)
-        ziel = [...wahlbar].sort((a, b2) => (G.familienRespekt[b2.familie] || 0) - (G.familienRespekt[a.familie] || 0))[0];
-      if (ziel) W.stimmen[b.id] = ziel.pid;
-    }
-    if (G.tick < W.endet) return;
-    const reihen = pateWahlErgebnis(W.stimmen, wahlbar);
-    const patt = reihen.length > 1 && reihen[0][1] === reihen[1][1];
-    if (patt && W.phase === "wahl") {
-      W.phase = "stichwahl"; W.endet = G.tick + 30; W.stimmen = {};
-      W.stich = [reihen[0][0].pid, reihen[1][0].pid];
-      io.emit("notice", { text: `\u2694 STICHWAHL! ${reihen[0][0].name} gegen ${reihen[1][0].name} — 30 Sekunden, alle Stimmen zurückgesetzt.` });
-      return;
-    }
-    /* Endergebnis (bei erneutem Patt entscheiden Bezirke, dann Respekt — steckt in der Sortierung) */
-    pateKroenen(reihen[0][0], reihen[0][1]);
-    W.phase = null; W.naechste = G.tick + PATE_WAHL_INTERVALL; W.stich = null;
-  }
-}
-/* ---- Werttransporte, Straßensperren, Fahndung (Kartellmodus) ----
- * Auf den Hauptstraßen rollen regelmäßig Werttransporte quer über die Karte.
- * Wer sich traut, überfällt sie: Erfolg bringt Bargeld, Pistolen oder
- * Goldbarren plus Respekt — Misserfolg kostet Kaution und treibt den
- * FAHNDUNGSDRUCK der Familie hoch. Bei 100 schlägt die Polizei mit einer
- * RAZZIA zu: alle illegale Ware der Mitglieder wird beschlagnahmt.
- * Straßensperren markieren Revier: Sie zählen wie zwei Gebäude für die
- * Bezirkskontrolle und stoppen Transporte, die in sie hineinfahren. */
-const TRANSPORT_INTERVALL = 75;   // Sekunden zwischen zwei Werttransporten
-const TRANSPORT_TEMPO = 0.45;     // Kacheln je Sekunde
-const TRANSPORT_ARTEN = {
-  geld:   { name: "Geldtransport",   gewicht: 3 },
-  waffen: { name: "Waffentransport", gewicht: 2 },
-  gold:   { name: "Goldtransport",   gewicht: 1 },
-};
-const UEBERFALL_COOLDOWN = 45;    // Sekunden Sperrfrist je Spieler
-const ERPRESS_COOLDOWN = 180;     // Sekunden je Spieler UND Bezirk — die Läden zahlen nicht zweimal am Tag
-/* Revierkampf: geclaimte Bezirke lassen sich mit WAFFEN umkämpfen. Der Angriff
- * kostet Pistolen (aus Waffentransport-Überfällen); Erfolg setzt die Kontrolle
- * des Bezirks für eine Weile aus — das Fenster, in dem man mit Bauten und
- * Sperren selbst die Mehrheit holt. */
-const KAMPF_COOLDOWN = 180;       // Sekunden je Spieler (egal welcher Bezirk)
-const KAMPF_PISTOLEN_MIN = 3;     // Mindesteinsatz; bis zu 6 werden automatisch eingesetzt
-const KAMPF_PISTOLEN_MAX = 6;
-const KAMPF_DAUER = 120;          // solange tobt das Tauziehen um den Bezirk
-/* Revierkampf 2.0 — das Tauziehen: Der Angriff eröffnet einen sichtbaren
- * Kontroll-Balken (Angreifer- vs. Verteidiger-Punkte). Alles im Bezirk zählt:
- * Gebäude +2, Sperre +2, Erpressung +1, „Verstärkung schicken" +1. Bei Ablauf
- * gewinnt, wer vorn liegt (Gleichstand: Verteidiger). Der Sieger übernimmt
- * den Bezirk als BESATZUNG für 5 Minuten — egal, wer mehr Gebäude hat — und
- * plündert die Kassen des Viertels. */
-const VERST_KOSTEN = 300;         // Verstärkung schicken: $ je Klick
-const VERST_CD = 10;              // Sekunden je Spieler zwischen Verstärkungen
-const BESATZUNG_DAUER = 300;      // eroberte Bezirke bleiben 5 min besetzt
-function kampfPunkte(idx, familie, n) {
-  const k = G.revierKaempfe?.[idx];
-  if (k && k.punkte[familie] != null) k.punkte[familie] += n;
-}
-const SPERRE_KOSTEN = 800;
-const SPERRE_DAUER = 180;         // Sekunden Lebenszeit einer Sperre
-const SPERRE_MAX_JE_FAMILIE = 2;
-const BESTECHUNG_KOSTEN = 2000;
-
-/* Durchgehende Straßenzüge der aktuellen Karte — auf ihnen fahren die
- * Transporte. Wird je Runde einmal aus dem Gitter abgeleitet. */
-function transportLinien() {
-  /* Längster ZUSAMMENHÄNGENDER Straßenzug je Zeile/Spalte — auf der
-   * Küstenkarte enden die Nord-Süd-Corsi im Meer, eine „volle Spalte“ gibt
-   * es dort nicht mehr. Ab 12 Kacheln am Stück lohnt sich ein Transport. */
-  const linien = [];
-  const lauf = (achse, linie, laenge, lies) => {
-    let start = 0, bestVon = 0, bestBis = -1;
-    for (let i = 0; i <= laenge; i++) {
-      if (i < laenge && lies(i)) continue;
-      if (i - start > bestBis - bestVon + 1) { bestVon = start; bestBis = i - 1; }
-      start = i + 1;
-    }
-    if (bestBis - bestVon + 1 >= 12) linien.push({ achse, linie, von: bestVon, bis: bestBis });
-  };
-  for (let x = 0; x < MAP_W; x++) lauf("y", x, MAP_H, y => !!G.map[y * MAP_W + x]?.road);
-  for (let y = 0; y < MAP_H; y++) lauf("x", y, MAP_W, x => !!G.map[y * MAP_W + x]?.road);
-  return linien;
-}
-const transportKachel = tr => {
-  const p = Math.round(tr.pos);
-  const x = tr.achse === "x" ? p : tr.linie, y = tr.achse === "x" ? tr.linie : p;
-  return { x, y, t: G.map[y * MAP_W + x] };
-};
 
 /* Industrien: jeder Spieler wählt beim Beitritt EINE — nur deren Gebäude sind
  * baubar (Shops kann jeder). Erzwingt Handel: Agrar braucht Wasser/Strom von
@@ -2532,7 +1726,7 @@ let SAISON_RENNEN = 5;
  * ausmachen, solange das Kartellamt ihnen nichts nachweisen kann.
  * Der Host wählt den Modus im Warteraum. */
 let MODE = "sandbox";
-const MODI_FREI = String(process.env.MODI_FREI || "sandbox").split(",").map(s => s.trim()).filter(Boolean);
+const MODI_FREI = String(process.env.MODI_FREI || "sandbox").split(",").map(s => s.trim()).filter(m => m && m !== "kartell");
 const PLAN_PHASEN = 5;
 const PLAN_DAUER = 8 * 60;      // Sekunden je Planphase
 const PLAN_ZIEL = 1000;         // Planpunkte für den vorzeitigen Sieg
@@ -2889,33 +2083,6 @@ function buildMapRoh(mode = "sandbox") {
         break;
       }
     }
-    /* Ein Wahrzeichen je Bezirk: nahe der Bezirksmitte, spiralförmig gesucht. */
-    const belegt = t2 => !t2 || t2.water || t2.road || t2.bank || t2.questura || t2.piazza
-      || t2.gcasino || t2.pier || t2.leuchtturm || t2.fontana || t2.wz || t2.famhaus;
-    for (const [key, def] of Object.entries(WZ_DEF)) {
-      const bx = (def.bezirk % 3) * 9 + 4, by = Math.floor(def.bezirk / 3) * 9 + 4;
-      let ziel = null;
-      aussen: for (let r = 0; r < 5; r++)
-        for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) {
-          if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;
-          const t2 = at2(bx + dx, by + dy);
-          if (!belegt(t2)) { ziel = t2; break aussen; }
-        }
-      if (ziel) Object.assign(ziel, { wz: key, park: false, field: false, locked: false, unlockCost: 0 });
-    }
-    /* Familienhäuser: der Stammsitz jeder Familie in ihrem Heimatbezirk. */
-    const heimat = { famiglia: 0, syndikat: 2, bratwa: 6, triade: 8 };
-    for (const [fid, bez] of Object.entries(heimat)) {
-      const bx = (bez % 3) * 9 + 3, by = Math.floor(bez / 3) * 9 + 6;
-      let ziel = null;
-      aussen2: for (let r = 0; r < 6; r++)
-        for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) {
-          if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;
-          const t2 = at2(bx + dx, by + dy);
-          if (!belegt(t2) && !t2.famhaus) { ziel = t2; break aussen2; }
-        }
-      if (ziel) Object.assign(ziel, { famhaus: fid, park: false, field: false, locked: false, unlockCost: 0 });
-    }
     return tiles;
   }
   MAP_W = 26; MAP_H = 26; MAP_ROUTES = null;
@@ -3110,6 +2277,7 @@ const G = {
   markt: {}, marktLog: [], panikTag: null, panikErledigt: false,   // Aktienkurse (siehe marktTag)
   anzeigen: [],          // Werbenetz: {id, produktId, firmaId, text, bis}
   fonds: {}, etfHist: {}, faEtf: {}, software: {}, paint: {}, swFaktor: {},   // Branchenfonds (ETFs), Fondsanteile des Finanzamts
+  haushalte: { cash: WK.start.haushalte, budget: 0, einkommen: 0, konsum: 0 },   // v2: gemeinsames Konto der Stadtbewohner
   stadtkasse: 20000, steuerStufe: 2, boerseGebuehren: 0,         // Finanzamt: Anteil der Steuern für Großauftrags-Prämien und Stadtprojekte
   casino: { einnahmen: 0, runden: 0, log: [] },   // Stadt-Casino (casino.cs): Überschuss des Hauses, letzte Runden
   steuernGesamt: 0,
@@ -3226,6 +2394,7 @@ function substance(p) {
   let v = p.cash + buildingValueOf(p.id) + (p.wettOffen || 0);   // laufende Kurswetten gehören weiter dem Spieler
   v += swMarkenwert(p);   // Software-Firmen: das System selbst ist ein Wert
   v -= p.steuerSchuld || 0;   // gestundete Steuern sind Schulden — sonst gewänne man mit offenen Steuern
+  v -= p.kredit || 0;         // v2: Kredit der Stadtsparkasse
   for (const k in p.inv) v += p.inv[k] * MM[k].price;
   for (const b of G.bonds) {
     if (b.holderId === p.id) v += b.principal;
@@ -3426,11 +2595,48 @@ function zentralbankTag(tag) {
   if (Math.abs(zb.leitzins - alt) > 1e-9) marktLog("leitzins", `Leitzins ${zb.leitzins > alt ? "steigt" : "sinkt"} auf ${(zb.leitzins * 100).toFixed(1)} % (Inflation ${(zb.inflation * 100).toFixed(1)} %)`);
 }
 const leitzins = () => zbVon().leitzins;
+/* Stadt (v2, Abschnitt 7): Über der Reserve von 5.000 $ gibt die Stadt je
+ * Markttag 10 % aus. 20 % als Stadtlöhne an die Haushalte, 30 % für laufende
+ * Einkäufe in den Läden (Einkaufsbudget, wird wie das der Haushalte bedient).
+ * Die übrigen 50 % bleiben für die Bauprojekte der Stadt in der Kasse. */
+function stadtAusgabenTag() {
+  const ueber = G.stadtkasse - WK.stadt.reserve;
+  if (!(ueber > 0)) return;
+  const budget = ueber * WK.stadt.ausgabenquote;
+  const loehne = budget * WK.stadt.anteilLoehne, einkauf = budget * WK.stadt.anteilEinkauf;
+  G.stadtkasse -= loehne + einkauf;
+  haushaltEinkommen(loehne);
+  G.stadtEinkauf = (G.stadtEinkauf || 0) + einkauf;
+  G.stadtStat = { loehne: Math.round(loehne), einkauf: Math.round(einkauf), tag: Math.floor(G.tick / MARKT.TAG) };
+}
+/* Unterhalt (v2, Abschnitt 3): je Gebäude und Markttag 0,5 % des Bauwerts,
+ * auch im Stillstand. 70 % an die Haushalte, 30 % an die Stadt. */
+function unterhaltTag() {
+  const je = {};
+  for (const t of G.map) if (t.owner && t.btype && !imBau(t)) {
+    const p = G.players[t.owner];
+    const vorteil = p?.fusionsBranchen?.includes(BTYPES[t.btype]?.industry) ? 1 - WK.uebernahme.fusionUnterhaltsvorteil : 1;
+    je[t.owner] = (je[t.owner] || 0) + anlageWert(t) * WK.produktion.unterhaltTag * vorteil;
+  }
+  for (const [pid, soll] of Object.entries(je)) {
+    const p = G.players[pid]; if (!p) continue;
+    const zahl = Math.min(soll, Math.max(0, p.cash));
+    if (!(zahl > 0.01)) continue;
+    p.cash -= zahl; p.stats.ausgaben += zahl; p.stats.unterhalt = (p.stats.unterhalt || 0) + zahl;
+    haushaltEinkommen(zahl * WK.bau.anteilHaushalte);
+    G.stadtkasse += zahl * WK.bau.anteilStadt;
+    logTx(p, "Unterhalt", "Gebäudeunterhalt (0,5 % des Bauwerts)", -zahl);
+  }
+}
 
 /* Einmal je Markttag, feste Reihenfolge wie Abschnitt 13: Preise, Firmen-
  * abschluss (fairer Wert), Börse (Orders, Kurse, Crash), Zentralbank. */
 function marktTag() {
   const tag = Math.floor(G.tick / MARKT.TAG);
+  unterhaltTag();
+  haushaltTag();
+  stadtAusgabenTag();
+  kreditTag();
   warenpreisTag(tag);
   const cr = (G.crash ??= { aktivBis: -1, pauseBis: -1 });
   const panik = tag <= cr.aktivBis;
@@ -3467,7 +2673,114 @@ function marktTag() {
       io.emit("notice", { text: `PANIK an der Börse — Fonds und Bürgerdepot verkaufen ${WK.crash.dauerTage} Markttage lang täglich ${Math.round(WK.crash.verkaufAnteil * 100)} % ihrer Aktien.` });
     }
   }
+  uebernahmeTag(tag);
   zentralbankTag(tag);
+}
+/* ============================================================
+ * Übernahmen (v2, Abschnitt 11)
+ * Stimmanteil = Aktien / AKTIEN (verwahrte Angebote zählen beim Anbieter).
+ * Ab 30 % muss der Käufer allen übrigen ein Angebot machen: Preis mindestens
+ * der höchste, den er in den letzten 10 Markttagen gezahlt hat, sonst der
+ * Kurs. Es läuft 5 Markttage. Fonds und Bürgerdepot nehmen an, wenn der Preis
+ * mindestens 15 % über dem fairen Wert liegt; Spieler entscheiden selbst.
+ * ============================================================ */
+function stimmanteilVon(co, hid) {
+  const verwahrt = G.shareListings.filter(l => l.companyId === co.id && (l.sellerId ?? l.companyId) === hid).reduce((a, l) => a + l.count, 0);
+  return ((co.equity[hid] || 0) + verwahrt) / AKTIEN;
+}
+const UEB_STUFEN = [["meldung", "Meldeschwelle"], ["sperrminorität", "Sperrminorität"], ["pflicht", "Pflichtangebot"], ["kontrolle", "Kontrolle"], ["fusion", "Fusion"], ["zwang", "Zwangsabfindung"]];
+function uebernahmeTag(tag) {
+  const fenster = WK.uebernahme.preisFensterTage;
+  G.kaufHist = (G.kaufHist || []).filter(k => tag - k.tag <= fenster);
+  G.pflichtangebote ??= [];
+  for (const co of Object.values(G.players)) {
+    for (const hid of Object.keys(co.equity)) {
+      const kaeufer = G.players[hid];
+      if (!kaeufer || hid === co.id) continue;
+      const anteil = stimmanteilVon(co, hid);
+      /* Meldungen beim Überschreiten einer Schwelle, je Halter und Firma nur einmal. */
+      const gemeldet = ((G.uebStufen ??= {})[co.id + ":" + hid] ??= {});
+      for (const [k, name] of UEB_STUFEN) {
+        const grenze = WK.uebernahme.schwellen[k];
+        const erreicht = k === "kontrolle" ? anteil > grenze : anteil >= grenze;
+        if (erreicht && !gemeldet[k]) {
+          gemeldet[k] = true;
+          marktLog("uebernahme", `${kaeufer.name} hält ${Math.round(anteil * 100)} % an ${co.name}: ${name}`, { firmaId: co.id });
+          io.emit("notice", { text: `${kaeufer.name} hält jetzt ${Math.round(anteil * 100)} % an ${co.name} — ${name}.` });
+        }
+      }
+      if (anteil >= WK.uebernahme.schwellen.pflicht && !G.pflichtangebote.some(o => o.companyId === co.id && o.kaeuferId === hid && o.bisTag >= tag) && !gemeldet.angebotGemacht) {
+        gemeldet.angebotGemacht = true;
+        const bezahlt = G.kaufHist.filter(k => k.kaeuferId === hid && k.companyId === co.id).map(k => k.je);
+        const preis = Math.round(Math.max(kursVon(co), WR.pflichtangebotPreis(bezahlt)) * 100) / 100;
+        G.pflichtangebote.push({ id: id(), companyId: co.id, kaeuferId: hid, preis, bisTag: tag + WK.uebernahme.fondsAngebotTage });
+        emitTo(hid, "notice", { text: `Pflichtangebot: Du bietest den übrigen Aktionären von ${co.name} ${preis.toLocaleString("de-DE")} $ je Aktie (5 Markttage).` });
+        for (const h of Object.keys(co.equity)) if (G.players[h] && h !== hid && co.equity[h] > 0)
+          emitTo(h, "notice", { text: `${kaeufer.name} macht dir ein Pflichtangebot: ${preis.toLocaleString("de-DE")} $ je Aktie von ${co.name}. Annehmen im Firmenfenster.` });
+      }
+    }
+  }
+  /* Laufende Angebote: Institutionen nehmen bei 15 % über fair an. */
+  for (const o of G.pflichtangebote) {
+    const co = G.players[o.companyId], k = G.players[o.kaeuferId];
+    if (!co || !k || o.bisTag < tag) continue;
+    if (!WR.fondsNimmtAn(o.preis, fundament(co) / AKTIEN)) continue;
+    for (const hid of Object.keys(co.equity)) {
+      if (!istInstitution(hid) || !(co.equity[hid] > 0)) continue;
+      angebotAnnehmen(o, hid, co.equity[hid]);
+    }
+  }
+  G.pflichtangebote = G.pflichtangebote.filter(o => o.bisTag >= tag && G.players[o.companyId] && G.players[o.kaeuferId]);
+}
+/* Verkauf an den Bieter des Pflichtangebots. Zahlt der Bieter nicht voll, nur so viele, wie er bezahlen kann. */
+function angebotAnnehmen(o, hid, anzahl) {
+  const co = G.players[o.companyId], k = G.players[o.kaeuferId];
+  const n = Math.min(anzahl, co.equity[hid] || 0, Math.floor(Math.max(0, k.cash) / o.preis));
+  if (!(n > 0)) return 0;
+  const betrag = n * o.preis;
+  k.cash -= betrag;
+  if (G.players[hid]) { G.players[hid].cash += betrag; logTx(G.players[hid], "Aktien", `Pflichtangebot angenommen: ${n} Aktien von ${co.name}`, betrag); }
+  else institutionErhaelt(hid, betrag);
+  co.equity[hid] -= n; if (co.equity[hid] <= 0) delete co.equity[hid];
+  merkeEinstand(k, co, n, betrag);
+  co.equity[k.id] = (co.equity[k.id] || 0) + n;
+  logTx(k, "Aktien", `Pflichtangebot: ${n} Aktien von ${co.name} übernommen`, -betrag);
+  kursWirkung(co, n, 1);
+  return n;
+}
+/* Kartellamt: höchster gemeinsamer Anteil an der Verkaufsmenge einer Ware in der letzten Periode. */
+function marktanteilGemeinsam(a, b) {
+  let max = 0;
+  for (const [g, men] of Object.entries(G.absatzPeriode || {})) {
+    const ges = Object.values(men).reduce((x, y) => x + y, 0);
+    if (ges > 0) max = Math.max(max, ((men[a] || 0) + (b ? men[b] || 0 : 0)) / ges);
+  }
+  return max;
+}
+/* Absatz je Ware und Firma für Kartellamt und Monopolabgabe (je Periode). */
+function absatzMerken(p, good, menge, erloes) {
+  const a = ((G.absatzLaufend ??= {})[good] ??= {});
+  a[p.id] = (a[p.id] || 0) + menge;
+  const e = ((G.erloesLaufend ??= {})[good] ??= {});
+  e[p.id] = (e[p.id] || 0) + erloes;
+}
+/* Periodenende: Monopolabgabe (über 60 % Marktanteil zahlt 10 % des Erlöses an die Stadt). */
+function kartellamtPeriode() {
+  G.absatzPeriode = G.absatzLaufend || {};
+  for (const [g, men] of Object.entries(G.absatzPeriode)) {
+    const ges = Object.values(men).reduce((x, y) => x + y, 0);
+    if (!(ges > 0) || Object.keys(men).length < 2) continue;
+    for (const [pid, m] of Object.entries(men)) {
+      const p = G.players[pid];
+      if (!p || m / ges <= WK.kartell.marktanteilGrenze) continue;
+      const abgabe = Math.min(Math.max(0, p.cash), (G.erloesLaufend?.[g]?.[pid] || 0) * WK.kartell.monopolabgabe);
+      if (!(abgabe > 0)) continue;
+      p.cash -= abgabe; G.stadtkasse += abgabe; G.steuernGesamt += abgabe;
+      logTx(p, "Steuer", `Monopolabgabe ${GOODS[g]?.name ?? g} (${Math.round(m / ges * 100)} % Marktanteil)`, -abgabe);
+      emitTo(pid, "notice", { text: `Kartellamt: ${Math.round(m / ges * 100)} % Marktanteil bei ${GOODS[g]?.name ?? g} — 10 % Monopolabgabe (${Math.round(abgabe)} $).` });
+    }
+  }
+  G.absatzLaufend = {}; G.erloesLaufend = {};
 }
 /* ---------- Finanzamt als Stabilisator ----------
  * Das Finanzamt hält eigene Aktien (Halter FA_ID) und zahlt aus der Stadtkasse,
@@ -3844,6 +3157,35 @@ function depotWert() {
 }
 const boersenwert = () => Object.values(G.players).reduce((a, co) => a + companyValue(co), 0);
 /* Stadtkunden kaufen im Online-Shop: ein Teil zusätzlich geht ins Depot. */
+/* ---- Haushalte (v2, Abschnitt 5) ----
+ * Ein gemeinsames Konto der Stadtbewohner. Einkommen: Löhne, Bau- und
+ * Unterhaltsanteile, Stütze. Davon sparen sie nach der Sparquote (Leitzins)
+ * ins Bürgerdepot, der Rest erhöht das Konsumbudget. Nicht Ausgegebenes
+ * bleibt im Budget und steht am nächsten Tag zusätzlich bereit. */
+const hhVon = () => (G.haushalte ??= { cash: WK.start.haushalte, budget: 0, einkommen: 0, konsum: 0 });
+function haushaltEinkommen(betrag) {
+  if (!(betrag > 0)) return;
+  const h = hhVon(), s = WR.sparquote(G.zb?.leitzins ?? WK.zentralbank.neutralzins);
+  const spar = depotAktiv() ? betrag * s : 0;
+  h.cash += betrag - spar; h.budget += betrag - spar; h.einkommen += betrag;
+  if (spar > 0) depotVon().zufluss += spar;
+}
+/* Täglich zehren die Haushalte einen kleinen Teil ihres Vermögens über dem Budget auf. */
+function haushaltTag() {
+  const h = hhVon();
+  const ueber = h.cash - h.budget;
+  if (ueber > 0) h.budget += ueber * WK.vorschlag.vermoegenVerzehrTag;
+  h.budget = Math.min(h.budget, h.cash);
+}
+/* Kaufkraft in den Läden: Budget der Haushalte plus Einkaufsbudget der Stadt. */
+const haushaltKaufkraft = () => Math.max(0, Math.min(hhVon().budget, hhVon().cash)) + Math.max(0, G.stadtEinkauf || 0);
+function haushaltZahlt(betrag) {
+  const h = hhVon();
+  const vonHH = Math.min(betrag, Math.max(0, Math.min(h.budget, h.cash)));
+  h.cash -= vonHH; h.budget = Math.max(0, h.budget - vonHH); h.konsum += vonHH;
+  const rest = betrag - vonHH;
+  if (rest > 0) G.stadtEinkauf = Math.max(0, (G.stadtEinkauf || 0) - rest);
+}
 function depotSparen(erloes) {
   if (!depotAktiv() || !(erloes > 0)) return;
   const d = depotVon();
@@ -3851,8 +3193,7 @@ function depotSparen(erloes) {
   /* v2 (Abschnitt 5): Wer für c ausgibt, hat (1 − s) seines Einkommens
    * ausgegeben und s gespart — also s / (1 − s) × Konsum. Bei 4 % Leitzins
    * sind das 30 % Sparquote, rund 43 % des Konsums. */
-  const s = WR.sparquote(G.zb?.leitzins ?? WK.zentralbank.neutralzins);
-  d.zufluss += erloes * s / (1 - s);
+  /* v2: Gespart wird vom Einkommen (haushaltEinkommen), nicht zusätzlich zum Einkauf. */
 }
 /* Mehr Nachfrage in den Shops, solange die Sparer Dividenden ausgeben. */
 const konsumBoost = () => depotAktiv() ? (G.depot?.konsumBoost || 0) : 0;
@@ -5197,7 +4538,69 @@ function returnListingToSeller(l) {
   company.equity[sellerId] = (company.equity[sellerId] || 0) + l.count;
 }
 function debtOf(p) {
-  return G.bonds.filter(b => b.issuerId === p.id && b.holderId).reduce((s, b) => s + b.principal, 0);
+  return G.bonds.filter(b => b.issuerId === p.id && b.holderId).reduce((s, b) => s + b.principal, 0) + (p.kredit || 0);
+}
+/* ---------- Stadtsparkasse (v2, Abschnitt 9) ----------
+ * Kredit: Firmenkonto und offene Kredite steigen um X (Geld entsteht).
+ * Tilgung: beide sinken (Geld verschwindet). Limit 50 % des Eigenkapitals.
+ * Zins Leitzins + 3 Punkte je Periode, täglich ein Zehntel, an die Bank.
+ * Wer 3 Markttage in Folge den Zins nicht zahlt, ist insolvent: Gebäude
+ * werden versteigert (Mindestgebot 50 % des Bauwerts), der Erlös tilgt den
+ * Kredit, den Rest schreibt die Bank ab; die Aktien der Firma verfallen. */
+const bankKonto = () => G.wettReserve;   // Konto der Stadtsparkasse
+function kreditLimitVon(p) { return WR.kreditLimit(eigenkapitalV2(p) + (p.kredit || 0)); }
+function kreditTag() {
+  const kz = WR.kreditzins(leitzins()) * WK.zeit.zinsTagesanteil;
+  for (const p of Object.values(G.players)) {
+    if (!(p.kredit > 0)) { p.kreditAusfall = 0; continue; }
+    const zins = p.kredit * kz;
+    if (p.cash >= zins) {
+      p.cash -= zins; G.wettReserve += zins; p.stats.zinsAufwand += zins; p.fin.zinsAufwand += zins; p.kreditAusfall = 0;
+      logTx(p, "Kredit", `Kreditzins ${(WR.kreditzins(leitzins()) * 100).toFixed(1)} % je Periode`, -zins);
+    } else {
+      p.kreditAusfall = (p.kreditAusfall || 0) + 1;
+      emitTo(p.id, "notice", { text: `Stadtsparkasse: Kreditzins nicht bezahlt (${p.kreditAusfall} von ${WK.bank.insolvenzTage} Tagen bis zur Insolvenz).` });
+      if (p.kreditAusfall >= WK.bank.insolvenzTage) insolvenzV2(p);
+    }
+  }
+  /* Bankgewinn: alles über 10.000 $ Eigenkapital geht am Periodenende an die Stadt. */
+  if (Math.floor(G.tick / MARKT.TAG) % WK.zeit.periodeTage === 0 && G.wettReserve > WK.bank.eigenkapitalFuerStadt) {
+    const ab = G.wettReserve - WK.bank.eigenkapitalFuerStadt;
+    G.wettReserve -= ab; G.stadtkasse += ab;
+  }
+}
+function insolvenzV2(p) {
+  marktLog("insolvenz", `${p.name} ist insolvent — Gebäude werden versteigert, die Aktien verfallen`, { firmaId: p.id });
+  io.emit("notice", { text: `${p.name} ist insolvent. Die Gebäude werden versteigert, die Aktien verfallen.` });
+  /* Aktien verfallen: Fremdbesitz löschen, Angebote zurückziehen. */
+  for (const h of Object.keys(p.equity)) if (h !== p.id) delete p.equity[h];
+  p.equity[p.id] = AKTIEN;
+  G.shareListings = G.shareListings.filter(l => l.companyId !== p.id);
+  /* Gebäude versteigern, Erlös an die Bank (bis zur Höhe des Kredits). */
+  for (const t of G.map.filter(t => t.owner === p.id && t.btype)) {
+    const btype = t.btype;
+    t.owner = null; t.btype = null; t.lien = false; t.steuerung = undefined;
+    G.auctions.push({ id: id(), tileIdx: G.map.indexOf(t), btype, autos: 0, inhalt: 0,
+      minBid: Math.round(BTYPES[btype].cost * 0.5), bestBid: 0, bestBidder: null, creditorId: null, kreditVon: p.id, tLeft: 30 });
+  }
+  /* Was die Firma an Cash hat, tilgt sofort. */
+  const tilg = Math.min(Math.max(0, p.cash), p.kredit);
+  p.cash -= tilg; p.kredit -= tilg;
+  p.kreditAusfall = 0;
+}
+/* Versteigerungserlös einer Insolvenz: tilgt den Kredit, Rest an die Firma. */
+function insolvenzErloes(a, betrag) {
+  const p = G.players[a.kreditVon];
+  if (!p) return;
+  const tilg = Math.min(betrag, p.kredit || 0);
+  p.kredit -= tilg;
+  p.cash += betrag - tilg;
+  /* Ist alles versteigert und bleibt Kredit offen, schreibt die Bank ab. */
+  if (!G.auctions.some(x => x !== a && x.kreditVon === p.id) && p.kredit > 0) {
+    G.wettReserve -= p.kredit;   // Abschreibung: Geld aus dem Kredit verschwindet auf dem Bankkonto
+    logTx(p, "Kredit", "Restkredit von der Bank abgeschrieben", 0);
+    p.kredit = 0;
+  }
 }
 // Rating rein aus Nettovermögen & Verschuldungsgrad des Spielers — keine Fantasiewerte
 function rating(p) {
@@ -5324,6 +4727,7 @@ function finishGroupOrder() {
  * (equity ist dann schon reduziert) und werden mitgezählt — sonst würde ein
  * Zukauf während eines offenen Angebots den Schnitt verfälschen. */
 function merkeEinstand(kaeufer, company, count, preis) {
+  if (count > 0) (G.kaufHist ??= []).push({ tag: Math.floor(G.tick / MARKT.TAG), kaeuferId: kaeufer.id, companyId: company.id, je: preis / count });
   const verwahrt = G.shareListings
     .filter(l => l.companyId === company.id && (l.sellerId ?? l.companyId) === kaeufer.id)
     .reduce((a, l) => a + l.count, 0);
@@ -5492,7 +4896,7 @@ function distributeDividends() {
      * eigenen Aktien entfiele, bleibt einfach in der Firma. */
     /* v2 (Abschnitt 6): 40 % des Nachsteuergewinns der Periode; bei Verlust
      * oder ohne Cash keine Dividende. Ein fester Betrag des Spielers geht vor. */
-    const wunsch = p.ausschuettung == null ? WR.ausschuettung(p.nachsteuerPeriode ?? 0, p.cash).brutto : p.ausschuettung;
+    const wunsch = p.ausschuettung == null ? WR.ausschuettung(p.nachsteuerPeriode ?? 0, p.cash, p.dividendenquote ?? WK.firma.dividendenquote).brutto : p.ausschuettung;
     const pool = Math.min(wunsch, Math.max(0, p.cash));
     let paidOut = 0;
     if (pool > 0.01) {
@@ -5630,6 +5034,10 @@ function steuerStufePruefen() {
  * keine 1.000 $ — obwohl die Firmen auf das Neunfache wuchsen. */
 function investieren(p, betrag) {
   if (!(betrag > 0)) return;
+  /* v2 (Abschnitt 2): Baukosten verschwinden nicht — 70 % Bauarbeiterlohn an
+   * die Haushalte, 30 % Baugebühr an die Stadt. */
+  haushaltEinkommen(betrag * WK.bau.anteilHaushalte);
+  G.stadtkasse += betrag * WK.bau.anteilStadt;
   p.stats.investiert = (p.stats.investiert || 0) + betrag;
   (p.afa ??= []).push({ b: betrag, t: G.tick });
 }
@@ -5980,6 +5388,7 @@ function loehneZahlen() {
     const hqL = hqLohn(p);
     if (hqL > 0 && p.cash >= hqL) {
       p.cash -= hqL; p.stats.ausgaben += hqL; p.stats.hqLoehne = (p.stats.hqLoehne || 0) + hqL;
+      haushaltEinkommen(hqL);   // v2: die HQ-Posten sind Arbeitsplätze mit Lohn
       p.hqLohnGesamt = (p.hqLohnGesamt || 0) + hqL;
       logTx(p, "Hauptsitz", `HQ-Gehälter (${Object.keys(p.hq || {}).filter(r => p.hq[r]).length} Rollen)`, -hqL);
     } else if (hqL > 0) {
@@ -5993,11 +5402,15 @@ function loehneZahlen() {
       emitTo(p.id, "notice", { text: `Löhne nicht voll bezahlt — bis du zahlst, bekommst du zuletzt Arbeiter.` });
     summe += zahl;
   }
-  const steuer = summe * STADT.LOHNSTEUER, miete = summe * STADT.MIETANTEIL, spar = summe * STADT.SPARANTEIL;
+  /* v2 (Abschnitt 5): Der Lohn bleibt im Kreislauf. Lohnsteuer und Miete an
+   * die Stadt, vom Rest sparen die Haushalte nach der Sparquote ins
+   * Bürgerdepot, der Rest landet auf ihrem Konto und ist ihr Konsumbudget. */
+  const steuer = summe * STADT.LOHNSTEUER, miete = summe * STADT.MIETANTEIL;
   G.stadtkasse += steuer + miete;
-  if (depotAktiv()) depotVon().zufluss += spar;
+  haushaltEinkommen(summe - steuer - miete);
   const stuetze = Math.min(Math.max(0, G.stadtkasse), (S.arbeitslos || 0) * STADT.STUETZE);
   G.stadtkasse -= stuetze;
+  haushaltEinkommen(stuetze);
   Object.assign(S, { lohnsumme: Math.round(summe), lohnsteuer: Math.round(steuer), miete: Math.round(miete), stuetze: Math.round(stuetze),
     mieteGesamt: (S.mieteGesamt || 0) + Math.round(miete + steuer) });
 }
@@ -6634,7 +6047,7 @@ const KARTELL_QUESTS = [
   { id: "schutzgeld", text: "Kassiere Schutzgeld aus einem Bezirk", en: "Collect protection money",            target: 1, reward: 600 },
   { id: "kampf",      text: "Gewinne einen Revierkampf", en: "Win a turf war",                                 target: 1, reward: 1500 },
 ];
-const QUESTSET = () => MODE === "kartell" ? KARTELL_QUESTS : QUESTS;
+const QUESTSET = () => QUESTS;
 function questProg(p, id, n = 1) {
   const def = QUESTSET().find(q => q.id === id);
   const q = p.quests[id] ??= { n: 0, done: false };
@@ -7064,74 +6477,14 @@ function snapshot() {
     questDefs: QUESTSET(),
     started: G.started, hostId: G.hostId,
     mode: MODE, plan: MODE === "plan" ? G.plan : null,
+    pflichtangebote: (G.pflichtangebote || []).map(o => ({ id: o.id, companyId: o.companyId, kaeuferId: o.kaeuferId, preis: o.preis, bisTag: o.bisTag })),
+    haushalte: G.haushalte ? { cash: Math.round(G.haushalte.cash), budget: Math.round(G.haushalte.budget) } : null,
     /* Zentralbank (v2): Leitzins, Zielzins als Trend und Inflation je Periode */
     zb: G.zb ? { leitzins: G.zb.leitzins, zielzins: G.zb.zielzins, inflation: Math.round(G.zb.inflation * 10000) / 10000,
                  kreditzins: WR.kreditzins(G.zb.leitzins), sparzins: WR.sparzins(G.zb.leitzins), sparquote: WR.sparquote(G.zb.leitzins),
                  multiple: Math.round(WR.multiple(G.zb.leitzins) * 10) / 10, panik: (G.crash?.aktivBis ?? -1) >= Math.floor(G.tick / MARKT.TAG) } : null,
     /* Wer mit wem gemeinsame Sache macht, ist öffentlich; wie heiß es dem
      * Kartell unter den Füßen wird, erfahren nur seine Mitglieder (privateState). */
-    cartels: MODE === "kartell" ? G.cartels.map(kartellPublic) : null,
-    bezirke: MODE === "kartell" ? G.bezirke : null,
-    transporte: MODE === "kartell" ? G.transporte.map(tr => {
-      const { x, y } = transportKachel(tr);
-      return { id: tr.id, art: tr.art,
-        x: tr.achse === "x" ? tr.pos : tr.linie, y: tr.achse === "x" ? tr.linie : tr.pos,
-        kx: x, ky: y, gestoppt: !!tr.gestoppt };
-    }) : null,
-    pate: MODE === "kartell" ? G.pate : null,
-    pateWahl: MODE === "kartell" ? { phase: G.pateWahl.phase,
-      rest: Math.max(0, G.pateWahl.endet - G.tick),
-      naechsteIn: Math.max(0, (G.pateWahl.naechste || 0) - G.tick),
-      kandidaten: G.pateWahl.kandidaten, stimmen: G.pateWahl.stimmen,
-      stich: G.pateWahl.stich, dekrete: PATE_DEKRETE } : null,
-    pateDekret: MODE === "kartell" ? G.pateDekret : null,
-    pateName: MODE === "kartell" ? G.pateName : null,
-    gcasino: MODE === "kartell" ? { stufe: G.gcasino.stufe, stil: GCASINO_STILE[G.gcasino.stufe - 1],
-      quote: G.gcasino.quote, herrscher: gcasinoHerrscher(),
-      spiele: Object.fromEntries(Object.entries(GCASINO_SPIELE).map(([k, sp]) => {
-        const q = GCASINO_QUOTEN[G.gcasino.quote];
-        return [k, { name: sp.name, chance: Math.max(.005, sp.chance + (sp.chance > .1 ? q.chanceDelta : q.chanceDelta / 10)), faktor: sp.faktor }];
-      })),
-      upgradeKosten: G.gcasino.stufe < 5 ? 4000 * G.gcasino.stufe : null } : null,
-    groulette: MODE === "kartell" ? { phase: G.groulette.phase,
-      rest: Math.max(0, G.groulette.endet - G.tick),
-      zahl: G.groulette.phase === "drehen" ? G.groulette.zahl : null,
-      letzteZahl: G.groulette.letzteZahl, letzteGewinner: G.groulette.letzteGewinner || [],
-      einsaetze: G.groulette.einsaetze.map(e => ({ name: e.name, farbe: e.farbe, art: e.art, zahl: e.zahl, einsatz: e.einsatz })) } : null,
-    gblackjack: MODE === "kartell" ? { phase: G.gblackjack.phase,
-      rest: Math.max(0, G.gblackjack.endet - G.tick), dran: G.gblackjack.dran,
-      dealer: G.gblackjack.dealer.map(k => ({ txt: k.txt, rot: k.rot })),
-      dealerSumme: G.gblackjack.dealer.length ? bjSumme(G.gblackjack.dealer) : null,
-      spieler: G.gblackjack.spieler.map(s => ({ pid: s.pid, name: s.name, farbe: s.farbe,
-        einsatz: s.einsatz, einsatz2: s.einsatz2, aktiv: s.aktiv,
-        karten: s.karten.map(kartePub), summe: bjSumme(s.karten),
-        karten2: s.karten2 ? s.karten2.map(kartePub) : null, summe2: s.karten2 ? bjSumme(s.karten2) : null,
-        fertig: s.fertig, ergebnis: s.ergebnis })) } : null,
-    wzInfo: MODE === "kartell" ? { brunnenPot: G.brunnenPot,
-      herren: Object.fromEntries(Object.entries(WZ_DEF).map(([k, d]) => [k, wzHerr(d.bezirk)])) } : null,
-    gpoker: MODE === "kartell" ? { phase: G.gpoker.phase, rest: Math.max(0, G.gpoker.endet - G.tick),
-      einsatz: G.gpoker.einsatz, pot: G.gpoker.pot, aktBet: G.gpoker.aktBet, raises: G.gpoker.raises,
-      strasse: G.gpoker.strasse, dran: G.gpoker.dran, board: G.gpoker.board.map(kartePub),
-      spieler: G.gpoker.spieler.map(s => ({ pid: s.pid, name: s.name, farbe: s.farbe,
-        gefoldet: s.gefoldet, gesetzt: s.gesetzt, ergebnis: s.ergebnis,
-        karten: G.gpoker.phase === "vorbei" && !s.gefoldet ? s.karten.map(kartePub) : null })) } : null,
-    polizei: MODE === "kartell" ? { punkte: G.polizeiPunkte || 0, ziel: POLIZEI_ZIEL,
-      farbe: POLIZEI.farbe,
-      mitglieder: Object.values(G.players).filter(p2 => p2.familie === "polizei").map(p2 => p2.name) } : null,
-    familien: MODE === "kartell" ? Object.entries(FAMILIEN).map(([fid, f]) => ({
-      id: fid, name: f.name, farbe: f.farbe, produkt: f.produkt, gebaeude: f.gebaeude,
-      respekt: Math.round(G.familienRespekt[fid] || 0),
-      fahndung: Math.round(G.fahndung[fid] || 0),
-      mitglieder: Object.values(G.players).filter(p2 => p2.familie === fid).map(p2 => p2.name),
-      kasse: Math.round(G.familienBank[fid] || 0),
-      tribut: G.familienTribut[fid] ?? .10,
-      soldaten: G.soldaten[fid] || 0,
-      bossPid: famBoss(fid),
-      wahlSiege: G.wahlSiege[fid] || 0,
-      kampfSiege: G.kampfSiege[fid] || 0,
-      raenge: Object.values(G.players).filter(p2 => p2.familie === fid)
-        .map(p2 => ({ pid: p2.id, name: p2.name, bot: !!p2.bot, rang: famRang(p2) })),
-    })) : null,
     hof: HOF,
     routes: MAP_ROUTES,
     lobby: G.started ? null : { winGoal: WIN_NW, zeitLimit: ZEIT_LIMIT, bots: botAuswahl, botLevel: botLevelKey, mode: MODE, saison: SAISON_RENNEN, saisonWahl: SAISON_CHOICES },
@@ -7254,26 +6607,9 @@ function privateState(p) {
   /* Kartell-Innensicht: der Verdachtswert und die offenen Einladungen gehen
    * ausschließlich an Mitglieder — und die eigenen offenen Einladungen an den,
    * der sie bekommen hat. Beides hat im öffentlichen Snapshot nichts verloren. */
-  const eigenesKartell = MODE === "kartell" ? kartellVon(p) : null;
   return { cash: p.cash, inv: p.inv, xp: p.xp, lvl: p.lvl,
-    kartell: eigenesKartell ? { ...kartellPublic(eigenesKartell),
-      verdacht: Math.round(eigenesKartell.verdacht),
-      minPreise: eigenesKartell.minPreise,
-      /* Was die Absprache bisher eingebracht hat — und damit, woran das
-       * Bussgeld haengen wuerde. Wer das sieht, kann abwaegen, statt zu raten. */
-      ermittlung: eigenesKartell.ermittlung,
-      umsatz: Math.round(eigenesKartell.umsatz[p.id] || 0),
-      risiko: Math.round((eigenesKartell.umsatz[p.id] || 0) * BUSSGELD_ANTEIL),
-      einladungen: eigenesKartell.einladungen.map(mid => ({ id: mid, name: G.players[mid]?.name ?? "—" })) } : null,
-    kartellEinladungen: MODE === "kartell" && !eigenesKartell
-      ? G.cartels.filter(k => k.einladungen.includes(p.id)).map(kartellPublic) : [],
-    /* Restzeit je Bezirk, bis dort wieder Schutzgeld erpresst werden kann */
-    erpress: MODE === "kartell"
-      ? Object.fromEntries(Object.entries(p.erpressCd || {})
-          .filter(([, bis]) => bis > G.tick).map(([b, bis]) => [b, bis - G.tick])) : null,
-    kampfCd: MODE === "kartell" ? Math.max(0, (p.kampfCd || 0) - G.tick) : 0,
-    verstCd: MODE === "kartell" ? Math.max(0, (p.verstCd || 0) - G.tick) : 0,
-    razziaCd: MODE === "kartell" ? Math.max(0, (p.razziaCd || 0) - G.tick) : 0,
+    kreditV2: { kredit: Math.round(p.kredit || 0), limit: Math.floor(kreditLimitVon(p)), zins: WR.kreditzins(leitzins()), ausfall: p.kreditAusfall || 0,
+                quote: p.dividendenquote ?? WK.firma.dividendenquote, verlustVortrag: Math.round(p.verlustVortrag || 0) },
     quests: p.quests,
     tx: p.tx, sales: p.sales, fin: p.fin, nwHist: p.nwHist,
     fans: Math.round(p.fans || 0), fanHubs: fanHubs(p).length,
@@ -7472,8 +6808,6 @@ function pushState() {
   }
   for (const p of Object.values(G.players)) if (p.socketId) {
     const ps = privateState(p);
-    const sitz = G.gpoker?.spieler?.find(s => s.pid === p.id);
-    if (sitz?.karten?.length && G.gpoker.phase !== "warten") ps.gpokerKarten = sitz.karten.map(kartePub);
     /* Wie beim öffentlichen Stand: je Verbindung nur geänderte Felder. Eine neue
      * Verbindung (Beitritt, Reconnect) hat noch keine Signaturen → voll. */
     const sock = io.sockets.sockets.get(p.socketId);
@@ -7564,30 +6898,6 @@ io.on("connection", socket => {
     /* Kartellmodus: Wer nach dem Start dazukommt (auch die Bots — sie
      * registrieren sich asynchron NACH startRound), landet sofort in der
      * jeweils kleinsten Familie. */
-    if (MODE === "kartell" && G.started && !G.players[pid].familie) {
-      const fids = Object.keys(FAMILIEN);
-      /* Wunsch aus der Registrierung (Bots wollen in IHRE Familie bzw. zur
-       * Polizei); sonst die kleinste Familie mit freiem Platz — sind alle
-       * voll, geht der Nachzügler zur Polizei. */
-      /* Für Menschen zählt nur die Zahl der MENSCHEN je Familie (max 2) —
-       * ein Bot auf dem zweiten Platz macht dem Neuling Platz. Bots selbst
-       * respektieren weiter die harte Obergrenze. */
-      const zaehler = G.players[pid].bot ? famAnzahl : famMenschen;
-      const wunsch = ["polizei", ...fids].includes(familieWunsch) ? familieWunsch : null;
-      const frei = fids.filter(f => zaehler(f) < FAMILIE_MAX)
-        .sort((a, b) => famAnzahl(a) - famAnzahl(b));
-      G.players[pid].familie =
-        (wunsch && (wunsch === "polizei" || zaehler(wunsch) < FAMILIE_MAX)) ? wunsch
-        : frei[0] || (zaehler("polizei") < FAMILIE_MAX ? "polizei"
-        : fids.slice().sort((a, b) => famAnzahl(a) - famAnzahl(b))[0]);
-      if (!G.players[pid].bot) famBotVerdraengen(G.players[pid].familie);
-      /* Späteinsteiger bekommen dasselbe Familien-Startkapital wie alle. */
-      G.players[pid].cash += 8000;
-      logTx(G.players[pid], "Kartell", "Startkapital der Familie", 8000);
-      io.emit("notice", { text: G.players[pid].familie === "polizei"
-        ? `${name} tritt in die Polizei ein — die Familien sind gewarnt.`
-        : `${name} schwört „${famDef(G.players[pid].familie).name}“ die Treue.` });
-    }
     io.emit("notice", { text: `${name} ist der Sitzung beigetreten.` + (Object.keys(G.players).length === 1 ? ` Rundenziel: ${WIN_NW.toLocaleString("de-DE")} $` : "") });
     ack?.({ ok: true, goods: goodsPublic(), btypes: btypesPublic(), rooms: ROOMS, you: pid, winGoal: WIN_NW, questDefs: QUESTSET(), industry, industries: INDUSTRIES,
       /* Dieselben Motorsport-Daten wie beim Wiederverbinden weiter oben. Fehlten
@@ -7649,38 +6959,6 @@ io.on("connection", socket => {
     /* Kartell: keine Wirtschafts-Bots (AgrarGenossen & Co.) — hier spielen
      * Mafiosi mit; die Auffüllung passiert unten nach der Familienzuteilung. */
     if (MODE !== "kartell") startBots();
-    if (MODE === "kartell") {
-      /* Familien auffüllen: Wer keine gewählt hat (auch Bots), kommt reihum in
-       * die jeweils kleinste Familie — vier lebende Familien sind der Modus. */
-      const fids = Object.keys(FAMILIEN);
-      for (const sp of Object.values(G.players)) {
-        if (sp.familie) continue;
-        const frei = fids.filter(f => famAnzahl(f) < FAMILIE_MAX)
-          .sort((a, b) => famAnzahl(a) - famAnzahl(b));
-        sp.familie = frei[0] || fids.slice().sort((a, b) => famAnzahl(a) - famAnzahl(b))[0];
-      }
-      for (const f of fids) G.familienRespekt[f] ??= 0;
-      /* Jede Familie bekommt genau ZWEI Plätze: freie Plätze füllen Mafia-Bots.
-       * Bleibt die Polizei unbesetzt, übernimmt ein KI-Kommissar — es soll
-       * immer einen Gegenspieler geben. */
-      mafiaBotsAuffuellen();
-      /* Weicher Einstieg: Startkapital der Familie obendrauf — der Betrieb
-       * soll in Minute zwei stehen, nicht erst nach einer Börsenlehre.
-       * Hier statt in newPlayer, weil die Registrierung VOR der Moduswahl
-       * in der Lobby passiert. */
-      for (const sp of Object.values(G.players)) {
-        sp.cash += 8000;
-        logTx(sp, "Kartell", "Startkapital der Familie", 8000);
-      }
-      /* Eigene Spielfläche: die alte italienische Küstenstadt. Wie bei Plan/
-       * Renntag muss die Karte nach dem Tausch einmal VOLLSTÄNDIG an alle —
-       * der Kachel-Diff trägt nur veränderliche Felder. */
-      G.map = buildMap("kartell");
-      G.groupOrder = null;
-      lastTileSigs = null;
-      for (const sock of io.sockets.sockets.values()) { sock.data.gotMap = false; sock.data.meSigs = null; }
-      io.emit("notice", { text: "Die vier Familien teilen die Stadt unter sich auf — Respekt entscheidet, wer das Sagen hat." });
-    }
     if (MODE === "renntag") {
       /* Eigene Flaeche, dann jeder Spieler seine Startausruestung. Wie beim
        * Plan- und Einsteiger-Modus muss die Karte danach einmal vollstaendig
@@ -7900,459 +7178,6 @@ io.on("connection", socket => {
     if (!G.started) { ack?.({ error: "Erst wenn die Runde läuft" }); return false; }
     return true;
   };
-
-  /* --- Familie wählen (vor dem Start; danach ist der Schwur bindend) --- */
-  socket.on("familieWaehlen", guard((p, { fid }, ack) => {
-    if (MODE !== "kartell") return ack?.({ error: "Familien gibt es nur in der Kartellwirtschaft" });
-    if (!famDef(fid)) return ack?.({ error: "Diese Familie kennt hier niemand" });
-    if (G.started && p.familie) return ack?.({ error: "Der Familie schwört man nur einmal — ein Wechsel wäre Verrat" });
-    if (fid !== p.familie && famMenschen(fid) >= FAMILIE_MAX)
-      return ack?.({ error: `${famDef(fid).name} hat schon ${FAMILIE_MAX} Spieler — such dir eine andere Seite` });
-    p.familie = fid;
-    if (!p.bot) famBotVerdraengen(fid);
-    io.emit("notice", { text: fid === "polizei"
-      ? `${p.name} tritt in die Polizei ein — die Familien sind gewarnt.`
-      : `${p.name} schwört „${famDef(fid).name}“ die Treue.` });
-    ack?.({ ok: true });
-  }));
-
-  /* --- Hehler: der einzige Absatzweg für illegale Ware ---
-   * Fester Ankaufspreis, bar auf die Hand — und jeder verkaufte Posten
-   * bringt der Familie Respekt (1 Punkt je 100 $ Warenwert). */
-  socket.on("hehlerVerkauf", guard((p, { good, qty }, ack) => {
-    if (MODE !== "kartell") return ack?.({ error: "Der Hehler arbeitet nur in der Kartellwirtschaft" });
-    if (p.familie === "polizei") return ack?.({ error: "Der Hehler bedient keine Beamten — schon gar nicht in Uniform" });
-    if (!ILLEGAL.includes(good)) return ack?.({ error: "Der Hehler nimmt nur heiße Ware" });
-    qty = Math.floor(+qty) || Math.floor(p.inv[good] || 0);
-    qty = Math.min(qty, Math.floor(p.inv[good] || 0));
-    if (qty <= 0) return ack?.({ error: `Kein ${GOODS[good].name} im Lager` });
-    const erloes = qty * BASEP[good];
-    p.inv[good] -= qty;
-    p.cash += erloes;
-    p.stats.umsatz = (p.stats.umsatz || 0) + erloes;
-    const respekt = erloes / 100;
-    if (p.familie) G.familienRespekt[p.familie] = (G.familienRespekt[p.familie] || 0) + respekt;
-    /* Abgabe an den Paten: 10 % des Erlöses, unter dessen Familie aufgeteilt —
-     * außer man gehört selbst zur Familie des Paten. */
-    let abgabe = 0;
-    if (G.pate && p.familie !== G.pate) {
-      const paten = Object.values(G.players).filter(x2 => x2.familie === G.pate);
-      if (paten.length) {
-        abgabe = Math.round(erloes * PATEN_ABGABE * (G.pateDekret === "steuer" ? .5 : 1));
-        p.cash -= abgabe;
-        const teil = Math.round(abgabe / paten.length);
-        for (const x2 of paten) { x2.cash += teil; logTx(x2, "Kartell", `Abgabe von ${p.name} an den Paten`, teil); }
-        logTx(p, "Kartell", `Abgabe an den Paten (${FAMILIEN[G.pate].name})`, -abgabe);
-      }
-    }
-    gainXp(p, Math.min(30, Math.round(respekt)));
-    questProg(p, "hehler");
-    logTx(p, "Kartell", `Hehler: ${qty}× ${GOODS[good].name} verkauft (+${Math.round(respekt)} Respekt)`, erloes);
-    ack?.({ ok: true, erloes, abgabe });
-  }));
-
-  /* --- Überfall auf einen Werttransport ---
-   * Chance: 50 % Basis, +6 % je Pistole im Lager (höchstens +30 %), +25 %
-   * wenn der Transport an einer Sperre festhängt, minus Fahndungs-Malus.
-   * Erfolg bringt Beute und Respekt, Misserfolg Kaution — beides heizt die
-   * Fahndung an. */
-  socket.on("ueberfall", guard((p, { transportId }, ack) => {
-    if (MODE !== "kartell") return ack?.({ error: "Überfälle gibt es nur in der Kartellwirtschaft" });
-    if (!p.familie) return ack?.({ error: "Ohne Familie überfällt man niemanden" });
-    const tr = G.transporte.find(t2 => t2.id === transportId);
-    if (!tr) return ack?.({ error: "Der Transport ist längst über alle Berge" });
-    /* Polizei: keine Beute, sondern Kontrolle — der Transport wird eskortiert,
-     * die Ladung sichergestellt. Verlässlich, aber unspektakulär bezahlt. */
-    if (p.familie === "polizei") {
-      if (p.ueberfallSperre && p.ueberfallSperre > G.tick)
-        return ack?.({ error: `Die Streife ist noch unterwegs — ${p.ueberfallSperre - G.tick} s` });
-      p.ueberfallSperre = G.tick + UEBERFALL_COOLDOWN;
-      G.transporte = G.transporte.filter(t2 => t2 !== tr);
-      const praemie = 400 + Math.floor(Math.random() * 300);
-      p.cash += praemie;
-      G.polizeiPunkte = (G.polizeiPunkte || 0) + 1;
-      logTx(p, "Polizei", `Transport kontrolliert und sichergestellt`, praemie);
-      io.emit("notice", { text: `🚔 ${p.name} kontrolliert einen ${TRANSPORT_ARTEN[tr.art].name} — Ladung sichergestellt (+1 Einsatzpunkt).` });
-      return ack?.({ ok: true, praemie });
-    }
-    if (p.ueberfallSperre && p.ueberfallSperre > G.tick)
-      return ack?.({ error: `Zu heiß — warte noch ${p.ueberfallSperre - G.tick} s` });
-    p.ueberfallSperre = G.tick + UEBERFALL_COOLDOWN;
-    questProg(p, "ueberfall");   // der Versuch zählt — Mut wird belohnt
-    const pistolen = Math.floor(p.inv.pistole || 0);
-    const chance = 0.5 + Math.min(0.3, pistolen * 0.06) + (tr.gestoppt ? 0.25 : 0)
-      - Math.min(0.25, (G.fahndung[p.familie] || 0) / 400);
-    G.transporte = G.transporte.filter(t2 => t2 !== tr);
-    if (Math.random() < chance) {
-      let beuteText;
-      if (tr.art === "geld") {
-        const geld = 1500 + Math.floor(Math.random() * 2000);
-        p.cash += geld; beuteText = `${geld} $ Bargeld`;
-        logTx(p, "Kartell", "Überfall: Geldtransport ausgeraubt", geld);
-      } else if (tr.art === "waffen") {
-        const n = 3 + Math.floor(Math.random() * 4);
-        p.inv.pistole = (p.inv.pistole || 0) + n; beuteText = `${n} Pistolen`;
-        logTx(p, "Kartell", `Überfall: Waffentransport ausgeraubt (${n} Pistolen)`, 0);
-      } else {
-        const n = 2 + Math.floor(Math.random() * 3);
-        p.inv.goldbarren = (p.inv.goldbarren || 0) + n; beuteText = `${n} Goldbarren`;
-        logTx(p, "Kartell", `Überfall: Goldtransport ausgeraubt (${n} Goldbarren)`, 0);
-      }
-      G.familienRespekt[p.familie] = (G.familienRespekt[p.familie] || 0) + 5;
-      G.fahndung[p.familie] = (G.fahndung[p.familie] || 0) + 8;
-      gainXp(p, 15);
-      io.emit("notice", { text: `💥 ${p.name} (${FAMILIEN[p.familie].name}) überfällt einen ${TRANSPORT_ARTEN[tr.art].name}: ${beuteText} erbeutet!` });
-      ack?.({ ok: true, beute: beuteText });
-    } else {
-      const kautionBasis = 500;
-      const kaution = Math.min(p.cash, Math.round(kautionBasis * (hqBesetzt(p, "sicherheit") ? 0.7 : 1)));
-      p.cash -= kaution;
-      G.fahndung[p.familie] = (G.fahndung[p.familie] || 0) + 15;
-      logTx(p, "Kartell", "Überfall vereitelt — Kaution gezahlt", -kaution);
-      io.emit("notice", { text: `🚓 Die Polizei vereitelt einen Überfall von ${p.name} — die Fahndung nach ${FAMILIEN[p.familie].name} verschärft sich.` });
-      ack?.({ error: "Der Überfall ist geplatzt — die Fahrer haben Verstärkung gerufen (−500 $ Kaution)" });
-    }
-  }));
-
-  /* --- Schutzgelderpressung: die Läden eines Bezirks einschüchtern ---
-   * Ergänzt das passive Bezirks-Schutzgeld (das weiter jede Minute an die
-   * kontrollierende Familie fließt): Wer selbst durch die Gassen zieht, holt
-   * mehr heraus — bezahlt aber mit Fahndungsdruck. Im eigenen Revier zahlen
-   * die Läden das Anderthalbfache ohne Murren; im Revier einer FREMDEN
-   * Familie riskiert man, von deren Schlägern rausgeworfen zu werden. */
-  socket.on("erpressen", guard((p, { bezirk }, ack) => {
-    if (MODE !== "kartell") return ack?.({ error: "Schutzgeld gibt es nur in der Kartellwirtschaft" });
-    if (p.familie === "polizei") return ack?.({ error: "Die Polizei erpresst niemanden — sie macht Razzien" });
-    if (!p.familie) return ack?.({ error: "Ohne Familie erpresst man niemanden" });
-    bezirk = Math.floor(+bezirk);
-    const b = G.bezirke?.[bezirk];
-    if (!b) return ack?.({ error: "Diesen Bezirk kennt hier niemand" });
-    p.erpressCd ??= {};
-    if ((p.erpressCd[bezirk] || 0) > G.tick)
-      return ack?.({ error: `Die Läden im ${b.name} haben gerade erst gezahlt — warte noch ${p.erpressCd[bezirk] - G.tick} s` });
-    p.erpressCd[bezirk] = G.tick + ERPRESS_COOLDOWN;
-    const eigene = b.kontrolle === p.familie, fremd = b.kontrolle && b.kontrolle !== p.familie;
-    if (fremd && Math.random() < 0.3) {
-      /* Die Schläger der kontrollierenden Familie funken dazwischen */
-      G.fahndung[p.familie] = (G.fahndung[p.familie] || 0) + 10;
-      G.familienRespekt[p.familie] = Math.max(0, (G.familienRespekt[p.familie] || 0) - 2);
-      G.familienRespekt[b.kontrolle] = (G.familienRespekt[b.kontrolle] || 0) + 1;
-      io.emit("notice", { text: `👊 ${FAMILIEN[b.kontrolle].name} wirft ${p.name} aus dem ${b.name} — die Erpressung platzt.` });
-      return ack?.({ error: `${FAMILIEN[b.kontrolle].name} hält ihre Hand über den ${b.name} — ihre Schläger haben dich rausgeworfen (−2 Respekt, +Fahndung)` });
-    }
-    let betrag = 250 + Math.floor(Math.random() * 200);
-    if (eigene) betrag = Math.round(betrag * 1.5);
-    p.cash += betrag;
-    kampfPunkte(bezirk, p.familie, 1);   // Tauziehen: wer eintreibt, zeigt, wem die Straße gehört
-    G.fahndung[p.familie] = (G.fahndung[p.familie] || 0) + 6;
-    G.familienRespekt[p.familie] = (G.familienRespekt[p.familie] || 0) + 1;
-    questProg(p, "schutzgeld");
-    gainXp(p, 8);
-    logTx(p, "Kartell", `Schutzgeld aus dem ${b.name} erpresst`, betrag);
-    io.to(p.id).emit("notice", { text: `💰 Die Läden im ${b.name} zahlen: +${betrag} $${eigene ? " — euer Revier, keiner mault" : ""}` });
-    ack?.({ ok: true, betrag });
-  }));
-
-  /* --- Revierkampf: geclaimte Bezirke mit Waffen umkämpfen ---
-   * Setzt bei Erfolg die Kontrolle des Bezirks für KAMPF_DAUER aus. In dem
-   * Fenster holt man sich mit Bauten und Sperren selbst die Mehrheit. */
-  socket.on("revierkampf", guard((p, { bezirk }, ack) => {
-    if (MODE !== "kartell") return ack?.({ error: "Revierkämpfe gibt es nur in der Kartellwirtschaft" });
-    if (p.familie === "polizei") return ack?.({ error: "Die Polizei führt keine Revierkämpfe — sie sichert Bezirke per Razzia" });
-    if (!p.familie) return ack?.({ error: "Ohne Familie kämpft man um kein Revier" });
-    bezirk = Math.floor(+bezirk);
-    const b = G.bezirke?.[bezirk];
-    if (!b) return ack?.({ error: "Diesen Bezirk kennt hier niemand" });
-    if ((G.revierKaempfe ??= {})[bezirk])
-      return ack?.({ error: "Dort tobt schon ein Revierkampf — misch dich mit Verstärkung ein" });
-    if (!b.kontrolle) return ack?.({ error: "Der Bezirk ist frei — bau einfach, statt zu schießen" });
-    if (b.kontrolle === p.familie) return ack?.({ error: "Das ist euer eigenes Revier" });
-    if ((p.kampfCd || 0) > G.tick)
-      return ack?.({ error: `Deine Leute lecken noch ihre Wunden — warte ${p.kampfCd - G.tick} s` });
-    const pistolen = Math.floor(p.inv.pistole || 0);
-    if (pistolen < KAMPF_PISTOLEN_MIN)
-      return ack?.({ error: `Für einen Revierkampf brauchst du mindestens ${KAMPF_PISTOLEN_MIN} Pistolen — Waffentransporte überfallen!` });
-    p.kampfCd = G.tick + KAMPF_COOLDOWN;
-    const einsatz = Math.min(KAMPF_PISTOLEN_MAX, pistolen);
-    p.inv.pistole -= einsatz;
-    /* Chance: Waffen helfen, die Präsenz der Verteidiger (Gebäude im Bezirk) bremst */
-    const verteidigung = b.staerken?.[b.kontrolle] || 2;
-    const chance = Math.min(.85, .35 + einsatz * .08 - Math.max(0, verteidigung - 2) * .04);
-    G.fahndung[p.familie] = (G.fahndung[p.familie] || 0) + 8;
-    if (Math.random() < chance) {
-      /* Das Tauziehen beginnt: Startpunkte = Momentum + Familiengröße + Soldaten */
-      G.revierKaempfe[bezirk] = { angreifer: p.familie, verteidiger: b.kontrolle,
-        punkte: { [p.familie]: kampfStart(p.familie, true), [b.kontrolle]: kampfStart(b.kontrolle, false) },
-        bis: G.tick + KAMPF_DAUER };
-      G.familienRespekt[p.familie] = (G.familienRespekt[p.familie] || 0) + 2;
-      questProg(p, "kampf");
-      gainXp(p, 20);
-      bezirkeBerechnen();
-      logTx(p, "Kartell", `Revierkampf eröffnet: ${b.name}`, 0);
-      io.emit("kampfStart", { bezirk, name: b.name, angreifer: p.familie, verteidiger: b.kontrolle });
-      io.emit("notice", { text: `⚔️ REVIERKAMPF! ${FAMILIEN[p.familie].name} stürmt den ${b.name} der ${FAMILIEN[b.kontrolle].name} — ${KAMPF_DAUER} s Tauziehen: Bauten, Sperren, Erpressungen und Verstärkung zählen!` });
-      ack?.({ ok: true, dauer: KAMPF_DAUER });
-    } else {
-      const kaution = Math.min(p.cash, 500);
-      p.cash -= kaution;
-      G.fahndung[p.familie] = (G.fahndung[p.familie] || 0) + 4;   // insgesamt +12
-      G.familienRespekt[p.familie] = Math.max(0, (G.familienRespekt[p.familie] || 0) - 1);
-      logTx(p, "Kartell", `Revierkampf im ${b.name} verloren (${einsatz} Pistolen weg)`, -kaution);
-      io.emit("notice", { text: `⚔️ ${FAMILIEN[b.kontrolle].name} schlägt einen Angriff von ${p.name} auf den ${b.name} zurück.` });
-      ack?.({ error: `Zurückgeschlagen — ${einsatz} Pistolen verloren, ${kaution} $ Kaution, die Fahndung brennt (+12)` });
-    }
-  }));
-
-  /* --- Polizei: Razzia gegen einen kontrollierten Bezirk ---
-   * Das Kerngeschäft des Gegenspielers: Die Polizei liest im Panel ab, WER
-   * einen Bezirk hält und wie heiß dessen Fahndung läuft — je höher die
-   * Fahndung, desto sicherer der Zugriff. Erfolg: Ware der Familie weg,
-   * Bußgeld an die Staatskasse (den Polizisten), Bezirk 60 s „gesichert",
-   * ein Einsatzpunkt. 25 Punkte, und die Polizei gewinnt die Runde. */
-  socket.on("razziaBezirk", guard((p, { bezirk }, ack) => {
-    if (MODE !== "kartell") return ack?.({ error: "Razzien gibt es nur in der Kartellwirtschaft" });
-    if (p.familie !== "polizei") return ack?.({ error: "Razzien führt nur die Polizei" });
-    bezirk = Math.floor(+bezirk);
-    const b = G.bezirke?.[bezirk];
-    if (!b) return ack?.({ error: "Diesen Bezirk kennt hier niemand" });
-    if (!b.kontrolle) return ack?.({ error: "Dort kontrolliert niemand etwas — keine Grundlage für einen Zugriff" });
-    if ((p.razziaCd || 0) > G.tick)
-      return ack?.({ error: `Das Einsatzkommando rüstet noch — ${p.razziaCd - G.tick} s` });
-    p.razziaCd = G.tick + RAZZIA_BEZIRK_CD;
-    const fam = b.kontrolle;
-    const chance = Math.min(.9, .35 + (G.fahndung[fam] || 0) / 200);   // heiße Familien = leichte Beute
-    if (Math.random() < chance) {
-      let beschlagnahmt = 0, strafe = 0;
-      for (const m of Object.values(G.players)) {
-        if (m.familie !== fam) continue;
-        for (const g of ILLEGAL) { const n = Math.floor(m.inv[g] || 0); if (n > 0) { m.inv[g] = 0; beschlagnahmt += n; } }
-        const st2 = Math.min(m.cash, 800); m.cash -= st2; strafe += st2;
-        logTx(m, "Kartell", `Razzia im ${b.name} — Ware beschlagnahmt, Bußgeld`, -st2);
-      }
-      p.cash += strafe;
-      G.familienRespekt[fam] = Math.max(0, (G.familienRespekt[fam] || 0) - 5);
-      G.fahndung[fam] = Math.max(0, (G.fahndung[fam] || 0) - 30);   // Akte abgearbeitet
-      (G.gesichert ??= {})[bezirk] = G.tick + GESICHERT_DAUER;
-      G.polizeiPunkte = (G.polizeiPunkte || 0) + 2;
-      gainXp(p, 15);
-      logTx(p, "Polizei", `Razzia im ${b.name}: ${beschlagnahmt}× Ware, ${strafe} $ Bußgeld`, strafe);
-      bezirkeBerechnen();
-      io.emit("notice", { text: `🚨 RAZZIA! ${p.name} stürmt den ${b.name} (${famDef(fam).name}): ${beschlagnahmt}× heiße Ware beschlagnahmt, ${strafe} $ Bußgeld — der Bezirk ist ${GESICHERT_DAUER} s gesichert.` });
-      ack?.({ ok: true, beschlagnahmt, strafe });
-    } else {
-      G.fahndung[fam] = Math.max(0, (G.fahndung[fam] || 0) - 5);
-      io.emit("notice", { text: `🚔 Eine Razzia im ${b.name} läuft ins Leere — ${famDef(fam).name} wurde gewarnt.` });
-      ack?.({ error: "Der Zugriff platzt — die Läden waren sauber. Mehr Fahndungsdruck macht den nächsten sicherer" });
-    }
-  }));
-
-  /* --- Casino Municipale: spielen, Quoten, Ausbau, Schwarzverkauf --- */
-  socket.on("gcasinoSpielen", guard((p, { spiel, einsatz }, ack) => {
-    if (MODE !== "kartell") return ack?.({ error: "Das Casino Municipale gibt es nur in der Kartellwirtschaft" });
-    const sp = GCASINO_SPIELE[spiel];
-    if (!sp) return ack?.({ error: "Dieses Spiel kennt das Haus nicht" });
-    const herr = gcasinoHerrscher();
-    if (!herr) return ack?.({ error: "Das Casino ist geschlossen — niemand beherrscht die Piazza Grande" });
-    /* Jeder darf ans Tableau — auch das Haus selbst (dann schiebt die Familie
-     * das Geld intern hin und her) und der Commissario nach Feierabend. */
-    einsatz = Math.floor(+einsatz);
-    if (!(einsatz >= 50 && einsatz <= GCASINO_EINSATZ_MAX))
-      return ack?.({ error: `Einsatz zwischen 50 und ${GCASINO_EINSATZ_MAX} $` });
-    if (p.cash < einsatz) return ack?.({ error: "Zu wenig Bargeld" });
-    const q = GCASINO_QUOTEN[G.gcasino.quote];
-    const chance = Math.max(.005, sp.chance + (sp.chance > .1 ? q.chanceDelta : q.chanceDelta / 10));
-    gcasinoEinsatz(p, einsatz, sp.name);
-    const gewonnen = Math.random() < chance;
-    const detail = gcasinoDetail(spiel, gewonnen);
-    let betrag = einsatz;
-    if (gewonnen) betrag = gcasinoGewinn(p, Math.round(einsatz * sp.faktor), sp.name);
-    ack?.({ ok: true, gewonnen, betrag, detail });
-  }));
-
-  /* --- Live-Roulette: gemeinsamer Tisch, alle setzen, ein Rad dreht --- */
-  socket.on("grouletteSetzen", guard((p, { art, zahl, einsatz }, ack) => {
-    if (MODE !== "kartell") return ack?.({ error: "Nur in der Kartellwirtschaft" });
-    if (!gcasinoHerrscher()) return ack?.({ error: "Das Casino ist geschlossen — niemand beherrscht die Piazza Grande" });
-    const R = G.groulette;
-    if (R.phase === "drehen") return ack?.({ error: "Rien ne va plus — das Rad dreht sich schon" });
-    if (!["rot", "schwarz", "zahl"].includes(art)) return ack?.({ error: "Diese Wette kennt der Croupier nicht" });
-    zahl = Math.floor(+zahl);
-    if (art === "zahl" && !(zahl >= 0 && zahl <= 36)) return ack?.({ error: "Volle Zahl: 0 bis 36" });
-    einsatz = Math.floor(+einsatz);
-    if (!(einsatz >= 50 && einsatz <= GCASINO_EINSATZ_MAX))
-      return ack?.({ error: `Einsatz zwischen 50 und ${GCASINO_EINSATZ_MAX} $` });
-    if (p.cash < einsatz) return ack?.({ error: "Zu wenig Bargeld" });
-    gcasinoEinsatz(p, einsatz, "Roulette");
-    if (R.phase === "warten") {
-      R.phase = "setzen"; R.endet = G.tick + 20; R.zahl = null;
-      io.emit("notice", { text: `\u{1F3A1} ${p.name} eröffnet eine Runde am Roulette-Tisch — Einsätze bitte! (20 s)` });
-    }
-    R.einsaetze.push({ pid: p.id, name: p.name, farbe: p.color, art, zahl: art === "zahl" ? zahl : null, einsatz });
-    ack?.({ ok: true, endet: R.endet });
-  }));
-
-  /* --- Blackjack: bis zu 4 Plätze, reihum ziehen, der Dealer zieht bis 17 --- */
-  socket.on("gblackjackBeitreten", guard((p, { einsatz }, ack) => {
-    if (MODE !== "kartell") return ack?.({ error: "Nur in der Kartellwirtschaft" });
-    if (!gcasinoHerrscher()) return ack?.({ error: "Das Casino ist geschlossen — niemand beherrscht die Piazza Grande" });
-    const B = G.gblackjack;
-    if (B.phase !== "warten" && B.phase !== "setzen")
-      return ack?.({ error: "Die Runde läuft — gleich wird neu gegeben" });
-    if (B.spieler.some(s => s.pid === p.id)) return ack?.({ error: "Du sitzt schon am Tisch" });
-    if (B.spieler.length >= 4) return ack?.({ error: "Der Tisch ist voll (4 Plätze)" });
-    einsatz = Math.floor(+einsatz);
-    if (!(einsatz >= 50 && einsatz <= GCASINO_EINSATZ_MAX))
-      return ack?.({ error: `Einsatz zwischen 50 und ${GCASINO_EINSATZ_MAX} $` });
-    if (p.cash < einsatz) return ack?.({ error: "Zu wenig Bargeld" });
-    gcasinoEinsatz(p, einsatz, "Blackjack");
-    B.spieler.push(bjSitzNeu(p, einsatz));
-    if (B.phase === "warten") {
-      B.phase = "setzen"; B.endet = G.tick + 12; B.dealer = []; B.dran = -1;
-      io.emit("notice", { text: `\u{1F0CF} ${p.name} setzt sich an den Blackjack-Tisch — wer spielt mit? (12 s)` });
-    }
-    ack?.({ ok: true });
-  }));
-
-  socket.on("gblackjackZug", guard((p, { aktion }, ack) => {
-    const B = G.gblackjack;
-    if (MODE !== "kartell" || B.phase !== "ziehen") return ack?.({ error: "Gerade wird nicht gezogen" });
-    const s = B.spieler[B.dran];
-    if (!s || s.pid !== p.id) return ack?.({ error: "Du bist nicht an der Reihe" });
-    ack?.(gblackjackAktion(p, s, aktion));
-  }));
-
-  /* --- Poker: 2-4 Spieler gegeneinander, das Haus nimmt 5 % Rake --- */
-  socket.on("gpokerBeitreten", guard((p, { einsatz }, ack) => {
-    if (MODE !== "kartell") return ack?.({ error: "Nur in der Kartellwirtschaft" });
-    if (!gcasinoHerrscher()) return ack?.({ error: "Das Casino ist geschlossen — niemand beherrscht die Piazza Grande" });
-    const P = G.gpoker;
-    if (P.phase !== "warten" && P.phase !== "setzen") return ack?.({ error: "Die Hand läuft — gleich wird neu gemischt" });
-    if (P.spieler.some(s => s.pid === p.id)) return ack?.({ error: "Du sitzt schon am Tisch" });
-    if (P.spieler.length >= 4) return ack?.({ error: "Der Tisch ist voll (4 Plätze)" });
-    if (P.phase === "warten") {
-      einsatz = Math.floor(+einsatz);
-      if (!(einsatz >= 50 && einsatz <= GCASINO_EINSATZ_MAX))
-        return ack?.({ error: `Grundeinsatz zwischen 50 und ${GCASINO_EINSATZ_MAX} $` });
-      P.einsatz = einsatz;
-    }
-    if (p.cash < P.einsatz * 6) return ack?.({ error: `Für diesen Tisch brauchst du Reserven: ${P.einsatz * 6} $ (6× Grundeinsatz)` });
-    p.cash -= P.einsatz; P.pot += P.einsatz;
-    logTx(p, "Casino", "Poker: Ante", -P.einsatz);
-    P.spieler.push({ pid: p.id, name: p.name, farbe: p.color, karten: [], gefoldet: false,
-      gesetzt: 0, dranWar: false, ergebnis: null, wert: null });
-    if (P.phase === "warten") {
-      P.phase = "setzen"; P.endet = G.tick + 15; P.board = []; P.pot = P.einsatz;
-      io.emit("notice", { text: `\u{1F0A1} ${p.name} eröffnet einen Poker-Tisch (Grundeinsatz ${P.einsatz} $) — wer setzt sich dazu? (15 s)` });
-    }
-    ack?.({ ok: true });
-  }));
-
-  socket.on("gpokerZug", guard((p, { aktion }, ack) => {
-    const P = G.gpoker;
-    if (MODE !== "kartell" || P.phase !== "wetten") return ack?.({ error: "Gerade wird nicht gesetzt" });
-    const s = P.spieler[P.dran];
-    if (!s || s.pid !== p.id) return ack?.({ error: "Du bist nicht an der Reihe" });
-    ack?.(gpokerAktion(p, s, aktion));
-  }));
-
-  /* --- Patenwahl: kandidieren, versprechen, abstimmen --- */
-  socket.on("pateKandidieren", guard((p, _x, ack) => {
-    if (MODE !== "kartell") return ack?.({ error: "Nur in der Kartellwirtschaft" });
-    const W = G.pateWahl;
-    if (W.phase !== "kandidatur") return ack?.({ error: "Gerade nimmt niemand Kandidaturen an" });
-    if (!p.familie || p.familie === "polizei") return ack?.({ error: "Die Questura kandidiert nicht" });
-    if (famBoss(p.familie) !== p.id) return ack?.({ error: "Nur das Oberhaupt einer Familie darf kandidieren — rede mit deinem Boss (oder stürze ihn)" });
-    if (W.kandidaten.some(k => k.pid === p.id)) return ack?.({ error: "Du stehst schon auf der Liste" });
-    W.kandidaten.push({ pid: p.id, name: p.name, familie: p.familie, versprechen: null });
-    io.emit("notice", { text: `\u{1F3A9} ${p.name} (${FAMILIEN[p.familie].name}) kandidiert für das Amt des Paten.` });
-    ack?.({ ok: true });
-  }));
-
-  socket.on("pateVersprechen", guard((p, { art }, ack) => {
-    if (MODE !== "kartell") return ack?.({ error: "Nur in der Kartellwirtschaft" });
-    const W = G.pateWahl;
-    if (W.phase !== "versprechen") return ack?.({ error: "Jetzt ist nicht die Zeit für große Worte" });
-    const k = W.kandidaten.find(k2 => k2.pid === p.id);
-    if (!k) return ack?.({ error: "Nur Kandidaten geben Versprechen ab" });
-    if (!PATE_DEKRETE[art]) return ack?.({ error: "Dieses Versprechen kennt niemand" });
-    k.versprechen = art;
-    io.emit("notice", { text: `\u{1F4DC} ${p.name} verspricht: „${PATE_DEKRETE[art].name}“ — ${PATE_DEKRETE[art].text}` });
-    ack?.({ ok: true });
-  }));
-
-  socket.on("patenStimme", guard((p, { kandidat }, ack) => {
-    if (MODE !== "kartell") return ack?.({ error: "Nur in der Kartellwirtschaft" });
-    const W = G.pateWahl;
-    if (W.phase !== "wahl" && W.phase !== "stichwahl") return ack?.({ error: "Gerade läuft keine Abstimmung" });
-    if (!p.familie || p.familie === "polizei") return ack?.({ error: "Die Questura wählt keinen Paten" });
-    if (!W.kandidaten.some(k => k.pid === kandidat)) return ack?.({ error: "Der steht nicht auf dem Zettel" });
-    if (W.stich && !W.stich.includes(kandidat)) return ack?.({ error: "In der Stichwahl stehen nur noch zwei zur Wahl" });
-    W.stimmen[p.id] = kandidat;
-    ack?.({ ok: true });
-  }));
-
-  /* --- Familienhaus: Ränge, Tribut, Kasse, Soldaten --- */
-  socket.on("famRang", guard((p, { pid, rang }, ack) => {
-    if (MODE !== "kartell") return ack?.({ error: "Nur in der Kartellwirtschaft" });
-    if (famBoss(p.familie) !== p.id) return ack?.({ error: "Ränge vergibt nur das Oberhaupt" });
-    const ziel = G.players[pid];
-    if (!ziel || ziel.familie !== p.familie) return ack?.({ error: "Der gehört nicht zu deiner Familie" });
-    if (pid === p.id) return ack?.({ error: "Dich selbst befördern? Sehr souverän — nein." });
-    if (rang === "oberhaupt") {
-      G.familienBoss[p.familie] = pid;
-      G.familienRang[p.id] = "capo";
-      io.emit("notice", { text: `\u{1F396} Machtübergabe bei ${FAMILIEN[p.familie].name}: ${ziel.name} ist das neue Oberhaupt.` });
-    } else if (rang === "capo" || rang === "rekrut") {
-      G.familienRang[pid] = rang;
-    } else return ack?.({ error: "Diesen Rang kennt die Familie nicht" });
-    ack?.({ ok: true });
-  }));
-
-  socket.on("famTribut", guard((p, { satz }, ack) => {
-    if (MODE !== "kartell") return ack?.({ error: "Nur in der Kartellwirtschaft" });
-    if (famBoss(p.familie) !== p.id) return ack?.({ error: "Den Tribut setzt nur das Oberhaupt fest" });
-    satz = +satz;
-    if (![0, .05, .10, .15].includes(satz)) return ack?.({ error: "Tribut: 0, 5, 10 oder 15 %" });
-    G.familienTribut[p.familie] = satz;
-    io.emit("notice", { text: `\u{1F4B0} ${p.name} setzt den Tribut bei ${FAMILIEN[p.familie].name} auf ${Math.round(satz * 100)} % fest.` });
-    ack?.({ ok: true });
-  }));
-
-  socket.on("famKasse", guard((p, { aktion }, ack) => {
-    if (MODE !== "kartell") return ack?.({ error: "Nur in der Kartellwirtschaft" });
-    const fid = p.familie;
-    if (!fid || fid === "polizei") return ack?.({ error: "Du gehörst keiner Familie an" });
-    if (aktion === "einzahlen") {
-      const betrag = Math.min(p.cash, 1000);
-      if (betrag <= 0) return ack?.({ error: "Kein Bargeld" });
-      p.cash -= betrag; G.familienBank[fid] += betrag;
-      logTx(p, "Kartell", "Einzahlung in die Familienkasse", -betrag);
-      return ack?.({ ok: true, text: `${betrag} $ eingezahlt.` });
-    }
-    if (famBoss(p.familie) !== p.id) return ack?.({ error: "An die Kasse darf nur das Oberhaupt" });
-    if (aktion === "ausschuetten") {
-      const teil = famAusschuetten(fid);
-      if (!teil) return ack?.({ error: "Die Kasse ist praktisch leer" });
-      return ack?.({ ok: true, text: `Ausgeschüttet: ${teil} $ an jedes Mitglied.` });
-    }
-    if (aktion === "einsacken") {
-      const betrag = Math.floor(G.familienBank[fid]);
-      if (betrag <= 0) return ack?.({ error: "Die Kasse ist leer" });
-      G.familienBank[fid] = 0;
-      p.cash += betrag;
-      logTx(p, "Kartell", "Familienkasse geleert — der Boss bedient sich", betrag);
-      G.familienRespekt[fid] = Math.max(0, (G.familienRespekt[fid] || 0) - 2);
-      io.emit("notice", { text: `\u{1F911} ${p.name} leert die Kasse von ${FAMILIEN[fid].name} (−2 Respekt — die Rekruten murren).` });
-      return ack?.({ ok: true, text: `${betrag} $ in die eigene Tasche.` });
-    }
-    if (aktion === "soldat") {
-      if (G.soldaten[fid] >= SOLDATEN_MAX) return ack?.({ error: `Mehr als ${SOLDATEN_MAX} Soldaten hält keine Familie` });
-      if (!famSoldatKaufen(fid)) return ack?.({ error: `Ein Soldat kostet ${SOLDAT_KOSTEN} $ aus der Kasse` });
-      return ack?.({ ok: true, text: `Soldat angeheuert (${G.soldaten[fid]}/${SOLDATEN_MAX}).` });
-    }
-    ack?.({ error: "Diese Kassen-Aktion gibt es nicht" });
-  }));
-
   /* --- Stadt-Casino auf casino.cs: eine Runde spielen --- */
   socket.on("casinoSpielen", guard((p, { spiel, tipp, einsatz }, ack) => {
     if (!stadtAktiv()) return ack?.({ error: "Das Stadt-Casino öffnet erst mit der wachsenden Stadt" });
@@ -8379,332 +7204,6 @@ io.on("connection", socket => {
      * dass auf casino.cs ueberhaupt etwas passiert. */
     if (netto >= 5000) io.emit("notice", { text: `🎰 ${p.name} räumt im Stadt-Casino ab — ${Math.round(netto)} $ bei ${def.name}!` });
     ack?.({ ok: true, ...r, einsatz, auszahlung: aus, netto, cash: Math.round(p.cash) });
-  }));
-
-  /* --- Wahrzeichen: ein interaktives Gebäude je Bezirk --- */
-  socket.on("wahrzeichen", guard((p, payload, ack) => {
-    if (MODE !== "kartell") return ack?.({ error: "Nur in der Kartellwirtschaft" });
-    ack?.(wzAktion(p, payload || {}));
-  }));
-
-  socket.on("gcasinoQuote", guard((p, { quote }, ack) => {
-    if (MODE !== "kartell") return ack?.({ error: "Nur in der Kartellwirtschaft" });
-    if (!GCASINO_QUOTEN[quote]) return ack?.({ error: "Diese Quote kennt das Haus nicht" });
-    if (p.familie !== gcasinoHerrscher()) return ack?.({ error: "Die Quoten stellt nur die Familie ein, die die Piazza hält" });
-    G.gcasino.quote = quote;
-    io.emit("notice", { text: `🎰 ${famDef(p.familie).name} stellt im Casino ${GCASINO_QUOTEN[quote].name} ein.` });
-    ack?.({ ok: true });
-  }));
-
-  socket.on("gcasinoUpgrade", guard((p, _x, ack) => {
-    if (MODE !== "kartell") return ack?.({ error: "Nur in der Kartellwirtschaft" });
-    if (p.familie !== gcasinoHerrscher()) return ack?.({ error: "Ausbauen darf nur die Familie, die die Piazza hält" });
-    if (G.gcasino.stufe >= 5) return ack?.({ error: "„La Dorata“ ist die höchste Ausbaustufe — prunkvoller geht es nicht" });
-    const kosten = 4000 * G.gcasino.stufe;
-    if (p.cash < kosten) return ack?.({ error: `Der Ausbau kostet ${kosten} $` });
-    p.cash -= kosten;
-    G.gcasino.stufe++;
-    logTx(p, "Casino", `Casino ausgebaut: „${GCASINO_STILE[G.gcasino.stufe - 1]}“`, -kosten);
-    gainXp(p, 25);
-    io.emit("notice", { text: `🎰 Das Casino Municipale erstrahlt neu: Stil „${GCASINO_STILE[G.gcasino.stufe - 1]}“ (Stufe ${G.gcasino.stufe}) — mehr Bürger, mehr Umsatz. Achtung: Der Ausbau bleibt, auch wenn die Piazza den Herrn wechselt.` });
-    ack?.({ ok: true, stufe: G.gcasino.stufe });
-  }));
-
-  socket.on("gcasinoVerkauf", guard((p, { good, qty }, ack) => {
-    if (MODE !== "kartell") return ack?.({ error: "Nur in der Kartellwirtschaft" });
-    if (p.familie !== gcasinoHerrscher()) return ack?.({ error: "Unterm Tisch verkauft nur die Familie, die die Piazza hält" });
-    if (!ILLEGAL.includes(good)) return ack?.({ error: "Das Volk will nur heiße Ware" });
-    qty = Math.floor(+qty) || Math.floor(p.inv[good] || 0);
-    qty = Math.min(qty, Math.floor(p.inv[good] || 0));
-    if (qty <= 0) return ack?.({ error: `Kein ${GOODS[good].name} im Lager` });
-    const erloes = Math.round(qty * BASEP[good] * GCASINO_SCHWARZPREIS);
-    p.inv[good] -= qty;
-    p.cash += erloes;
-    G.familienRespekt[p.familie] = (G.familienRespekt[p.familie] || 0) + Math.floor(erloes / 100);
-    G.fahndung[p.familie] = (G.fahndung[p.familie] || 0) + 2;
-    logTx(p, "Casino", `${qty}× ${GOODS[good].name} unterm Tisch ans Volk (ohne Paten-Abgabe)`, erloes);
-    questProg(p, "hehler");
-    ack?.({ ok: true, erloes });
-  }));
-
-  /* --- Verstärkung: im laufenden Tauziehen Schläger in den Bezirk schicken --- */
-  socket.on("verstaerkung", guard((p, { bezirk }, ack) => {
-    if (MODE !== "kartell") return ack?.({ error: "Verstärkung gibt es nur in der Kartellwirtschaft" });
-    if (p.familie === "polizei") return ack?.({ error: "Die Polizei mischt sich nicht in Bandenkriege — sie beendet sie" });
-    bezirk = Math.floor(+bezirk);
-    const k = G.revierKaempfe?.[bezirk];
-    if (!k) return ack?.({ error: "Dort kämpft gerade niemand" });
-    if (k.punkte[p.familie] == null)
-      return ack?.({ error: "Das ist nicht der Kampf deiner Familie — halt dich raus" });
-    if ((p.verstCd || 0) > G.tick)
-      return ack?.({ error: `Deine Schläger sind noch unterwegs — ${p.verstCd - G.tick} s` });
-    if (p.cash < VERST_KOSTEN) return ack?.({ error: `Verstärkung kostet ${VERST_KOSTEN} $` });
-    p.cash -= VERST_KOSTEN;
-    p.verstCd = G.tick + VERST_CD;
-    k.punkte[p.familie] += 1;
-    logTx(p, "Kartell", `Verstärkung in den ${BEZIRK_NAMEN[bezirk]} geschickt`, -VERST_KOSTEN);
-    ack?.({ ok: true, punkte: k.punkte });
-  }));
-
-  /* --- Straßensperre: Revier markieren --- */
-  socket.on("sperreBauen", guard((p, { x, y }, ack) => {
-    if (MODE !== "kartell") return ack?.({ error: "Sperren gibt es nur in der Kartellwirtschaft" });
-    if (p.familie === "polizei") return ack?.({ error: "Die Polizei baut keine Barrikaden" });
-    if (!p.familie) return ack?.({ error: "Ohne Familie sperrt man keine Straßen" });
-    const t = G.map[y * MAP_W + x];
-    if (!t?.road) return ack?.({ error: "Sperren stehen nur auf Straßen" });
-    if (t.sperre) return ack?.({ error: "Hier steht schon eine Sperre" });
-    /* Limit je SPIELER, nicht je Familie: Mit Bots als Familienmitgliedern
-     * war das Familien-Kontingent sonst belegt, bevor ein Mensch klickte. */
-    const aktive = G.map.filter(t2 => t2.sperre?.von === p.id).length;
-    if (aktive >= SPERRE_MAX_JE_FAMILIE)
-      return ack?.({ error: `Du hältst schon ${SPERRE_MAX_JE_FAMILIE} Sperren — mehr Leute hast du nicht` });
-    if (p.cash < SPERRE_KOSTEN) return ack?.({ error: `Zu wenig Bargeld (${SPERRE_KOSTEN} $)` });
-    p.cash -= SPERRE_KOSTEN;
-    t.sperre = { familie: p.familie, von: p.id, bis: G.tick + SPERRE_DAUER };
-    kampfPunkte(bezirkVon(x, y), p.familie, 2);   // Tauziehen: Sperre zeigt Präsenz
-    G.fahndung[p.familie] = (G.fahndung[p.familie] || 0) + 5;
-    questProg(p, "sperre");
-    logTx(p, "Kartell", `Straßensperre errichtet (${BEZIRK_NAMEN[bezirkVon(x, y)]})`, -SPERRE_KOSTEN);
-    io.emit("notice", { text: `🚧 ${FAMILIEN[p.familie].name} sperrt eine Straße im ${BEZIRK_NAMEN[bezirkVon(x, y)]}.` });
-    ack?.({ ok: true });
-  }));
-
-  /* --- Illegales Casino: 17+4 gegen die Kasse des Besitzers ---
-   * Der Server hält die Hand, der Client zeigt sie nur an. Einsatz wird beim
-   * Geben abgebucht; am Ende fließt Geld direkt zwischen Gast und Besitzer.
-   * Klassische 17+4-Karten: 7, 8, 9, 10, Unter (2), Ober (3), König (4),
-   * Ass (11) — Ziel 21, die Bank zieht bis 17 und gewinnt den Gleichstand. */
-  const KARTEN = [{ w: 7, n: "7" }, { w: 8, n: "8" }, { w: 9, n: "9" }, { w: 10, n: "10" },
-                  { w: 2, n: "U" }, { w: 3, n: "O" }, { w: 4, n: "K" }, { w: 11, n: "A" }];
-  const karte = () => KARTEN[Math.floor(Math.random() * KARTEN.length)];
-  const handWert = h => h.reduce((s, k) => s + k.w, 0);
-  const casinoEnde = (p, gast) => {
-    const sp = p.casinoSpiel; p.casinoSpiel = null;
-    const owner = G.players[sp.ownerId];
-    const wert = handWert(sp.hand);
-    let bank = sp.bankHand || [];
-    let status, auszahlung = 0;
-    /* Zwei Asse aus der Hand sind das „Feuer“ — nach klassischer 17+4-Regel
-     * ein sofortiger Sieg, kein Überkauf. */
-    if (wert === 22 && sp.hand.length === 2) status = "gewonnen";
-    else if (wert > 21) status = "verloren";
-    else {
-      while (handWert(bank) < 17) bank.push(karte());
-      const bw = handWert(bank);
-      if (bw > 21 || bw < wert) status = "gewonnen";
-      else if (bw === wert) status = "push";
-      else status = "verloren";
-    }
-    if (!owner) { p.cash += sp.einsatz; status = "push"; }   // Besitzer weg: Einsatz zurück
-    else if (status === "gewonnen") {
-      /* Einsatz zurück plus Gewinn aus der Kasse des Besitzers — mehr als der
-       * Besitzer bar hat, kann der Tisch nicht auszahlen. */
-      auszahlung = Math.min(sp.einsatz, Math.max(0, owner.cash));
-      p.cash += sp.einsatz + auszahlung;
-      owner.cash -= auszahlung;
-      logTx(p, "Kartell", `Casino: 17+4 gewonnen (${wert} gegen ${handWert(bank)})`, auszahlung);
-      logTx(owner, "Kartell", `Casino: ${p.name} sprengt den Tisch`, -auszahlung);
-    } else if (status === "push") {
-      p.cash += sp.einsatz;
-    } else {
-      owner.cash += sp.einsatz;
-      owner.stats.umsatz = (owner.stats.umsatz || 0) + sp.einsatz;
-      logTx(p, "Kartell", `Casino: 17+4 verloren (${wert > 21 ? "über 21" : wert + " gegen " + handWert(bank)})`, -sp.einsatz);
-      logTx(owner, "Kartell", `Casino: das Haus gewinnt gegen ${p.name}`, sp.einsatz);
-      if (owner.familie) G.familienRespekt[owner.familie] = (G.familienRespekt[owner.familie] || 0) + 2;
-    }
-    if (owner?.familie) G.fahndung[owner.familie] = (G.fahndung[owner.familie] || 0) + 2;
-    return { status, hand: sp.hand, wert, bank, bankWert: handWert(bank), auszahlung, einsatz: sp.einsatz };
-  };
-
-  socket.on("casinoStart", guard((p, { x, y, einsatz }, ack) => {
-    if (MODE !== "kartell") return ack?.({ error: "Casinos gibt es nur in der Kartellwirtschaft" });
-    const t = G.map[y * MAP_W + x];
-    if (!t || t.btype !== "casino") return ack?.({ error: "Hier steht kein Casino" });
-    if (t.owner === p.id) return ack?.({ error: "Am eigenen Tisch spielt man nicht — das Haus gewinnt immer" });
-    if (t.paused) return ack?.({ error: "Der Tisch ist gerade geschlossen" });
-    if (p.casinoSpiel) return ack?.({ error: "Du sitzt schon an einem Tisch" });
-    einsatz = Math.floor(+einsatz);
-    if (!(einsatz >= 50 && einsatz <= 2000)) return ack?.({ error: "Einsatz zwischen 50 und 2.000 $" });
-    if (p.cash < einsatz) return ack?.({ error: "Zu wenig Bargeld" });
-    p.cash -= einsatz;
-    p.casinoSpiel = { x, y, ownerId: t.owner, einsatz, hand: [karte(), karte()] };
-    const wert = handWert(p.casinoSpiel.hand);
-    /* 21 mit den ersten beiden Karten (oder das Feuer): sofort ausbezahlt. */
-    if (wert >= 21) return ack?.(casinoEnde(p));
-    ack?.({ status: "offen", hand: p.casinoSpiel.hand, wert, einsatz });
-  }));
-
-  socket.on("casinoZiehen", guard((p, _a, ack) => {
-    const sp = p.casinoSpiel;
-    if (!sp) return ack?.({ error: "Du sitzt an keinem Tisch" });
-    sp.hand.push(karte());
-    const wert = handWert(sp.hand);
-    if (wert >= 21) return ack?.(casinoEnde(p));
-    ack?.({ status: "offen", hand: sp.hand, wert, einsatz: sp.einsatz });
-  }));
-
-  socket.on("casinoHalten", guard((p, _a, ack) => {
-    if (!p.casinoSpiel) return ack?.({ error: "Du sitzt an keinem Tisch" });
-    ack?.(casinoEnde(p));
-  }));
-
-  /* --- Bestechung: die Fahndung abkühlen --- */
-  socket.on("bestechen", guard((p, _a, ack) => {
-    if (MODE !== "kartell") return ack?.({ error: "Bestechung gibt es nur in der Kartellwirtschaft" });
-    if (!p.familie) return ack?.({ error: "Ohne Familie besticht man niemanden" });
-    if ((G.fahndung[p.familie] || 0) <= 0) return ack?.({ error: "Nach euch fahndet gerade niemand" });
-    if (p.cash < BESTECHUNG_KOSTEN) return ack?.({ error: `Zu wenig Bargeld (${BESTECHUNG_KOSTEN} $)` });
-    p.cash -= BESTECHUNG_KOSTEN;
-    G.fahndung[p.familie] = Math.max(0, (G.fahndung[p.familie] || 0) - 25);
-    logTx(p, "Kartell", "Beamte bestochen — die Fahndung kühlt ab", -BESTECHUNG_KOSTEN);
-    ack?.({ ok: true, fahndung: Math.round(G.fahndung[p.familie]) });
-  }));
-
-  socket.on("kartellGruenden", guard((p, { name }, ack) => {
-    if (!kartellModus(ack)) return;
-    if (kartellVon(p)) return ack?.({ error: "Du bist schon in einem Kartell" });
-    /* Wie beim Firmennamen: erst kürzen, dann entschärfen. Der Kartellname geht
-     * an alle Clients und landet dort in Mitgliederlisten — ungefiltert wäre er
-     * der direkte Weg, jedem Mitspieler eigenes Markup unterzuschieben. */
-    name = sicherText(String(name || "").trim().slice(0, KARTELL_NAME_MAX));
-    if (name.length < 3) return ack?.({ error: "Name zu kurz (mindestens 3 Zeichen)" });
-    if (G.cartels.some(k => k.name.toLowerCase() === name.toLowerCase()))
-      return ack?.({ error: "Diesen Namen gibt es schon" });
-    const k = { id: id(), name, kopfId: p.id, mitglieder: [p.id], einladungen: [],
-      minPreise: {}, verdacht: 0, ermittlung: null, umsatz: {}, gegruendet: G.tick };
-    G.cartels.push(k);
-    logTx(p, "Kartell", `Kartell „${name}“ gegründet`, 0);
-    /* Die Gründung ist öffentlich: Ein Zusammenschluss lässt sich nicht
-     * verbergen, nur das, was drinnen besprochen wird. */
-    io.emit("notice", { text: `${p.name} gründet das Kartell „${name}“.` });
-    ack?.({ ok: true, kartellId: k.id });
-  }));
-
-  socket.on("kartellEinladen", guard((p, { toId }, ack) => {
-    if (!kartellModus(ack)) return;
-    const k = kartellVon(p);
-    if (!k) return ack?.({ error: "Du bist in keinem Kartell" });
-    if (k.kopfId !== p.id) return ack?.({ error: "Nur der Kopf des Kartells lädt ein" });
-    const ziel = G.players[toId];
-    if (!ziel || ziel.id === p.id) return ack?.({ error: "Unbekannter Spieler" });
-    if (k.mitglieder.length >= KARTELL_MAX) return ack?.({ error: `Höchstens ${KARTELL_MAX} Mitglieder` });
-    if (kartellVon(ziel)) return ack?.({ error: `${ziel.name} ist schon in einem Kartell` });
-    if (k.einladungen.includes(ziel.id)) return ack?.({ error: "Einladung läuft bereits" });
-    k.einladungen.push(ziel.id);
-    /* Die Einladung geht privat raus — wer sie bekommt, soll selbst entscheiden
-     * können, ohne dass der Rest der Stadt zusieht. */
-    emitTo(ziel.id, "notice", { text: `${p.name} lädt dich ins Kartell „${k.name}“ ein.` });
-    ack?.({ ok: true });
-  }));
-
-  socket.on("kartellBeitreten", guard((p, { kartellId }, ack) => {
-    if (!kartellModus(ack)) return;
-    if (kartellVon(p)) return ack?.({ error: "Du bist schon in einem Kartell" });
-    const k = kartellFinden(kartellId);
-    if (!k) return ack?.({ error: "Kartell gibt es nicht mehr" });
-    if (!k.einladungen.includes(p.id)) return ack?.({ error: "Ohne Einladung geht das nicht" });
-    /* Zwischen Einladung und Beitritt kann das Kartell vollgelaufen sein — die
-     * Einladung allein garantiert keinen Platz. */
-    if (k.mitglieder.length >= KARTELL_MAX) {
-      k.einladungen = k.einladungen.filter(mid => mid !== p.id);
-      return ack?.({ error: "Das Kartell ist inzwischen voll" });
-    }
-    k.einladungen = k.einladungen.filter(mid => mid !== p.id);
-    k.mitglieder.push(p.id);
-    logTx(p, "Kartell", `Kartell „${k.name}“ beigetreten`, 0);
-    io.emit("notice", { text: `${p.name} gehört jetzt zum Kartell „${k.name}“.` });
-    ack?.({ ok: true });
-  }));
-
-  socket.on("kartellAblehnen", guard((p, { kartellId }, ack) => {
-    if (!kartellModus(ack)) return;
-    const k = kartellFinden(kartellId);
-    if (!k) return ack?.({ ok: true });          // schon weg — für den Ablehnenden dasselbe Ergebnis
-    k.einladungen = k.einladungen.filter(mid => mid !== p.id);
-    emitTo(k.kopfId, "notice", { text: `${p.name} lehnt die Einladung ins Kartell „${k.name}“ ab.` });
-    ack?.({ ok: true });
-  }));
-
-  socket.on("kartellVerlassen", guard((p, _payload, ack) => {
-    if (!kartellModus(ack)) return;
-    const k = kartellVon(p);
-    if (!k) return ack?.({ error: "Du bist in keinem Kartell" });
-    kartellVerlassen(p);
-    logTx(p, "Kartell", `Kartell „${k.name}“ verlassen`, 0);
-    io.emit("notice", { text: `${p.name} verlässt das Kartell „${k.name}“.` });
-    ack?.({ ok: true });
-  }));
-
-  /* --- Kartellmodus: Preisabsprache ---
-   * Wie beim Einladen entscheidet der Kopf. Eine Abstimmung unter Mitgliedern
-   * klänge demokratischer, brächte aber nur eine Warteschlange offener
-   * Vorschläge — die Spannung des Modus liegt nicht in der Beschlussfassung,
-   * sondern darin, ob sich alle daran halten. */
-  socket.on("kartellPreisSetzen", guard((p, { good, price }, ack) => {
-    if (!kartellModus(ack)) return;
-    const k = kartellVon(p);
-    if (!k) return ack?.({ error: "Du bist in keinem Kartell" });
-    if (k.kopfId !== p.id) return ack?.({ error: "Nur der Kopf des Kartells legt Preise fest" });
-    if (!GOODS[good]) return ack?.({ error: "Unbekannte Ware" });
-    price = Math.round(+price * 100) / 100;
-    if (!(price > 0) || !Number.isFinite(price)) return ack?.({ error: "Preis > 0 nötig" });
-    k.minPreise[good] = price;
-    const angehoben = kartellLaedenAngleichen(k, good, price);
-    /* Die Absprache bleibt unter den Mitgliedern — nach außen sieht man nur die
-     * Preise, die sich daraus ergeben, nicht die Abmachung selbst. */
-    for (const mid of k.mitglieder) {
-      emitTo(mid, "notice", { text: `Kartellabsprache: ${GOODS[good].name} ab sofort nicht unter ${price} $` +
-        (angehoben ? ` — ${angehoben} Ladenpreis${angehoben === 1 ? "" : "e"} angehoben.` : ".") });
-    }
-    logTx(p, "Kartell", `Mindestpreis ${GOODS[good].name}: ${price} $`, 0);
-    ack?.({ ok: true });
-  }));
-
-  /* --- Kronzeugenregelung ---
-   * Der Zug, der aus der Absprache ein Misstrauensspiel macht: Jedes Mitglied
-   * kann das eigene Kartell anzeigen, auch der Kopf. Wer anzeigt, geht
-   * straffrei aus und behaelt, was er unter der Absprache verdient hat — die
-   * uebrigen zahlen den hoeheren Satz.
-   *
-   * Moeglich, solange eine Absprache laeuft, also auch vorbeugend, bevor
-   * ueberhaupt Verdacht besteht. Damit haengt die Drohung dauerhaft ueber jeder
-   * Absprache und nicht erst in den Minuten vor einem Bescheid.
-   *
-   * Der Kronzeuge verlaesst das Kartell dabei. In einem Kartell zu bleiben, das
-   * man gerade verraten hat, waere unglaubwuerdig — und die anderen wissen es
-   * ohnehin, der Name steht in der Meldung. */
-  socket.on("kartellAnzeigen", guard((p, _payload, ack) => {
-    if (!kartellModus(ack)) return;
-    const k = kartellVon(p);
-    if (!k) return ack?.({ error: "Du bist in keinem Kartell" });
-    /* Ohne laufende Absprache gibt es nichts anzuzeigen — ein Zusammenschluss
-     * allein ist nicht verboten. */
-    if (!Object.keys(k.minPreise).length)
-      return ack?.({ error: "Ohne laufende Preisabsprache gibt es nichts anzuzeigen" });
-
-    emitTo(p.id, "notice", { text: `Du hast „${k.name}“ angezeigt — für dich bleibt es folgenlos.` });
-    /* Erst den Bescheid, dann den Austritt: Der Bescheid geht die
-     * Mitgliederliste durch, und der Kronzeuge muss darin noch vorkommen,
-     * damit er als straffrei ausgewiesen wird statt einfach zu fehlen. */
-    kartellBescheid(k, p.id);
-    kartellVerlassen(p);
-    logTx(p, "Kartell", `Kartell „${k.name}“ angezeigt und verlassen`, 0);
-    ack?.({ ok: true });
-  }));
-
-  socket.on("kartellPreisAufheben", guard((p, { good }, ack) => {
-    if (!kartellModus(ack)) return;
-    const k = kartellVon(p);
-    if (!k) return ack?.({ error: "Du bist in keinem Kartell" });
-    if (k.kopfId !== p.id) return ack?.({ error: "Nur der Kopf des Kartells legt Preise fest" });
-    if (k.minPreise[good] == null) return ack?.({ error: "Für diese Ware gibt es keine Absprache" });
-    delete k.minPreise[good];
-    for (const mid of k.mitglieder) {
-      emitTo(mid, "notice", { text: `Kartellabsprache für ${GOODS[good].name} aufgehoben.` });
-    }
-    ack?.({ ok: true });
   }));
 
   /* --- Karte: Bauen (schaltet gesperrte Kacheln atomar mit frei) / Abriss --- */
@@ -8754,14 +7253,7 @@ io.on("connection", socket => {
     /* Der Rennstall ist branchenfrei, aber auf einen je Firma begrenzt: Ohne
      * diese Grenze wäre "mehr Ställe" die beste Strategie, und der Wettpool
      * gehörte am Ende dem, der am meisten Kacheln hält. */
-    /* Familien-Gebäude: nur im Kartellmodus, nur von der eigenen Familie. */
-    if (bt.familie) {
-      if (MODE !== "kartell") return ack?.({ error: "Solche Geschäfte gibt es nur in der Kartellwirtschaft" });
-      if (p.familie !== bt.familie)
-        return ack?.({ error: `${FAMILIEN[bt.familie].name} lässt sich nicht in die Karten schauen — nur ihre Mitglieder bauen ${bt.name}` });
-    }
-    if (bt.casino && MODE !== "kartell")
-      return ack?.({ error: "Solche Etablissements gibt es nur in der Kartellwirtschaft" });
+    if (bt.familie || bt.casino) return ack?.({ error: "Dieses Gebäude gibt es nicht mehr" });
     if (bt.racing) {
       /* Planwirtschaft und Kartellmodus: keine Renntage, kein Wettpool — ein
        * Rennstall wäre ein totes Gebäude mit laufenden Fahrergehältern. */
@@ -8793,7 +7285,6 @@ io.on("connection", socket => {
     const matWert = Object.entries(mats).reduce((a, [g, n]) => a + n * MM[g].price, 0);
     for (const [g, n] of Object.entries(mats)) p.inv[g] -= n;
     if (t.locked) { t.locked = false; gainXp(p, 30); }
-    if (MODE === "kartell" && p.familie) kampfPunkte(bezirkVon(x, y), p.familie, 2);   // Tauziehen
     if (bt.out || bt.proc) questProg(p, "build");
     if (bt.familie) questProg(p, "familiebau");
     p.cash -= bt.cost + unlockCost; t.owner = p.id; t.btype = btype; t.level = 1; t.sterne = undefined; gainXp(p, 20);
@@ -8803,6 +7294,16 @@ io.on("connection", socket => {
     t.bauBis = G.tick + Math.round(MARKT.BAU_DAUER * (hqBesetzt(p, "bauleitung") ? 0.75 : 1));
     p.stats.gebaut++; p.stats.ausgaben += bt.cost + unlockCost;
     investieren(p, bt.cost + unlockCost);
+    /* v2 (Abschnitt 10): Mit dem Hauptsitz geht die Firma an die Börse — 40
+     * Aktien zum fairen Wert stehen für Fonds, Bürgerdepot und Spieler im Angebot,
+     * der Erlös geht an die Firma. */
+    if (bt === BTYPES.hauptsitz && !p.boersengang && (p.equity[p.id] || 0) >= WK.boerse.anteileBoersengang) {
+      p.boersengang = true;
+      const n = WK.boerse.anteileBoersengang;
+      p.equity[p.id] -= n;
+      G.shareListings.push({ id: id(), companyId: p.id, sellerId: p.id, count: n, price: Math.round(n * fundament(p) / AKTIEN), ts: Date.now(), toId: null, boersengang: true });
+      io.emit("notice", { text: `${p.name} geht an die Börse: ${n} Aktien zum fairen Wert im Angebot.` });
+    }
     marktLog("bau", `${p.name} baut ${bt.name}`, { firmaId: p.id, betrag: Math.round(t.anlagewert) });
     if (bt.retail) t.shop = Array.from({ length: bt.retail.slots }, () => null);
     logTx(p, "Bau", `${bt.name} gebaut${unlockCost ? " (inkl. Freischaltung)" : ""}`, -(bt.cost + unlockCost));
@@ -9640,6 +8141,7 @@ io.on("connection", socket => {
     G.boersen = {}; G.coins = {}; G.coinVertraege = []; G.coinOrders = [];
     G.markt = {}; G.marktLog = []; G.panikTag = null; G.panikErledigt = false; G.fonds = {}; G.etfHist = {}; G.faEtf = {}; G.software = {}; G.paint = {}; G.swFaktor = {}; G.werbeAktiv = new Set();
     G.boerseApp = {}; G.buergerApp = {}; G.jobboerse = {}; G.tour = { firmen: {} }; G.website = {}; G.rzUptime = {}; G.rzStoer = {}; G.depot = depotLeer(); G.bstat = {}; G.anzeigen = [];
+    G.haushalte = { cash: WK.start.haushalte, budget: 0, einkommen: 0, konsum: 0 };
     G.stadtkasse = STADT_GRUNDSTOCK; G.steuerStufe = 2; G.boerseGebuehren = 0; G.steuernGesamt = 0; G.stadtprojekt = null; G.projektPause = 120; G.stadtprojekteFertig = [];
     stadtInit();
     for (const pl of Object.values(G.players)) { pl.steuerStand = undefined; pl.steuerSchuld = 0; pl.steuerLetzter = null; }
@@ -10460,10 +8962,103 @@ io.on("connection", socket => {
     ack?.({ ok: true, reach: Math.round(p.adReach), boost: adBoost(p) });
   }));
 
+  /* v2: Kredit bei der Stadtsparkasse aufnehmen und tilgen. */
+  socket.on("kreditAufnehmen", guard((p, { betrag }, ack) => {
+    const x = Math.floor(Number(betrag) || 0);
+    const frei = Math.max(0, kreditLimitVon(p) - (p.kredit || 0));
+    if (!(x > 0)) return ack?.({ error: "Betrag > 0 nötig" });
+    if (x > frei) return ack?.({ error: `Kreditlimit: noch ${Math.floor(frei).toLocaleString("de-DE")} $ frei (50 % des Eigenkapitals)` });
+    p.kredit = (p.kredit || 0) + x; p.cash += x;
+    logTx(p, "Kredit", `Kredit der Stadtsparkasse (${(WR.kreditzins(leitzins()) * 100).toFixed(1)} % je Periode)`, x);
+    ack?.({ ok: true, kredit: p.kredit });
+  }));
+  socket.on("kreditTilgen", guard((p, { betrag }, ack) => {
+    const x = Math.min(Math.floor(Number(betrag) || 0), p.kredit || 0, Math.floor(p.cash));
+    if (!(x > 0)) return ack?.({ error: "Nichts zu tilgen" });
+    p.kredit -= x; p.cash -= x;
+    logTx(p, "Kredit", "Kredit getilgt", -x);
+    ack?.({ ok: true, kredit: p.kredit });
+  }));
+  /* v2: Wer die Kontrolle hält (über 50 %), stellt die Dividendenquote ein (0–80 %). */
+  socket.on("dividendenquote", guard((p, { companyId, quote }, ack) => {
+    const co = G.players[companyId || p.id];
+    if (!co) return ack?.({ error: "Ungültige Firma" });
+    if (stimmanteilVon(co, p.id) <= WK.uebernahme.schwellen.kontrolle) return ack?.({ error: "Dafür brauchst du mehr als 50 % der Aktien" });
+    const q = Math.min(WK.firma.dividendenMax, Math.max(0, Number(quote) || 0));
+    co.dividendenquote = q; co.ausschuettung = null;
+    logTx(co, "Aktien", `Dividendenquote auf ${Math.round(q * 100)} % des Nachsteuergewinns gesetzt`, 0);
+    ack?.({ ok: true, quote: q });
+  }));
+  /* v2: Pflichtangebot annehmen (Spieler entscheiden selbst). */
+  socket.on("pflichtangebotAnnehmen", guard((p, { id: oid, anzahl }, ack) => {
+    const o = (G.pflichtangebote || []).find(x => x.id === oid);
+    if (!o) return ack?.({ error: "Das Angebot ist abgelaufen" });
+    const co = G.players[o.companyId];
+    const n = angebotAnnehmen(o, p.id, Math.max(1, Math.floor(anzahl ?? co?.equity[p.id] ?? 0)));
+    if (!n) return ack?.({ error: "Nichts verkauft — keine Aktien oder der Bieter kann nicht zahlen" });
+    ack?.({ ok: true, verkauft: n });
+  }));
+  /* v2: Zwangsabfindung ab 90 % — Preis ist der höhere aus fairem Wert und letztem Angebotspreis. */
+  socket.on("zwangsabfindung", guard((p, { companyId }, ack) => {
+    const co = G.players[companyId];
+    if (!co || companyId === p.id) return ack?.({ error: "Ungültige Firma" });
+    if (stimmanteilVon(co, p.id) < WK.uebernahme.schwellen.zwang) return ack?.({ error: "Dafür brauchst du mindestens 90 % der Aktien" });
+    if (G.shareListings.some(l => l.companyId === companyId && (l.sellerId ?? l.companyId) !== p.id)) return ack?.({ error: "Es sind noch Aktien im Angebot — erst zurückziehen lassen" });
+    const letzt = (G.pflichtangebote || []).filter(o => o.companyId === companyId && o.kaeuferId === p.id).reduce((a, o) => Math.max(a, o.preis), 0);
+    const je = WR.zwangsPreis(fundament(co) / AKTIEN, letzt);
+    const rest = Object.entries(co.equity).filter(([h, n]) => h !== p.id && n > 0);
+    const summe = rest.reduce((a, [, n]) => a + n * je, 0);
+    if (p.cash < summe) return ack?.({ error: `Die Abfindung kostet ${Math.round(summe).toLocaleString("de-DE")} $` });
+    for (const [h, n] of rest) {
+      const betrag = n * je;
+      if (G.players[h]) { G.players[h].cash += betrag; logTx(G.players[h], "Aktien", `Zwangsabfindung: ${n} Aktien von ${co.name}`, betrag); emitTo(h, "notice", { text: `${p.name} hat dich bei ${co.name} abgefunden: +${Math.round(betrag)} $` }); }
+      else institutionErhaelt(h, betrag);
+      delete co.equity[h];
+      co.equity[p.id] = (co.equity[p.id] || 0) + n;
+    }
+    p.cash -= summe;
+    logTx(p, "Aktien", `Zwangsabfindung bei ${co.name} (${je.toFixed(2)} $ je Aktie)`, -summe);
+    ack?.({ ok: true, summe });
+  }));
+
   socket.on("mergeCompany", guard((p, { targetId }, ack) => {
     const target = G.players[targetId];
     if (!target || targetId === p.id) return ack?.({ error: "Ungültige Zielfirma" });
-    if ((target.equity[p.id] || 0) < AKTIEN) return ack?.({ error: `Du brauchst alle ${AKTIEN} Aktien für eine Fusion` });
+    /* v2: Fusion ab 75 % der Stimmen; das Kartellamt lehnt über 60 % gemeinsamem Marktanteil ab. */
+    if (stimmanteilVon(target, p.id) < WK.uebernahme.schwellen.fusion)
+      return ack?.({ error: `Für eine Fusion brauchst du mindestens ${Math.round(WK.uebernahme.schwellen.fusion * 100)} % der Aktien` });
+    const ma = marktanteilGemeinsam(p.id, targetId);
+    if (!WR.kartellErlaubt(ma))
+      return ack?.({ error: `Kartellamt: gemeinsam ${Math.round(ma * 100)} % Marktanteil bei einer Ware — über 60 % ist keine Fusion erlaubt. Verkaufe vorher Gebäude.` });
+    /* Restaktionäre bekommen Aktien der neuen Firma im Verhältnis der fairen
+     * Werte. Bei festen 100 Aktien heißt das: Die bisherigen Aktionäre des
+     * Käufers werden anteilig verdünnt. Bruchteile werden bar ausgezahlt. */
+    {
+      const Fp = fundament(p), Ft = fundament(target);
+      const rest = Object.entries(target.equity).filter(([h, n]) => h !== p.id && n > 0);
+      const restWert = rest.reduce((a, [, n]) => a + n / AKTIEN * Ft, 0);
+      const r = restWert / (Fp + Ft);
+      if (r > 0) {
+        const neu = {};
+        for (const [h, n] of Object.entries(p.equity)) neu[h] = n * (1 - r);
+        for (const [h, n] of rest) neu[h] = (neu[h] || 0) + n / AKTIEN * Ft / (Fp + Ft) * AKTIEN;
+        let summe = 0;
+        for (const h of Object.keys(neu)) {
+          const ganz = Math.floor(neu[h]), bruch = neu[h] - ganz;
+          if (bruch > 0 && h !== p.id) {
+            const bar = bruch * (Fp + Ft) / AKTIEN;
+            if (G.players[h]) G.players[h].cash += bar; else institutionErhaelt(h, bar);
+            p.cash -= bar;
+          }
+          neu[h] = ganz; summe += ganz;
+        }
+        neu[p.id] = (neu[p.id] || 0) + (AKTIEN - summe);   // Rundungsrest beim Käufer
+        p.equity = Object.fromEntries(Object.entries(neu).filter(([, n]) => n > 0));
+      }
+      /* Ein Hauptsitz bleibt: der zweite wird geschlossen. */
+      if (hatHQ(p)) for (const t of G.map) if (t.owner === targetId && t.btype === "hauptsitz") { t.btype = null; t.level = 0; }
+      p.fusionsBranchen = [...new Set([...(p.fusionsBranchen || []), target.industry])];
+    }
     p.afa.push(...(target.afa || []));   // Abschreibungen laufen bei der übernehmenden Firma weiter
     /* Vermögen zusammenlegen */
     p.cash += target.cash;
@@ -10651,347 +9246,6 @@ function runTick() {
     }
   }
   /* Das Kartellamt schaut jede Sekunde auf den Markt. */
-  if (!G.winner) kartellamtTick();
-  /* --- Kartellmodus: Bezirkskontrolle und Schutzgeld --- */
-  if (MODE === "kartell" && G.started && !G.winner) {
-    /* Während eines Tauziehens jede Sekunde neu rechnen — der Kontroll-Balken
-     * soll live zucken, nicht im 5-Sekunden-Takt nachhinken. */
-    if (G.tick % 5 === 0 || Object.keys(G.revierKaempfe || {}).length) bezirkeBerechnen();
-    /* Tauziehen auflösen: Wer bei Ablauf vorn liegt, gewinnt den Bezirk.
-     * Gleichstand geht an den Verteidiger — Angreifen muss sich lohnen MÜSSEN. */
-    for (const [idxS, k] of Object.entries(G.revierKaempfe || {})) {
-      if (k.bis > G.tick) continue;
-      const idx = +idxS;
-      delete G.revierKaempfe[idx];
-      const pa = k.punkte[k.angreifer], pv = k.punkte[k.verteidiger];
-      const name = BEZIRK_NAMEN[idx];
-      if (pa > pv) {
-        (G.besatzung ??= {})[idx] = { familie: k.angreifer, bis: G.tick + BESATZUNG_DAUER };
-        /* Plünderung: die Kassen des Viertels — mehr Verteidiger-Gebäude, mehr Beute */
-        const gebaeude = G.map.filter(t => t.btype && G.players[t.owner]?.familie === k.verteidiger &&
-          bezirkVon(t.x, t.y) === idx).length;
-        const beute = 800 + gebaeude * 100;
-        const sieger = Object.values(G.players).filter(p2 => p2.familie === k.angreifer);
-        const teil = Math.round(beute / Math.max(1, sieger.length));
-        for (const m of sieger) { m.cash += teil; logTx(m, "Kartell", `Plünderung im ${name}`, teil); }
-        G.familienRespekt[k.angreifer] = (G.familienRespekt[k.angreifer] || 0) + 6;
-        G.familienRespekt[k.verteidiger] = Math.max(0, (G.familienRespekt[k.verteidiger] || 0) - 3);
-        G.kampfSiege[k.angreifer] = (G.kampfSiege[k.angreifer] || 0) + 1;
-        io.emit("revierErgebnis", { bezirk: idx, name, sieger: k.angreifer, verlierer: k.verteidiger,
-          art: "erobert", beute, pa, pv, dauer: BESATZUNG_DAUER });
-        io.emit("notice", { text: `⚔️ ${FAMILIEN[k.angreifer].name} EROBERT den ${name} (${pa}:${pv})! ${beute} $ geplündert — 5 min Besatzung, dann zählt wieder die Gebäudemehrheit.` });
-      } else {
-        G.familienRespekt[k.verteidiger] = (G.familienRespekt[k.verteidiger] || 0) + 3;
-        io.emit("revierErgebnis", { bezirk: idx, name, sieger: k.verteidiger, verlierer: k.angreifer,
-          art: "verteidigt", pa, pv });
-        io.emit("notice", { text: `🛡️ ${FAMILIEN[k.verteidiger].name} VERTEIDIGT den ${name} (${pv}:${pa}) — der Angriff von ${FAMILIEN[k.angreifer].name} verpufft.` });
-      }
-      bezirkeBerechnen();
-    }
-    /* Abgelaufene Besatzungen und Sicherungen aufräumen */
-    for (const [idxS, bes] of Object.entries(G.besatzung || {}))
-      if (bes.bis <= G.tick) delete G.besatzung[idxS];
-    for (const [idxS, bis] of Object.entries(G.gesichert || {}))
-      if (bis <= G.tick) delete G.gesichert[idxS];
-    /* Polizei: Sold im Minutentakt und der Blick auf das Einsatzziel */
-    if (G.tick % 60 === 0) for (const p2 of Object.values(G.players)) {
-      if (p2.familie !== "polizei") continue;
-      p2.cash += POLIZEI_SOLD;
-      logTx(p2, "Polizei", "Sold", POLIZEI_SOLD);
-    }
-    if (!G.winner && (G.polizeiPunkte || 0) >= POLIZEI_ZIEL) {
-      const beste = Object.values(G.players).filter(p2 => p2.familie === "polizei")
-        .sort((a, b) => netWorth(b) - netWorth(a))[0];
-      if (beste) {
-        G.winner = beste.name;
-        G.winGrund = `Die Polizei hat die Stadt aufgeräumt — ${POLIZEI_ZIEL} erfolgreiche Einsätze`;
-        G.report = buildReport(beste.id);
-        io.emit("notice", { text: `🚔 DIE POLIZEI GEWINNT: ${POLIZEI_ZIEL} Einsätze abgeschlossen — die Stadt gehört wieder dem Gesetz. ${beste.name} führt die Ehrenliste an.` });
-      }
-    }
-    if (G.tick % 60 === 0 && G.bezirke) {
-      for (const b of G.bezirke) {
-        if (!b.kontrolle) continue;
-        const mitglieder = Object.values(G.players).filter(p2 => p2.familie === b.kontrolle);
-        if (!mitglieder.length) continue;
-        const teil = Math.round(SCHUTZGELD_JE_BEZIRK * (G.pateDekret === "schutz" ? 1.25 : 1) / mitglieder.length);
-        for (const m of mitglieder) {
-          m.cash += teil;
-          questProg(m, "schutzgeld");
-          logTx(m, "Kartell", `Schutzgeld aus dem ${b.name}`, teil);
-        }
-        G.familienRespekt[b.kontrolle] = (G.familienRespekt[b.kontrolle] || 0) + 2;
-      }
-    }
-    /* Casino Municipale: Alle 30 s spielen die Bürger — der Netto-Erlös
-     * (Quote × Ausbaustufe) geht an die Familie, die die Piazza hält. Bürger
-     * gewinnen auch mal, aber gedeckelt: Das steckt bereits im Netto. */
-    if (G.tick % 30 === 0) {
-      const herr = gcasinoHerrscher();
-      if (herr) {
-        const q = GCASINO_QUOTEN[G.gcasino.quote];
-        const brutto = Math.round(q.netto * G.gcasino.stufe * (G.pateDekret === "brot" ? 1.5 : 1));
-        const bank = Object.values(G.players).filter(m => m.familie === herr);
-        const teil = Math.round(brutto / Math.max(1, bank.length));
-        for (const m of bank) { m.cash += teil; logTx(m, "Casino", `Bürger-Umsatz (${GCASINO_STILE[G.gcasino.stufe - 1]})`, teil); }
-        if (q.respekt) G.familienRespekt[herr] = (G.familienRespekt[herr] || 0) + q.respekt;
-        if (q.fahndung) G.fahndung[herr] = (G.fahndung[herr] || 0) + q.fahndung;
-      }
-    }
-    familienPflegen();
-    pateWahlTick();
-    /* Wunschbrunnen: Alle 2 Minuten fischt die Giardini-Familie Münzen heraus. */
-    if (G.tick % 120 === 0 && G.brunnenPot > 200) {
-      const anteil = Math.round(G.brunnenPot * .15);
-      G.brunnenPot -= anteil;
-      wzKasse(8, anteil, "Münzen aus dem Wunschbrunnen gefischt");
-    }
-    /* Live-Roulette: Setzphase zu Ende -> Kugel fällt (Nummer steht fest, die
-     * Clients drehen das Rad dorthin); nach der Drehphase wird ausgezahlt. */
-    {
-      const R = G.groulette;
-      if (R.phase === "setzen" && G.tick >= R.endet) {
-        R.phase = "drehen"; R.zahl = Math.floor(Math.random() * 37); R.endet = G.tick + 8;
-      } else if (R.phase === "drehen" && G.tick >= R.endet) {
-        const rot = GROULETTE_ROT.has(R.zahl);
-        const gewinner = [];
-        for (const e of R.einsaetze) {
-          const pl = G.players[e.pid]; if (!pl) continue;
-          const faktor = e.art === "zahl" ? (e.zahl === R.zahl ? 36 : 0)
-            : (R.zahl !== 0 && (e.art === "rot") === rot ? 2 : 0);
-          if (faktor) { gcasinoGewinn(pl, e.einsatz * faktor, "Roulette"); gewinner.push(pl.name); }
-        }
-        const farbe = R.zahl === 0 ? "Zero — die Bank lacht" : rot ? "Rot" : "Schwarz";
-        io.emit("notice", { text: `\u{1F3A1} Roulette: Die ${R.zahl} (${farbe}). ${gewinner.length ? "Es kassieren: " + [...new Set(gewinner)].join(", ") : "Das Haus räumt den Tisch ab."}` });
-        R.letzteZahl = R.zahl; R.letzteGewinner = [...new Set(gewinner)];
-        R.phase = "warten"; R.einsaetze = []; R.endet = 0;
-      }
-    }
-    /* Blackjack: geben, Zug-Timeouts, Dealer, Abrechnung */
-    {
-      const B = G.gblackjack;
-      if (B.phase === "setzen" && G.tick >= B.endet) {
-        for (const s of B.spieler) { s.karten = [karteZiehen(), karteZiehen()]; s.fertig = bjSumme(s.karten) === 21; }
-        B.dealer = [karteZiehen()];
-        B.phase = "ziehen"; B.dran = -1;
-        gblackjackWeiter();
-      } else if (B.phase === "ziehen" && G.tick >= B.endet) {
-        const s = B.spieler[B.dran];
-        if (s) s.fertig = true;   // Zeit um -> automatisch halten
-        gblackjackWeiter();
-      } else if (B.phase === "vorbei" && G.tick >= B.endet) {
-        Object.assign(B, { phase: "warten", endet: 0, dran: -1, dealer: [], spieler: [] });
-      }
-    }
-    /* Poker: geben, Zug-Timeouts, Aufräumen */
-    {
-      const P = G.gpoker;
-      if (P.phase === "setzen" && G.tick >= P.endet) {
-        if (P.spieler.length >= 2) {
-          P.deck = deckNeu();
-          for (const s of P.spieler) s.karten = [P.deck.pop(), P.deck.pop()];
-          P.strasse = 0; P.aktBet = 0; P.raises = 0; P.dran = 0; P.phase = "wetten"; P.endet = G.tick + 25;
-        } else {
-          const s = P.spieler[0];
-          const pl = s && G.players[s.pid];
-          if (pl) { pl.cash += P.einsatz; logTx(pl, "Casino", "Poker: niemand kam — Ante zurück", P.einsatz); }
-          Object.assign(P, { phase: "warten", endet: 0, pot: 0, board: [], dran: -1, spieler: [] });
-        }
-      } else if (P.phase === "wetten" && G.tick >= P.endet) {
-        const s = P.spieler[P.dran];
-        if (s) {
-          const pl = G.players[s.pid];
-          gpokerAktion(pl || {}, s, P.aktBet - s.gesetzt > 0 ? "fold" : "check");
-        }
-      } else if (P.phase === "vorbei" && G.tick >= P.endet) {
-        Object.assign(P, { phase: "warten", endet: 0, pot: 0, board: [], dran: -1, aktBet: 0, raises: 0, spieler: [] });
-      }
-    }
-    /* Die Bots zieht es an die Tische: Sie setzen beim Roulette mit, nehmen am
-     * Blackjack- und Poker-Tisch Platz und spielen ordentlich ihre Züge. */
-    {
-      const tischBots = Object.values(G.players).filter(b => b.bot && b.familie && b.familie !== "polizei" && b.cash > 1500);
-      const casinoOffen = !!gcasinoHerrscher();
-      const R2 = G.groulette;
-      if (casinoOffen && R2.phase === "setzen" && R2.endet - G.tick <= 15) for (const b of tischBots) {
-        if (R2.einsaetze.some(e => e.pid === b.id) || Math.random() > .06) continue;
-        const einsatz = 100 * (1 + Math.floor(Math.random() * 4));
-        const art = Math.random() < .12 ? "zahl" : Math.random() < .5 ? "rot" : "schwarz";
-        gcasinoEinsatz(b, einsatz, "Roulette");
-        R2.einsaetze.push({ pid: b.id, name: b.name, farbe: b.color, art,
-          zahl: art === "zahl" ? Math.floor(Math.random() * 37) : null, einsatz });
-      }
-      const B2 = G.gblackjack;
-      if (casinoOffen && B2.phase === "setzen" && B2.spieler.length < 4) for (const b of tischBots) {
-        if (B2.spieler.some(s => s.pid === b.id) || Math.random() > .05) continue;
-        const einsatz = 100 * (1 + Math.floor(Math.random() * 3));
-        gcasinoEinsatz(b, einsatz, "Blackjack");
-        B2.spieler.push(bjSitzNeu(b, einsatz));
-      }
-      if (B2.phase === "ziehen") {
-        const s = B2.spieler[B2.dran], pl = s && G.players[s.pid];
-        if (pl?.bot && G.tick >= B2.endet - 17) {   // ~3 s Bedenkzeit
-          const hand = s.aktiv === 2 ? s.karten2 : s.karten;
-          const sum = bjSumme(hand);
-          let akt = sum < 17 ? "hit" : "stand";
-          if (hand.length === 2 && (sum === 10 || sum === 11) && pl.cash > s.einsatz && Math.random() < .5) akt = "double";
-          else if (s.aktiv === 1 && !s.karten2 && hand.length === 2 && hand[0].bj === hand[1].bj && hand[0].bj >= 8 && pl.cash > s.einsatz && Math.random() < .5) akt = "split";
-          gblackjackAktion(pl, s, akt);
-        }
-      }
-      const P2 = G.gpoker;
-      const pokerSitz = b => {
-        b.cash -= P2.einsatz; P2.pot += P2.einsatz;
-        logTx(b, "Casino", "Poker: Ante", -P2.einsatz);
-        P2.spieler.push({ pid: b.id, name: b.name, farbe: b.color, karten: [], gefoldet: false,
-          gesetzt: 0, dranWar: false, ergebnis: null, wert: null });
-      };
-      /* Ab und zu eroeffnet ein Bot selbst einen Tisch — kleiner Grundeinsatz,
-       * damit auch die Kollegen (und Menschen) mithalten koennen. */
-      if (casinoOffen && P2.phase === "warten" && Math.random() < .012) {
-        const b = tischBots[Math.floor(Math.random() * tischBots.length)];
-        if (b && b.cash > 100 * 8 && !G.gblackjack.spieler.some(s => s.pid === b.id)) {
-          P2.einsatz = 100 * (1 + Math.floor(Math.random() * 2));
-          P2.pot = 0; P2.board = [];
-          pokerSitz(b);
-          P2.phase = "setzen"; P2.endet = G.tick + 15;
-          io.emit("notice", { text: `\u{1F0A1} ${b.name} eröffnet einen Poker-Tisch (Grundeinsatz ${P2.einsatz} $) — wer setzt sich dazu? (15 s)` });
-        }
-      }
-      if (casinoOffen && P2.phase === "setzen" && P2.spieler.length < 4) for (const b of tischBots) {
-        if (P2.spieler.some(s => s.pid === b.id) || b.cash < P2.einsatz * 6 || Math.random() > .12) continue;
-        pokerSitz(b);
-      }
-      /* Wahrzeichen: Bots spenden, schmuggeln, wetten und werfen Münzen. */
-      for (const b of tischBots) {
-        if (Math.random() > .012) continue;
-        const wurf = Math.random();
-        if (wurf < .3) {
-          if ((G.fahndung[b.familie] || 0) > 40 && b.cash > 1500)
-            wzAktion(b, { art: "kathedrale", betrag: 300 + 100 * Math.floor(Math.random() * 5) });
-        } else if (wurf < .5) {
-          if (b.cash > 600) wzAktion(b, { art: "brunnen", betrag: 50 + 50 * Math.floor(Math.random() * 4) });
-        } else if (wurf < .62) {
-          if (b.cash > 1500) wzAktion(b, { art: "yacht", yacht: 1 + Math.floor(Math.random() * 3), betrag: 100 + 100 * Math.floor(Math.random() * 3) });
-        } else if (wurf < .82) {
-          const heiss = ILLEGAL.find(g2 => Math.floor(b.inv[g2] || 0) >= 5);
-          if (heiss && Math.random() < .5) wzAktion(b, { art: "kai", good: heiss });
-        } else {
-          if (b.cash > 3000 && Object.values(G.revierKaempfe || {}).some(k => k.punkte?.[b.familie] != null))
-            wzAktion(b, { art: "villa" });
-        }
-      }
-      if (P2.phase === "wetten") {
-        const s = P2.spieler[P2.dran], pl = s && G.players[s.pid];
-        if (pl?.bot && G.tick >= P2.endet - 21) {   // ~4 s Bedenkzeit
-          const kosten = P2.aktBet - s.gesetzt;
-          let akt = kosten > 0 ? "call" : "check";
-          if (kosten === 0 && P2.raises < 3 && pl.cash > P2.einsatz * 3 && Math.random() < .18) akt = "raise";
-          else if (kosten > 0 && Math.random() < .12) akt = "fold";
-          if (akt !== "fold" && akt !== "check" && pl.cash < kosten + (akt === "raise" ? P2.einsatz : 0)) akt = "fold";
-          gpokerAktion(pl, s, akt);
-        }
-      }
-    }
-    /* Endbedingung — VIER Wege zur Macht:
-     *   Herrschaft: 6 der 9 Bezirke halten
-     *   Dynastie:   3 Patenwahlen gewinnen
-     *   Vendetta:   10 Bezirke im Revierkampf erobern
-     *   Imperium:   Casino „La Dorata“ + Piazza + 100.000 $ in der Familienkasse
-     * Die Familie gewinnt gemeinsam; den Titel trägt ihr vermögendstes Mitglied. */
-    if (!G.winner && G.bezirke) {
-      const famSieg = (fid, grund) => {
-        const boss = Object.values(G.players).filter(p2 => p2.familie === fid)
-          .sort((x2, y2) => netWorth(y2) - netWorth(x2))[0];
-        if (!boss) return;
-        G.winner = boss.name;
-        G.winGrund = `${FAMILIEN[fid].name}: ${grund}`;
-        G.report = buildReport(boss.id);
-        io.emit("notice", { text: `\u{1F3C6} ${FAMILIEN[fid].name} — ${grund}! ${boss.name} ist der Boss der Bosse.` });
-      };
-      const warnung = (fid, art, text) => {
-        const key = fid + ":" + art;
-        if (G.siegWarnungen[key]) return;
-        G.siegWarnungen[key] = true;
-        io.emit("notice", { text: `\u26A0 ${text}` });
-      };
-      const zaehl = {};
-      for (const b of G.bezirke) if (b.kontrolle) zaehl[b.kontrolle] = (zaehl[b.kontrolle] || 0) + 1;
-      for (const fid of Object.keys(FAMILIEN)) {
-        if (G.winner) break;
-        const bez = zaehl[fid] || 0;
-        /* Herrschaft */
-        if (bez >= 6) { famSieg(fid, `kontrolliert ${bez} von 9 Bezirken — die Stadt gehört ihr`); break; }
-        if (bez === 5) warnung(fid, "stadt", `${FAMILIEN[fid].name} hält 5 Bezirke — noch einer, und die Stadt fällt!`);
-        /* Dynastie */
-        const w = G.wahlSiege[fid] || 0;
-        if (w >= 3) { famSieg(fid, `stellt zum dritten Mal den Paten — die Dynastie regiert die Stadt`); break; }
-        if (w === 2) warnung(fid, "dynastie", `${FAMILIEN[fid].name} hat 2 Patenwahlen gewonnen — eine dritte besiegelt die Dynastie!`);
-        /* Vendetta */
-        const s = G.kampfSiege[fid] || 0;
-        if (s >= 10) { famSieg(fid, `hat 10 Bezirke im Revierkampf erobert — die Vendetta ist vollstreckt`); break; }
-        if (s === 8) warnung(fid, "vendetta", `${FAMILIEN[fid].name} steht bei 8 von 10 Vendetta-Siegen — stoppt sie!`);
-        /* Imperium */
-        const imperium = G.gcasino.stufe >= 5 && G.bezirke[GCASINO_BEZIRK]?.kontrolle === fid;
-        if (imperium && (G.familienBank[fid] || 0) >= 100000) {
-          famSieg(fid, `„La Dorata“, die Piazza und 100.000 $ in der Kasse — das Imperium steht`); break;
-        }
-        if (imperium && (G.familienBank[fid] || 0) >= 80000)
-          warnung(fid, "imperium", `${FAMILIEN[fid].name} hortet ${Math.round(G.familienBank[fid] / 1000)}k $ im goldenen Casino — bei 100k steht das Imperium!`);
-      }
-    }
-    /* Werttransporte: spawnen, rollen, an Sperren hängenbleiben, entkommen. */
-    if (--G.naechsterTransport <= 0) {
-      G.naechsterTransport = TRANSPORT_INTERVALL;
-      const linien = transportLinien();
-      if (linien.length) {
-        const l = linien[Math.floor(Math.random() * linien.length)];
-        const arten = Object.entries(TRANSPORT_ARTEN)
-          .flatMap(([id2, a]) => Array(a.gewicht).fill(id2));
-        const art = arten[Math.floor(Math.random() * arten.length)];
-        const dir = Math.random() < 0.5 ? 1 : -1;
-        G.transporte.push({ id: id(), art, achse: l.achse, linie: l.linie,
-          von: l.von, bis: l.bis, pos: dir === 1 ? l.von : l.bis, dir, gestoppt: 0 });
-        io.emit("notice", { text: `🚚 Ein ${TRANSPORT_ARTEN[art].name} ist in der Stadt unterwegs — wer greift zu?` });
-      }
-    }
-    for (const tr of [...G.transporte]) {
-      if (tr.gestoppt) {
-        /* An einer Sperre festgesetzt: leichte Beute — aber nur eine Minute,
-         * dann trauen sich die Fahrer an der Barrikade vorbei. */
-        if (++tr.gestoppt > 60) { tr.gestoppt = 0; }
-        continue;
-      }
-      tr.pos += tr.dir * TRANSPORT_TEMPO;
-      if (tr.pos < (tr.von ?? 0) || tr.pos > (tr.bis ?? (tr.achse === "x" ? MAP_W : MAP_H) - 1)) {
-        G.transporte = G.transporte.filter(t2 => t2 !== tr);
-        continue;
-      }
-      const { t: kachel } = transportKachel(tr);
-      if (kachel?.sperre) tr.gestoppt = 1;
-    }
-    /* Sperren verfallen; Fahndung kühlt langsam ab; bei 100 kommt die Razzia. */
-    for (const t of G.map) if (t.sperre && t.sperre.bis <= G.tick) t.sperre = null;
-    if (G.tick % 30 === 0)
-      for (const f of Object.keys(G.fahndung)) G.fahndung[f] = Math.max(0, G.fahndung[f] - 1);
-    for (const [fid, wert] of Object.entries(G.fahndung)) {
-      if (wert < 100) continue;
-      G.fahndung[fid] = 40;
-      G.familienRespekt[fid] = Math.max(0, (G.familienRespekt[fid] || 0) - 10);
-      let beschlagnahmt = 0;
-      for (const m of Object.values(G.players)) {
-        if (m.familie !== fid) continue;
-        for (const g of ILLEGAL) {
-          const n = Math.floor(m.inv[g] || 0);
-          if (n > 0) { m.inv[g] = 0; beschlagnahmt += n; }
-        }
-        const strafe = Math.min(m.cash, 1000);
-        m.cash -= strafe;
-        logTx(m, "Kartell", "Razzia! Illegale Ware beschlagnahmt, Strafe kassiert", -strafe);
-      }
-      io.emit("notice", { text: `🚨 RAZZIA bei ${FAMILIEN[fid].name}! ${beschlagnahmt} Einheiten heiße Ware beschlagnahmt, −10 Respekt.` });
-    }
-  }
   /* Stromabschaltung (Planwirtschaft): Wurde das Volkswirtschaftsziel der
    * Vorphase verfehlt, läuft jede Produktion nur mit halber Kraft. */
   const SPERR_PLAN = (MODE === "plan" && G.plan?.stromsperre) ? 0.5 : 1;
@@ -11033,7 +9287,10 @@ function runTick() {
         const bezug = MM[slot.good].price * adBoost(p) * (swProd ? swPreisFuer(swProd, slot.good) : 1);
         let q = Math.min(p.inv[slot.good], bt.retail.base * swF * retailFlow(slot.good) * shopSpeed(slot.good, slot.price, bezug) * (1 + konsumBoost()) * stadtNachfrage() * (1 + webBonus(p)) * SPERR);
         if (slot.qty != null) q = Math.min(q, slot.qty);   // begrenzte Verkaufsmenge
+        /* v2: Die Haushalte bezahlen aus ihrem Konto — mehr als ihr Budget kaufen sie nicht. */
+        q = Math.min(q, haushaltKaufkraft() / slot.price);
         if (q <= 0) return;
+        haushaltZahlt(q * slot.price);
         p.inv[slot.good] -= q;
         /* v2: Der Kunde zahlt brutto, 10/110 gehen als Umsatzsteuer an die Stadt. */
         const brutto = q * slot.price, { ust } = WR.umsatzAufteilen(brutto);
@@ -11046,6 +9303,7 @@ function runTick() {
         if (gebuehr) { p.stats.ausgaben += gebuehr; swGebuehr(swProd, gebuehr); }
         if (bt.online) { const l = (t._lauf ??= {}); const e = (l[slot.good] ??= { n: 0, b: 0 }); e.n += q; e.b += erloes; }
         const r = salesRec(p, slot.good); r.botQty += q; r.botRev += q * slot.price;
+        absatzMerken(p, slot.good, q, erloes);
         kartellUmsatzMerken(p, slot.good, q * slot.price);
         noteSold(slot.good, q);
         if (slot.qty != null) {
@@ -11184,6 +9442,7 @@ function runTick() {
     if (a.bestBidder && G.players[a.bestBidder]) {
       t.owner = a.bestBidder; t.btype = a.btype;
       logTx(G.players[a.bestBidder], "Auktion", `Zuschlag ${BTYPES[a.btype].name}`, -a.bestBid);
+      if (a.kreditVon) insolvenzErloes(a, a.bestBid);
       const creditor = G.players[a.creditorId];
       if (creditor) { creditor.cash += a.bestBid;    // Erlös an den Gläubiger
         logTx(creditor, "Auktion", `Verwertungserlös ${BTYPES[a.btype].name}`, a.bestBid); }
@@ -11240,7 +9499,11 @@ function runTick() {
   /* Kartellmodus: keine Nachrichtenzentrale — die Stadt redet nicht mit der Presse. */
   if (MODE !== "plan" && MODE !== "kartell" && G.tick > 60 && G.tick % NEWS_INTERVAL === 0) sendeMarktbericht();
   /* Aktien: Dividendenausschüttung alle 10 min */
-  if (--G.nextDividendIn <= 0) { steuernErheben(); distributeDividends(); G.nextDividendIn = DIVIDEND_INTERVAL; }
+  if (--G.nextDividendIn <= 0) { steuernErheben(); distributeDividends(); kartellamtPeriode();
+    /* v2: Token zahlen 5 % des Erlöses der Periode an ihre Halter. */
+    tokenPeriode(G, fid => { const p = G.players[fid]; if (!p) return 0; const e = p.stats.umsatz - (p.umsatzVorPeriode ?? 0); return e; });
+    for (const p of Object.values(G.players)) p.umsatzVorPeriode = p.stats.umsatz;
+    G.nextDividendIn = DIVIDEND_INTERVAL; }
   finanzamtTick();
   stadtTick();
   if (G.tick % MARKT.TAG === 0) marktTag();   // Aktienkurse: F messen, P nachführen
@@ -11637,26 +9900,6 @@ function startBots() {
   console.log(`Bots: ${liste.map(c => c.name).join(", ") || "keine"} — Stufe ${lvl.name}`);
   liste.forEach((cfg, i) => setTimeout(() => { if (gen === botGen && botsStarted) spawnBot(cfg, lvl); }, 8000 + i * 5000));
 }
-function mafiaBotsAuffuellen() {
-  if (process.env.BOT === "0") return;
-  botsStarted = true;
-  let delay = 4000;
-  for (const fid of Object.keys(FAMILIEN)) {
-    const fehlt = FAMILIE_MAX - famAnzahl(fid);
-    for (let i = 0; i < fehlt; i++) {
-      const name = (MAFIA_BOT_NAMEN[fid] || [])[i] || `${FAMILIEN[fid].name}-Soldat`;
-      const cfg = { name, color: FAMILIEN[fid].farbe, industry: "agrar", kartellFamilie: fid };
-      const d = delay; delay += 3500;
-      setTimeout(() => spawnBot(cfg), d);
-    }
-  }
-  if (famAnzahl("polizei") === 0) {
-    const d = delay;
-    setTimeout(() => spawnBot({ name: "Commissario Rizzo", color: POLIZEI.farbe,
-      industry: "agrar", polizei: true }), d);
-  }
-  console.log("Mafia-Bots werden aufgefüllt (2 je Familie, Polizei besetzt).");
-}
 function stopBots() {
   botGen++;
   for (const h of botHandles) { clearInterval(h.timer); h.socket.close(); }
@@ -11777,69 +10020,6 @@ async function spawnBot(cfg, lvl = BOT_LEVELS[BOT_LEVEL_DEFAULT]) {
        * Betrieb ihrer Familie hoch, tragen heiße Ware zum Hehler und greifen
        * sich gelegentlich einen Werttransport. Die normalen Markt-Routinen
        * weiter unten laufen zusätzlich, damit die Wirtschaft lebt. --- */
-      if (st.mode === "kartell") {
-        const famDef = (st.familien || []).find(f2 => f2.id === st.players?.[myId]?.familie);
-        if (famDef) {
-          const btF = BTYPES[famDef.gebaeude];
-          const meine = st.map.filter(t2 => t2.owner === myId && t2.btype === famDef.gebaeude).length;
-          if (btF && meine < 2 && me.cash > btF.cost + 2500 && Date.now() - lastBuild > lvl.bauPause) {
-            const mats = matCost(btF);
-            const fehlt = Object.entries(mats).find(([g, n]) => me.inv[g] < n);
-            if (fehlt) {
-              if (me.cash > 2000 && !st.orders.some(o => o.playerId === myId && o.side === "buy" && o.good === fehlt[0]))
-                await em("placeOrder", { side: "buy", good: fehlt[0],
-                  qty: Math.ceil(fehlt[1] - me.inv[fehlt[0]]) + 4,
-                  price: Math.round((st.avg[fehlt[0]] || BASEP[fehlt[0]] || 1) * 1.12 * 100) / 100 });
-            } else {
-              const frei = t2 => t2.zone === btF.zone && !t2.road && !t2.water && !t2.park
-                && !t2.bank && !t2.news && !t2.finanzamt && !t2.deko && !t2.schwarz && !t2.owner;
-              /* Die Piazza Grande zuerst: Wer sie hält, führt das Casino. */
-              const kandidaten = st.map.filter(t2 => frei(t2) && !t2.locked)
-                .sort((a2, b2) => (bezirkVon(a2.x, a2.y) === GCASINO_BEZIRK ? 0 : 1) -
-                                  (bezirkVon(b2.x, b2.y) === GCASINO_BEZIRK ? 0 : 1));
-              let ziel = kandidaten[0];
-              if (!ziel) {
-                const lt = st.map.find(t2 => frei(t2) && t2.locked);
-                if (lt && me.cash > btF.cost + lt.unlockCost + 2000) ziel = lt;
-              }
-              if (ziel) {
-                const r = await em("build", { x: ziel.x, y: ziel.y, btype: famDef.gebaeude });
-                if (r?.ok) lastBuild = Date.now();
-              }
-            }
-          }
-          /* Heiße Ware: Hält die Familie die Piazza, läuft der Verkauf übers
-           * Casino (bessere Preise, keine Paten-Abgabe) — sonst zum Hehler. */
-          const piazzaMeins = st.bezirke?.[4]?.kontrolle === st.players[myId]?.familie;
-          if ((me.inv[famDef.produkt] || 0) >= 5)
-            await em(piazzaMeins ? "gcasinoVerkauf" : "hehlerVerkauf", { good: famDef.produkt });
-          /* Casino pflegen: gelegentlich ausbauen, wenn die Kasse prall ist */
-          if (piazzaMeins && st.gcasino?.upgradeKosten && me.cash > st.gcasino.upgradeKosten + 6000 && Math.random() < .3)
-            await em("gcasinoUpgrade", {});
-          /* Die Piazza EROBERN, wenn eine fremde Familie sie hält */
-          if (!piazzaMeins && st.bezirke?.[4]?.kontrolle && !st.bezirke[4].kampf &&
-              Math.floor(me.inv.pistole || 0) >= 3 && !me.kampfCd && Math.random() < .25)
-            await em("revierkampf", { bezirk: 4 });
-          /* Überfall: ab und zu traut sich ein Bot an einen Transport —
-           * der Server würfelt Erfolg, Kaution und Fahndung wie bei jedem. */
-          if ((st.transporte || []).length && Math.random() < 0.2)
-            await em("ueberfall", { transportId: st.transporte[0].id });
-          /* Tauziehen: Wird die Familie des Bots angegriffen (oder greift sie
-           * an), schickt er Verstärkung, solange die Kasse es hergibt — sonst
-           * wären Bot-Familien im Revierkampf wehrlose Beute. */
-          const meinKampf = (st.bezirke || []).find(b2 => b2.kampf &&
-            (b2.kampf.verteidiger === st.players[myId]?.familie || b2.kampf.angreifer === st.players[myId]?.familie));
-          if (meinKampf && me.cash > 1200 && !me.verstCd)
-            await em("verstaerkung", { bezirk: meinKampf.id });
-          /* Schutzgeld: gelegentlich zieht der Bot durchs EIGENE Revier —
-           * fremde Bezirke lässt er in Ruhe (Bots provozieren keine Kriege). */
-          if (Math.random() < 0.25) {
-            const revier = (st.bezirke || []).find(b2 =>
-              b2.kontrolle === st.players[myId]?.familie && !(me.erpress || {})[b2.id]);
-            if (revier) await em("erpressen", { bezirk: revier.id });
-          }
-        }
-      }
       /* --- Motorsport: Bots bestücken ihren Stall, tunen, melden, wetten
        * und sponsern — alles nur, wenn die Kasse es hergibt. --- */
       if (st.mode !== "plan" && st.mode !== "kartell" && lvl.rennen) {

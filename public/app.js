@@ -6430,7 +6430,7 @@ addEventListener("keydown", e => {
 });
 
 /* ---- Dock & Panels ---- */
-const DOCK = [["karte","Karte"],["plan","Planbüro"],["kartell","Kartell"],["lager","Lager"],["boerse","Börse"],["bonds","Finanzen"],["firma","Firma"],["hauptsitz","Hauptsitz"],["netz","Stadtnetz"],["touristik","Touristik"],["motorsport","Motorsport"],["lexikon","Lexikon"],["chat","Chat"]];
+const DOCK = [["karte","Karte"],["plan","Planbüro"],["lager","Lager"],["boerse","Börse"],["bonds","Finanzen"],["firma","Firma"],["hauptsitz","Hauptsitz"],["netz","Stadtnetz"],["touristik","Touristik"],["motorsport","Motorsport"],["lexikon","Lexikon"],["chat","Chat"]];
 const dock = document.getElementById("dock");
 DOCK.forEach(([pid, label]) => { const b = document.createElement("button");
   b.className = "dockbtn"; b.dataset.p = pid; b.textContent = label;
@@ -6622,6 +6622,12 @@ document.getElementById("p-bank").addEventListener("click", e => {
   const yes = e.target.closest("[data-merge-yes]");
   if (yes) { act("mergeCompany", { targetId: yes.dataset.mergeYes }); pendingMerge = null; render(store.get()); return; }
   if (e.target.closest("[data-merge-no]")) { pendingMerge = null; render(store.get()); return; }
+  const kb = e.target.closest("[data-kredit]");
+  if (kb) { act(kb.dataset.kredit === "auf" ? "kreditAufnehmen" : "kreditTilgen", { betrag: +document.getElementById("kreditBetrag").value }); return; }
+  const zw = e.target.closest("[data-zwang]");
+  if (zw) { act("zwangsabfindung", { companyId: zw.dataset.zwang }); return; }
+  const pa = e.target.closest("[data-pflicht]");
+  if (pa) { act("pflichtangebotAnnehmen", { id: pa.dataset.pflicht }); return; }
   const ask = e.target.closest("[data-merge]");
   if (ask) { pendingMerge = ask.dataset.merge; render(store.get()); return; }
   const buy = e.target.closest("[data-shbuy]");
@@ -12872,15 +12878,35 @@ function render({ state, me, myId, chat, room }) {
     document.getElementById("bReiterDepot").textContent = me.portfolio?.length ? me.portfolio.length : "";
     kurswettenRendern();
     bankReiterZeigen();
+    /* v2: Kredit der Stadtsparkasse und Dividendenquote der eigenen Firma */
+    const kv = me.kreditV2;
+    const kEl = document.getElementById("bankKredit");
+    if (kv && kEl) {
+      const pz = x => (x * 100).toFixed(1).replace(".", ",") + " %";
+      const html = `<div class="bpos" style="flex-wrap:wrap;gap:8px">
+        <span class="bposText"><b>Kredit der Stadtsparkasse</b>
+          <small>offen ${fmt(kv.kredit)} · Limit ${fmt(kv.limit)} (50 % des Eigenkapitals) · Zins ${pz(kv.zins)} je Periode${kv.ausfall ? ` · <b style="color:var(--down)">${kv.ausfall} Tag(e) im Verzug</b>` : ""}</small>
+          <small>Dividende: ${Math.round(kv.quote * 100)} % des Nachsteuergewinns${kv.verlustVortrag ? ` · Verlustvortrag ${fmt(kv.verlustVortrag)}` : ""}</small></span>
+        <span style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+          <input id="kreditBetrag" type="number" min="100" step="500" value="1000" style="width:90px">
+          <button class="buyb" data-kredit="auf">Aufnehmen</button><button class="mini" data-kredit="ab">Tilgen</button>
+          <select id="divQuote">${[0, 20, 40, 60, 80].map(q => `<option value="${q}"${Math.round(kv.quote * 100) === q ? " selected" : ""}>${q} % Dividende</option>`).join("")}</select>
+        </span></div>`;
+      if (kEl.dataset.sig !== html && !kEl.contains(document.activeElement)) { kEl.innerHTML = html; kEl.dataset.sig = html; }
+    }
     /* Depot: was man an fremden Firmen hält, mit aktuellem Wert */
     document.getElementById("bankdepot").innerHTML = me.portfolio?.length
       ? me.portfolio.map(h => {
-          const mergeUi = h.pct < 100 ? ""
+          /* v2: Fusion ab 75 %, Zwangsabfindung ab 90 %, Pflichtangebote annehmen. */
+          const zwangUi = h.pct >= 90 && h.pct < 100 ? `<button class="mini" data-zwang="${h.id}">Restaktionäre abfinden</button>` : "";
+          const angebote = (state.pflichtangebote || []).filter(o => o.companyId === h.id && o.kaeuferId !== myId)
+            .map(o => `<button class="mini" data-pflicht="${o.id}">Pflichtangebot ${escapeHtml(rohText(state.players[o.kaeuferId]?.name || ""))}: ${fmt(o.preis)} je Aktie annehmen</button>`).join("");
+          const mergeUi = zwangUi + angebote + (h.pct < 75 ? ""
             : pendingMerge === h.id
-              ? `<span class="meta" style="align-self:center">Gebäude, Kapital und Lager gehen an dich über.</span>
+              ? `<span class="meta" style="align-self:center">Gebäude, Kapital und Lager gehen an dich über. Restaktionäre bekommen Aktien deiner Firma.</span>
                  <button class="buyb" data-merge-yes="${h.id}">Ja, übernehmen</button>
                  <button class="mini" data-merge-no="1">Abbrechen</button>`
-              : `<button class="buyb" data-merge="${h.id}">Fusionieren</button>`;
+              : `<button class="buyb" data-merge="${h.id}">Fusionieren</button>`);
           /* Gewinn/Verlust gegen den Einstand. Der aktuelle Wert allein sagt
            * nicht, ob sich die Beteiligung gelohnt hat — genau das ist aber
            * die Frage beim Verkaufen. */
@@ -12890,7 +12916,7 @@ function render({ state, me, myId, chat, room }) {
           const firma = state.players[h.id] || { id: h.id, name: h.company };
           return `<div class="bpos">
             ${bankAvatar(firma)}
-            <span class="bposText"><b>${escapeHtml(rohText(h.company))}${h.pct >= 100 ? ` <span class="bposFusion">bereit zur Fusion</span>` : ""}</b>
+            <span class="bposText"><b>${escapeHtml(rohText(h.company))}${h.pct >= 75 ? ` <span class="bposFusion">bereit zur Fusion</span>` : h.pct > 50 ? ` <span class="bposFusion">Kontrolle</span>` : h.pct >= 30 ? ` <span class="bposFusion">Pflichtangebot</span>` : h.pct >= 25 ? ` <span class="bposFusion">Sperrminorität</span>` : ""}</b>
               <small>${h.count} Aktien · ${h.pct} % · Einstand ${h.einstand > 0 ? fmt(h.einstand) : "—"} · Buchwert ${fmt(h.buchwert || 0)}</small></span>
             <span class="bposWert"><b>${fmt(h.value)}</b>${gv == null ? "" : `<em style="color:${gvFarbe}">${gv >= 0 ? "+" : "−"}${fmt(Math.abs(gv))} · ${gvProz >= 0 ? "+" : "−"}${Math.abs(gvProz).toFixed(0)} %</em>`}</span>
             ${mergeUi ? `<span class="bposTat">${mergeUi}</span>` : ""}</div>`;
@@ -14140,3 +14166,9 @@ document.getElementById("p-bank").addEventListener("click", e => {
   const v = e.target.closest("[data-etf-verkauf]");
   if (v) act("etfVerkaufen", { branche: v.dataset.etfVerkauf, anteil: +v.dataset.anteil });
 });
+
+/* v2: Dividendenquote der eigenen Firma (über 50 % der Stimmen nötig) */
+document.addEventListener("change", e => {
+  if (e.target.id === "divQuote") act("dividendenquote", { companyId: myIdAktuell(), quote: +e.target.value / 100 });
+});
+function myIdAktuell() { try { return store.get().myId; } catch { return null; } }

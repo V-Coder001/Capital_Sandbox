@@ -16,6 +16,16 @@
  * Alle Funktionen arbeiten auf dem Zustand G, damit sie sich einzeln testen lassen.
  * ============================================================ */
 
+/* Wirtschaftssystem v2 (Abschnitt 10): Coins sind Token mit Erlösbeteiligung.
+ * Jede Serie hat Anspruch auf 5 % des Software- und App-Erlöses der Firma,
+ * ausgezahlt am Periodenende an die Halter. Fairer Wert einer Serie:
+ * Ausschüttung der letzten Periode × 1 / (Leitzins + 15 Punkte), je Stück
+ * geteilt durch den Umlauf. Der Kurs folgt einmal je Markttag der Aktienformel
+ * mit vierfachem Order-Einfluss. Die alte Logik (Gebührenstock, Hype als Wert,
+ * Tagesgrenze) ist ersetzt. */
+import { KONFIG as WK } from "./wirtschaft/konfiguration.js";
+import * as WR from "./wirtschaft/regeln.js";
+
 export const COIN = {
   UMLAUF: 100,            // Stück je Coin, die ausgegeben werden dürfen
   COINS_JE_FIRMA: 5,      // so viele verschiedene Coins darf eine Firma auflegen
@@ -220,6 +230,8 @@ export function coinOrder(G, p, { boerseId, coinId, side, qty, price }) {
     reserviert = m;
   }
   const o = { id: `co_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`, boerseId, coinId, side, qty: m, price: pr, playerId: p.id, reserviert };
+  /* v2: Netto-Orders des Tages (Kauf minus Verkauf, in Stück) für die Kursformel. */
+  c.nettoTag = (c.nettoTag || 0) + (side === "buy" ? m : -m);
   matchen(G, o);
   if (o.qty > 0) G.coinOrders.push(o);
   return { ok: true, order: o };
@@ -292,6 +304,53 @@ const gutschreiben = (G, pid, betrag) => { if (G.players[pid]) G.players[pid].ca
 
 /* Jeden Tick: Kurs nachführen, Tagesgrenze und Gebührenstock. */
 export function coinTick(G, tick) {
+  const tag = tick % COIN.TAG === 0;
+  for (const c of Object.values(G.coins || {})) {
+    c.hype = COIN.HYPE_BODEN + ((c.hype ?? COIN.HYPE_START) - COIN.HYPE_BODEN) * COIN.HYPE_TRAEGHEIT;
+    if (!tag) continue;
+    /* v2: einmal je Markttag Kursformel mit vierfachem Order-Einfluss. */
+    const L = G.zb?.leitzins ?? WK.zentralbank.neutralzins;
+    const anspruch = c.ausschuettungLetzt || 0;
+    const fair = anspruch > 0 ? anspruch / COIN.UMLAUF / (L + WK.boerse.token.risikoaufschlag) : Math.min(c.fundament || COIN.KURS_START, COIN.KURS_START);
+    c.fundament = Math.max(0.01, fair);
+    const netto = c.nettoTag || 0; c.nettoTag = 0; c.netVol = 0;
+    c.kurs = Math.max(0.01, WR.kursNeu(c.kurs, c.fundament, netto, COIN.UMLAUF, { einfluss: WK.boerse.token.orderEinfluss, rauschen: Math.random() * 2 - 1 }));
+    c.tagStart = c.kurs; c.tagTick = tick;
+  }
+}
+/* Am Periodenende: Jede Serie zahlt 5 % des Erlöses der Periode an ihre Halter.
+ * erloesVon(firmaId) liefert den Software- und App-Erlös der Periode. */
+export function tokenPeriode(G, erloesVon) {
+  for (const c of Object.values(G.coins || {})) {
+    const firma = G.players[c.firmaId];
+    if (!firma) continue;
+    const anspruch = Math.min(Math.max(0, firma.cash), Math.max(0, erloesVon(c.firmaId)) * WK.boerse.token.erloesanteil);
+    c.ausschuettungLetzt = anspruch;
+    if (!(anspruch > 0)) continue;
+    /* Halter: alle Konten aller Börsen, auch Bürger; was die Firma selbst hält, bleibt bei ihr. */
+    const halter = [];
+    let stueck = 0;
+    for (const b of Object.values(G.boersen || {})) for (const [pid, k] of Object.entries(b.konten || {})) {
+      const n = k.coins?.[c.id] || 0;
+      if (n > 0 && pid !== c.firmaId) { halter.push([b, pid, k, n]); stueck += n; }
+    }
+    for (const o of G.coinOrders || []) if (o.coinId === c.id && o.side === "sell" && o.playerId !== c.firmaId && o.reserviert > 0) {
+      const b = G.boersen[o.boerseId]; const k = b?.konten?.[o.playerId];
+      if (k) { halter.push([b, o.playerId, k, o.reserviert]); stueck += o.reserviert; }
+    }
+    if (!stueck) { c.ausschuettungLetzt = anspruch; continue; }
+    const jeStueck = anspruch / COIN.UMLAUF;
+    let gezahlt = 0;
+    for (const [, pid, k, n] of halter) {
+      const betrag = jeStueck * n;
+      /* Kapitalertragsteuer 25 % geht an die Stadt (G.stadtkasse). */
+      const kest = betrag * WK.steuern.kapitalertrag;
+      k.cash += betrag - kest; G.stadtkasse = (G.stadtkasse || 0) + kest; gezahlt += betrag;
+    }
+    firma.cash -= gezahlt;
+  }
+}
+function coinTickAlt(G, tick) {
   for (const c of Object.values(G.coins || {})) {
     if (tick - c.tagTick >= COIN.TAG) { c.tagTick = tick; c.tagStart = c.kurs; }
     c.feeStock *= COIN.ZERFALL;
