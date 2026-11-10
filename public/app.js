@@ -7701,6 +7701,7 @@ function netzSchliessen() {
   boerseHeimholen();
   bankHeimholen();
   NETZ.offen = false;
+  try { sessionStorage.removeItem(NETZ_MERK_KEY); } catch {}
   const el = document.getElementById("netzFenster");
   el.hidden = true; el.innerHTML = "";
 }
@@ -7709,7 +7710,55 @@ const netzSetze = (sel, html, key) => {
   NETZ.sig[key] = html;
   const el = document.querySelector("#netzFenster " + sel); if (el) el.innerHTML = html;
 };
+/* Scrollposition im Stadtnetz halten: Beim Neuzeichnen (jeder Tick) ersetzt
+ * innerHTML die Inhalte, und der Browser springt nach oben. Darum merken wir
+ * uns vor dem Zeichnen jede gescrollte Fläche im Fenster und setzen sie danach
+ * zurück — aber nur, solange man auf derselben Seite bleibt. Ein Seiten- oder
+ * Reiterwechsel beginnt wie im echten Browser oben. */
+let NETZ_SCROLL_SEITE = null;
+/* Auch über ein Neuladen der Seite (Cmd+R) hinweg: geöffnete Stadtnetz-Seite,
+ * Reiter und Scrollhöhe stehen in sessionStorage und werden nach dem
+ * Wiederverbinden einmal wiederhergestellt. */
+const NETZ_MERK_KEY = "netzZustand";
+function netzMerken() {
+  try {
+    const sc = document.querySelector("#netzFenster .netzInhalt");
+    sessionStorage.setItem(NETZ_MERK_KEY, JSON.stringify({ offen: NETZ.offen, seite: NETZ.seite, bankTab: NETZ.bankTab,
+      bankAktie: NETZ.bankAktie, artikel: NETZ.artikel, reiter: typeof BANK_REITER !== "undefined" ? BANK_REITER : null, y: sc?.scrollTop || 0 }));
+  } catch {}
+}
+let netzWiederDa = false;
+function netzWiederherstellen() {
+  if (netzWiederDa) return; 
+  const st = store.get()?.state; if (!st?.stadt || !st.started) return;
+  netzWiederDa = true;
+  let z = null; try { z = JSON.parse(sessionStorage.getItem(NETZ_MERK_KEY) || "null"); } catch {}
+  if (!z?.offen) return;
+  Object.assign(NETZ, { bankTab: z.bankTab ?? NETZ.bankTab, bankAktie: z.bankAktie ?? null });
+  if (z.reiter && typeof BANK_REITER !== "undefined") BANK_REITER = z.reiter;
+  netzOeffnen(z.seite || null);
+  if (z.seite === "kurier" && z.artikel) { NETZ.artikel = z.artikel; NETZ.sig = {}; netzZeichnen(); }
+  if (z.seite === "bank" && typeof bankReiterZeigen === "function") bankReiterZeigen();
+  requestAnimationFrame(() => { const sc = document.querySelector("#netzFenster .netzInhalt"); if (sc) sc.scrollTop = z.y || 0; });
+}
+document.addEventListener("scroll", e => { if (e.target?.closest?.("#netzFenster")) netzMerken(); }, true);
 function netzZeichnen() {
+  const fenster = document.getElementById("netzFenster");
+  const seite = [NETZ.seite, NETZ.bankTab, NETZ.bankAktie, NETZ.artikel, typeof BANK_REITER !== "undefined" ? BANK_REITER : ""].join("|");
+  const gleich = seite === NETZ_SCROLL_SEITE;
+  const pos = [];
+  if (gleich && fenster) fenster.querySelectorAll("*").forEach(el => { if (el.scrollTop > 0) pos.push([el, el.scrollTop, el.className, el.id]); });
+  netzZeichnenRoh();
+  NETZ_SCROLL_SEITE = seite;
+  netzMerken();
+  if (!gleich || !fenster) return;
+  for (const [el, y, cls, id] of pos) {
+    /* Ersetztes Element? Dann den Nachfolger mit gleicher id/Klasse suchen. */
+    const ziel = el.isConnected ? el : (id ? document.getElementById(id) : (cls && typeof cls === "string" ? fenster.querySelector("." + cls.trim().split(/\s+/).join(".")) : null));
+    if (ziel && ziel.scrollTop !== y) ziel.scrollTop = y;
+  }
+}
+function netzZeichnenRoh() {
   const { state, me, myId } = store.get();
   if (!state?.stadt) return netzSchliessen();
   const fenster = document.getElementById("netzFenster");
@@ -13175,6 +13224,7 @@ function render({ state, me, myId, chat, room }) {
   }
 }
 store.subscribe(render);
+store.subscribe(() => { try { netzWiederherstellen(); } catch {} });
 
 /* ================================================================
  * Ausführliches Tutorial (Startbildschirm)
