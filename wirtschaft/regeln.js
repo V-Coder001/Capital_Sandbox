@@ -95,7 +95,10 @@ export const anleihezins = leitzins => leitzins + 0.01;
 /* Kursformel je Markttag. nettoOrders in Stück (Kauf minus Verkauf). rauschen in [-1, 1]. */
 export function kursNeu(kAlt, kFair, nettoOrders, anteile, { einfluss = K.boerse.orderEinfluss, rauschen = 0 } = {}) {
   const rueck = 0.10 * (kFair - kAlt);
-  const orders = kAlt * einfluss * nettoOrders * 100 / anteile;
+  /* Order-Wirkung je Tag auf ±5 % des Kurses begrenzt. Ohne Deckel gibt es
+   * ab ~20 % gehandelter Aktien je Tag kein Gleichgewicht mehr gegen den
+   * 10-%-Rückzug, und der Kurs wächst exponentiell (KI-Testfond, 10.11.2026). */
+  const orders = clamp(kAlt * einfluss * nettoOrders * 100 / anteile, -0.05 * kAlt, 0.05 * kAlt);
   const roh = kAlt + rueck + orders;
   return roh * (1 + clamp(rauschen, -1, 1) * K.boerse.kursRauschen);
 }

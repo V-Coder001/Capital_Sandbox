@@ -96,3 +96,9 @@ test("Sparquote und Bürgerdepot folgen dem Leitzins", () => {
   nah(R.buergerdepotVerteilung(0.05).fonds, 0.55, 1e-12);
   assert.equal(K.zeit.periodeTage, 10);
 });
+
+test("Kurs bleibt bei Dauerkäufen begrenzt (kein exponentielles Wachstum)", () => {
+  let k = 100;
+  for (let i = 0; i < 500; i++) k = R.kursNeu(k, 100, 1000, 100);
+  assert.ok(k < 200, `Kurs ${k}`);
+});
