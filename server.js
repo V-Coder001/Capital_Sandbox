@@ -2687,6 +2687,34 @@ async function kiFondTag(tag) {
 
 app.get("/ki-verlauf", (_req, res) => res.json({ ...kiPublic(), verlauf: KI_STATE.verlauf, protokoll: KI_STATE.protokoll }));
 
+/* ---- Stadt kauft Rohware an (Entscheidung 11.11.2026, Weg 1) ----
+ * Eine Firma, die nur Rohware produziert, fand an der Börse keine Käufer und
+ * ging pleite. Die Stadt steht darum jeden Markttag als Käuferin bereit:
+ * Sell-Orders für Rohware zum Mindestpreis (50 % des Basispreises) oder
+ * darunter füllt sie zum Mindestpreis. Bezahlt wird aus der Stadtkasse, also
+ * aus Steuern — es entsteht kein neues Geld. Der Preis liegt bewusst unter
+ * dem, was Verarbeitung und eigener Laden bringen. */
+const ANKAUF_ANTEIL = 0.5, ANKAUF_KASSE_TAG = 0.05, ANKAUF_JE_EINWOHNER = 0.03;   // Menge je Ware und Tag: Bedarf der Stadt, nicht unbegrenzt
+const ROHWAREN = [...new Set(Object.values(BTYPES).filter(b => b.out && !b.proc).map(b => b.out))].filter(g => GOODS[g] && !ILLEGAL.includes(g));
+const ankaufPreis = g => Math.round(BASEP[g] * ANKAUF_ANTEIL * 100) / 100;
+function stadtAnkaufTag() {
+  let budget = Math.max(0, (G.stadtkasse || 0) * ANKAUF_KASSE_TAG);
+  const rest = Object.fromEntries(ROHWAREN.map(g => [g, Math.floor((G.stadt?.einwohner || 100) * ANKAUF_JE_EINWOHNER)]));
+  const offen = G.orders.filter(o => o.side === "sell" && ROHWAREN.includes(o.good) && o.price <= ankaufPreis(o.good))
+    .sort((a, b) => a.ts - b.ts);
+  for (const o of offen) {
+    if (budget < 1) break;
+    const preis = ankaufPreis(o.good);
+    const qty = Math.min(o.qty, Math.floor(budget / preis), rest[o.good]);
+    if (qty < 1) continue;
+    rest[o.good] -= qty;
+    settleTrade(o.good, qty, preis, STADTNETZ_ID + "-ankauf", o.playerId);
+    G.stadtkasse -= qty * preis; budget -= qty * preis;
+    G.stadtAnkauf = (G.stadtAnkauf || 0) + qty * preis;
+    o.qty -= qty; if (o.qty <= 0) G.orders.splice(G.orders.indexOf(o), 1);
+  }
+}
+
 function marktTag() {
   const tag = Math.floor(G.tick / MARKT.TAG);
   unterhaltTag();
@@ -2708,6 +2736,7 @@ function marktTag() {
     m.kurs = Math.max(0.01, WR.kursNeu(kursVon(p), F / AKTIEN, netto, AKTIEN, { rauschen: Math.random() * 2 - 1 }));
     m.nettoOrders = 0;
   }
+  stadtAnkaufTag();
   kiFondTag(tag).catch(() => {});
   if (!panik) {
     fondsTag();          // die Branchenfonds (in der Panik kaufen sie nichts)
@@ -6539,6 +6568,7 @@ function snapshot() {
     haushalte: G.haushalte ? { cash: Math.round(G.haushalte.cash), budget: Math.round(G.haushalte.budget) } : null,
     /* Zentralbank (v2): Leitzins, Zielzins als Trend und Inflation je Periode */
     ki: kiPublic(),
+    stadtAnkauf: Object.fromEntries(ROHWAREN.map(g => [g, ankaufPreis(g)])),
     zb: G.zb ? { leitzins: G.zb.leitzins, zielzins: G.zb.zielzins, inflation: Math.round(G.zb.inflation * 10000) / 10000,
                  kreditzins: WR.kreditzins(G.zb.leitzins), sparzins: WR.sparzins(G.zb.leitzins), sparquote: WR.sparquote(G.zb.leitzins),
                  multiple: Math.round(WR.multiple(G.zb.leitzins) * 10) / 10, panik: (G.crash?.aktivBis ?? -1) >= Math.floor(G.tick / MARKT.TAG) } : null,

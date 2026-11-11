@@ -12569,6 +12569,9 @@ function render({ state, me, myId, chat, room }) {
         <span class="meta oname">${o.player}</span>
         <button class="${gesuch ? "sellb" : "buyb"}" data-take="${o.id}">${gesuch ? t("Beliefern") : t("Kaufen")}</button>
       </div>`;
+    /* Stadt kauft Rohware: Mindestpreis zur gewählten Ware anzeigen. */
+    { const ak = document.getElementById("oAnkauf"), g = document.getElementById("oGood")?.value, pr = state.stadtAnkauf?.[g];
+      if (ak) { ak.hidden = !pr; if (pr) ak.textContent = `Die Stadt kauft ${GOODS()[g]?.name ?? g} jederzeit zu ${pr.toFixed(2).replace(".", ",")} $ — Verkaufsorders zu diesem Preis oder darunter füllt sie zum Mindestpreis.`; } }
     { const F = state.finanzamt, gb = document.getElementById("oGebuehr");
       gb.hidden = !(F?.aktiv && F.boerse > 0);
       if (!gb.hidden) gb.innerHTML = `<span class="faStufeMini" data-stufe="${F.stufe}">${F.stufeName}</span>
