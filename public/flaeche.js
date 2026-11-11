@@ -23,10 +23,12 @@
   const PAL = {
     vermessung: {
       line: "125,211,252",
-      agrar: "#173a2e", field: "#1c4434", park: "#18402f", zentrum: "#1b2535", industrie: "#2a2b31",
-      kueste: "#33402f", sand: "#4a4128", wasser: "#0d2a40", deep: "#0a2134", road: "#0d131d", wohnen: "#2a2a3c",
+      /* Jeder Bezirk mit eigenem Farbton: Agrar grün, Zentrum stahlblau,
+       * Wohngebiet warmes Ziegelrot, Industrie Betongrau-Braun, Küste sandig. */
+      agrar: "#17432f", field: "#1e5038", park: "#1a4a33", zentrum: "#20324d", industrie: "#35302a",
+      kueste: "#3d472f", sand: "#5c4f2c", wasser: "#0e3654", deep: "#0a2943", road: "#0d131d", wohnen: "#40303a",
       furche: "rgba(125,211,252,.10)", schraffur: "rgba(251,191,36,.20)", raster: "rgba(125,211,252,.09)",
-      wasserLinie: null, lane: "rgba(125,211,252,.5)", hoehe: "rgba(125,211,252,.16)",
+      wasserLinie: null, welle: "rgba(186,230,253,.13)", lane: "rgba(125,211,252,.5)", hoehe: "rgba(125,211,252,.16)",
       grenze: "rgba(125,211,252,.55)", indGrenze: "rgba(251,191,36,.6)",
       seite1: "#0c1a28", seite2: "#08121c", schicht: "rgba(125,211,252,.22)",
       schildBg: "rgba(7,11,16,.82)", schildRand: "rgba(125,211,252,.45)", schildText: "#bae6fd",
@@ -87,6 +89,12 @@
       if ((a === "wasser" || a === "deep") && P.wasserLinie) {   // Wasserschraffur (Papier)
         g.strokeStyle = P.wasserLinie; g.lineWidth = .8;
         for (let k = 2; k < TH; k += 4) { g.beginPath(); g.moveTo(0, k); g.lineTo(TW, k); g.stroke(); }
+      }
+      if ((a === "wasser" || a === "deep") && P.welle) {         // kleine Wellenkämme
+        g.strokeStyle = P.welle; g.lineWidth = 1; g.lineCap = "round";
+        for (const [wx, wy, wl] of [[TW * .3, TH * .38, 7], [TW * .56, TH * .56, 9], [TW * .42, TH * .72, 5]]) {
+          g.beginPath(); g.moveTo(wx, wy); g.quadraticCurveTo(wx + wl / 2, wy - 2, wx + wl, wy); g.stroke();
+        }
       }
       // Rasterlinie
       g.strokeStyle = a === "wasser" || a === "deep" ? `rgba(${P.line},.05)` : P.raster; g.lineWidth = .8;
@@ -221,7 +229,11 @@
       const mx = teil.reduce((s, u) => s + u.x, 0) / teil.length, my = teil.reduce((s, u) => s + u.y, 0) / teil.length;
       // Schild auf eine Straße/freie Kachel nahe dem Schwerpunkt, nicht mitten auf ein Gebäude
       let best = null, bd = 1e9;
-      for (const u of teil) { const d = (u.x - mx) ** 2 + (u.y - my) ** 2 + (u.btype || (u.zone === "wohnen" && !u.road) ? 6 : 0); if (d < bd) { bd = d; best = u; } }
+      const ort = v => v && (v.bank || v.news || v.finanzamt || v.denkmal || v.schwarz || v.deko);
+      /* … und nicht auf oder direkt vor einen beschrifteten Ort (Bank, Finanzamt …):
+       * dessen Namensschild sitzt unterhalb des Gebäudes. */
+      const belegt = u => { for (let dx = -2; dx <= 1; dx++) for (let dy = -2; dy <= 1; dy++) if (ort(T.get((u.x + dx) + "," + (u.y + dy)))) return true; return false; };
+      for (const u of teil) { const d = (u.x - mx) ** 2 + (u.y - my) ** 2 + (u.btype || (u.zone === "wohnen" && !u.road) ? 6 : 0) + (belegt(u) ? 14 : 0); if (d < bd) { bd = d; best = u; } }
       schilder.push({ x: best.x, y: best.y, text: NAMEN[t.zone], ind: t.zone === "industrie" });
     }
 
