@@ -1378,3 +1378,59 @@ html.ohneGlas,html.ohneGlas *{-webkit-backdrop-filter:none!important;backdrop-fi
 /* Gesperrte Spielmodi (vorerst nur Sandkasten) */
 #lwMode button.gesperrt{opacity:.38;filter:grayscale(1);cursor:not-allowed}
 .modusChip.gesperrt{opacity:.45}
+
+
+/* ================================================================
+ * Feinschliff Menüs und Panels (nur Thema „Vermessung")
+ * Reine Optik: Symbole in der Menüleiste, klarere Panel-Köpfe, Karten mit
+ * mehr Tiefe, besser lesbare Nebentexte. Kartenpapier bleibt unberührt.
+ * ================================================================ */
+html:not([data-theme="papier"]){--dim:#a2b2c7;--karte:linear-gradient(180deg,rgba(125,211,252,.065),rgba(125,211,252,.018));--karte-rand:rgba(125,211,252,.17)}
+
+/* Menüleiste: Symbol über dem Namen, aktiver Reiter leuchtet */
+html:not([data-theme="papier"]) .dockbtn{display:flex;flex-direction:column;align-items:center;gap:4px;padding:8px 2px 7px;
+  transition:color .15s,background .15s,box-shadow .15s;--ico:url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%221.7%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Cpath d=%22M5 5h6v6H5zM13 5h6v6h-6zM5 13h6v6H5zM13 13h6v6h-6z%22/%3E%3C/svg%3E")}
+html:not([data-theme="papier"]) .dockbtn::before{content:"";width:18px;height:18px;flex:none;background:currentColor;opacity:.8;
+  -webkit-mask:var(--ico) center/contain no-repeat;mask:var(--ico) center/contain no-repeat}
+html:not([data-theme="papier"]) .dockbtn.on{background:linear-gradient(180deg,rgba(125,211,252,.2),rgba(125,211,252,.07));
+  box-shadow:inset 0 0 0 1px rgba(125,211,252,.28),inset 0 -2px 0 var(--accent),0 6px 18px rgba(56,189,248,.14)}
+html:not([data-theme="papier"]) .dockbtn.on::before{background:var(--accent);opacity:1}
+html:not([data-theme="papier"]) .dockbtn[data-p="karte"]{--ico:url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%221.7%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Cpath d=%22M9 4 3 6v14l6-2 6 2 6-2V4l-6 2-6-2zM9 4v14M15 6v14%22/%3E%3C/svg%3E")}
+html:not([data-theme="papier"]) .dockbtn[data-p="lager"]{--ico:url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%221.7%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Cpath d=%22M3 8l9-5 9 5v8l-9 5-9-5V8zM3 8l9 5 9-5M12 13v8%22/%3E%3C/svg%3E")}
+html:not([data-theme="papier"]) .dockbtn[data-p="firma"]{--ico:url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%221.7%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Cpath d=%22M4 21V5l8-2v18M12 9l8 2v10M2 21h20M7 8h2M7 12h2M7 16h2M15 14h2M15 17h2%22/%3E%3C/svg%3E")}
+html:not([data-theme="papier"]) .dockbtn[data-p="netz"]{--ico:url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%221.7%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Ccircle cx=%2212%22 cy=%2212%22 r=%229%22/%3E%3Cpath d=%22M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18%22/%3E%3C/svg%3E")}
+html:not([data-theme="papier"]) .dockbtn[data-p="lexikon"]{--ico:url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%221.7%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Cpath d=%22M4 5a2 2 0 0 1 2-2h14v16H6a2 2 0 0 0-2 2V5zM4 19a2 2 0 0 0 2 2h14M9 7h7%22/%3E%3C/svg%3E")}
+html:not([data-theme="papier"]) .dockbtn[data-p="chat"]{--ico:url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%221.7%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Cpath d=%22M4 5h16v11H9l-5 4V5z%22/%3E%3C/svg%3E")}
+html:not([data-theme="papier"]) .dockbtn[data-p="boerse"]{--ico:url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%221.7%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Cpath d=%22M3 20h18M5 16l5-6 4 3 6-8%22/%3E%3C/svg%3E")}
+html:not([data-theme="papier"]) .dockbtn[data-p="bonds"]{--ico:url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%221.7%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Ccircle cx=%2212%22 cy=%2212%22 r=%229%22/%3E%3Cpath d=%22M9 15c.6.9 1.700 1.400 3 1.400 1.700 0 3-.8 3-2.100 0-2.900-6-1.300-6-4.200C9 8.800 10.300 8 12 8c1.300 0 2.400.5 3 1.400M12 6v2M12 16.400V18%22/%3E%3C/svg%3E")}
+html:not([data-theme="papier"]) .dockbtn[data-p="hauptsitz"]{--ico:url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%221.7%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Cpath d=%22M3 21h18M6 21V7l6-4 6 4v14M10 21v-5h4v5M9.500 10h1M13.500 10h1M9.500 13h1M13.500 13h1%22/%3E%3C/svg%3E")}
+
+/* Panels: Kopf mit Akzentstrich, feiner Lichtrand, schmale Rollbalken */
+html:not([data-theme="papier"]) .panel{box-shadow:var(--schatten),inset 0 1px 0 rgba(255,255,255,.06)}
+html:not([data-theme="papier"]) .phead{background:linear-gradient(180deg,rgba(125,211,252,.08),rgba(125,211,252,0))}
+html:not([data-theme="papier"]) .phead h2{display:flex;align-items:center;gap:10px;font-size:18px}
+html:not([data-theme="papier"]) .phead h2::before{content:"";flex:none;width:4px;height:18px;border-radius:2px;
+  background:linear-gradient(180deg,var(--accent),var(--accent2));box-shadow:0 0 12px rgba(125,211,252,.45)}
+html:not([data-theme="papier"]) .phead .x{transition:color .15s,border-color .15s,background .15s}
+html:not([data-theme="papier"]) .phead .x:hover{background:rgba(125,211,252,.1)}
+html:not([data-theme="papier"]) .pbody{scrollbar-width:thin;scrollbar-color:rgba(125,211,252,.32) transparent}
+
+/* Karten: leichter Verlauf statt flacher Fläche, Rand hellt beim Überfahren auf */
+html:not([data-theme="papier"]) .invtile,html:not([data-theme="papier"]) .lexKarte,html:not([data-theme="papier"]) .fKennzahlen > div,html:not([data-theme="papier"]) .fZinsen > div,html:not([data-theme="papier"]) .contract{
+  background:var(--karte);border-color:var(--karte-rand);transition:border-color .15s,transform .15s}
+html:not([data-theme="papier"]) .invtile:hover,html:not([data-theme="papier"]) .lexKarte:hover{border-color:rgba(125,211,252,.45);transform:translateY(-1px)}
+html:not([data-theme="papier"]) .invtile{border-radius:12px;padding:12px 13px}
+html:not([data-theme="papier"]) .invtile h4{font:500 11px var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--dim);margin-bottom:6px}
+html:not([data-theme="papier"]) .invtile .qty{font-size:22px;font-weight:600;letter-spacing:-.01em;color:var(--text)}
+html:not([data-theme="papier"]) .invtile .val{margin-top:2px}
+html:not([data-theme="papier"]) .fKennzahlen .haupt{border-color:rgba(125,211,252,.4);box-shadow:inset 0 0 24px rgba(125,211,252,.07)}
+html:not([data-theme="papier"]) .lexChips span{border-radius:999px;padding:2px 9px;border:1px solid rgba(125,211,252,.14)}
+html:not([data-theme="papier"]) .lexGruppe > summary{font-weight:600}
+html:not([data-theme="papier"]) .fLohn button{background:var(--karte);transition:border-color .15s}
+html:not([data-theme="papier"]) .fLohn button.on{background:linear-gradient(180deg,rgba(125,211,252,.16),rgba(125,211,252,.05))}
+
+/* Knöpfe: spürbare Rückmeldung */
+html:not([data-theme="papier"]) .buyb,html:not([data-theme="papier"]) .sellb,html:not([data-theme="papier"]) .mini{transition:filter .15s,transform .1s,border-color .15s}
+html:not([data-theme="papier"]) .buyb:hover,html:not([data-theme="papier"]) .sellb:hover{filter:brightness(1.12)}
+html:not([data-theme="papier"]) .mini:hover{border-color:var(--accent)}
+html:not([data-theme="papier"]) .buyb:active,html:not([data-theme="papier"]) .sellb:active,html:not([data-theme="papier"]) .mini:active{transform:translateY(1px)}
