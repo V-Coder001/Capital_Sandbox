@@ -5262,7 +5262,8 @@ const STADT = Object.assign({
    * 15 % Miete an die Stadt, 20 % ins Buergerdepot; der Rest ist Konsum und
    * steckt in der Ladennachfrage (stadtNachfrage). */
   ERWERBSQUOTE: 0.6,
-  ARBEIT_JE_DOLLAR: 1 / 400,   // v2: weniger Stellen je Bauwert, sonst fressen Löhne den Umsatz (10.11.2026) ARBEIT_MIN: 2, ARBEIT_MAX: 30, ARBEIT_AUSBAU: 0.5,
+  ARBEIT_JE_DOLLAR: 1 / 400,   // v2: weniger Stellen je Bauwert, sonst fressen Löhne den Umsatz (10.11.2026)
+  ARBEIT_MIN: 2, ARBEIT_MAX: 30, ARBEIT_AUSBAU: 0.5,
   ARBEIT_STOPP: 0.25,     // unter 25 % Besetzung steht ein Gebaeude still
   VERTEILUNG_TAKT: 10,    // Sekunden
   LOEHNE: {
