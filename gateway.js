@@ -146,7 +146,9 @@ async function raumErstellen(oeffentlich = false) {
   const code = neuerCode();
   const proc = spawn(process.execPath, ["server.js"], {
     cwd: __dirname,
-    env: { ...process.env, PORT: String(port) },
+    /* Keine Spielstand-Sicherung je Runde: Die Ports wechseln, ein liegen
+     * gebliebener Stand könnte sonst in einer fremden Runde auftauchen. */
+    env: { ...process.env, PORT: String(port), CS_SICHERUNG: "0" },
     stdio: ["ignore", "pipe", "pipe"],
   });
   const room = { proc, port, createdAt: Date.now(), lastActivity: Date.now(), oeffentlich: false };

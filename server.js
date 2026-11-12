@@ -1667,7 +1667,7 @@ const DIVIDEND_RATE = 0.25;      // Anteil des seit der letzten Ausschüttung er
 const RECONNECT_GRACE_MS = 5 * 60 * 1000;   // 5 Minuten
 
 /* $7.000 Start: deckt die Tutorial-Gebäude Farm+Plantage+Vertriebsbüro ($5.900) plus Puffer */
-/* Siegziel $250k ≈ 1–2 h Partie (Playtest: ~$1k/min Anfangswachstum, skaliert später).
+/* Siegziel: siehe WIN_NW (Vorgabe $50k, gemessen an Wirtschaft v2).
  * Überschreibbar: WIN_NW=1000000 npm start */
 /* $8.500 deckt in jeder Industrie 2 Grundgebäude + 1 Verarbeitungsgebäude:
  * Agrar 2×Farm+Saftpresse=$5.600, Rohstoff 2×Mine+Betonwerk=$8.000,
@@ -1699,14 +1699,18 @@ const sicherText = s => String(s).replace(/[&<>"']/g, c =>
  * durch die Vorgabe ersetzt. */
 const STANDARDFARBE = "#e8b544";
 const sichereFarbe = c => /^#[0-9a-fA-F]{6}$/.test(String(c || "")) ? String(c) : STANDARDFARBE;
-/* Rundenziel: Default $250k ≈ 1–2 h; der ERSTE Spieler der Runde legt es beim
+/* Rundenziel: Default $50k ≈ 1,5 h; der ERSTE Spieler der Runde legt es beim
  * Beitreten fest (Auswahl im Join-Screen). Env-Override: WIN_NW=... npm start */
-let WIN_NW = +process.env.WIN_NW || 250_000;
-const WIN_CHOICES = [100_000, 250_000, 500_000, 1_000_000, 10_000_000];
+/* Wirtschaft v2 ist ein geschlossener Geldkreislauf: In fünf Testrunden mit
+ * acht Firmen stand die beste Firma nach 30 Minuten bei 15–25k, nach 60 bei
+ * 20–32k, nach 90 bei 22–40k und nach 285 Minuten bei 27–60k. 250k war damit
+ * in keiner Runde erreichbar. Vorgabe darum 50k mit 90 Minuten Zeitlimit. */
+let WIN_NW = +process.env.WIN_NW || 50_000;
+const WIN_CHOICES = [25_000, 50_000, 100_000, 250_000, 500_000, 1_000_000, 10_000_000];
 /* Zeitlimit (Minuten, 0 = keins): Ist die Zeit um, gewinnt das höchste
  * Nettovermögen — Runden werden planbar, auch wenn niemand das Ziel knackt. */
-let ZEIT_LIMIT = 0;
-const ZEIT_CHOICES = [0, 30, 45, 60, 90];
+let ZEIT_LIMIT = process.env.ZEIT_LIMIT != null ? +process.env.ZEIT_LIMIT : 90;
+const ZEIT_CHOICES = [0, 30, 45, 60, 90, 120, 180];
 /* ---- Meisterschaft (Race Day) ----
  * Der Renntag-Modus hatte bisher dieselbe Siegbedingung wie der Sandkasten:
  * das hoechste Nettovermoegen. In einem Rennmodus soll aber gewinnen, wer
@@ -6937,6 +6941,10 @@ io.on("connection", socket => {
   /* Reconnect: Browser hat noch ein Token aus einer früheren Verbindung (Tab zu,
    * WLAN-Aussetzer, versehentlich verlassen) — Spielstand bleibt komplett erhalten. */
   socket.on("rejoin", ({ token }, ack) => {
+    /* Gesicherte Runde wartet, und hier kommt einer ihrer Spieler zurück:
+     * fortsetzen. Nur solange noch niemand eine neue Runde begonnen hat. */
+    if (SICHERUNG_ANGEBOT && !G.started && !Object.keys(G.players).length
+        && SICHERUNG_ANGEBOT.G.players[token] && !SICHERUNG_ANGEBOT.G.players[token].bot) spielstandLaden();
     const p = G.players[token];
     if (!p) return ack?.({ error: "Sitzung abgelaufen oder unbekannt" });
     G.socketToPid[socket.id] = token;
@@ -6958,6 +6966,8 @@ io.on("connection", socket => {
     if (!name) return ack?.({ error: "Name fehlt" });
     if (Object.values(G.players).some(p => p.name === name)) return ack?.({ error: "Name vergeben" });
     if (!INDUSTRIES[industry]) return ack?.({ error: "Bitte eine Industrie wählen" });
+    /* Wer neu beitritt, will eine neue Runde: der gesicherte Stand verfällt. */
+    if (SICHERUNG_ANGEBOT) spielstandLoeschen();
     /* Der erste Spieler wird Host: seine Angaben vom Startbildschirm sind die
      * Voreinstellung des Warteraums, die er dort bis zum Start noch ändern kann. */
     if (Object.keys(G.players).length === 0 && WIN_CHOICES.includes(+winGoal)) WIN_NW = +winGoal;
@@ -8201,7 +8211,7 @@ io.on("connection", socket => {
    * zu Ende gespielt hat, darf sie auch neu starten. */
   socket.on("newRound", (_payload, ack) => {
     if (!G.winner) return ack?.({ error: "Die Runde läuft noch" });
-    stopBots();
+    stopBots(); spielstandLoeschen();
     botAuswahl = null; botLevelKey = BOT_LEVEL_DEFAULT;
     G.map = buildMap();
     /* Frische Karte → Kachel-Diff zurücksetzen, alle bekommen sie voll. */
@@ -9323,7 +9333,8 @@ function runTick() {
   if (!G.started) return;   // Warteraum: nichts produzieren, keine Fristen laufen lassen
   G.tick++;
   /* Rundenende: die Bestenliste genau einmal fortschreiben. */
-  if (G.winner && !G.hofGespeichert) { G.hofGespeichert = true; hofSpeichern(); }
+  if (G.winner && !G.hofGespeichert) { G.hofGespeichert = true; hofSpeichern(); spielstandLoeschen(); }
+  if (G.tick % SICHERUNG_TAKT === 0) spielstandSichern();
   /* --- Renntage (nicht in Planwirtschaft und Kartellmodus) ---
    * In der Kartellwirtschaft geht es um Absprachen auf den Warenmärkten. Ein
    * Renntag mit eigenem Wettpool wäre ein zweites Spiel daneben, das von der
@@ -9976,10 +9987,8 @@ const botHandles = [];
  * ausstehende Starts einer beendeten Runde in die neue hineinfeuern und die
  * Bots doppelt anlegen. */
 let botGen = 0;
-function startBots() {
-  if (botsStarted || process.env.BOT === "0") return;
-  botsStarted = true;
-  const lvl = BOT_LEVELS[botLevelKey] || BOT_LEVELS[BOT_LEVEL_DEFAULT];
+/* Welche Bots zu dieser Runde gehören (Auswahl des Hosts im Warteraum). */
+function botListe() {
   /* Ohne Auswahl (z. B. alter Client) je Branche ein Bot. Sonst genau so viele,
    * wie im Startbildschirm eingestellt wurden — höchstens zwei je Branche. */
   const gewuenscht = {};
@@ -9992,12 +10001,18 @@ function startBots() {
    * abwechselnd, damit immer beide Seiten besetzt sind: ohne Zulieferer gaebe
    * es keine Teile, ohne Clubs kein Rennen. */
   const genommen = {};
-  const liste = MODE === "renntag"
+  return MODE === "renntag"
     ? RENNTAG_BOT_CFGS.slice(0, Object.values(gewuenscht).reduce((a2, b2) => a2 + b2, 0))
     : BOT_CFGS.filter(cfg => {
         genommen[cfg.industry] = (genommen[cfg.industry] || 0) + 1;
         return genommen[cfg.industry] <= (gewuenscht[cfg.industry] || 0);
       });
+}
+function startBots() {
+  if (botsStarted || process.env.BOT === "0") return;
+  botsStarted = true;
+  const lvl = BOT_LEVELS[botLevelKey] || BOT_LEVELS[BOT_LEVEL_DEFAULT];
+  const liste = botListe();
   if (!liste.length) { botsStarted = false; return; }   // ohne Bots gar nicht erst hochfahren
   const gen = ++botGen;
   console.log(`Bots: ${liste.map(c => c.name).join(", ") || "keine"} — Stufe ${lvl.name}`);
@@ -10013,10 +10028,12 @@ function stopBots() {
 const BOT_COIN_ANHANG = ["Coin", "Token", "Bit", "Credit", "Chip"];
 const botCoinName = (firma, n) => `${String(firma).split(" ")[0].slice(0, 10)}${BOT_COIN_ANHANG[n % BOT_COIN_ANHANG.length]}`;
 
-async function spawnBot(cfg, lvl = BOT_LEVELS[BOT_LEVEL_DEFAULT]) {
+async function spawnBot(cfg, lvl = BOT_LEVELS[BOT_LEVEL_DEFAULT], bestehendeId = null) {
   const { io: ioClient } = await import("socket.io-client");
   const s = ioClient(`http://localhost:${PORT}`);
-  let me = null, st = null, myId = null, lastBuild = 0;
+  /* bestehendeId: Nach dem Laden eines Spielstands gibt es die Firma schon —
+   * der Bot meldet sich dann per rejoin an, statt sich neu zu registrieren. */
+  let me = null, st = null, myId = bestehendeId, lastBuild = 0;
   let bauMat = {};   // Baumaterial fürs nächste Gebäude des Bauplans (aus dem vorigen Durchlauf)
   let ausschuettungGesetzt = null;   // zuletzt festgelegte Dividende (cfg.dividendeAnteil)
   let swPreisZeit = Date.now();   // Software-Anbieter: wann zuletzt die Gebühr überprüft wurde
@@ -11298,10 +11315,119 @@ async function spawnBot(cfg, lvl = BOT_LEVELS[BOT_LEVEL_DEFAULT]) {
 
 /* Letztes Sicherheitsnetz: Server bleibt auch bei einem übersehenen Bug am Leben
  * (sonst beendet Node den Prozess standardmäßig bei jeder unabgefangenen Exception). */
+/* ---------- Spielstand sichern ----------
+ * Die Runde lag bisher nur im Arbeitsspeicher: Stürzte der Prozess ab oder
+ * wurde der Rechner hart beendet, war sie für alle verloren. Jetzt schreibt
+ * der Server jede Minute den ganzen Rundenzustand in eine Datei.
+ *
+ * Fortgesetzt wird ohne Rückfrage, aber nur auf Wunsch eines Spielers: Nach
+ * dem Neustart wartet der Stand als Angebot. Meldet sich ein Browser mit dem
+ * Token eines Spielers dieser Runde zurück (rejoin, passiert beim Laden der
+ * Seite von selbst), wird die Runde geladen. Tritt stattdessen jemand neu
+ * bei, beginnt eine frische Runde und der alte Stand wird verworfen.
+ *
+ * Ein gewolltes Beenden (Strg+C, start.sh, Desktop-App schließen: alle senden
+ * SIGTERM/SIGINT) löscht die Datei. So bleibt "neu starten = neue Runde" wie
+ * bisher, nur ein Absturz führt zurück in die alte.
+ *
+ * Hinter dem Gateway ist die Sicherung aus (CS_SICHERUNG=0): Dort bekommt
+ * jede Runde einen eigenen Prozess mit wechselndem Port, ein liegen
+ * gebliebener Stand könnte in einer fremden Runde landen. */
+const SICHERUNG_AN = process.env.CS_SICHERUNG !== "0";
+const SICHERUNG_DATEI = path.join(DATEN, `spielstand-${process.env.PORT || 3000}.json`);
+const SICHERUNG_TAKT = +process.env.SICHERUNG_TAKT || 60;            // Ticks zwischen zwei Sicherungen
+const SICHERUNG_MAX_ALTER_MS = (+process.env.SICHERUNG_MAX_STD || 24) * 3600 * 1000;
+const SICHERUNG_VERSION = 1;
+let SICHERUNG_ANGEBOT = null;      // geladener, noch nicht übernommener Stand
+let sicherungLaeuft = false;
+/* JSON kennt weder Set noch NaN/Infinity. Sets werden markiert und beim Laden
+ * zurückverwandelt; nicht endliche Zahlen wären sonst null und würden beim
+ * Rechnen zu 0 — das ist hier hinnehmbar (betrifft nur Anzeige-Zwischenwerte). */
+const sicherErsatz = (_k, v) => v instanceof Set ? { __set: [...v] } : v instanceof Map ? { __map: [...v] } : v;
+const sicherZurueck = (_k, v) => v && typeof v === "object" && Array.isArray(v.__set) && Object.keys(v).length === 1 ? new Set(v.__set)
+  : v && typeof v === "object" && Array.isArray(v.__map) && Object.keys(v).length === 1 ? new Map(v.__map) : v;
+function spielstandSichern() {
+  if (!SICHERUNG_AN || !G.started || G.winner || sicherungLaeuft) return;
+  let text;
+  try {
+    const { socketToPid, ...rest } = G;
+    text = JSON.stringify({
+      version: SICHERUNG_VERSION, zeit: Date.now(), G: rest, MM,
+      einstellungen: { WIN_NW, ZEIT_LIMIT, MODE, SAISON_RENNEN, botAuswahl, botLevelKey, MAP_W, MAP_H, MAP_ROUTES },
+      zaehler: { nextId, wettSeq, autoNr },
+    }, sicherErsatz);
+  } catch (e) { console.error("Spielstand nicht speicherbar:", e.message); return; }
+  sicherungLaeuft = true;
+  /* Erst in eine Nebendatei, dann umbenennen: Reißt der Strom mitten im
+   * Schreiben ab, bleibt der vorige vollständige Stand erhalten. */
+  fs.promises.writeFile(SICHERUNG_DATEI + ".neu", text)
+    .then(() => fs.promises.rename(SICHERUNG_DATEI + ".neu", SICHERUNG_DATEI))
+    .catch(e => console.error("Spielstand nicht geschrieben:", e.message))
+    .finally(() => { sicherungLaeuft = false; });
+}
+function spielstandLoeschen() {
+  SICHERUNG_ANGEBOT = null;
+  for (const d of [SICHERUNG_DATEI, SICHERUNG_DATEI + ".neu"]) { try { fs.unlinkSync(d); } catch {} }
+}
+/* Beim Start: liegt ein brauchbarer Stand da, als Angebot merken. */
+function spielstandSuchen() {
+  if (!SICHERUNG_AN) return;
+  try {
+    const d = JSON.parse(fs.readFileSync(SICHERUNG_DATEI, "utf8"), sicherZurueck);
+    if (d?.version !== SICHERUNG_VERSION || !d.G?.started || d.G.winner || !d.G.players) return spielstandLoeschen();
+    if (Date.now() - d.zeit > SICHERUNG_MAX_ALTER_MS) return spielstandLoeschen();
+    SICHERUNG_ANGEBOT = d;
+    console.log(`Gesicherte Runde gefunden (Minute ${Math.floor(d.G.tick / 60)}, ${Object.values(d.G.players).filter(p => !p.bot).map(p => p.name).join(", ")}) — wird fortgesetzt, sobald einer von ihnen zurückkommt.`);
+  } catch (e) { if (e.code !== "ENOENT") { console.error("Gesicherte Runde unlesbar, wird verworfen:", e.message); spielstandLoeschen(); } }
+}
+/* Übernimmt den angebotenen Stand in die laufende (noch leere) Runde. */
+function spielstandLaden() {
+  const d = SICHERUNG_ANGEBOT; SICHERUNG_ANGEBOT = null;
+  if (!d) return false;
+  stopBots();
+  for (const k of Object.keys(G)) delete G[k];
+  Object.assign(G, d.G, { socketToPid: {} });
+  for (const k of Object.keys(GOODS)) if (d.MM?.[k]) Object.assign(MM[k], d.MM[k]);
+  const e = d.einstellungen || {};
+  if (e.WIN_NW) WIN_NW = e.WIN_NW;
+  if (e.ZEIT_LIMIT != null) ZEIT_LIMIT = e.ZEIT_LIMIT;
+  if (e.MODE) MODE = e.MODE;
+  if (e.SAISON_RENNEN) SAISON_RENNEN = e.SAISON_RENNEN;
+  botAuswahl = e.botAuswahl ?? null; botLevelKey = e.botLevelKey || BOT_LEVEL_DEFAULT;
+  if (e.MAP_W) { MAP_W = e.MAP_W; MAP_H = e.MAP_H; MAP_ROUTES = e.MAP_ROUTES ?? null; }
+  nextId = Math.max(nextId, d.zaehler?.nextId || 1); wettSeq = Math.max(wettSeq, d.zaehler?.wettSeq || 1); autoNr = Math.max(autoNr, d.zaehler?.autoNr || 0);
+  /* Zwischenspeicher gehören zur alten Runde */
+  lastTileSigs = null; letzteFeldSigs = {}; bldCache = { tick: -1, byOwner: null }; WARE_BRANCHE = null;
+  for (const sock of io.sockets.sockets.values()) { sock.data.gotMap = false; sock.data.meSigs = null; }
+  /* Niemand ist verbunden. Die Gnadenfrist beginnt jetzt neu, damit die
+   * Mitspieler Zeit haben zurückzukommen, bevor ihre Firma aufgelöst wird. */
+  const jetzt = Date.now();
+  for (const p of Object.values(G.players)) { p.socketId = null; p.disconnected = true; p.disconnectedAt = jetzt; }
+  /* Die Bots waren Verbindungen des alten Prozesses. Sie werden neu gestartet
+   * und übernehmen ihre bestehende Firma, statt eine zweite zu gründen. */
+  const lvl = BOT_LEVELS[botLevelKey] || BOT_LEVELS[BOT_LEVEL_DEFAULT];
+  const gen = ++botGen; let i = 0;
+  /* Namen stehen im Spielstand maskiert (Montan &amp; Bau AG), darum derselbe
+   * Weg wie beim Registrieren. Bots, die beim Absturz noch nicht beigetreten
+   * waren (sie starten zeitversetzt), kommen jetzt als neue Firma dazu. */
+  const vorhanden = Object.values(G.players).filter(p => p.bot);
+  for (const cfg of process.env.BOT === "0" ? [] : botListe()) {
+    const p = vorhanden.find(x => x.name === sicherText(cfg.name));
+    botsStarted = true;
+    setTimeout(() => { if (gen === botGen && botsStarted) spawnBot(cfg, lvl, p?.id || null); }, 1500 + i++ * 400);
+  }
+  console.log(`Runde fortgesetzt ab Minute ${Math.floor(G.tick / 60)}.`);
+  io.emit("notice", { text: `Die Runde wurde nach einem Neustart fortgesetzt (Stand: Minute ${Math.floor(G.tick / 60)}).` });
+  return true;
+}
+/* Gewolltes Beenden: Stand löschen, dann normal beenden. */
+for (const sig of ["SIGINT", "SIGTERM"]) process.on(sig, () => { if (SICHERUNG_AN) spielstandLoeschen(); process.exit(0); });
+
 process.on("uncaughtException", e => console.error("Unerwarteter Fehler (Server läuft weiter):", e));
 process.on("unhandledRejection", e => console.error("Unerwarteter Promise-Fehler (Server läuft weiter):", e));
 
 const PORT = process.env.PORT || 3000;
+spielstandSuchen();
 httpServer.listen(PORT, async () => {
   console.log(`Capital Sandbox Server → http://localhost:${PORT}`);
   for (const u of lanUrls(PORT)) console.log(`  Einladungslink (LAN): ${u}`);

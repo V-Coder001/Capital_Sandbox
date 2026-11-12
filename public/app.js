@@ -186,6 +186,47 @@ const toast = (msg, err) => { const d = document.createElement("div");
    * halben Bildschirm. Die ältesten weichen den neuen. */
   while (box.children.length > TOAST_MAX) box.firstElementChild.remove();
   setTimeout(() => d.remove(), 4000); };
+/* ---- Meldungen des Servers (Rundfunk an alle) ----
+ * Sie sagen, was in der Stadt passiert: Renntag, Großauftrag, Beitritte.
+ * Zwei Dinge störten: Kamen mehrere zusammen, lag ein Stapel über dem
+ * Paneltitel. Und im Tutorial lenkten sie von dem einen Schritt ab, um den es
+ * gerade geht. Darum: höchstens zwei gleichzeitig, der Rest als Zähler in
+ * einer Zeile. Während des Tutorials werden sie gesammelt und am Ende in
+ * einer einzigen Meldung nachgereicht. Antworten auf eigene Aktionen (toast)
+ * sind davon nicht betroffen, die braucht man sofort. */
+const MELD = { wartend: [], mehr: 0, mehrEl: null, MAX: 2 };
+function meldung(text) {
+  if (typeof tutIdx === "number" && tutIdx >= 0) {
+    MELD.wartend.push(String(text ?? ""));
+    if (MELD.wartend.length > 30) MELD.wartend.shift();
+    return;
+  }
+  const box = document.getElementById("toasts");
+  const offen = box.querySelectorAll(".toast.info");
+  if (offen.length >= MELD.MAX) {
+    offen[0].remove();
+    MELD.mehr++;
+    if (!MELD.mehrEl || !MELD.mehrEl.isConnected) {
+      MELD.mehrEl = document.createElement("div"); MELD.mehrEl.className = "toastMehr";
+    }
+    MELD.mehrEl.textContent = SPRACHE === "en"
+      ? `+ ${MELD.mehr} more ${MELD.mehr === 1 ? "message" : "messages"}`
+      : `+ ${MELD.mehr} weitere ${MELD.mehr === 1 ? "Meldung" : "Meldungen"}`;
+    clearTimeout(MELD.mehrZeit);
+    MELD.mehrZeit = setTimeout(() => { MELD.mehrEl?.remove(); MELD.mehr = 0; }, 4000);
+  }
+  toast(text);
+  box.lastElementChild?.classList.add("info");
+  if (MELD.mehr && MELD.mehrEl) box.append(MELD.mehrEl);
+}
+/* Nach dem Tutorial: eine Zeile statt einer Salve. */
+function meldungenNachreichen() {
+  const n = MELD.wartend.length; if (!n) return;
+  const letzte = MELD.wartend[n - 1]; MELD.wartend = [];
+  meldung(n === 1 ? letzte : (SPRACHE === "en"
+    ? `${n} messages during the tutorial. Latest: ${letzte}`
+    : `${n} Meldungen während des Tutorials. Zuletzt: ${letzte}`));
+}
 /* Jede Aktion läuft über ack — Server-Fehler landen als Toast beim Spieler.
  * Der passende Klang kommt erst mit der Bestätigung: eine abgelehnte Order
  * soll nicht nach gelungenem Geschäft klingen. */
@@ -1506,7 +1547,7 @@ function bindSocketEvents(s) {
     store.set({ me });
   });
   s.on("kurse", k => { priceHist = k?.waren || {}; firmHist = k?.firmen || {}; });
-  s.on("notice", ({ text }) => toast(text));
+  s.on("notice", ({ text }) => meldung(text));
   /* Revierkampf-Inszenierung: Kamera bebt, Schüsse knallen, am Ende Banner */
   s.on("kampfStart", () => { KAMPF_SHAKE = 1; kampfSchuesse(); });
   s.on("revierErgebnis", d => kampfBanner(d));
@@ -2619,7 +2660,14 @@ const EN = {
   "— vorerst wird nur der Sandkasten gespielt": "— for now only sandbox is played", "Freies Wirtschaften mit wachsender Stadt": "Free economy with a growing city",
   "Planwirtschaft · gesperrt": "Planned economy · locked", "Einsteiger · gesperrt": "Beginner · locked", "Race Day · gesperrt": "Race Day · locked", "Kartell · gesperrt": "Cartel · locked",
   "Zeitlimit": "Time limit", "kein Zeitlimit": "no time limit", "30 Minuten": "30 minutes", "45 Minuten": "45 minutes", "60 Minuten": "60 minutes", "90 Minuten": "90 minutes",
-  "$100.000 · etwa 30–40 Minuten": "$100,000 · about 30–40 minutes", "$250.000 · etwa 1 Stunde": "$250,000 · about 1 hour", "$500.000 · etwa 2 Stunden": "$500,000 · about 2 hours",
+  "$25.000 · kurze Runde, etwa 45 Minuten": "$25,000 · short round, about 45 minutes", "$50.000 · etwa 1,5 Stunden": "$50,000 · about 1.5 hours", "$100.000 · etwa 3 Stunden": "$100,000 · about 3 hours",
+  "$250.000 · langer Abend": "$250,000 · a long evening", "$500.000 · für Ausdauernde": "$500,000 · for the persistent", "$1 Mio. · Marathon": "$1M · marathon", "$10 Mio. · Marathon über mehrere Abende": "$10M · marathon over several evenings",
+  "2 Stunden": "2 hours", "3 Stunden": "3 hours", "Ist die Zeit um, gewinnt das höchste Vermögen.": "When time is up, the highest net worth wins.",
+  "Rundenlänge": "Round length", "Kurz": "Short", "Lang": "Long", "Eigene": "Custom", "etwa 45 Minuten": "about 45 minutes", "etwa 1,5 Stunden": "about 1.5 hours", "etwa 3 Stunden": "about 3 hours",
+  "Ziel und Zeitlimit frei wählen": "Choose goal and time limit freely", "Freier Platz": "Open seat", "Kurze Runde": "Short round", "Standard-Runde": "Standard round", "Lange Runde": "Long round", "Eigene Runde": "Custom round",
+  "Planwirtschaft, Einsteiger und Race Day sind noch gesperrt.": "Planned economy, Beginner and Race Day are still locked.", "und": "and", "Minuten": "minutes",
+  "Rohware allein reicht nicht": "Raw goods alone are not enough",
+  "Dein Lager füllt sich mit Rohware. Die Stadt kauft sie nur zum halben Grundpreis und nur in kleiner Menge. Deutlich mehr verdienst du, wenn du sie weiterverarbeitest (zum Beispiel Obst zu Saft) und im eigenen Laden verkaufst. Welche Gebäude das können, steht im Baumenü deiner Branche.": "Your storage is filling up with raw goods. The city only buys them at half the base price and in small amounts. You earn far more by processing them (for example fruit into juice) and selling in your own shop. Your industry's build menu shows which buildings can do that.",
   "Die Stadt wächst mit": "The city grows with you", "Stadtübersicht": "City overview", "Dir fehlen Arbeiter": "You are short of workers", "Firma-Panel": "Company panel",
   "Oben neben deinem Geld steht, wie viele Einwohner die Stadt hat. Sie wohnen im Wohngebiet, arbeiten in euren Gebäuden und kaufen in euren Läden. Ein Klick auf die Einwohnerzahl öffnet die Stadtübersicht.": "Next to your money at the top you see how many residents the city has. They live in the residential ring, work in your buildings and buy in your shops. Click the population for the city overview.",
   "Deine Gebäude sind nicht voll besetzt und stellen weniger her. Ein höherer Lohn holt Leute von anderen Firmen — günstiger ist oft eine Jobbörse. Beides findest du im Firma-Panel.": "Your buildings are not fully staffed and produce less. Higher wages draw people from other companies — a job board is often cheaper. Both are in the company panel.",
@@ -2817,6 +2865,12 @@ let myIndustry = "agrar";
     if (rumpf) rumpf.style.gridTemplateColumns = "1fr";
   }
 })();
+/* Auch das Einladen zieht in den Warteraum: Auf dem Startbildschirm gab es
+ * noch niemanden, den man einladen konnte, und im Warteraum fehlte der Link. */
+(() => {
+  const box = document.getElementById("invite"), slot = document.getElementById("lwEinladenSlot");
+  if (box && slot) slot.append(box);
+})();
 document.querySelectorAll(".indopt:not(.netopt)").forEach(b => b.addEventListener("click", () => {
   myIndustry = b.dataset.ind;
   document.querySelectorAll(".indopt:not(.netopt)").forEach(x => x.classList.toggle("on", x === b));
@@ -2981,6 +3035,27 @@ function lobbyWaitZeichnen() {
         kartellAktiv ? escapeHtml(FAM_LOBBY[p.familie]?.[0] || "wählt noch…")
                      : escapeHtml(BRANCHE_NAME[p.industry] || p.industry || "—")}</span>
     </div>`).join("") || '<div class="leer">Noch niemand da.</div>';
+  /* Unter den Mitspielern stehen die Bots, die mit dem Start dazukommen, und
+   * die freien Plätze. So sieht man vor dem Start, wie voll die Stadt wird. */
+  const botWahl = istHost ? lwBots : (state.lobby?.bots || lwBots);
+  const botZeilen = Object.entries(botWahl || {}).flatMap(([k, n]) =>
+    Array.from({ length: Math.max(0, Math.min(2, +n || 0)) }, () => `
+    <div class="pl bot"><span class="dot"></span><span>Bot</span>
+      <span class="tag" style="margin-left:auto">${escapeHtml(BRANCHE_NAME[k] || k)}</span></div>`));
+  const frei = Math.max(0, Math.min(botZeilen.length ? 1 : 2, 8 - spieler.length));
+  document.getElementById("lwPlayers").insertAdjacentHTML("beforeend", botZeilen.join("")
+    + Array.from({ length: frei }, () => `<div class="pl frei">${t("Freier Platz")}</div>`).join(""));
+  lwBrancheTextSetzen();
+  { const inv = document.getElementById("invite");
+    document.getElementById("lwEinladen").style.display = (!inv || inv.style.display === "none") ? "none" : ""; }
+  /* Zusammenfassung neben dem Startknopf: was gleich gespielt wird. */
+  { const lo = state.lobby || {}, ziel = lo.winGoal, zeit = lo.zeitLimit;
+    const lg = (istHost && lwEigene) ? null : LW_LAENGEN.find(x => x.ziel === ziel && x.zeit === zeit);
+    const botSumme = botZeilen.length, modus = lo.mode || lwMode;
+    document.getElementById("lwZus").innerHTML = modus === "sandbox" || modus === "kartell"
+      ? `<b>${t(lg ? lg.name : "Eigene Runde")}</b> · ${t("Ziel")} ${fmt(ziel || 0)} · ${zeit ? `${t("Zeitlimit")} ${zeit} ${t("Minuten")}` : t("kein Zeitlimit")}<br>
+         ${spieler.length} ${t("Spieler")} ${t("und")} ${botSumme} ${t(botSumme === 1 ? "Bot" : "Bots")}${botSumme ? ` (${t(({ einfach: "Einfach", mittel: "Mittel", schwer: "Schwer" })[lo.botLevel || lwBotLevel] || "Mittel")})` : ""}`
+      : `${spieler.length} ${t("Spieler")} ${t("und")} ${botSumme} ${t(botSumme === 1 ? "Bot" : "Bots")}`; }
 
   /* Solange man allein wartet, ist das Teilen des Codes der nächste Schritt —
    * das soll der Screen auch sagen, statt neutral "wartet" anzuzeigen. */
@@ -3004,6 +3079,7 @@ function lobbyWaitZeichnen() {
   if (state.lobby && Date.now() - lwEigeneAenderung > 1500) {
     document.getElementById("lwGoal").value = String(state.lobby.winGoal);
     if (state.lobby.zeitLimit != null) document.getElementById("lwZeit").value = String(state.lobby.zeitLimit);
+    lwLaengeSpiegeln();
     if (state.lobby.botLevel) lwBotLevel = state.lobby.botLevel;
     if (state.lobby.bots) lwBots = { ...lwBots, ...state.lobby.bots };
     if (state.lobby.mode) { lwMode = state.lobby.mode; lwModeSpiegeln(); }
@@ -3043,7 +3119,44 @@ function lwSettingsSenden() {
     bots: lwBots, botLevel: lwBotLevel, mode: lwMode,
   });
 }
-document.getElementById("lwGoal").addEventListener("change", lwSettingsSenden);
+/* ---- Rundenlänge als Karten ----
+ * Kurz, Standard und Lang setzen Ziel und Zeitlimit gemeinsam. "Eigene" zeigt
+ * die beiden Auswahllisten für alles dazwischen und darüber. Die Listen bleiben
+ * die eine Quelle: Die Karten schreiben nur hinein. */
+const LW_LAENGEN = [{ lg: "kurz", name: "Kurze Runde", ziel: 25000, zeit: 45 }, { lg: "standard", name: "Standard-Runde", ziel: 50000, zeit: 90 }, { lg: "lang", name: "Lange Runde", ziel: 100000, zeit: 180 }];
+let lwEigene = false;
+function lwLaengeSpiegeln() {
+  const ziel = +document.getElementById("lwGoal").value, zeit = +document.getElementById("lwZeit").value;
+  const treffer = lwEigene ? null : LW_LAENGEN.find(x => x.ziel === ziel && x.zeit === zeit);
+  const an = treffer ? treffer.lg : "eigene";
+  document.querySelectorAll("#lwLaenge button").forEach(b => b.classList.toggle("on", b.dataset.lg === an));
+  document.getElementById("lwSettings").classList.toggle("eigene", an === "eigene");
+}
+document.getElementById("lwLaenge").addEventListener("click", e => {
+  const b = e.target.closest("button[data-lg]"); if (!b) return;
+  lwEigene = b.dataset.lg === "eigene";
+  if (!lwEigene) {
+    document.getElementById("lwGoal").value = b.dataset.ziel;
+    document.getElementById("lwZeit").value = b.dataset.zeit;
+  }
+  SFX.spiel?.("klick");
+  lwLaengeSpiegeln(); lwSettingsSenden(); lobbyWaitZeichnen();
+});
+document.getElementById("lwZeit").addEventListener("change", () => { lwEigene = true; lwLaengeSpiegeln(); });
+/* Unter den Branchen-Kacheln steht nur die Beschreibung der gewählten. */
+function lwBrancheTextSetzen() {
+  const el = document.getElementById("lwBrancheText"), an = document.querySelector("#lwBrancheSlot .indopt.on");
+  if (!el) return;
+  el.innerHTML = an ? `<b>${an.querySelector("b")?.textContent || ""}:</b> ${an.querySelector("small")?.textContent || ""}` : "";
+}
+/* Ziel und Zeitlimit gehören zusammen: Wer ein Ziel wählt, bekommt das dazu
+ * passende Zeitlimit vorgeschlagen und kann es danach noch frei ändern. */
+const LW_ZEIT_ZUM_ZIEL = { 25000: 45, 50000: 90, 100000: 180 };
+document.getElementById("lwGoal").addEventListener("change", () => {
+  document.getElementById("lwZeit").value = String(LW_ZEIT_ZUM_ZIEL[+document.getElementById("lwGoal").value] ?? 0);
+  lwEigene = true; lwLaengeSpiegeln();
+  lwSettingsSenden();
+});
 document.getElementById("lwZeit").addEventListener("change", lwSettingsSenden);
 document.getElementById("lwSaison").addEventListener("change", lwSettingsSenden);
 let lwMode = "sandbox";
@@ -3052,6 +3165,10 @@ function lwModeSpiegeln() {
   /* In der Planwirtschaft gibt es kein Vermögensziel — die Zeile ausblenden. */
   document.getElementById("lwGoalRow").style.display =
     (lwMode === "plan" || lwMode === "einsteiger" || lwMode === "renntag") ? "none" : "";
+  { const ohneZiel = lwMode === "plan" || lwMode === "einsteiger" || lwMode === "renntag";
+    document.getElementById("lwLaenge").style.display = ohneZiel ? "none" : "";
+    document.getElementById("lwLaengeLbl").style.display = ohneZiel ? "none" : "";
+    document.getElementById("lwZeitRow").style.display = ohneZiel ? "none" : ""; }
   document.getElementById("lwModeHint").style.display = lwMode === "plan" ? "" : "none";
   document.getElementById("lwEinsteigerHint").style.display = lwMode === "einsteiger" ? "" : "none";
   document.getElementById("lwRenntagHint").style.display = lwMode === "renntag" ? "" : "none";
@@ -10130,7 +10247,7 @@ const TUT_IND = {
     { t: "Hol dir den Boost", warte: (st, me, id) => tutGekauft(st, me, id, ["wasser", "strom"]), wartetext: "Warte auf Wasser oder Strom …", ziel: '.dockbtn[data-p="netz"]',
       p: `Liegen <b>Wasser</b> und <b>Strom</b> im Lager, wächst deine Farm bis zu <b>150 % schneller</b>. Beides verkaufen die Versorger.<br><br>Öffne das <b>Stadtnetz</b> (Knopf unten hervorgehoben) → <b>Warenbörse</b>, wähl Wasser oder Strom und kauf ein paar Stück.` },
     { t: "Veredle deine Ernte", warte: (st, me, id) => tutHat(st, id, "imkerei", "saftpresse", "plantage", "baeckerei"), wartetext: "Warte auf eine Imkerei, Saftpresse oder Plantage …",
-      p: `Rohes Obst bringt wenig. Mehr verdienst du mit Veredelung: Die <b>Imkerei</b> liefert Honig, die <b>Saftpresse</b> macht aus Obst Saft, die <b>Plantage</b> Kannabis für das Pharma-Labor. Später backt die <b>Bäckerei</b> aus Obst und Honig Gebäck — das teuerste Lebensmittel.` },
+      p: `Rohes Obst bringt wenig: Findet sich kein Käufer, nimmt die Stadt es nur zum <b>halben Grundpreis</b> ab. Mehr verdienst du mit Veredelung: Die <b>Imkerei</b> liefert Honig, die <b>Saftpresse</b> macht aus Obst Saft, die <b>Plantage</b> Kannabis für das Pharma-Labor. Später backt die <b>Bäckerei</b> aus Obst und Honig Gebäck — das teuerste Lebensmittel.` },
     { t: "Deine Kunden in der Stadt",
       p: `Drei Abnehmer solltest du kennen:<br>· Die <b>Bewohner</b> brauchen Lebensmittel im Laden — fehlen sie, sinkt die Zufriedenheit der Stadt.<br>· <b>Hotels ab 3 Sternen</b> kaufen Frühstück: Obst, Honig, Saft, Gebäck.<br>· Mit dem Website-Modul <b>Branchenportal</b> wird deine Website zum <b>Hofladen</b>: Mitspieler kaufen dort direkt bei dir.` },
   ],
@@ -10496,7 +10613,7 @@ function tutSpotSetzen(sel) {
     tutSpotLauf = requestAnimationFrame(tick);
   }
 }
-function tutDone() { tutIdx = -1; tutEl.style.display = "none"; tutSpotSetzen(null); try { localStorage.setItem("cs_tut_done", "1"); } catch {} }
+function tutDone() { tutIdx = -1; tutEl.style.display = "none"; tutSpotSetzen(null); meldungenNachreichen(); try { localStorage.setItem("cs_tut_done", "1"); } catch {} }
 document.getElementById("tutNext").addEventListener("click", () => {
   if (tutIdx < TUT.length - 1) return tutShow(tutIdx + 1);
   /* Im Einsteiger-Modus endet die Runde mit dem Tutorial — sonst bleibt sie
@@ -10568,6 +10685,17 @@ const HINWEISE = [
     text: "Für neue Wohnblöcke bestellt die Stadt Ziegel, Beton, Stahl oder Elektronik und zahlt 15 % über Kurs. Liefern kannst du in der Stadtübersicht.", panel: ["finanzamt", "Stadtübersicht"] },
   { id: "versorgung", wann: st => st.stadt?.teile?.some(x => x.key === "versorgung" && x.wirkung < 0), titel: "Der Stadt fehlt etwas",
     text: "In keinem Online-Marktplatz gibt es gerade Strom, Wasser oder Lebensmittel. Dann ziehen weniger Leute zu. Wer das ins Regal stellt, hat sichere Kundschaft.", panel: ["finanzamt", "Stadtübersicht"] },
+  /* Wer nur Rohware herstellt, bekommt von der Stadt bloß den Mindestpreis
+   * (halber Grundpreis) und tritt auf der Stelle — gemessen in den Testrunden
+   * zur Wirtschaft v2. Der Hinweis kommt, sobald sich Rohware staut und noch
+   * kein verarbeitendes Gebäude steht. */
+  { id: "rohware", wann: (st, me, id) => {
+      if (!st.stadtAnkauf || st.tick < 480) return false;
+      const bt = BTYPES(), meine = (st.map || []).filter(k => k.owner === id && k.btype);
+      if (!meine.length || meine.some(k => bt[k.btype]?.proc)) return false;
+      return Object.keys(st.stadtAnkauf).some(g => (me.inv?.[g] || 0) >= 40 && meine.some(k => bt[k.btype]?.out === g));
+    }, titel: "Rohware allein reicht nicht",
+    text: "Dein Lager füllt sich mit Rohware. Die Stadt kauft sie nur zum halben Grundpreis und nur in kleiner Menge. Deutlich mehr verdienst du, wenn du sie weiterverarbeitest (zum Beispiel Obst zu Saft) und im eigenen Laden verkaufst. Welche Gebäude das können, steht im Baumenü deiner Branche.", panel: ["lager", "Lager"] },
   { id: "steuer", wann: (st, me) => (me.steuer?.steuer || 0) > 0, titel: "Das Finanzamt",
     text: "Alle 10 Minuten zahlst du Gewinnsteuer. Bauen und Ausbauen senken den Gewinn nach und nach (Abschreibung). Die Steuer geht an die Stadt.", panel: ["finanzamt", "Finanzamt"] },
   { id: "stadtanleihe", wann: st => (st.bonds || []).some(b => !b.holderId && String(b.issuer).startsWith("Stadt")), titel: "Die Stadt leiht sich Geld",
@@ -12580,7 +12708,10 @@ function render({ state, me, myId, chat, room }) {
   }
   /* Die Starter-Aufgaben führen zu Börse und Stadtbank — beides gibt es in
    * der Planwirtschaft nicht, dort bleibt das Widget aus. */
-  if (!polizeiWidget && open.length && !state.winner && state.mode !== "plan") {
+  /* Solange der Mentor erklärt, bleiben die Starter-Aufgaben weg: Beides
+   * zugleich waren zwei Anleitungen übereinander. Sie erscheinen, sobald das
+   * Tutorial durch oder übersprungen ist. */
+  if (!polizeiWidget && open.length && !state.winner && state.mode !== "plan" && tutIdx < 0) {
     qEl.style.display = "block";
     /* Übersicht statt Liste: Fortschritt, die NÄCHSTE Aufgabe groß, der Rest
      * nur auf Wunsch (Zustand wird gemerkt). */
@@ -13340,7 +13471,7 @@ const TUT_BUCH = [
       Geschäften zwischen euch. Wenn alle dasselbe verkaufen, fällt der Preis — und
       wenn eine Ware knapp wird, steigt er.</p>
       <div class="merk">Der Host stellt Rundenziel und Bots im Warteraum ein.
-      Von 100.000 $ (etwa eine Stunde) bis 10 Mio. $ (Marathon).</div>`,
+      Von 25.000 $ (etwa 45 Minuten) bis 10 Mio. $ (Marathon). Mit Zeitlimit gewinnt am Ende das höchste Vermögen.</div>`,
     en: { t: "What it's about", lead: "The goal in one sentence", html: `
       <p>You run a company in a shared city. You build plants, make goods and sell them —
       to the city, through your own shops, or directly to the other players.
@@ -13352,7 +13483,7 @@ const TUT_BUCH = [
       you. If everyone sells the same thing the price falls — and when a good gets scarce
       it rises.</p>
       <div class="merk">The host sets the round target and the bots in the lobby.
-      From $100,000 (about an hour) up to $10M (a marathon).</div>` } },
+      From $25,000 (about 45 minutes) up to $10M (a marathon). With a time limit, the highest net worth wins at the end.</div>` } },
 
   { t: "Deine Branche", lead: "Warum du nicht alles selbst bauen kannst",
     html: `

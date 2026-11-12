@@ -168,3 +168,7 @@ marketing/capital-sandbox-itch.zip
 
 # KI-Testfond: lokaler API-Schlüssel — nie ins Repo
 .ki-schluessel.json
+
+# Gesicherter Spielstand der laufenden Runde
+spielstand-*.json
+spielstand-*.json.neu

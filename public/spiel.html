@@ -34,6 +34,8 @@
 
 <div id="join">
 <div id="joinGlow"></div>
+<!-- Stadtbild rechts neben dem Startformular (nur auf breiten Bildschirmen, siehe theme.css) -->
+<div id="joinBild" aria-hidden="true"></div>
 <!-- Werbeplakate im sonst leeren Raum neben der Karte. Rein dekorativ, daher
      aria-hidden — für Screenreader wäre "Plakat" nur Rauschen. -->
 <div class="posterWall" id="posterL" aria-hidden="true" data-topo-avoid></div>
@@ -283,12 +285,14 @@
 </div></div>
 
 <div id="lobbyWait"><div class="card" data-topo-avoid>
+  <div id="lwKopf">
+    <div id="lwKopfText">
   <div id="lwHead">
     <h2 id="lwTitel">Warteraum</h2>
     <span id="lwPulse"><span class="pulse"><i></i><b></b></span><span id="lwPulseText">wartet</span></span>
   </div>
   <p class="sub" id="lwSub">Sobald alle da sind, startet der Host die Runde.</p>
-
+    </div>
   <div class="joinbox" id="lwCodeBox">
     <div class="lbl">Rundencode für deine Mitspieler</div>
     <div class="row" style="justify-content:space-between">
@@ -296,24 +300,93 @@
       <button class="copybtn" id="lwCodeCopy" type="button">Kopieren</button>
     </div>
   </div>
-
+  </div>
+  <div id="lwRaster">
+    <div id="lwLinks">
   <div class="joinbox">
     <div class="lbl">Wer ist da — <span id="lwCount">0</span>/8</div>
     <div id="lwPlayers"></div>
   </div>
+  <!-- Einladungslink und Code: vom Startbildschirm hierher umgezogen (app.js) -->
+  <div class="joinbox" id="lwEinladen">
+    <div class="lbl">Mitspieler einladen</div>
+    <div id="lwEinladenSlot"></div>
+  </div>
 
+    </div>
+    <div id="lwRechts">
   <div class="joinbox" id="lwBrancheBox">
     <div class="lbl">Deine Branche</div>
-    <p style="font-size:12px;margin:2px 0 8px;color:#8695ab">Du baust nur Gebäude deiner Branche — alles andere kaufst du bei den anderen ein. Bis zum Start kannst du wechseln.</p>
     <div id="lwBrancheSlot"></div>
+    <p id="lwBrancheText"></p>
   </div>
   <div class="joinbox" id="lwSettings">
-    <div class="lbl">Einstellungen</div>
+    <div class="lbl" id="lwLaengeLbl">Rundenlänge</div>
+    <!-- Drei fertige Rundenlängen statt zweier Auswahllisten. "Eigene" blendet
+         Ziel und Zeitlimit zum freien Einstellen ein. -->
+    <div id="lwLaenge">
+      <button type="button" data-lg="kurz" data-ziel="25000" data-zeit="45"><b>Kurz</b><span>$25.000</span><small>etwa 45 Minuten</small></button>
+      <button type="button" data-lg="standard" data-ziel="50000" data-zeit="90" class="on"><b>Standard</b><span>$50.000</span><small>etwa 1,5 Stunden</small></button>
+      <button type="button" data-lg="lang" data-ziel="100000" data-zeit="180"><b>Lang</b><span>$100.000</span><small>etwa 3 Stunden</small></button>
+      <button type="button" data-lg="eigene"><b>Eigene</b><span>…</span><small>Ziel und Zeitlimit frei wählen</small></button>
+    </div>
+    <div class="lwRow" id="lwSaisonRow" style="display:none">
+      <label for="lwSaison">Saison</label>
+      <select id="lwSaison">
+        <option value="3">3 Renntage · kurz</option>
+        <option value="5" selected>5 Renntage · Standard</option>
+        <option value="8">8 Renntage · lang</option>
+        <option value="12">12 Renntage · Marathon</option>
+      </select>
+    </div>
+    <div class="lwRow" id="lwGoalRow">
+      <label for="lwGoal">Ziel</label>
+      <select id="lwGoal">
+        <option value="25000">$25.000 · kurze Runde, etwa 45 Minuten</option>
+        <option value="50000" selected>$50.000 · etwa 1,5 Stunden</option>
+        <option value="100000">$100.000 · etwa 3 Stunden</option>
+        <option value="250000">$250.000 · langer Abend</option>
+        <option value="500000">$500.000 · für Ausdauernde</option>
+        <option value="1000000">$1 Mio. · Marathon</option>
+        <option value="10000000">$10 Mio. · Marathon über mehrere Abende</option>
+      </select>
+    </div>
+    <div class="lwRow" id="lwZeitRow" style="flex-wrap:wrap">
+      <label for="lwZeit">Zeitlimit</label>
+      <select id="lwZeit">
+        <option value="0">kein Zeitlimit</option>
+        <option value="30">30 Minuten</option>
+        <option value="45">45 Minuten</option>
+        <option value="60">60 Minuten</option>
+        <option value="90" selected>90 Minuten</option>
+        <option value="120">2 Stunden</option>
+        <option value="180">3 Stunden</option>
+      </select>
+      <div id="lwZeitHint" style="flex-basis:100%;font-size:11.5px;color:#8695ab;margin:-2px 0 0 61px">Ist die Zeit um, gewinnt das höchste Vermögen.</div>
+    </div>
+    <div class="lwRow" id="lwBotsKopf">
+      <label>Bots</label>
+      <div id="lwBotLevel">
+        <button type="button" data-lvl="einfach">Einfach</button>
+        <button type="button" data-lvl="mittel" class="on">Mittel</button>
+        <button type="button" data-lvl="schwer">Schwer</button>
+      </div>
+    </div>
+    <div id="lwBotCounts">
+      <div class="botrow" data-b="agrar"><span>Agrar</span><div class="pick"><button type="button" data-n="0">0</button><button type="button" data-n="1" class="on">1</button><button type="button" data-n="2">2</button></div></div>
+      <div class="botrow" data-b="rohstoff"><span>Rohstoff</span><div class="pick"><button type="button" data-n="0">0</button><button type="button" data-n="1" class="on">1</button><button type="button" data-n="2">2</button></div></div>
+      <div class="botrow" data-b="versorger"><span>Versorger</span><div class="pick"><button type="button" data-n="0">0</button><button type="button" data-n="1" class="on">1</button><button type="button" data-n="2">2</button></div></div>
+      <div class="botrow" data-b="tech"><span>Technik</span><div class="pick"><button type="button" data-n="0">0</button><button type="button" data-n="1" class="on">1</button><button type="button" data-n="2">2</button></div></div>
+      <div class="botrow" data-b="touristik"><span>Touristik</span><div class="pick"><button type="button" data-n="0">0</button><button type="button" data-n="1" class="on">1</button><button type="button" data-n="2">2</button></div></div>
+      <div class="botrow" data-b="ruestung"><span>Rüstung</span><div class="pick"><button type="button" data-n="0">0</button><button type="button" data-n="1" class="on">1</button><button type="button" data-n="2">2</button></div></div>
+      <div class="botrow" data-b="software"><span>Software</span><div class="pick"><button type="button" data-n="0">0</button><button type="button" data-n="1" class="on">1</button><button type="button" data-n="2">2</button></div></div>
+    </div>
+    <p id="lwBotSum">—</p>
     <!-- Modus-Auswahl als Plakate. Der Modusname steht im Bild, die Bildunterschrift
          wiederholt ihn trotzdem: die Plakate sind auf Deutsch beschriftet und im
          Miniaturformat nicht immer sicher lesbar — beim Einsteiger steht der Name
          ausserdem auf Englisch im Bild. -->
-    <div class="lwRow lwModeRow">
+    <div class="lwRow lwModeRow" id="lwModeRow">
       <label>Modus</label>
       <div id="lwMode">
         <button type="button" data-mode="sandbox" class="on">
@@ -326,6 +399,7 @@
         <button type="button" data-mode="renntag" class="gesperrt" disabled title="Vorerst gesperrt">
           <img src="assets/modi/renntag.jpg" alt="" loading="lazy"><span>Race Day · gesperrt</span></button>
       </div>
+      <span id="lwModeGesperrt">Planwirtschaft, Einsteiger und Race Day sind noch gesperrt.</span>
     </div>
     <p id="lwModeHint" style="display:none;font-size:11.5px;color:#8695ab;margin:2px 0 6px">
       Planwirtschaft: Kein Vermögensziel — das Planbüro verkündet Plansolls, du lieferst zu festen
@@ -359,57 +433,17 @@
       Einsteiger: Ein geführter Durchgang durch das ganze Spiel — Bauen, Verkaufen, Börse,
       Kursticker, Nachrichten und Bank, Schritt für Schritt erklärt. Nichts ist gesperrt, die Bots
       spielen normal mit. Die Runde endet, wenn du durch bist. Karte: San Francisco.</p>
-    <div class="lwRow" id="lwSaisonRow" style="display:none">
-      <label for="lwSaison">Saison</label>
-      <select id="lwSaison">
-        <option value="3">3 Renntage · kurz</option>
-        <option value="5" selected>5 Renntage · Standard</option>
-        <option value="8">8 Renntage · lang</option>
-        <option value="12">12 Renntage · Marathon</option>
-      </select>
-    </div>
-    <div class="lwRow" id="lwGoalRow">
-      <label for="lwGoal">Ziel</label>
-      <select id="lwGoal">
-        <option value="100000">$100.000 · etwa 30–40 Minuten</option>
-        <option value="250000">$250.000 · etwa 1 Stunde</option>
-        <option value="500000">$500.000 · etwa 2 Stunden</option>
-        <option value="1000000">$1 Mio. · für Ausdauernde</option>
-        <option value="10000000">$10 Mio. · Marathon</option>
-      </select>
-    </div>
-    <div class="lwRow" id="lwZeitRow">
-      <label for="lwZeit">Zeitlimit</label>
-      <select id="lwZeit">
-        <option value="0">kein Zeitlimit</option>
-        <option value="30">30 Minuten</option>
-        <option value="45">45 Minuten</option>
-        <option value="60">60 Minuten</option>
-        <option value="90">90 Minuten</option>
-      </select>
-    </div>
-    <div class="lwRow">
-      <label>Bots</label>
-      <div id="lwBotLevel">
-        <button type="button" data-lvl="einfach">Einfach</button>
-        <button type="button" data-lvl="mittel" class="on">Mittel</button>
-        <button type="button" data-lvl="schwer">Schwer</button>
-      </div>
-    </div>
-    <div id="lwBotCounts">
-      <div class="botrow" data-b="agrar"><span>Agrar</span><div class="pick"><button type="button" data-n="0">0</button><button type="button" data-n="1" class="on">1</button><button type="button" data-n="2">2</button></div></div>
-      <div class="botrow" data-b="rohstoff"><span>Rohstoff</span><div class="pick"><button type="button" data-n="0">0</button><button type="button" data-n="1" class="on">1</button><button type="button" data-n="2">2</button></div></div>
-      <div class="botrow" data-b="versorger"><span>Versorger</span><div class="pick"><button type="button" data-n="0">0</button><button type="button" data-n="1" class="on">1</button><button type="button" data-n="2">2</button></div></div>
-      <div class="botrow" data-b="tech"><span>Technik</span><div class="pick"><button type="button" data-n="0">0</button><button type="button" data-n="1" class="on">1</button><button type="button" data-n="2">2</button></div></div>
-      <div class="botrow" data-b="touristik"><span>Touristik</span><div class="pick"><button type="button" data-n="0">0</button><button type="button" data-n="1" class="on">1</button><button type="button" data-n="2">2</button></div></div>
-      <div class="botrow" data-b="ruestung"><span>Rüstung</span><div class="pick"><button type="button" data-n="0">0</button><button type="button" data-n="1" class="on">1</button><button type="button" data-n="2">2</button></div></div>
-      <div class="botrow" data-b="software"><span>Software</span><div class="pick"><button type="button" data-n="0">0</button><button type="button" data-n="1" class="on">1</button><button type="button" data-n="2">2</button></div></div>
-    </div>
-    <p id="lwBotSum">—</p>
   </div>
 
-  <button id="lwStart" type="button">Runde starten</button>
-  <p id="lwHint">Der Host startet die Runde, sobald alle da sind.</p>
+    </div>
+  </div>
+  <div id="lwFuss">
+    <div id="lwZus"></div>
+    <div id="lwFussRechts">
+      <button id="lwStart" type="button">Runde starten</button>
+      <p id="lwHint">Der Host startet die Runde, sobald alle da sind.</p>
+    </div>
+  </div>
 </div></div>
 
 <canvas id="cv"></canvas>
@@ -418,7 +452,7 @@
   <div id="ticker" title="Ø-Kurse als Orientierung — der Pfeil zeigt die Richtung gegenüber den letzten 30 Sekunden."><div id="tickerScroll"><div id="tickerTrack"><span class="tk">Warte auf erste Trades — der Ticker zeigt nur echte Transaktionspreise.</span></div></div><button id="tickerToggle" title="Alle Preise anzeigen" aria-label="Alle Preise anzeigen" aria-expanded="false">⌄</button></div>
   <div id="status">
     <div class="left"><div class="logo" id="mylogo">?</div><span id="coname"></span>
-      <span id="networth">NW <b id="nwv">$0</b> / <span id="goalv">$250.000</span> · Rating <b id="myrat">—</b></span></div>
+      <span id="networth">NW <b id="nwv">$0</b> / <span id="goalv">$50.000</span> · Rating <b id="myrat">—</b></span></div>
     <div class="right">
       <div id="players"></div>
       <span id="cash">$0</span>
