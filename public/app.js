@@ -2663,6 +2663,9 @@ const EN = {
   "$25.000 · kurze Runde, etwa 45 Minuten": "$25,000 · short round, about 45 minutes", "$50.000 · etwa 1,5 Stunden": "$50,000 · about 1.5 hours", "$100.000 · etwa 3 Stunden": "$100,000 · about 3 hours",
   "$250.000 · langer Abend": "$250,000 · a long evening", "$500.000 · für Ausdauernde": "$500,000 · for the persistent", "$1 Mio. · Marathon": "$1M · marathon", "$10 Mio. · Marathon über mehrere Abende": "$10M · marathon over several evenings",
   "2 Stunden": "2 hours", "3 Stunden": "3 hours", "Ist die Zeit um, gewinnt das höchste Vermögen.": "When time is up, the highest net worth wins.",
+  "Rundenlänge": "Round length", "Kurz": "Short", "Lang": "Long", "Eigene": "Custom", "etwa 45 Minuten": "about 45 minutes", "etwa 1,5 Stunden": "about 1.5 hours", "etwa 3 Stunden": "about 3 hours",
+  "Ziel und Zeitlimit frei wählen": "Choose goal and time limit freely", "Freier Platz": "Open seat", "Kurze Runde": "Short round", "Standard-Runde": "Standard round", "Lange Runde": "Long round", "Eigene Runde": "Custom round",
+  "Planwirtschaft, Einsteiger und Race Day sind noch gesperrt.": "Planned economy, Beginner and Race Day are still locked.", "und": "and", "Minuten": "minutes",
   "Rohware allein reicht nicht": "Raw goods alone are not enough",
   "Dein Lager füllt sich mit Rohware. Die Stadt kauft sie nur zum halben Grundpreis und nur in kleiner Menge. Deutlich mehr verdienst du, wenn du sie weiterverarbeitest (zum Beispiel Obst zu Saft) und im eigenen Laden verkaufst. Welche Gebäude das können, steht im Baumenü deiner Branche.": "Your storage is filling up with raw goods. The city only buys them at half the base price and in small amounts. You earn far more by processing them (for example fruit into juice) and selling in your own shop. Your industry's build menu shows which buildings can do that.",
   "Die Stadt wächst mit": "The city grows with you", "Stadtübersicht": "City overview", "Dir fehlen Arbeiter": "You are short of workers", "Firma-Panel": "Company panel",
@@ -2862,6 +2865,12 @@ let myIndustry = "agrar";
     if (rumpf) rumpf.style.gridTemplateColumns = "1fr";
   }
 })();
+/* Auch das Einladen zieht in den Warteraum: Auf dem Startbildschirm gab es
+ * noch niemanden, den man einladen konnte, und im Warteraum fehlte der Link. */
+(() => {
+  const box = document.getElementById("invite"), slot = document.getElementById("lwEinladenSlot");
+  if (box && slot) slot.append(box);
+})();
 document.querySelectorAll(".indopt:not(.netopt)").forEach(b => b.addEventListener("click", () => {
   myIndustry = b.dataset.ind;
   document.querySelectorAll(".indopt:not(.netopt)").forEach(x => x.classList.toggle("on", x === b));
@@ -3026,6 +3035,27 @@ function lobbyWaitZeichnen() {
         kartellAktiv ? escapeHtml(FAM_LOBBY[p.familie]?.[0] || "wählt noch…")
                      : escapeHtml(BRANCHE_NAME[p.industry] || p.industry || "—")}</span>
     </div>`).join("") || '<div class="leer">Noch niemand da.</div>';
+  /* Unter den Mitspielern stehen die Bots, die mit dem Start dazukommen, und
+   * die freien Plätze. So sieht man vor dem Start, wie voll die Stadt wird. */
+  const botWahl = istHost ? lwBots : (state.lobby?.bots || lwBots);
+  const botZeilen = Object.entries(botWahl || {}).flatMap(([k, n]) =>
+    Array.from({ length: Math.max(0, Math.min(2, +n || 0)) }, () => `
+    <div class="pl bot"><span class="dot"></span><span>Bot</span>
+      <span class="tag" style="margin-left:auto">${escapeHtml(BRANCHE_NAME[k] || k)}</span></div>`));
+  const frei = Math.max(0, Math.min(botZeilen.length ? 1 : 2, 8 - spieler.length));
+  document.getElementById("lwPlayers").insertAdjacentHTML("beforeend", botZeilen.join("")
+    + Array.from({ length: frei }, () => `<div class="pl frei">${t("Freier Platz")}</div>`).join(""));
+  lwBrancheTextSetzen();
+  { const inv = document.getElementById("invite");
+    document.getElementById("lwEinladen").style.display = (!inv || inv.style.display === "none") ? "none" : ""; }
+  /* Zusammenfassung neben dem Startknopf: was gleich gespielt wird. */
+  { const lo = state.lobby || {}, ziel = lo.winGoal, zeit = lo.zeitLimit;
+    const lg = (istHost && lwEigene) ? null : LW_LAENGEN.find(x => x.ziel === ziel && x.zeit === zeit);
+    const botSumme = botZeilen.length, modus = lo.mode || lwMode;
+    document.getElementById("lwZus").innerHTML = modus === "sandbox" || modus === "kartell"
+      ? `<b>${t(lg ? lg.name : "Eigene Runde")}</b> · ${t("Ziel")} ${fmt(ziel || 0)} · ${zeit ? `${t("Zeitlimit")} ${zeit} ${t("Minuten")}` : t("kein Zeitlimit")}<br>
+         ${spieler.length} ${t("Spieler")} ${t("und")} ${botSumme} ${t(botSumme === 1 ? "Bot" : "Bots")}${botSumme ? ` (${t(({ einfach: "Einfach", mittel: "Mittel", schwer: "Schwer" })[lo.botLevel || lwBotLevel] || "Mittel")})` : ""}`
+      : `${spieler.length} ${t("Spieler")} ${t("und")} ${botSumme} ${t(botSumme === 1 ? "Bot" : "Bots")}`; }
 
   /* Solange man allein wartet, ist das Teilen des Codes der nächste Schritt —
    * das soll der Screen auch sagen, statt neutral "wartet" anzuzeigen. */
@@ -3049,6 +3079,7 @@ function lobbyWaitZeichnen() {
   if (state.lobby && Date.now() - lwEigeneAenderung > 1500) {
     document.getElementById("lwGoal").value = String(state.lobby.winGoal);
     if (state.lobby.zeitLimit != null) document.getElementById("lwZeit").value = String(state.lobby.zeitLimit);
+    lwLaengeSpiegeln();
     if (state.lobby.botLevel) lwBotLevel = state.lobby.botLevel;
     if (state.lobby.bots) lwBots = { ...lwBots, ...state.lobby.bots };
     if (state.lobby.mode) { lwMode = state.lobby.mode; lwModeSpiegeln(); }
@@ -3088,11 +3119,42 @@ function lwSettingsSenden() {
     bots: lwBots, botLevel: lwBotLevel, mode: lwMode,
   });
 }
+/* ---- Rundenlänge als Karten ----
+ * Kurz, Standard und Lang setzen Ziel und Zeitlimit gemeinsam. "Eigene" zeigt
+ * die beiden Auswahllisten für alles dazwischen und darüber. Die Listen bleiben
+ * die eine Quelle: Die Karten schreiben nur hinein. */
+const LW_LAENGEN = [{ lg: "kurz", name: "Kurze Runde", ziel: 25000, zeit: 45 }, { lg: "standard", name: "Standard-Runde", ziel: 50000, zeit: 90 }, { lg: "lang", name: "Lange Runde", ziel: 100000, zeit: 180 }];
+let lwEigene = false;
+function lwLaengeSpiegeln() {
+  const ziel = +document.getElementById("lwGoal").value, zeit = +document.getElementById("lwZeit").value;
+  const treffer = lwEigene ? null : LW_LAENGEN.find(x => x.ziel === ziel && x.zeit === zeit);
+  const an = treffer ? treffer.lg : "eigene";
+  document.querySelectorAll("#lwLaenge button").forEach(b => b.classList.toggle("on", b.dataset.lg === an));
+  document.getElementById("lwSettings").classList.toggle("eigene", an === "eigene");
+}
+document.getElementById("lwLaenge").addEventListener("click", e => {
+  const b = e.target.closest("button[data-lg]"); if (!b) return;
+  lwEigene = b.dataset.lg === "eigene";
+  if (!lwEigene) {
+    document.getElementById("lwGoal").value = b.dataset.ziel;
+    document.getElementById("lwZeit").value = b.dataset.zeit;
+  }
+  SFX.spiel?.("klick");
+  lwLaengeSpiegeln(); lwSettingsSenden(); lobbyWaitZeichnen();
+});
+document.getElementById("lwZeit").addEventListener("change", () => { lwEigene = true; lwLaengeSpiegeln(); });
+/* Unter den Branchen-Kacheln steht nur die Beschreibung der gewählten. */
+function lwBrancheTextSetzen() {
+  const el = document.getElementById("lwBrancheText"), an = document.querySelector("#lwBrancheSlot .indopt.on");
+  if (!el) return;
+  el.innerHTML = an ? `<b>${an.querySelector("b")?.textContent || ""}:</b> ${an.querySelector("small")?.textContent || ""}` : "";
+}
 /* Ziel und Zeitlimit gehören zusammen: Wer ein Ziel wählt, bekommt das dazu
  * passende Zeitlimit vorgeschlagen und kann es danach noch frei ändern. */
 const LW_ZEIT_ZUM_ZIEL = { 25000: 45, 50000: 90, 100000: 180 };
 document.getElementById("lwGoal").addEventListener("change", () => {
   document.getElementById("lwZeit").value = String(LW_ZEIT_ZUM_ZIEL[+document.getElementById("lwGoal").value] ?? 0);
+  lwEigene = true; lwLaengeSpiegeln();
   lwSettingsSenden();
 });
 document.getElementById("lwZeit").addEventListener("change", lwSettingsSenden);
@@ -3103,6 +3165,10 @@ function lwModeSpiegeln() {
   /* In der Planwirtschaft gibt es kein Vermögensziel — die Zeile ausblenden. */
   document.getElementById("lwGoalRow").style.display =
     (lwMode === "plan" || lwMode === "einsteiger" || lwMode === "renntag") ? "none" : "";
+  { const ohneZiel = lwMode === "plan" || lwMode === "einsteiger" || lwMode === "renntag";
+    document.getElementById("lwLaenge").style.display = ohneZiel ? "none" : "";
+    document.getElementById("lwLaengeLbl").style.display = ohneZiel ? "none" : "";
+    document.getElementById("lwZeitRow").style.display = ohneZiel ? "none" : ""; }
   document.getElementById("lwModeHint").style.display = lwMode === "plan" ? "" : "none";
   document.getElementById("lwEinsteigerHint").style.display = lwMode === "einsteiger" ? "" : "none";
   document.getElementById("lwRenntagHint").style.display = lwMode === "renntag" ? "" : "none";
