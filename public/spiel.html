@@ -371,22 +371,27 @@
     <div class="lwRow" id="lwGoalRow">
       <label for="lwGoal">Ziel</label>
       <select id="lwGoal">
-        <option value="100000">$100.000 · etwa 30–40 Minuten</option>
-        <option value="250000">$250.000 · etwa 1 Stunde</option>
-        <option value="500000">$500.000 · etwa 2 Stunden</option>
-        <option value="1000000">$1 Mio. · für Ausdauernde</option>
-        <option value="10000000">$10 Mio. · Marathon</option>
+        <option value="25000">$25.000 · kurze Runde, etwa 45 Minuten</option>
+        <option value="50000" selected>$50.000 · etwa 1,5 Stunden</option>
+        <option value="100000">$100.000 · etwa 3 Stunden</option>
+        <option value="250000">$250.000 · langer Abend</option>
+        <option value="500000">$500.000 · für Ausdauernde</option>
+        <option value="1000000">$1 Mio. · Marathon</option>
+        <option value="10000000">$10 Mio. · Marathon über mehrere Abende</option>
       </select>
     </div>
-    <div class="lwRow" id="lwZeitRow">
+    <div class="lwRow" id="lwZeitRow" style="flex-wrap:wrap">
       <label for="lwZeit">Zeitlimit</label>
       <select id="lwZeit">
         <option value="0">kein Zeitlimit</option>
         <option value="30">30 Minuten</option>
         <option value="45">45 Minuten</option>
         <option value="60">60 Minuten</option>
-        <option value="90">90 Minuten</option>
+        <option value="90" selected>90 Minuten</option>
+        <option value="120">2 Stunden</option>
+        <option value="180">3 Stunden</option>
       </select>
+      <div id="lwZeitHint" style="flex-basis:100%;font-size:11.5px;color:#8695ab;margin:-2px 0 0 61px">Ist die Zeit um, gewinnt das höchste Vermögen.</div>
     </div>
     <div class="lwRow">
       <label>Bots</label>
@@ -418,7 +423,7 @@
   <div id="ticker" title="Ø-Kurse als Orientierung — der Pfeil zeigt die Richtung gegenüber den letzten 30 Sekunden."><div id="tickerScroll"><div id="tickerTrack"><span class="tk">Warte auf erste Trades — der Ticker zeigt nur echte Transaktionspreise.</span></div></div><button id="tickerToggle" title="Alle Preise anzeigen" aria-label="Alle Preise anzeigen" aria-expanded="false">⌄</button></div>
   <div id="status">
     <div class="left"><div class="logo" id="mylogo">?</div><span id="coname"></span>
-      <span id="networth">NW <b id="nwv">$0</b> / <span id="goalv">$250.000</span> · Rating <b id="myrat">—</b></span></div>
+      <span id="networth">NW <b id="nwv">$0</b> / <span id="goalv">$50.000</span> · Rating <b id="myrat">—</b></span></div>
     <div class="right">
       <div id="players"></div>
       <span id="cash">$0</span>
