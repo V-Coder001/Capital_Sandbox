@@ -4490,10 +4490,12 @@ function makeCloud(seed) {
   const g = c.getContext("2d");
   let r = seed;
   const rnd = () => (r = (r * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff;
-  g.filter = "blur(10px)";
-  const n = 9 + Math.floor(rnd() * 6);
+  g.filter = "blur(16px)";
+  const n = 12 + Math.floor(rnd() * 7);
   for (let i = 0; i < n; i++) {
-    const x = 110 + rnd() * 340, y = 105 + rnd() * 70, rad = 34 + rnd() * 52;
+    /* Viele kleinere Bausche auf einer flachen Unterkante: Schönwetterwolke
+     * statt eines runden Flecks. */
+    const x = 100 + rnd() * 360, rad = 26 + rnd() * 44, y = 160 - rad * .4 - rnd() * 46;
     const grad = g.createRadialGradient(x, y, rad * .15, x, y, rad);
     grad.addColorStop(0, "rgba(255,255,255,.9)");
     grad.addColorStop(.7, "rgba(248,250,253,.45)");
@@ -4541,7 +4543,7 @@ function drawClouds(now) {
     const h = cl.w / 2;
     /* DDR-Optik: graue, tiefer hängende Wolkendecke statt Schäfchenwolken. */
     if (PLAN_LOOK) cx.filter = "brightness(.7) saturate(.4)";
-    cx.globalAlpha = PLAN_LOOK ? Math.min(1, cl.alpha + .18) : cl.alpha;
+    cx.globalAlpha = PLAN_LOOK ? Math.min(1, cl.alpha + .18) : cl.alpha * (.18 + .3 * LICHT);
     cx.drawImage(cl.puff, wx - cl.w / 2 + pxo, wy - h / 2 + pyo, cl.w, h);
     cx.filter = "none";
     cx.globalAlpha = 1;
@@ -4634,7 +4636,7 @@ function atmosphaereMalen() {
   let tint;
   if (LICHT > .55)      tint = lerp3([255, 246, 232], [255, 253, 250], (LICHT - .55) / .45);  // Tag: Hauch warm
   else if (LICHT > .28) tint = lerp3([255, 208, 162], [255, 246, 232], (LICHT - .28) / .27);  // goldene Stunde
-  else                  tint = lerp3([76, 90, 146], [255, 208, 162], LICHT / .28);            // Nacht: kühles Blau
+  else                  tint = lerp3([118, 134, 196], [255, 208, 162], LICHT / .28);            // Nacht: kühles Blau
   /* Kartenpapier: Die Karte soll wie gedruckt wirken — Tageszeit nur angedeutet,
    * sonst wird das helle Papier nachts zu einem schmutzigen Violett. */
   const PAPIER = document.documentElement.dataset.theme === "papier";
@@ -4660,13 +4662,13 @@ function atmosphaereMalen() {
   if (nacht > .02 && !PAPIER) {
     /* Rest-Dunkel deutlich schwächer als früher (das Multiply-Blau trägt
      * die Nacht) — dafür oben ein kühler Glanz, als stünde der Mond hoch. */
-    cx.fillStyle = `rgba(7,11,30,${(nacht * .34).toFixed(3)})`;
+    cx.fillStyle = `rgba(7,11,30,${(nacht * .14).toFixed(3)})`;
     cx.fillRect(0, 0, innerWidth, innerHeight);
     const m = Math.round(nacht * 100);
     if (!ATMO.mond || ATMO.mondKey !== m) {
       const g = cx.createRadialGradient(innerWidth * .5, -innerHeight * .15, 0,
                                         innerWidth * .5, -innerHeight * .15, innerHeight * .95);
-      g.addColorStop(0, `rgba(150,178,232,${(nacht * .14).toFixed(3)})`);
+      g.addColorStop(0, `rgba(150,178,232,${(nacht * .22).toFixed(3)})`);
       g.addColorStop(1, "rgba(150,178,232,0)");
       ATMO.mond = g; ATMO.mondKey = m;
     }
@@ -4822,6 +4824,97 @@ const GLOW = (() => {
   g.fillStyle = grad; g.fillRect(0, 0, 64, 64);
   return c;
 })();
+
+/* ---- Leuchtende Fenster bei Nacht ----
+ * Je Gebäude-Sprite wird einmal eine Lichtmaske gebaut: warme Pixel (die
+ * Sprites haben gemalte Fenster) leuchten, von bläulichen Glasflächen ein
+ * zufälliger Teil. Die Masken werden NACH dem Nacht-Farbton additiv gemalt —
+ * so bleiben die Fenster hell, während die Stadt abdunkelt. */
+const NACHTMASKE = new WeakMap();
+function nachtMaske(img) {
+  let m = NACHTMASKE.get(img);
+  if (m !== undefined) return m;
+  m = null;
+  try {
+    const w = img.naturalWidth || img.width, h = img.naturalHeight || img.height;
+    const c = document.createElement("canvas"); c.width = w; c.height = h;
+    const g = c.getContext("2d", { willReadFrequently: true });
+    g.drawImage(img, 0, 0);
+    const d = g.getImageData(0, 0, w, h), p = d.data;
+    const B = Math.max(1, Math.round(w / 64));       // ein Ursprungspixel nach dem Hochskalieren
+    let n = 0;
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+      const i = (y * w + x) * 4, r = p[i], gr = p[i + 1], b = p[i + 2];
+      let an = 0;
+      if (p[i + 3] > 200) {
+        if (r > 150 && gr > 95 && r > b * 1.4) an = 255;                        // gemaltes Fensterlicht
+        else if (b > 120 && b > r + 45 &&                                        // Glas: jedes fünfte Fenster brennt
+                 ((((x / B | 0) * 7919) ^ ((y / B | 0) * 104729)) >>> 0) % 100 < 20) an = 170;
+      }
+      if (an) { p[i] = 255; p[i + 1] = 208; p[i + 2] = 124; p[i + 3] = an; n++; } else p[i + 3] = 0;
+    }
+    if (n) {
+      g.putImageData(d, 0, 0);
+      const o = document.createElement("canvas"); o.width = w; o.height = h;
+      const og = o.getContext("2d");
+      og.filter = `blur(${B * 2.2}px)`; og.drawImage(c, 0, 0); og.drawImage(c, 0, 0);   // Schein
+      og.filter = "none"; og.globalAlpha = 1; og.drawImage(c, 0, 0);                    // Fenster selbst
+      m = o;
+    }
+  } catch { m = null; }
+  NACHTMASKE.set(img, m);
+  return m;
+}
+const LICHTER = [];
+const lichtMerken = (img, x, y, w, h) => { if (LICHT < .5) LICHTER.push({ img, x, y, w, h }); };
+function drawNachtlichter() {
+  const n = Math.min(1, Math.max(0, (.5 - LICHT) / .28));
+  if (!EINST.licht || n <= 0 || !draw.welt || document.documentElement.dataset.theme === "papier") { LICHTER.length = 0; return; }
+  cx.save();
+  cx.setTransform(draw.welt);
+  cx.globalCompositeOperation = "lighter"; cx.globalAlpha = n;
+  for (const l of LICHTER) { const m = nachtMaske(l.img); if (m) cx.drawImage(m, l.x, l.y, l.w, l.h); }
+  cx.restore();
+  LICHTER.length = 0;
+}
+/* Die Stadtbild-Türme sind sehr dunkel gemalt und gingen auf dem dunklen
+ * Boden unter — eine einmal aufgehellte Kopie hebt sie ab. */
+const HELLSPRITE = new WeakMap();
+function hellSprite(img) {
+  let h = HELLSPRITE.get(img);
+  if (h) return h;
+  try {
+    h = document.createElement("canvas"); h.width = img.naturalWidth || img.width; h.height = img.naturalHeight || img.height;
+    const g = h.getContext("2d"); g.filter = "brightness(1.55) saturate(1.15)"; g.drawImage(img, 0, 0);
+  } catch { h = img; }
+  HELLSPRITE.set(img, h);
+  return h;
+}
+
+/* ---- Beschriftungen auf der Karte ----
+ * Orte (Bank, Finanzamt …) und Bauzeiten bekommen ein kleines Schild in der
+ * Spielschrift. Gesammelt während des Kachel-Durchlaufs, gemalt danach —
+ * so verdeckt kein Gebäude davor die Schrift. */
+const KARTENLABELS = [];
+const kartenLabel = (text, x, y, farbe) => KARTENLABELS.push({ text, x, y, farbe });
+function drawKartenLabels() {
+  if (!KARTENLABELS.length) return;
+  const papier = document.documentElement.dataset.theme === "papier";
+  cx.save();
+  cx.font = "600 8.5px 'IBM Plex Mono',ui-monospace,monospace";
+  cx.textAlign = "center"; cx.textBaseline = "middle"; cx.lineWidth = .9;
+  for (const l of KARTENLABELS) {
+    const w = cx.measureText(l.text).width + 10, h = 13, x = l.x - w / 2, y = l.y - h / 2;
+    cx.beginPath();
+    if (cx.roundRect) cx.roundRect(x, y, w, h, 3.5); else cx.rect(x, y, w, h);
+    cx.fillStyle = papier ? "#f8f4ea" : "rgba(7,11,16,.86)"; cx.fill();
+    cx.strokeStyle = l.farbe; cx.stroke();
+    cx.fillStyle = papier ? "#1f1a14" : l.farbe;
+    cx.fillText(l.text, l.x, l.y + .5);
+  }
+  cx.restore();
+  KARTENLABELS.length = 0;
+}
 
 /* ---- Fabrikrauch ----
  * Aktive Industriegebäude stoßen kleine, aufsteigende Rauchwölkchen aus —
@@ -5275,14 +5368,14 @@ function draw() {
     for (const b of st.bezirke) {
       const zx = (b.id % 3) * 9 + 4, zy = Math.floor(b.id / 3) * 9 + 4;
       const [sx, sy] = iso(zx, zy);
-      cx.font = "700 11px sans-serif"; cx.textAlign = "center";
+      cx.font = "700 11px 'Space Grotesk','Archivo',sans-serif"; cx.textAlign = "center";
       cx.fillStyle = "rgba(8,12,20,.55)";
       cx.fillText(b.name, sx + 1, sy + 1);
       cx.fillStyle = b.kontrolle ? famFarbe[b.kontrolle] : "rgba(220,228,240,.5)";
       cx.fillText(b.name, sx, sy);
       if (b.kontrolle) {
         const fam = st.familien.find(f => f.id === b.kontrolle);
-        cx.font = "600 9px sans-serif";
+        cx.font = "600 9px 'Space Grotesk','Archivo',sans-serif";
         cx.fillStyle = "rgba(220,228,240,.65)";
         cx.fillText(fam?.name || "", sx, sy + 12);
         if (b.besatzung) {
@@ -5302,7 +5395,7 @@ function draw() {
         cx.fillStyle = fv; cx.fillRect(bx2 + w * (b.kampf.pa / gesamt), by2, w * (b.kampf.pv / gesamt), h);
         cx.fillStyle = "#fff";
         cx.fillRect(bx2 + w * (b.kampf.pa / gesamt) - 1, by2 - 1, 2, h + 2);
-        cx.font = "800 13px sans-serif";
+        cx.font = "800 13px 'Space Grotesk','Archivo',sans-serif";
         cx.fillStyle = "#ffd7d0";
         cx.fillText(`⚔️ ${b.kampf.pa} : ${b.kampf.pv} · ${b.kampf.rest}s`, sx, by2 + 24);
       }
@@ -5435,7 +5528,7 @@ function draw() {
         for (const [fx2, fy2] of [[bx2 + 4, by2 - 24], [bx2 + 12, by2 - 21], [bx2 - 8, by2 - 26], [bx2 - 14, by2 - 24]]) {
           cx.fillStyle = LICHT < .5 ? "#ffd27a" : "#2e3646"; cx.fillRect(fx2, fy2, 3.6, 5);
         }
-        cx.fillStyle = "#e8edf5"; cx.font = "700 6.5px sans-serif"; cx.textAlign = "center";
+        cx.fillStyle = "#e8edf5"; cx.font = "700 6.5px 'Space Grotesk','Archivo',sans-serif"; cx.textAlign = "center";
         cx.fillText("QUESTURA", bx2 + 9.5, by2 - 14.5);
         /* rotierendes Blaulicht über der Tür */
         const bl = (Math.sin(now / 180) + 1) / 2;
@@ -5467,7 +5560,7 @@ function draw() {
         }
         const neonPuls = .55 + ((Math.sin(now / 300) + 1) / 2) * .45;
         cx.fillStyle = `rgba(255,72,72,${neonPuls.toFixed(2)})`;   // Neon-Schriftzug
-        cx.font = "800 7px sans-serif"; cx.textAlign = "center";
+        cx.font = "800 7px 'Space Grotesk','Archivo',sans-serif"; cx.textAlign = "center";
         cx.fillText("CASINO", bx2 + 9.5, by2 - 12.5);
         /* Lichterkette an der Traufe: Lauflicht */
         for (let i = 0; i < 8; i++) {
@@ -5503,7 +5596,7 @@ function draw() {
           cx.fillStyle = fam.farbe;
           const weh = Math.sin(now / 300 + t.x) * 1.5;
           cx.beginPath(); cx.moveTo(bx2, by2 - 42); cx.lineTo(bx2 + 10, by2 - 39 + weh); cx.lineTo(bx2, by2 - 36); cx.closePath(); cx.fill();
-          cx.font = "700 6.5px sans-serif"; cx.textAlign = "center";
+          cx.font = "700 6.5px 'Space Grotesk','Archivo',sans-serif"; cx.textAlign = "center";
           cx.fillStyle = "rgba(9,13,20,.85)";
           const bw2 = cx.measureText(fam.name).width + 8;
           cx.fillRect(bx2 - bw2 / 2, by2 + 8, bw2, 9);
@@ -5521,9 +5614,9 @@ function draw() {
         cx.fillStyle = "#b99253";
         cx.beginPath(); cx.moveTo(bx2, by2 + 7); cx.lineTo(bx2 + 15, by2); cx.lineTo(bx2, by2 - 7); cx.lineTo(bx2 - 15, by2); cx.closePath(); cx.fill();
         cx.strokeStyle = "#7d6023"; cx.lineWidth = 1; cx.stroke();
-        cx.font = "22px sans-serif"; cx.textAlign = "center"; cx.textBaseline = "alphabetic";
+        cx.font = "22px 'Space Grotesk','Archivo',sans-serif"; cx.textAlign = "center"; cx.textBaseline = "alphabetic";
         cx.fillText(w.icon, bx2, by2 - 4);
-        cx.font = "700 6.5px sans-serif";
+        cx.font = "700 6.5px 'Space Grotesk','Archivo',sans-serif";
         cx.fillStyle = "rgba(9,13,20,.85)";
         const bw = cx.measureText(w.name).width + 8;
         cx.fillRect(bx2 - bw / 2, by2 + 8, bw, 9);
@@ -5696,8 +5789,9 @@ function draw() {
        * sollen sich nicht als bedienbar ausgeben. */
       const dimg = dekoSprite(t);
       if (dimg) {
-        const gr = dekoGroesse(dimg);
-        cx.drawImage(dimg, sx - gr / 2, standY(sy, dimg, gr), gr, gr);
+        const gr = dekoGroesse(dimg), dy = standY(sy, dimg, gr);
+        cx.drawImage(hellSprite(dimg), sx - gr / 2, dy, gr, gr);
+        lichtMerken(dimg, sx - gr / 2, dy, gr, gr);
       }
     }
     if (t.wohnblock) wohnMalen(t, sx, sy, st);
@@ -5708,15 +5802,13 @@ function draw() {
       cx.beginPath(); cx.moveTo(sx,sy); cx.lineTo(sx+TW/2,sy+TH/2); cx.lineTo(sx,sy+TH); cx.lineTo(sx-TW/2,sy+TH/2); cx.closePath(); cx.fill();
       cx.strokeStyle = "#38bdf8"; cx.lineWidth = 1.6; cx.stroke(); cx.lineWidth = 1;
       const bimg = BANKSPR || spriteFor("kontor", t.x, t.y);
-      if (bimg) cx.drawImage(bimg, sx-36, standY(sy, bimg, 72), 72, 72);
-      cx.font = "bold 10px sans-serif"; cx.textAlign = "center"; cx.fillStyle = "#38bdf8";
-      cx.fillText(uebers("BANK"), sx, sy + TH / 2 + 16);
+      if (bimg) { cx.drawImage(bimg, sx-36, standY(sy, bimg, 72), 72, 72); lichtMerken(bimg, sx-36, standY(sy, bimg, 72), 72, 72); }
+      kartenLabel(uebers("BANK"), sx, sy + TH / 2 + 19, "#38bdf8");
     }
     if (t.news) {
       const nimg = NEWSSPR || spriteFor("buero", t.x, t.y);
-      if (nimg) cx.drawImage(nimg, sx-36, standY(sy, nimg, 72), 72, 72);
-      cx.font = "bold 10px sans-serif"; cx.textAlign = "center"; cx.fillStyle = "#fbbf24";
-      cx.fillText(uebers("NACHRICHTEN"), sx, sy + TH / 2 + 16);
+      if (nimg) { cx.drawImage(nimg, sx-36, standY(sy, nimg, 72), 72, 72); lichtMerken(nimg, sx-36, standY(sy, nimg, 72), 72, 72); }
+      kartenLabel(uebers("NACHRICHTEN"), sx, sy + TH / 2 + 19, "#fbbf24");
     }
     if (t.finanzamt) {
       /* Finanzamt: violetter Sockel wie die Bank, damit es als städtischer Ort lesbar ist */
@@ -5724,15 +5816,13 @@ function draw() {
       cx.beginPath(); cx.moveTo(sx,sy); cx.lineTo(sx+TW/2,sy+TH/2); cx.lineTo(sx,sy+TH); cx.lineTo(sx-TW/2,sy+TH/2); cx.closePath(); cx.fill();
       cx.strokeStyle = "#a78bfa"; cx.lineWidth = 1.6; cx.stroke(); cx.lineWidth = 1;
       const fimg = STADT_SPR.finanzamt || spriteFor("buero", t.x, t.y);
-      if (fimg) cx.drawImage(fimg, sx-36, standY(sy, fimg, 72), 72, 72);
-      cx.font = "bold 10px sans-serif"; cx.textAlign = "center"; cx.fillStyle = "#a78bfa";
-      cx.fillText(uebers("FINANZAMT"), sx, sy + TH / 2 + 16);
+      if (fimg) { cx.drawImage(fimg, sx-36, standY(sy, fimg, 72), 72, 72); lichtMerken(fimg, sx-36, standY(sy, fimg, 72), 72, 72); }
+      kartenLabel(uebers("FINANZAMT"), sx, sy + TH / 2 + 19, "#a78bfa");
     }
     if (t.denkmal) {
       const dimg2 = STADT_SPR[t.denkmal] || spriteFor("kontor", t.x, t.y);
       if (dimg2) cx.drawImage(dimg2, sx-36, standY(sy, dimg2, 72), 72, 72);
-      cx.font = "bold 10px sans-serif"; cx.textAlign = "center"; cx.fillStyle = "#fbbf24";
-      cx.fillText(String(t.denkmalName || "").toUpperCase(), sx, sy + TH / 2 + 16);
+      kartenLabel(String(t.denkmalName || "").toUpperCase(), sx, sy + TH / 2 + 19, "#fbbf24");
     }
     if (t.schwarz) {
       /* Schwarzmarkt-Baracke: rot markiert, bewusst unscheinbarer als die Bank. */
@@ -5741,8 +5831,7 @@ function draw() {
       cx.strokeStyle = "#f43f5e"; cx.lineWidth = 1.6; cx.stroke(); cx.lineWidth = 1;
       const simg = spriteFor("markt", t.x, t.y) || spriteFor("kontor", t.x, t.y);
       if (simg) cx.drawImage(simg, sx-36, standY(sy, simg, 72), 72, 72);
-      cx.font = "bold 10px sans-serif"; cx.textAlign = "center"; cx.fillStyle = "#f43f5e";
-      cx.fillText(uebers("SCHWARZMARKT"), sx, sy + TH / 2 + 16);
+      kartenLabel(uebers("SCHWARZMARKT"), sx, sy + TH / 2 + 19, "#f43f5e");
     }
     if (t.btype) {
       const owner = st.players[t.owner];
@@ -5764,6 +5853,7 @@ function draw() {
         // Sprite direkt auf die Kachel — Grundfläche mittig, ohne Bodenschatten
         const oben = standY(sy, spr, 64);
         cx.drawImage(spr, sx-32, oben, 64, 64);
+        lichtMerken(spr, sx-32, oben, 64, 64);
         /* Firmenschild: das selbst gemalte Logo des Besitzers am Gebäude */
         const schild = st.logoV?.[t.owner] != null && FLOGO[t.owner]?.canvas;
         if (schild) {
@@ -5798,10 +5888,9 @@ function draw() {
         const k = Math.max(0, Math.min(1, 1 - rest / dauer)), w = 30;
         cx.fillStyle = "rgba(10,14,21,.75)"; cx.fillRect(sx - w / 2 - 1, sy - 37, w + 2, 6);
         cx.fillStyle = "#f59e0b"; cx.fillRect(sx - w / 2, sy - 36, w * k, 4);
-        cx.font = "bold 9px sans-serif"; cx.textAlign = "center"; cx.fillStyle = "#f59e0b";
-        cx.fillText(`im Bau ${rest}s`, sx, sy - 40);
+        kartenLabel(`${rest}s`, sx, sy - 46, "#f59e0b");
       }
-      if (t.level > 1) { cx.font="bold 10px sans-serif"; cx.textAlign="center"; cx.fillStyle="#38bdf8";
+      if (t.level > 1) { cx.font="bold 10px 'Space Grotesk','Archivo',sans-serif"; cx.textAlign="center"; cx.fillStyle="#38bdf8";
         cx.fillText(`★${t.level}`, sx, sy - 48); }
     }
     /* Fahrzeuge auf dieser Kachel — nach ihrem Gebaeude, aber vor allen
@@ -5809,10 +5898,12 @@ function draw() {
     verkehrZeichnen(t.x, t.y);
   }
   verkehrRest();          // was ausserhalb der Karte liegt, nicht verschlucken
+  drawKartenLabels();
   if (FL) FLAECHE.schilder(cx, st.map);
   drawEffekte(now);
   drawClouds(now);
   drawAtmosphere();
+  drawNachtlichter();
   rennStreckeZeichnen();
   leistungMessen(pnow);
 }
