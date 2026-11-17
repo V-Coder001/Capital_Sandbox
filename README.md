@@ -65,6 +65,44 @@ Umgebungsvariablen: `PORT` (öffentlicher Port), `MAX_ROOMS` (Höchstzahl
 gleichzeitiger Runden, Standard 20), `ROOM_IDLE_MIN` (Leerlauf-Grenze in
 Minuten, Standard 20).
 
+## Desktop-App (Download-Fassung)
+
+Dieselbe Idee wie im Gateway: `server.js` bleibt unverändert und bekommt einen
+eigenen Node-Prozess — nur startet den hier nicht ein Server für fremde
+Gruppen, sondern eine Electron-Hülle auf dem Rechner des Spielers, auf einem
+freien Port, der nur auf `127.0.0.1` hört. Kein Internet nötig, kein Cold
+Start, keine Paketgrößen-Grenze der Portale.
+
+```bash
+npm install          # einmalig, holt auch Electron
+npm run desktop      # App zum Entwickeln starten
+npm run desktop:dir  # ungepackter Probebau in dist/desktop/
+npm run desktop:build # .dmg / .exe / AppImage in dist/desktop/
+```
+
+```
+desktop/
+├── main.js      Hülle: freien Port suchen, server.js als Kindprozess starten,
+│                 warten bis er antwortet, Fenster darauf laden. Fenstergröße,
+│                 Menü, externe Links in den Systembrowser.
+└── preload.cjs  Die einzige Brücke ins Spiel: window.CS_DESKTOP
+                  (Version, Plattform, Adresse für spätere Online-Runden).
+```
+
+Zwei Dinge, die das möglich machen:
+
+- `ELECTRON_RUN_AS_NODE=1` beim `spawn` — `process.execPath` ist die
+  Electron-Binary; ohne die Variable öffnete sie ein zweites Fenster, statt
+  `server.js` als reines Node-Programm auszuführen.
+- `CS_DATEN` — im App-Paket ist `__dirname` nur lesbar. Die Hülle gibt
+  deshalb den Benutzerordner vor, in dem `bugreports/` und `leaderboard.json`
+  landen (`~/Library/Application Support/Capital Sandbox` bzw. `%APPDATA%`).
+
+Noch offen: ein App-Icon unter `desktop/build/icon.png` (1024×1024) — ohne das
+bauen die Pakete mit dem Standard-Electron-Icon. Und die Builds sind
+unsigniert: macOS meldet beim ersten Start „nicht verifizierter Entwickler"
+(Rechtsklick → Öffnen), Windows zeigt den SmartScreen-Hinweis.
+
 ## Architektur
 
 ```

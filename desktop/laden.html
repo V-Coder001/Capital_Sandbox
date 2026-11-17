@@ -1,0 +1,28 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Capital Sandbox</title>
+<style>
+  :root { color-scheme: dark; }
+  body { margin: 0; height: 100vh; display: grid; place-content: center; justify-items: center; gap: 1.1rem;
+         background: #0b1120; color: #e2e8f0;
+         font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  h1 { margin: 0; font-size: 1.6rem; font-weight: 700; letter-spacing: -.02em; }
+  h1 span { color: #38bdf8; }
+  p { margin: 0; color: #94a3b8; max-width: 32rem; text-align: center; }
+  .balken { width: 16rem; height: 3px; border-radius: 3px; background: #1e293b; overflow: hidden; }
+  .balken i { display: block; width: 40%; height: 100%; background: #38bdf8; border-radius: 3px;
+              animation: lauf 1.4s ease-in-out infinite; }
+  @keyframes lauf { 0% { transform: translateX(-100%); } 100% { transform: translateX(350%); } }
+  .spaet { opacity: 0; transition: opacity .6s; font-size: 13px; }
+</style>
+<h1>Capital <span>Sandbox</span></h1>
+<div class="balken"><i></i></div>
+<p>Die Welt wird aufgebaut …</p>
+<p class="spaet" id="spaet">Beim ersten Start kann das eine Weile dauern — besonders, wenn der
+   Spielordner in einer Cloud liegt und die Dateien erst geladen werden müssen.</p>
+<script>
+  /* Der Hinweis erscheint erst, wenn es wirklich lange dauert: steht er von
+     Anfang an da, liest ihn niemand, und bei einem schnellen Start wäre er
+     bloß Panikmache. */
+  setTimeout(() => document.getElementById("spaet").style.opacity = 1, 12000);
+</script>

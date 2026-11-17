@@ -769,7 +769,21 @@ input.autoname::placeholder{color:var(--fg);opacity:.95;font-weight:700}
 /* Kaufen und Verkaufen tragen dieselbe Farbsprache wie das Orderbuch an der
  * Börse — vorher sahen beide Formulare identisch aus und man musste die
  * Überschrift lesen, um zu wissen, was der blaue Knopf gleich auslöst. */
-.bhandel{display:flex;flex-direction:column;gap:10px;margin-bottom:6px}
+.bhandel{display:grid;grid-template-columns:repeat(auto-fit,minmax(248px,1fr));gap:10px;margin-bottom:6px}
+/* Schnellwahl für Menge und Gebot. Beides hing vorher am Kopfrechnen: Wer 25
+ * Aktien zum Kurs wollte, musste Kurs × Menge selbst ausrechnen und abtippen. */
+.bSchnell{display:flex;gap:5px}
+.bSchnell button{flex:1;padding:5px 2px;border-radius:7px;border:1px solid var(--line);
+  background:rgba(12,18,28,.5);color:var(--dim);font-family:var(--font);font-size:11.5px;
+  font-weight:600;cursor:pointer;transition:all .14s}
+.bSchnell button:hover{color:var(--text);border-color:var(--accent)}
+/* Vorschau: was der Auftrag kostet und wie weit er vom Kurs abweicht. */
+.bVorschau{display:flex;justify-content:space-between;align-items:baseline;gap:8px;
+  padding:7px 10px;border-radius:8px;background:rgba(12,18,28,.55);border:1px solid var(--line);
+  font-family:var(--mono);font-size:12px;color:var(--dim)}
+.bVorschau b{color:var(--text);font-size:13px;white-space:nowrap}
+.bVorschau b.plus{color:var(--up)} .bVorschau b.minus{color:var(--down)}
+.bVorschau em{font-style:normal;font-size:11px;opacity:.85}
 .bseite{border:1px solid var(--line);border-radius:11px;padding:10px 12px 11px}
 .bseite.verkauf{border-color:rgba(251,113,133,.3);background:rgba(251,113,133,.05)}
 .bseite.kauf{border-color:rgba(52,211,153,.3);background:rgba(52,211,153,.05)}
@@ -784,6 +798,8 @@ input.autoname::placeholder{color:var(--fg);opacity:.95;font-weight:700}
 .bknopf.verkauf:hover{background:rgba(251,113,133,.15)}
 .bknopf.kauf{color:var(--up);border-color:rgba(52,211,153,.5)}
 .bknopf.kauf:hover{background:rgba(52,211,153,.15)}
+.bknopf.zur{color:var(--accent);border-color:var(--accent)}
+.bknopf.zur:hover{background:rgba(14,116,144,.15)}
 .bseite .meta{margin-top:6px}
 /* Aufgeklappte Firma in der Kurstafel */
 .firmdetail{margin:-4px 0 10px;padding:2px 12px 10px;border:1px solid var(--line);border-top:0;
@@ -793,6 +809,96 @@ input.autoname::placeholder{color:var(--fg);opacity:.95;font-weight:700}
 .kzrow:last-of-type{border-bottom:0}
 .kzrow b{font-family:var(--mono);white-space:nowrap}
 .firmrow:hover{border-color:var(--accent)}
+/* Kurstafel als Tabelle statt als Kachelliste. Die alten Zeilen waren 70 px
+ * hoch und zeigten vier Angaben auf zwei Ebenen; dieselben Zahlen stehen jetzt
+ * in Spalten, die über alle Firmen hinweg untereinander fluchten — erst damit
+ * kann man zwei Aktien vergleichen, ohne sie nacheinander zu lesen. */
+/* Die Zahlenspalten sind bewusst knapp: Im Stadtnetz steht die Tafel in der
+ * linken Spalte eines 880 px breiten Fensters, und jedes Pixel, das die Zahlen
+ * mehr nehmen, fehlt dem Firmennamen — der sonst als „Montan & Ba…" endet. */
+.bzeile{display:grid;align-items:center;gap:8px;padding:8px 10px;cursor:pointer;
+  grid-template-columns:minmax(0,1fr) 52px 86px 58px 82px 88px;
+  border-bottom:1px solid rgba(36,48,68,.45);transition:background .14s}
+.bzeile:hover{background:rgba(255,255,255,.03)}
+.bzeile.auf{background:rgba(255,255,255,.04)}
+.bzeile.kopf{cursor:default;padding-bottom:6px;font-size:10px;letter-spacing:.07em;
+  text-transform:uppercase;color:var(--dim);font-weight:600}
+.bzeile.kopf:hover{background:none}
+.bzeile.kopf .bzKurs,.bzeile.kopf .bzAend,.bzeile.kopf .bzMwert{text-align:right}
+.bzFirma{display:flex;align-items:center;gap:9px;min-width:0}
+.bzLogo{width:28px;height:28px;border-radius:8px;flex:none;display:grid;place-items:center;
+  color:#fff;font-weight:800;font-size:13px;object-fit:contain;background:#0e1620}
+.bzLogo.hatBild{padding:3px}
+.bzText{min-width:0;flex:1}
+.bzText>b{display:block;font-size:13.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bzText small{display:block;font-size:11px;color:var(--dim);overflow:hidden;
+  text-overflow:ellipsis;white-space:nowrap}
+.bzDu{color:var(--dim);font-weight:400}
+.bzHalt{color:var(--accent);font-weight:600}
+.bzSpark{display:flex;justify-content:center;min-width:0}
+.bzKurs{text-align:right;font-family:var(--mono);font-size:13px;white-space:nowrap}
+.bzLuecke{display:block;font-style:normal;font-size:10.5px;font-family:var(--font)}
+.bzAend{text-align:right;font-family:var(--mono);font-size:12.5px;font-weight:600;white-space:nowrap}
+.bzAend.auf{color:var(--up)} .bzAend.ab{color:var(--down)} .bzAend.null{color:var(--dim)}
+.bzMwert{text-align:right;font-family:var(--mono);font-size:12.5px;color:var(--dim);white-space:nowrap}
+.bzTat{display:flex;align-items:center;justify-content:flex-end;gap:7px}
+.bzKauf{padding:5px 11px;border-radius:8px;border:1px solid rgba(52,211,153,.5);
+  background:transparent;color:var(--up);font-family:var(--font);font-size:12px;
+  font-weight:600;cursor:pointer;white-space:nowrap;transition:all .14s}
+.bzKauf:hover{background:rgba(52,211,153,.15)}
+.bzKauf.aus{border-color:var(--line);color:var(--dim)}
+.bzKauf.aus:hover{background:rgba(255,255,255,.05);color:var(--text)}
+.bzLeer{color:var(--dim)}
+.bzPfeil{font-style:normal;width:9px;text-align:center;color:var(--dim);font-size:11px}
+/* Depotposition: Logo, Bestand, Wert und Gewinn in einer Zeile. */
+.bpos{display:flex;align-items:center;gap:11px;padding:10px 10px;
+  border-bottom:1px solid rgba(36,48,68,.45)}
+.bpos:last-child{border-bottom:0}
+.bposText{min-width:0;flex:1}
+.bposText b{display:block;font-size:13.5px}
+.bposText small{display:block;font-size:11.5px;color:var(--dim)}
+.bposFusion{color:var(--accent);font-size:11px;font-weight:600}
+.bposWert{text-align:right;font-family:var(--mono);white-space:nowrap}
+.bposWert b{display:block;font-size:14px}
+.bposWert em{font-style:normal;font-size:11.5px}
+.bposTat{display:flex;gap:5px;align-items:center}
+/* Leerer Zustand als Karte mit Ausweg statt als Satz im Nichts. */
+.bLeer{display:flex;flex-direction:column;align-items:flex-start;gap:6px;padding:16px;
+  border:1px dashed var(--line);border-radius:11px;background:rgba(12,18,28,.4)}
+.bLeer b{font-size:13.5px} .bLeer span{font-size:12.5px;color:var(--dim);max-width:46ch}
+.bLeer .bknopf{margin-top:4px}
+/* Kurstafel und Depot als eine Karte — sonst stehen Spaltenköpfe und Zeilen in
+ * zwei Kästen und fluchten nicht. */
+.bTafel{border:1px solid var(--line);border-radius:12px;background:rgba(12,18,28,.45);
+  padding:10px 2px 2px;margin-bottom:10px;overflow:hidden;
+  container:bTafel / inline-size}
+.bTafel .sec{padding-left:10px;padding-right:10px}
+.bTafel .bond{margin:0 8px 8px}
+.bTafel .bLeer{margin:0 8px 8px}
+.bTafel .bzeile:last-child{border-bottom:0}
+/* Randspalte der Handelsseite im Stadtnetz */
+.bankTipp h4{margin:0 0 6px;font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:var(--dim)}
+.bankTipp p{margin:0;font-size:12.5px;line-height:1.5}
+.bankTipp p b.auf{color:var(--up)}
+/* Die Tafel steht mal in einem 880 px breiten Browserfenster, mal im schmalen
+ * Panel über der Karte — der Bildschirm sagt darüber nichts. Deshalb Container-
+ * statt Bildschirmabfragen: Es zählt, wie breit die Karte selbst ist. Marktwert
+ * und Verlauf fallen zuerst weg, Kurs und Veränderung bleiben immer. */
+@container bTafel (max-width:620px){
+  .bzeile{grid-template-columns:minmax(0,1fr) 52px 86px 58px 88px}
+  .bzMwert{display:none}
+}
+@container bTafel (max-width:520px){
+  .bzeile{grid-template-columns:minmax(0,1fr) 80px 56px 34px;gap:7px}
+  .bzSpark{display:none}
+  .bzTat .bzKauf,.bzTat .bzLeer{display:none}
+}
+@supports not (container-type:inline-size){
+  @media (max-width:760px){
+    .bzeile{grid-template-columns:minmax(0,1fr) 80px 56px 34px;gap:7px}
+    .bzSpark,.bzMwert,.bzTat .bzKauf,.bzTat .bzLeer{display:none}
+  }
+}
 /* Orderbuch-Zeile: Pfeil | Menge×Preis | Firma | Knopf */
 .obrow{display:grid;grid-template-columns:13px auto 1fr auto;align-items:center;gap:9px;
   padding:3px 2px;border-bottom:1px solid rgba(36,48,68,.4)}
@@ -1021,6 +1127,20 @@ td:first-child{font-family:var(--font)}
 #tutWait{font-size:11.5px;color:var(--accent2);display:none;align-items:center;gap:6px}
 @keyframes tutpulse{0%,100%{opacity:.4}50%{opacity:1}}
 #tutWait::before{content:"●";animation:tutpulse 1.2s infinite}
+/* ---- Tutorial-Scheinwerfer ----
+ * Hebt das UI-Element hervor, von dem der aktuelle Schritt spricht: ein
+ * pulsierender Ring, und der Rest der Seite wird abgedunkelt (Loch per
+ * riesigem Schatten). pointer-events:none — der Spieler kann das Element
+ * weiter anklicken, der Schritt hakt sich dann selbst ab. */
+#tutSpot{position:fixed;z-index:29;border-radius:12px;pointer-events:none;display:none;
+  box-shadow:0 0 0 9999px rgba(8,12,20,.60), 0 0 0 3px var(--accent), 0 0 22px 6px color-mix(in srgb,var(--accent) 70%,transparent);
+  transition:top .22s ease,left .22s ease,width .22s ease,height .22s ease}
+#tutSpot.on{display:block;animation:tutspot 1.4s ease-in-out infinite}
+@keyframes tutspot{0%,100%{box-shadow:0 0 0 9999px rgba(8,12,20,.60), 0 0 0 3px var(--accent), 0 0 14px 3px color-mix(in srgb,var(--accent) 55%,transparent)}
+  50%{box-shadow:0 0 0 9999px rgba(8,12,20,.60), 0 0 0 3px var(--accent), 0 0 26px 9px color-mix(in srgb,var(--accent) 80%,transparent)}}
+/* Zeigt der Schritt nach unten (Dock, Statusleiste unten), rückt die Mentor-Box
+ * nach oben, damit sie den Ring nicht verdeckt. */
+#tut.oben{top:84px;bottom:auto}
 #toasts{position:fixed;top:86px;left:50%;transform:translateX(-50%);z-index:40;display:flex;flex-direction:column;gap:6px;align-items:center}
 .toast{background:var(--panel2);border:1px solid var(--line);border-left:3px solid var(--accent);border-radius:9px;padding:8px 14px;font-size:12.5px;animation:tin .25s}
 .toast.err{border-left-color:var(--down)}
@@ -1141,3 +1261,962 @@ td:first-child{font-family:var(--font)}
   .tbInhalt .kasten{padding:11px 12px}
   .tbCard{height:94vh}
 }
+
+/* Stadtwachstum: Einwohner in der Kopfleiste, Stadtübersicht im Finanzamt */
+#einw{background:none;border:1px solid var(--line);border-radius:7px;color:var(--dim);height:24px;cursor:pointer;padding:0 8px;font:600 11px/1 var(--font);white-space:nowrap}
+#einw:hover{color:var(--text)}
+.faKonten.stKonten{grid-template-columns:repeat(3,minmax(0,1fr))}
+.stVerlauf{display:block;width:100%;height:56px;margin:10px 0 2px;border-bottom:1px solid var(--line)}
+.stAchse{display:flex;justify-content:space-between;margin-bottom:8px}
+.stTeile{margin:6px 0}
+.stPlus{color:#4ade80}.stMinus{color:#f87171}
+.stLog{margin-top:6px;padding-top:6px;border-top:1px dashed var(--line)}
+@media (max-width:640px){.faKonten.stKonten{grid-template-columns:1fr}}
+
+/* Etappe 2: Löhne im Firma-Panel, Arbeitsmarkt in der Stadtübersicht, Stadt im Endbildschirm */
+.fLohn{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;margin:6px 0 8px}
+.fLohn button{background:none;border:1px solid var(--line);border-radius:8px;padding:8px 6px;cursor:pointer;color:var(--dim);text-align:left;font:inherit}
+.fLohn button b{display:block;color:var(--text);font-size:12px}
+.fLohn button span{font-size:11px}
+.fLohn button.on{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
+.fLohn button.bald{border-style:dashed}
+.stArbeitBalken{position:relative;height:8px;border-radius:4px;background:var(--line);margin:8px 0 4px;overflow:hidden}
+.stArbeitBalken i{position:absolute;left:0;top:0;bottom:0;background:var(--accent)}
+.stArbeitBalken em{position:absolute;top:-2px;bottom:-2px;width:2px;background:#f87171}
+.winStadt{display:flex;gap:10px;align-items:baseline;margin-top:8px;padding:8px 12px;border:1px solid var(--line);border-radius:10px}
+.winStadt b{font-size:20px;color:var(--accent)}
+
+/* Etappe 3: Wohnbau-Aufträge in der Stadtübersicht */
+.stAuftrag{border:1px solid var(--line);border-radius:10px;padding:8px 10px;margin:6px 0}
+
+/* Software-Panel mit Reitern (Etappe 5) */
+.swUeberblick{display:grid;grid-template-columns:repeat(auto-fit,minmax(72px,1fr));gap:6px;margin:0 0 10px}
+.swUeberblick>div{border:1px solid var(--line);border-radius:8px;padding:6px 8px;display:flex;flex-direction:column;gap:2px;min-width:0}
+.swUeberblick span{font-size:9.5px;letter-spacing:.04em;text-transform:uppercase;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.swUeberblick b{font-size:15px;color:var(--text)}
+.swUeberblick small{font-size:11px;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.swReiterLeiste{display:flex;gap:4px;border-bottom:1px solid var(--line);margin:0 0 12px;overflow-x:auto}
+.swReiterLeiste button{background:none;border:0;border-bottom:2px solid transparent;color:var(--dim);padding:8px 12px;cursor:pointer;font:600 12px/1 var(--font);white-space:nowrap}
+.swReiterLeiste button.on{color:var(--text);border-bottom-color:var(--accent)}
+.swReiterLeiste button:hover{color:var(--text)}
+.swListe{display:flex;flex-direction:column;gap:4px}
+.swListeZeile{display:grid;grid-template-columns:minmax(0,1fr) auto auto auto;gap:10px;align-items:center;border:1px solid var(--line);border-radius:8px;padding:6px 8px}
+.swListeZeile.meins{border-color:var(--accent)}
+.fJobs{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:6px;margin:4px 0 8px}
+.fJobs button{background:none;border:1px solid var(--line);border-radius:8px;padding:6px 8px;cursor:pointer;color:var(--dim);text-align:left;font:inherit}
+.fJobs button b{display:block;color:var(--text);font-size:12px}
+.fJobs button span{font-size:11px}
+.fJobs button.on{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
+
+/* Hinweise im Spielverlauf */
+#spielHinweis{position:fixed;left:16px;bottom:84px;z-index:70;width:min(340px,calc(100vw - 32px));background:rgba(12,18,28,.95);border:1px solid #2a3a52;border-radius:12px;padding:12px 14px;box-shadow:0 12px 40px rgba(0,0,0,.45);color:#e6edf6;font-size:12.5px;line-height:1.45}
+#spielHinweis .shKopf{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:6px}
+#spielHinweis .shKopf b{font-size:13.5px}
+#spielHinweis .shKopf button{background:none;border:0;color:#8695ab;font-size:18px;cursor:pointer;line-height:1}
+#spielHinweis p{margin:0 0 10px;color:#c4cfdd}
+#spielHinweis .shFuss{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+#spielHinweis .shAus{background:none;border:0;color:#8695ab;font-size:11px;cursor:pointer;margin-left:auto;text-decoration:underline}
+/* Touristik-Panel (Etappe 6) */
+.tourSterne{display:inline-flex;gap:1px;font-size:13px;letter-spacing:0;white-space:nowrap}
+.tourSterne i{font-style:normal;color:var(--line);opacity:.9}
+.tourSterne i.on{color:#fbbf24}
+.tourSterne i.halb{color:#fbbf24;opacity:.45}
+.swZahlen .tourSterne{font-size:15px}
+.tourFest{border:1px solid #fbbf24;background:rgba(251,191,36,.1);border-radius:10px;padding:8px 10px;margin-bottom:12px;font-size:13px}
+.tourFeste{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.tourFestKnopf{display:flex;flex-direction:column;align-items:flex-start;gap:3px;text-align:left;padding:9px 10px;border:1px solid var(--line);border-radius:10px;background:var(--panel2);color:var(--text);cursor:pointer;font:inherit}
+.tourFestKnopf b{font-size:13.5px}
+.tourFestKnopf span{font:600 12px var(--mono)}
+.tourFestKnopf small{font-size:11px;color:var(--dim);line-height:1.35}
+.tourFestKnopf:not(:disabled):hover{border-color:var(--accent)}
+.tourFestKnopf:disabled{opacity:.5;cursor:default}
+@media (max-width:560px){.tourFeste{grid-template-columns:1fr}}
+/* Buchungsseite (hotelOeffnen): Rahmen wie das Shop-Fenster */
+#hotelFenster{position:fixed;inset:0;z-index:240;display:grid;place-items:center;padding:16px;background:rgba(3,6,12,.62);backdrop-filter:blur(3px)}
+#hotelFenster[hidden]{display:none}
+.hfHaupt{display:flex;flex-direction:column;gap:14px;min-width:0}
+.hfZahlen{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+.hfZahlen div{background:#fff;border:1px solid #e3e6ee;border-radius:10px;padding:8px 10px;display:flex;flex-direction:column;gap:2px}
+.hfZahlen b{font:700 16px var(--mono);color:#111827}
+.hfZahlen span{font-size:11px;color:#6b7280}
+.hfBild{max-height:84px;max-width:100%;image-rendering:auto;filter:drop-shadow(0 4px 6px rgba(0,0,0,.18))}
+.hfKarte{border:0;background:none;color:#4b5563;font:500 11.5px var(--font);cursor:pointer;padding:2px;text-align:center}
+.hfKarte:hover{color:#111827;text-decoration:underline}
+.hfVerwalten{display:flex;flex-direction:column;gap:10px;background:#fff;border:1px solid #e3e6ee;border-radius:12px;padding:12px}
+.hfPreis{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px 10px;align-items:end}
+.hfPreis label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:#374151}
+.hfPreis small{grid-column:1/-1;font-size:11.5px;color:#6b7280}
+.hfTitel{margin:4px 0 0;font-size:14px;color:#111827;display:flex;flex-wrap:wrap;gap:6px;align-items:baseline}
+.hfTitel small{font-weight:400;font-size:11.5px;color:#6b7280}
+.hfFeste .sfBild{height:64px}
+.hfSterneKlein{color:#f59e0b!important;letter-spacing:1px;font-size:12px}
+.hfBrowser .sfBand.grau{background:#9ca3af}
+.hfBrowser .sfBanner{background:color-mix(in srgb,var(--sys) 16%,#fff);color:#111827}
+button.swListeZeile.tourHotel{width:100%;text-align:left;background:transparent;color:inherit;font:inherit;cursor:pointer}
+button.swListeZeile.tourHotel:hover{border-color:var(--accent);background:rgba(125,211,252,.06)}
+@media (max-width:640px){.hfZahlen{grid-template-columns:repeat(2,minmax(0,1fr))}.hfPreis{grid-template-columns:1fr}}
+/* Statusseite der Rechenzentren (Etappe 7): Rahmen wie Shop- und Buchungsseite */
+#rzFenster{position:fixed;inset:0;z-index:240;display:grid;place-items:center;padding:16px;background:rgba(3,6,12,.62);backdrop-filter:blur(3px)}
+#rzFenster[hidden]{display:none}
+.rzBadges{display:flex;gap:8px;flex-wrap:wrap}
+.rzReiter{display:flex;gap:4px;padding:8px 20px 0;background:#fff;border-bottom:1px solid #e3e6ee;flex-wrap:wrap}
+.rzReiter button{border:0;border-bottom:3px solid transparent;background:none;padding:10px 14px;font:500 14px var(--font);color:#374151;cursor:pointer}
+.rzReiter button.on{border-bottom-color:var(--sys);color:#111827;font-weight:700}
+.rzWarn{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 20px;background:#fef3c7;color:#78350f;font-size:13px;border-bottom:1px solid #fde68a}
+.rzWarn[hidden]{display:none}
+.rzWarn .sfKaufen{background:#b45309;flex:none}
+.rzInhalt{display:flex;flex-direction:column;gap:14px;padding:16px 20px 20px;overflow:auto;min-height:0}
+.rzBox{background:#fff;border:1px solid #e3e6ee;border-radius:12px;padding:12px 14px;display:flex;flex-direction:column;gap:9px;font-size:13px;color:#18202e}
+.rzBox>b{font-size:14.5px;color:#111827}
+.rzBox small{color:#4b5563;font-size:11.5px}
+.rzBoxKopf{display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap}
+.rzBoxKopf b{font-size:14.5px;color:#111827}
+.rzUptime{display:grid;gap:3px}
+.rzUp{height:24px;border-radius:3px}
+.rzUp.an{background:#16a34a}.rzUp.aus{background:#dc2626}
+.rzKarten{grid-template-columns:repeat(auto-fill,minmax(220px,1fr))}
+.rzKarte{display:flex;flex-direction:column;gap:7px;padding:12px;background:#fff;border:1px solid #e3e6ee;border-radius:12px;color:#18202e}
+.rzKarte small{font-size:11.5px;color:#4b5563}
+.rzKarteKopf{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.rzKarteKopf b{font-size:14.5px}
+.rzStatus{font-size:11px;font-weight:700;padding:3px 8px;border-radius:999px}
+.rzStatus.an{background:#dcfce7;color:#166534}.rzStatus.aus{background:#fee2e2;color:#991b1b}
+.rzBalken{height:9px;border-radius:5px;background:#e5e7eb;overflow:hidden}
+.rzBalken i{display:block;height:100%;background:var(--sys)}
+.rzZeile{display:grid;grid-template-columns:200px minmax(0,1fr) 90px;gap:12px;align-items:center}
+.rzZeile b{text-align:right;font-size:12px;color:#111827}
+.rzVert{grid-template-columns:170px minmax(0,1fr) 90px 72px}
+.rzPM{display:flex;gap:4px;justify-content:flex-end}
+.rzPM button,.rzPreisZeile .sfMenge button{width:30px;height:30px;border-radius:8px;border:1px solid #d4d8e2;background:#f3f4f6;color:#111827;cursor:pointer}
+.rzPreisZeile{display:flex;align-items:center;justify-content:space-between;gap:8px;border:1px dashed #cfd4de;border-radius:9px;padding:5px 8px;font-size:12px;color:#374151}
+.rzPreisZeile .sfMenge{display:flex;align-items:center;gap:6px;border:0}
+.rzPreisZeile .sfMenge b{min-width:52px;text-align:center;font-size:12.5px;color:#111827}
+.rzAngebote{grid-template-columns:repeat(auto-fill,minmax(230px,1fr))}
+.rzAngebote .sfKauf{gap:5px}
+.rzZwei{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);gap:14px;align-items:start}
+.rzModul{display:flex;flex-direction:column;gap:4px;align-items:flex-start;text-align:left;padding:10px 12px;border-radius:10px;border:1px solid #e3e6ee;background:#fff;color:#18202e;cursor:pointer;font:inherit}
+.rzModul.on{border:2px solid var(--sys);background:color-mix(in srgb,var(--sys) 7%,#fff)}
+.rzModul.zu{opacity:.55;cursor:default}
+.rzModulKopf{display:flex;justify-content:space-between;gap:8px;width:100%}
+.rzModul small{font-size:12px;color:#4b5563}
+.rzModul em{font-style:normal;font-size:11.5px;color:#1e3a8a}
+.rzNeu{display:flex;flex-direction:column;gap:4px;font-size:12px;color:#374151}
+.rzNeu input{border:1px solid #d4d8e2;border-radius:8px;padding:8px 10px;font:inherit;color:#111827;background:#fff}
+.rzKunde{display:grid;grid-template-columns:10px minmax(0,1fr) auto;gap:10px;align-items:center;padding:8px;border-radius:9px;background:#f8fafc}
+.rzKunde i{width:10px;height:10px;border-radius:50%}
+.rzKunde i.an{background:#16a34a}.rzKunde i.aus{background:#d97706}
+.rzKunde b{display:block;font-size:13px;color:#111827}.rzKunde small{font-size:11px;color:#4b5563}
+.rzOn{font-size:11.5px;font-weight:700}.rzOn.an{color:#166534}.rzOn.aus{color:#92400e}
+.rzPortal{font-size:12.5px;color:#374151;text-align:center}
+@media (max-width:720px){.rzZwei{grid-template-columns:1fr}.rzZeile{grid-template-columns:120px minmax(0,1fr) 80px}.rzVert{grid-template-columns:110px minmax(0,1fr) 80px 70px}}
+/* Stadtnetz und Firmen-Websites (Etappe 8) */
+#netzFenster{position:fixed;inset:0;z-index:240;display:grid;place-items:center;padding:16px;background:rgba(3,6,12,.62);backdrop-filter:blur(3px)}
+#netzFenster[hidden]{display:none}
+.netzSuche{flex:1;max-width:340px;min-width:180px}
+.netzSuche input{width:100%;box-sizing:border-box;border:1px solid rgba(255,255,255,.5);border-radius:999px;padding:8px 14px;font:inherit;font-size:13px;color:#111827;background:#fff}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+.netzChips{display:flex;flex-wrap:wrap;gap:6px}
+.netzChip{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border-radius:999px;border:1px solid #e3e6ee;background:#f8fafc;color:#111827;font:500 12.5px var(--font)}
+button.netzChip{cursor:pointer}button.netzChip:hover{border-color:var(--sys)}
+.netzAnzeigen{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:8px}
+.netzAnz{display:flex;flex-direction:column;gap:2px;text-align:left;padding:9px 12px;border-radius:10px;border:1px dashed #cbd5e1;background:#fffbeb;color:#111827;cursor:pointer;font:inherit}
+.netzAnz small{font-size:10.5px;color:#92400e;text-transform:uppercase;letter-spacing:.06em}
+.netzAnz span{font-size:12.5px;color:#374151}
+.netzGrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px}
+.netzEintrag{display:flex;flex-direction:column;gap:6px;text-align:left;padding:11px 12px;border-radius:12px;border:1px solid #e3e6ee;background:#fff;color:#18202e;cursor:pointer;font:inherit;transition:transform .15s,box-shadow .15s}
+.netzEintrag:hover{transform:translateY(-2px);box-shadow:0 8px 20px rgba(16,24,40,.1)}
+.netzEintragKopf{display:flex;align-items:center;gap:10px}
+.netzEintragKopf b{display:block;font-size:14px;color:#111827}.netzEintragKopf small{font-size:11px;color:#4b5563}
+.netzLogo{width:34px;height:34px;border-radius:9px;display:grid;place-items:center;font:800 16px var(--font);color:#fff;flex:none;object-fit:cover}
+.netzEintragInfo{font-size:12px;color:#374151}
+.netzEintragFuss{display:flex;justify-content:space-between;gap:8px;font-size:11.5px;color:#111827}
+.netzEintragFuss em{font-style:normal;color:#b45309;font-weight:700}
+.netzBetriebe,.netzProdukte{display:flex;flex-wrap:wrap;gap:8px}
+.netzBetrieb{display:flex;align-items:center;gap:8px;padding:6px 10px;border-radius:9px;background:#f8fafc;font-size:12.5px}
+.netzBetrieb img{height:30px}
+.netzProdukt{display:flex;align-items:center;gap:6px;padding:6px 10px;border-radius:9px;background:#f8fafc;font-size:12.5px}
+.netzProdukt span{font-size:18px}.netzProdukt small{color:#4b5563}
+.netzKnoepfe{display:flex;gap:12px;flex-wrap:wrap}
+.netzAuftrag{grid-template-columns:140px minmax(0,1fr) 110px;font-size:12.5px}
+.netzMitte{display:flex;justify-content:center}
+/* Stadtnetz-Startseite und Stadtkurier (neu gestaltet) */
+.netzBrowser .netzInhalt{background:#f4f6f8}
+.netzEil{flex-shrink:0}.netzEil[hidden]{display:none}
+.netzEil button{display:flex;align-items:center;gap:12px;width:100%;padding:9px 20px;background:#b91c1c;color:#fff;border:0;text-align:left;cursor:pointer;font:inherit;font-size:13.5px}
+.netzEilMarke{font:700 11px var(--mono);letter-spacing:.1em;padding:3px 7px;border-radius:5px;background:rgba(255,255,255,.2);flex:none}
+.netzEilText{flex:1;min-width:0}
+.netzEilLink{font-size:12px;opacity:.9;flex:none}
+.sfBrowser .sfKopf.netzHero{position:relative;overflow:hidden;display:flex;flex-direction:column;flex-wrap:nowrap;flex-shrink:0;align-items:stretch;gap:14px;padding:26px 24px 22px;background:#0f766e}
+.sfBrowser .sfKopf.netzHero>.netzSkyline{position:absolute;right:-40px;top:-20px;pointer-events:none;z-index:0}
+.netzMarke{display:flex;align-items:center;gap:12px;position:relative}
+.netzMarke b{display:block;font-size:23px;font-weight:700;letter-spacing:-.01em}
+.netzMarke small{display:block;font-size:13px;opacity:.9}
+.netzMarkeS{width:46px;height:46px;border-radius:13px;display:grid;place-items:center;font:800 22px var(--font);background:#fff;color:#0f766e}
+.netzSuchfeld{position:relative;display:flex;align-items:center;gap:10px;max-width:640px;background:#fff;border-radius:14px;padding:4px 6px 4px 16px;box-shadow:0 10px 30px rgba(0,0,0,.18)}
+.netzSuchfeld input{flex:1;min-width:0;border:0;outline:none;font:inherit;font-size:15px;padding:10px 0;color:#111827;background:transparent}
+.netzTreffer{font:600 12px var(--mono);color:#0f766e;padding:8px 12px;border-radius:10px;background:#ccfbf1;flex:none}
+.netzStats{display:flex;gap:22px;flex-wrap:wrap;position:relative;font-size:13px}
+.netzStats b{font:700 18px var(--mono)}
+.netzKats{display:flex;gap:8px;flex-wrap:wrap}
+.netzKat{border:1px solid #d9dee6;border-radius:999px;padding:8px 14px;font:600 13px var(--font);cursor:pointer;background:#fff;color:#334155}
+.netzKat.on{background:#0f766e;border-color:#0f766e;color:#fff}
+.netzSpalten{display:grid;grid-template-columns:minmax(0,1fr) 280px;gap:18px;align-items:start}
+.netzHaupt{display:flex;flex-direction:column;gap:16px;min-width:0}
+.netzSeite{display:flex;flex-direction:column;gap:14px}
+.netzKurier{background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 1px 2px rgba(16,24,40,.06),0 6px 18px rgba(16,24,40,.05)}
+.netzKurierKopf{display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-bottom:1px solid #eef0f4}
+.netzKurierKopf span{display:flex;align-items:baseline;gap:10px}
+.netzKurierKopf b{font:800 20px "Fraunces",Georgia,serif;color:#111827}
+.netzKurierKopf small{font-size:11.5px;color:#4b5563}
+.netzKurierKopf button{border:0;background:none;color:#0f766e;font:700 13px var(--font);cursor:pointer}
+.netzKurierSchlag{display:grid;grid-template-columns:1.4fr 1fr 1fr}
+.netzKurierSchlag button{display:flex;flex-direction:column;gap:6px;text-align:left;padding:14px 16px;border:0;border-right:1px solid #eef0f4;background:#fff;cursor:pointer;color:#18202e;font:inherit}
+.netzKurierSchlag button:last-child{border-right:0}
+.netzKurierSchlag b{font:600 15.5px "Fraunces",Georgia,serif;line-height:1.25;color:#111827}
+.netzKurierSchlag small{font-size:11.5px;color:#4b5563}
+.kurierRessort{align-self:flex-start;font:700 10.5px var(--mono);letter-spacing:.08em;text-transform:uppercase;padding:2px 7px;border-radius:5px;background:#e5e7eb;color:#111827}
+.kurierRessort.r-wirtschaft{background:#dbeafe;color:#1e3a8a}.kurierRessort.r-boerse{background:#ede9fe;color:#4c1d95}
+.kurierRessort.r-stadt{background:#dcfce7;color:#14532d}.kurierRessort.r-firmen{background:#ffedd5;color:#7c2d12}.kurierRessort.r-eilmeldung{background:#fee2e2;color:#991b1b}
+.netzAbschnitt{display:flex;flex-direction:column;gap:12px}
+.netzAbschnittKopf{display:flex;justify-content:space-between;align-items:baseline}
+.netzAbschnittKopf b{font-size:17px;color:#111827}.netzAbschnittKopf small{font-size:12px;color:#4b5563}
+.netzKarten{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:14px}
+.netzKarte{display:flex;flex-direction:column;padding:0;border:0;text-align:left;background:#fff;border-radius:16px;overflow:hidden;cursor:pointer;color:#18202e;font:inherit;box-shadow:0 1px 2px rgba(16,24,40,.06),0 6px 18px rgba(16,24,40,.05);transition:transform .15s,box-shadow .15s}
+.netzKarte:hover{transform:translateY(-2px);box-shadow:0 10px 24px rgba(16,24,40,.12)}
+.netzKarteBand{display:flex;justify-content:space-between;align-items:flex-end;height:60px;padding:0 14px}
+.netzKarteBand em{font:700 10.5px var(--mono);font-style:normal;letter-spacing:.06em;padding:3px 8px;border-radius:999px;background:#fef3c7;color:#92400e;align-self:center}
+.netzKarteLogo{width:44px;height:44px;margin-bottom:-18px;border-radius:12px;display:grid;place-items:center;font:800 19px var(--font);color:#fff;border:3px solid #fff;box-shadow:0 4px 10px rgba(0,0,0,.15);object-fit:cover}
+.netzKarteInhalt{display:flex;flex-direction:column;gap:6px;padding:12px 14px 14px}
+.netzKarteName{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.netzKarteName b{font-size:15px;color:#111827}.netzKarteName i{font-style:normal;font-size:12px;color:#b45309;letter-spacing:1px}
+.netzKarteInhalt>small{font-size:11.5px;color:#4b5563}
+.netzKarteText{font-size:12.5px;color:#374151;min-height:34px}
+.netzTags{display:flex;flex-wrap:wrap;gap:5px}
+.netzTags span{font-size:11px;padding:3px 8px;border-radius:999px;background:#f1f5f9;color:#334155}
+.netzKarteFuss{display:flex;justify-content:space-between;align-items:center;margin-top:4px;padding-top:10px;border-top:1px solid #f1f5f9;font-size:12px}
+.netzKarteFuss span:last-child{font-weight:700;color:#0f766e}
+.netzLeer{padding:26px;text-align:center;background:#fff;border-radius:16px;color:#4b5563;font-size:14px}
+.netzBox{display:flex;flex-direction:column;gap:9px;background:#fff;border-radius:16px;padding:14px 16px;box-shadow:0 1px 2px rgba(16,24,40,.06);color:#18202e;text-align:left;font:inherit;border:0}
+.netzBox>b{font-size:14.5px;color:#111827}.netzBox>small{font-size:12px;color:#4b5563}
+.netzLaeuft{display:grid;grid-template-columns:34px minmax(0,1fr);gap:10px;align-items:center;padding:0;border:0;background:none;text-align:left;font:inherit;color:inherit}
+button.netzLaeuft{cursor:pointer}
+.netzLaeuft>span:first-child{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;font-weight:800;color:#fff}
+.netzLaeuft b{display:block;font-size:13px;color:#111827}.netzLaeuft small{display:block;font-size:11.5px;color:#4b5563}
+.netzNeu{display:flex;justify-content:space-between;gap:8px;padding:0;border:0;background:none;font:inherit;font-size:12.5px;color:#111827;cursor:pointer;text-align:left}
+.netzNeu small{color:#4b5563;flex:none}
+.netzRz{display:flex;flex-direction:column;gap:5px;padding:0;border:0;background:none;font:inherit;cursor:pointer;text-align:left}
+.netzRzKopf{display:flex;justify-content:space-between;font-size:12.5px;color:#111827}.netzRzKopf b{font-size:12px;color:#166534}
+.netzRzBalken{height:6px;border-radius:3px;background:#e5e7eb;overflow:hidden}.netzRzBalken i{display:block;height:100%;background:#0f766e}
+.netzAnzeige{background:#fffbeb;border:1px dashed #d6a64b;cursor:pointer;gap:4px}
+.netzAnzeige small{font:600 10.5px var(--mono);letter-spacing:.08em;color:#92400e}.netzAnzeige span{font-size:12.5px;color:#374151}
+.sfBrowser .sfKopf.netzZeitung{flex-direction:column;flex-wrap:nowrap;flex-shrink:0;align-items:center;justify-content:center;gap:4px;padding:18px 20px 12px;background:#fff;color:#111827;border-bottom:3px double #111827}
+.netzZeitungTitel{font:800 40px "Fraunces",Georgia,serif;letter-spacing:-.01em}
+.sfBrowser .sfKopf.netzZeitung small{font-size:12px;color:#4b5563}
+.kurierReiter{display:flex;gap:4px;justify-content:center;flex-wrap:wrap;background:#fff;border-radius:12px;padding:4px}
+.kurierReiter button{border:0;border-bottom:3px solid transparent;background:none;padding:9px 14px;font:500 14px var(--font);color:#374151;cursor:pointer}
+.kurierReiter button.on{border-bottom-color:#111827;font-weight:700;color:#111827}
+.kurierArtikel{background:#fff;border-radius:16px;padding:18px 20px;display:flex;flex-direction:column;gap:10px;color:#1f2937}
+.kurierArtikel h2{margin:0;font:800 26px "Fraunces",Georgia,serif;line-height:1.2;color:#111827}
+.kurierArtikel small{font-size:12px;color:#4b5563}
+.kurierArtikel p{margin:0;font-size:14.5px;line-height:1.6}
+.kurierKnoepfe{display:flex;gap:12px;flex-wrap:wrap;align-items:center}
+.kurierAufmacher{display:grid;grid-template-columns:200px minmax(0,1fr);gap:16px;text-align:left;padding:0;border:0;border-radius:16px;background:#fff;overflow:hidden;cursor:pointer;color:#18202e;font:inherit}
+.kurierBild{display:grid;place-items:center;min-height:150px;background:#1e3a8a}
+.kurierBild.r-boerse{background:#4c1d95}.kurierBild.r-stadt{background:#14532d}.kurierBild.r-firmen{background:#7c2d12}.kurierBild.r-eilmeldung{background:#991b1b}
+.kurierAufText{display:flex;flex-direction:column;gap:6px;padding:14px 16px 14px 0}
+.kurierAufText b{font:800 22px "Fraunces",Georgia,serif;line-height:1.2;color:#111827}
+.kurierAufText span:not(.kurierRessort){font-size:13.5px;line-height:1.5;color:#374151}
+.kurierAufText small,.kurierKarte small{font-size:11.5px;color:#4b5563}
+.kurierListe{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.kurierKarte{display:flex;flex-direction:column;gap:6px;text-align:left;padding:13px 14px;border:0;border-radius:14px;background:#fff;cursor:pointer;color:#18202e;font:inherit}
+.kurierKarte b{font:600 16px "Fraunces",Georgia,serif;line-height:1.25;color:#111827}
+.kurierKarte span:not(.kurierRessort){font-size:12.5px;line-height:1.45;color:#374151}
+.kurierKurs{display:flex;justify-content:space-between;font-size:12.5px;color:#111827}
+.kurierKurs b{font-size:12.5px}.kurierKurs b.auf{color:#166534}.kurierKurs b.ab{color:#991b1b}
+.kurierArchiv{display:flex;justify-content:space-between;padding:0;border:0;background:none;font:inherit;font-size:12.5px;color:#374151;cursor:pointer}
+.kurierArchiv small{color:#4b5563}
+.dockbtn.neu{position:relative}
+.dockbtn.neu::after{content:"";position:absolute;top:6px;right:8px;width:8px;height:8px;border-radius:50%;background:#ef4444;box-shadow:0 0 0 2px rgba(0,0,0,.4)}
+@media (max-width:860px){.netzSpalten{grid-template-columns:1fr}.netzKurierSchlag{grid-template-columns:1fr}.kurierAufmacher{grid-template-columns:1fr}.kurierListe{grid-template-columns:1fr}}
+.netzKarteBand .netzKarteLogo:not(.hatBild){background:#fff!important;color:#0f172a}
+/* Warenbörse als Website (boerse.cs) */
+.netzDienste{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px}
+.netzDienst{display:flex;align-items:center;gap:12px;padding:12px 14px;border:0;border-radius:16px;background:#fff;cursor:pointer;text-align:left;font:inherit;color:#18202e;box-shadow:0 1px 2px rgba(16,24,40,.06),0 6px 18px rgba(16,24,40,.05)}
+.netzDienst:hover{box-shadow:0 10px 24px rgba(16,24,40,.12)}
+.netzDienstIcon{width:42px;height:42px;border-radius:12px;display:grid;place-items:center;font-size:20px;flex:none}
+.netzDienst b{display:block;font-size:14.5px;color:#111827}.netzDienst small{display:block;font-size:11.5px;color:#4b5563}
+.boerseLayout{display:grid;grid-template-columns:250px minmax(0,1fr);gap:16px;align-items:start}
+.boerseUebersicht{display:flex;flex-direction:column;gap:4px;background:#fff;border-radius:16px;padding:12px;box-shadow:0 1px 2px rgba(16,24,40,.06)}
+.boerseTitel{font-size:14.5px;color:#111827;padding:2px 6px 6px}
+.boerseWare{position:relative;display:flex;justify-content:space-between;align-items:center;gap:8px;padding:7px 8px;border:0;border-radius:9px;background:none;cursor:pointer;font:inherit;font-size:12.5px;color:#18202e;text-align:left}
+.boerseWare:hover{background:#f1f5f9}.boerseWare.on{background:#dbeafe}
+.boerseKurs{display:flex;align-items:center;gap:6px}.boerseKurs b{font-size:12px}
+.boerseWare em{flex:none;min-width:16px;height:16px;padding:0 4px;border-radius:8px;background:#1d4ed8;color:#fff;font:700 10px var(--mono);font-style:normal;display:grid;place-items:center}
+.netzBrowser .sfKopf{flex-shrink:0}
+.boerseSlot{background:var(--panel);color:var(--text);border-radius:16px;padding:14px;min-height:300px}
+.boerseSlot .pbody{padding:0;overflow:visible;max-height:none}
+@media (max-width:760px){.boerseLayout{grid-template-columns:1fr}.boerseUebersicht{max-height:230px;overflow:auto}}
+/* Warenbörse übersichtlich: Liste | Detail, Formular, Orderbuch */
+.bwLayout{display:grid;grid-template-columns:270px minmax(0,1fr);gap:16px;align-items:start}
+.bwListe{background:#fff;border-radius:16px;box-shadow:0 1px 2px rgba(16,24,40,.06);overflow:hidden}
+.bwListeKopf{display:flex;justify-content:space-between;align-items:baseline;padding:12px 14px;border-bottom:1px solid #eef0f4}
+.bwListeKopf b{font-size:14.5px;color:#111827}.bwListeKopf small{font-size:11px;color:#4b5563}
+.bwListeInhalt{display:flex;flex-direction:column;padding:6px;max-height:640px;overflow:auto}
+.bwGruppe{font:700 10.5px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:#4b5563;padding:10px 8px 4px}
+.bwZeile{display:grid;grid-template-columns:minmax(0,1fr) auto 52px 22px;gap:6px;align-items:center;padding:7px 8px;border:0;border-radius:9px;background:none;cursor:pointer;font:inherit;font-size:13px;color:#18202e;text-align:left}
+.bwZeile:hover{background:#f1f5f9}.bwZeile.on{background:#dbeafe}
+.bwZeile b{font-size:12.5px;color:#111827}
+.bwTrend{font-size:11.5px;text-align:right}
+.bwAnz{font:700 10px var(--mono);color:#1d4ed8;text-align:right}
+.bwHaupt{display:flex;flex-direction:column;gap:14px;min-width:0}
+.bwDetail{background:#fff;border-radius:16px;padding:16px 18px;box-shadow:0 1px 2px rgba(16,24,40,.06);display:flex;flex-direction:column;gap:14px;color:#18202e}
+.bwDetailKopf{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap}
+.bwKat{font:700 10.5px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:#1d4ed8}
+.bwDetailKopf h3{margin:2px 0 0;font-size:24px;color:#111827}
+.bwPreis{display:flex;flex-direction:column;align-items:flex-end}
+.bwPreis b{font-size:26px;color:#111827}.bwPreis span{font-size:12px;color:#4b5563}
+.bwKennzahlen{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.bwKennzahlen div{display:flex;flex-direction:column;gap:2px;padding:10px 12px;border-radius:12px;background:#f8fafc}
+.bwKennzahlen small{font-size:11px;color:#4b5563}.bwKennzahlen b{font-size:17px;color:#111827}.bwKennzahlen span{font-size:11.5px;color:#4b5563}
+.bwChart{border-radius:12px;background:#0f172a;padding:8px;color:#e6edf6}
+.bwForm{display:grid;grid-template-columns:auto minmax(0,1fr) minmax(0,1fr) auto;gap:10px 12px;align-items:end;background:#fff;border-radius:16px;padding:14px 16px;box-shadow:0 1px 2px rgba(16,24,40,.06);color:#18202e}
+.bwForm label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:#374151}
+.bwForm input{border:1px solid #d4d8e2;border-radius:9px;padding:9px 10px;font:600 14px var(--mono);color:#111827;background:#fff;min-width:0}
+.bwForm small{grid-column:1/-1;font-size:11.5px;color:#4b5563}
+.bwSeiten{display:flex;border:1px solid #d4d8e2;border-radius:10px;overflow:hidden;align-self:end}
+.bwSeiten button{border:0;background:#fff;padding:10px 14px;font:700 13px var(--font);color:#374151;cursor:pointer}
+.bwSeiten button.on.kauf{background:#16a34a;color:#fff}.bwSeiten button.on.verkauf{background:#dc2626;color:#fff}
+.bwSenden{padding:10px 14px;border-radius:10px}
+.bwBuch{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.bwBuch section,.bwMeine{display:flex;flex-direction:column;gap:6px;background:#fff;border-radius:16px;padding:12px 14px;box-shadow:0 1px 2px rgba(16,24,40,.06);color:#18202e}
+.bwBuchKopf{display:flex;justify-content:space-between;align-items:baseline;gap:8px;padding-bottom:6px;border-bottom:2px solid #e5e7eb}
+.bwBuchKopf.verkauf{border-bottom-color:#dc2626}.bwBuchKopf.kauf{border-bottom-color:#16a34a}
+.bwBuchKopf b{font-size:14px;color:#111827}.bwBuchKopf small{font-size:11px;color:#4b5563}
+.bwOrder{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:10px;align-items:center;padding:6px 2px;border-bottom:1px solid #f1f5f9;font-size:12.5px}
+.bwOrder:last-child{border-bottom:0}
+.bwWer{color:#4b5563;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bwK,.bwV{font:700 10.5px var(--mono);padding:2px 6px;border-radius:5px}.bwK{background:#dcfce7;color:#14532d}.bwV{background:#fee2e2;color:#7f1d1d}
+.bwMeine>b{font-size:14px;color:#111827}
+.bwLeer{font-size:12.5px;color:#4b5563;padding:8px 2px}
+@media (max-width:860px){.bwLayout{grid-template-columns:1fr}.bwListeInhalt{max-height:220px}.bwForm{grid-template-columns:1fr 1fr}.bwSeiten{grid-column:1/-1}.bwBuch{grid-template-columns:1fr}.bwKennzahlen{grid-template-columns:1fr 1fr 1fr}}
+/* Stadtbank als Website (bank.cs): das Bank-Panel eingebettet wie ein Terminal */
+.bankSlot{min-height:300px}
+.panel.imNetz{position:static;inset:auto;width:auto;max-width:none;height:auto;max-height:none;z-index:auto;display:flex;border-radius:16px;box-shadow:0 1px 2px rgba(16,24,40,.06),0 6px 18px rgba(16,24,40,.05);background:var(--panel);color:var(--text);backdrop-filter:none}
+.panel.imNetz .phead{display:none}
+.panel.imNetz .pbody{overflow:visible;max-height:none}
+/* Stadtbank-Portal (bank.cs) */
+.bankNav{display:flex;align-items:center;gap:4px;flex-wrap:wrap;background:#fff;border-radius:999px;padding:4px 4px 4px 8px;box-shadow:0 6px 18px rgba(0,0,0,.15)}
+.bankNav button{border:0;background:none;padding:8px 12px;border-radius:999px;font:600 13.5px var(--font);color:#155e75;cursor:pointer}
+.bankNav button.on{background:#155e75;color:#fff}
+.bankSuche input{border:0;border-radius:999px;background:#f1f5f9;padding:8px 14px;font:inherit;font-size:13px;color:#111827;width:180px}
+.bankPortal{display:grid;grid-template-columns:minmax(0,1fr) 220px;gap:16px;align-items:start}
+.bankHaupt{display:flex;flex-direction:column;gap:16px;min-width:0}
+.bankOben{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);gap:14px}
+.bankKarte{background:#fff;border-radius:16px;padding:14px 16px;box-shadow:0 1px 2px rgba(16,24,40,.06),0 6px 18px rgba(16,24,40,.05);display:flex;flex-direction:column;gap:12px;color:#18202e;min-width:0}
+.bankKarteKopf{display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap}
+.bankKarteKopf b{font-size:19px;letter-spacing:-.01em;color:#111827}.bankKarteKopf small{font-size:12px;color:#4b5563}
+.bankKacheln{display:grid;grid-template-columns:repeat(auto-fill,minmax(118px,1fr));gap:6px}
+.bankKachel{display:flex;flex-direction:column;gap:2px;padding:6px 8px;border:0;border-radius:8px;text-align:left;cursor:pointer;font:inherit;color:#111827;outline:2px solid transparent;outline-offset:1px}
+.bankKachel span:first-child{font-size:11.5px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bankKachelZahl{display:flex;justify-content:space-between;align-items:baseline;gap:6px}
+.bankKachelZahl b{font:600 11.5px var(--mono)}.bankKachelZahl em{font:600 11px var(--mono);font-style:normal}
+.bankKachel.on{outline-color:#155e75}
+.k-stark-auf{background:#2ec99a}.k-auf{background:#c4f2e2}.k-null{background:#eef0f3}.k-ab{background:#fdd9d1}.k-stark-ab{background:#f79a85}
+.bankLegende{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:11.5px;color:#4b5563}
+.bankLegende span{width:12px;height:12px;border-radius:3px;display:inline-block;margin-left:6px}
+.bankChartKopf{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+.bankChartKopf b{display:block;font-size:15px;color:#111827}
+.bankChartWert{font:700 22px var(--mono);color:#111827}
+.bankChartKopf em{font:700 15px var(--mono);font-style:normal}
+em.auf,.bankZeile em.auf{color:#15803d}em.ab,.bankZeile em.ab{color:#b91c1c}
+.bankChart svg{width:100%;height:auto;display:block}
+.bankChartLeer{padding:40px 10px;text-align:center;color:#4b5563;font-size:13px;background:#f8fafc;border-radius:12px}
+.bankLink{align-self:flex-end;border:0;background:none;color:#155e75;font:700 14px var(--font);cursor:pointer;padding:2px}
+.bankLink.zurueck{align-self:flex-start}
+.bankAnalysen h3{margin:4px 0 10px;font-size:24px;color:#111827;letter-spacing:-.01em}
+.bankAnalyseKarten{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:14px}
+.bankAnalyse{display:flex;flex-direction:column;padding:0;border:0;border-radius:16px;overflow:hidden;background:#fff;cursor:pointer;text-align:left;font:inherit;color:#18202e;box-shadow:0 1px 2px rgba(16,24,40,.06),0 6px 18px rgba(16,24,40,.05)}
+.bankAnalyseBild{height:96px;display:grid;place-items:center;background:#1e3a8a}.bankAnalyseBild.r-boerse{background:#4c1d95}
+.bankAnalyseText{display:flex;flex-direction:column;gap:6px;padding:12px 14px 14px}
+.bankAnalyseText b{font:600 16px "Fraunces",Georgia,serif;line-height:1.25;color:#111827}.bankAnalyseText small{font-size:11.5px;color:#4b5563}
+.bankRand{position:sticky;top:0}
+.bankAnzeige{display:flex;flex-direction:column;align-items:center;gap:10px;width:100%;min-height:420px;padding:18px 14px;border:0;border-radius:16px;background:linear-gradient(170deg,var(--af,#0e7490),#0b1220);color:#fff;text-align:center;cursor:pointer;font:inherit}
+.bankAnzeige small{align-self:flex-start;font:600 10px var(--mono);letter-spacing:.1em;opacity:.8}
+.bankAnzLogo{width:64px;height:64px;border-radius:16px;display:grid;place-items:center;font:800 28px var(--font);border:3px solid rgba(255,255,255,.8);margin-top:30px;object-fit:cover}
+.bankAnzeige b{font-size:20px}.bankAnzeige span{font-size:14px;line-height:1.4;opacity:.92}
+.bankAnzeige em{margin-top:auto;font-style:normal;border:1px solid rgba(255,255,255,.8);padding:9px 14px;border-radius:4px;font-size:13px}
+.bankAnzeige.leer{background:#e5e7eb;color:#374151;cursor:default}
+.bankAnzeige.leer b{margin-top:40px}
+.bankTabelle{display:flex;flex-direction:column}
+.bankZeile{display:grid;grid-template-columns:minmax(0,1.6fr) 90px 80px 110px 70px;gap:10px;align-items:center;padding:9px 6px;border:0;border-bottom:1px solid #f1f5f9;background:none;font:inherit;font-size:13px;color:#18202e;text-align:left;cursor:pointer}
+.bankZeile:hover{background:#f8fafc}
+.bankZeile.kopf{cursor:default;font-size:11px;color:#4b5563;text-transform:uppercase;letter-spacing:.06em}
+.bankZeile em{font:600 12.5px var(--mono);font-style:normal}
+.bankZeileName{display:flex;align-items:center;gap:10px;min-width:0}
+.bankZeileName b{display:block}.bankZeileName small{display:block;font-size:11px;color:#4b5563}
+.bankZeileLogo,.bankDetailLogo{width:32px;height:32px;border-radius:9px;display:grid;place-items:center;font:800 15px var(--font);color:#fff;flex:none;object-fit:cover}
+.bankDetailLogo{width:46px;height:46px;font-size:20px}
+.bankDetailName{display:flex;align-items:center;gap:12px}
+.bankDetailName b{font-size:20px}.bankDetailName small{display:block;font-size:12px;color:#4b5563}
+.bankDetailKurs{display:flex;flex-direction:column;align-items:flex-end}.bankDetailKurs b{font-size:26px;color:#111827}
+.bankKennzahlen{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+.bankKennzahlen div{display:flex;flex-direction:column;gap:2px;padding:10px 12px;border-radius:12px;background:#f8fafc}
+.bankKennzahlen small{font-size:11px;color:#4b5563}.bankKennzahlen b{font:600 15px var(--mono);color:#111827}
+.bankDetailKnoepfe{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+@media (max-width:980px){.bankPortal{grid-template-columns:1fr}.bankRand{position:static}.bankAnzeige{min-height:0;flex-direction:row;flex-wrap:wrap;text-align:left}.bankAnzLogo{margin-top:0;width:44px;height:44px;font-size:20px}.bankAnzeige em{margin-top:0}}
+@media (max-width:640px){.bankOben{grid-template-columns:1fr}}
+@media (max-width:820px){.bankKennzahlen{grid-template-columns:1fr 1fr}.bankZeile{grid-template-columns:minmax(0,1fr) 80px 70px}.bankZeile>*:nth-child(4),.bankZeile>*:nth-child(5){display:none}}
+/* Handeln & Depot im hellen Website-Stil von bank.cs */
+.panel.imNetz{--panel:#ffffff;--panel2:#f8fafc;--line:#e3e6ee;--text:#18202e;--dim:#4b5563;--accent:#0e7490;--accent2:#155e75;--up:#15803d;--down:#b91c1c;
+  --rand:1px solid #e3e6ee;--akzent-flaeche:#e0f2f7;--auf-akzent:#ffffff;--glass-strong:#ffffff;background:transparent;color:#18202e;box-shadow:none;border:0}
+.panel.imNetz .pbody{padding:0;color:#18202e}
+.panel.imNetz .bkopf{background:#fff;border:0;box-shadow:0 1px 2px rgba(16,24,40,.06),0 6px 18px rgba(16,24,40,.05);border-radius:16px}
+.panel.imNetz .bkopf-balken{background:#e5e7eb}
+.panel.imNetz .bReiter{background:#fff;border:0;box-shadow:0 1px 2px rgba(16,24,40,.06);border-radius:14px}
+.panel.imNetz .bReiter button{color:#374151}
+.panel.imNetz .bReiter button.on{background:#155e75;color:#fff}
+.panel.imNetz .bond,.panel.imNetz .auction,.panel.imNetz .contract{background:#fff;border:1px solid #eef0f4;box-shadow:0 1px 2px rgba(16,24,40,.05);border-radius:12px;color:#18202e}
+.panel.imNetz .firmdetail{background:#fff;border-color:#eef0f4}
+.panel.imNetz .kzrow{border-color:#f1f5f9}
+.panel.imNetz .vChart{background:#f8fafc!important;border-color:#e3e6ee!important}
+.panel.imNetz .sec{color:#155e75}
+.panel.imNetz .meta{color:#4b5563}
+.panel.imNetz input,.panel.imNetz select{background:#fff;border-color:#d4d8e2;color:#111827}
+.panel.imNetz .bseite{background:#fff;box-shadow:0 1px 2px rgba(16,24,40,.05)}
+.panel.imNetz .bseite.kauf{background:#f0fdf4;border-color:#bbf7d0}
+.panel.imNetz .bseite.verkauf{background:#fef2f2;border-color:#fecaca}
+.panel.imNetz .bknopf.kauf{background:#16a34a;color:#fff;border-color:#16a34a}
+.panel.imNetz .bknopf.verkauf{background:#dc2626;color:#fff;border-color:#dc2626}
+.panel.imNetz .bknopf:hover{filter:brightness(1.06)}
+.panel.imNetz .mlog{color:#374151;border-color:#f1f5f9}
+.panel.imNetz .buyb{background:#16a34a;color:#fff}
+.panel.imNetz .mini{background:#f1f5f9;color:#111827;border:1px solid #d4d8e2}
+.panel.imNetz .wRichtung button{background:#fff;border-color:#d4d8e2;color:#374151}
+.panel.imNetz .wRichtung button.on{background:#e0f2f7;border-color:#0e7490;color:#0f172a}
+.panel.imNetz .wSchnell button{background:#f1f5f9;color:#111827;border-color:#d4d8e2}
+/* Kurstafel, Depot und Formulare im hellen Stil von bank.cs */
+.panel.imNetz .bTafel{background:#fff;border:0;box-shadow:0 1px 2px rgba(16,24,40,.06),0 6px 18px rgba(16,24,40,.05);
+  border-radius:16px;padding:12px 6px 4px}
+.panel.imNetz .bzeile{border-bottom-color:#eef0f4}
+.panel.imNetz .bzeile:hover,.panel.imNetz .bzeile.auf{background:#f8fafc}
+.panel.imNetz .bzeile.kopf{color:#64748b}
+.panel.imNetz .bzLogo{background:#e2e8f0}
+.panel.imNetz .bzKauf{border-color:#0e7490;color:#0e7490;background:#fff}
+.panel.imNetz .bzKauf:hover{background:#e0f2f7}
+.panel.imNetz .bzKauf.aus{border-color:#d4d8e2;color:#64748b}
+.panel.imNetz .bpos{border-bottom-color:#eef0f4}
+.panel.imNetz .bSchnell button{background:#f1f5f9;color:#334155;border-color:#d4d8e2}
+.panel.imNetz .bSchnell button:hover{border-color:#0e7490;color:#0f172a}
+.panel.imNetz .bVorschau{background:#f1f5f9;border-color:#e3e6ee;color:#475569}
+.panel.imNetz .bLeer{background:#f8fafc;border-color:#d4d8e2}
+.panel.imNetz .bknopf.zur{background:#0e7490;border-color:#0e7490;color:#fff}
+/* Die Handelsseite läuft im selben Raster wie Marktübersicht und Aktien. */
+.bankHaupt .bankSlot{min-width:0}
+.bankRand .bankTipp{background:#fff;border-radius:16px;padding:14px 16px;
+  box-shadow:0 1px 2px rgba(16,24,40,.06),0 6px 18px rgba(16,24,40,.05);color:#18202e}
+.bankRand .bankTipp h4{color:#64748b}
+.bankRand .bankTipp p{color:#374151}
+.bankRand .bankTipp .mono{font-family:var(--mono);color:#111827}
+.bankRand .bankTipp b.auf{color:#15803d}
+/* Anleihenmarkt (anleihen.cs) */
+.anlLayout{display:grid;grid-template-columns:minmax(0,1fr) 290px;gap:16px;align-items:start}
+.anlHaupt,.anlSeite{display:flex;flex-direction:column;gap:14px;min-width:0}
+.anlBox{background:#fff;border-radius:16px;padding:14px 16px;box-shadow:0 1px 2px rgba(16,24,40,.06),0 6px 18px rgba(16,24,40,.05);display:flex;flex-direction:column;gap:10px;color:#18202e}
+.anlBox>b{font-size:15px;color:#111827}.anlBox>small{font-size:12px;color:#4b5563;line-height:1.45}
+.anlBoxKopf{display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap}
+.anlBoxKopf b{font-size:17px;color:#111827}.anlBoxKopf small{font-size:12px;color:#4b5563}
+.anlKarten{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px}
+.anlKarte{display:flex;flex-direction:column;gap:10px;padding:12px;border:1px solid #eef0f4;border-radius:14px}
+.anlKarte.stadt{border-color:#c4b5fd;background:#faf5ff}
+.anlKarteKopf{display:grid;grid-template-columns:36px minmax(0,1fr) auto;gap:10px;align-items:center}
+.anlKarteKopf b{display:block;font-size:14px;color:#111827}.anlKarteKopf small{display:block;font-size:11.5px;color:#4b5563}
+.anlLogo,.anlStadt{width:36px;height:36px;border-radius:10px;display:grid;place-items:center;font:800 16px var(--font);color:#fff;background:#6d28d9;object-fit:cover}
+.anlRating{font:700 11px var(--mono);padding:3px 7px;border-radius:6px}
+.anlZahlen{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+.anlZahlen div{display:flex;flex-direction:column;gap:1px;padding:7px 8px;border-radius:10px;background:#f8fafc}
+.anlZahlen small{font-size:10.5px;color:#4b5563}.anlZahlen b{font:600 13px var(--mono);color:#111827}
+.anlErtrag{font-size:12.5px;color:#374151}.anlErtrag b{color:#15803d;font-family:var(--mono)}.anlErtrag em{color:#b91c1c;font-style:normal;font-weight:700}
+.anlZeile{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid #f1f5f9;font-size:12.5px}
+.anlZeile:last-child{border-bottom:0}
+.anlZeile b{display:block;color:#111827}.anlZeile small{display:block;font-size:11.5px;color:#4b5563}
+.anlZeile .auf{color:#15803d}.anlZeile .ab{color:#b91c1c}
+.anlVerzug{font-style:normal;font:700 10.5px var(--mono);padding:2px 6px;border-radius:5px;background:#fee2e2;color:#991b1b}
+.anlKnoepfe{display:flex;gap:6px;align-items:center}
+.anlKnoepfe input{width:90px;border:1px solid #d4d8e2;border-radius:8px;padding:7px 8px;font:600 13px var(--mono);color:#111827;background:#fff}
+.anlLeer{font-size:12.5px;color:#4b5563}
+.anlForm label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:#374151}
+.anlForm input{border:1px solid #d4d8e2;border-radius:9px;padding:9px 10px;font:600 14px var(--mono);color:#111827;background:#fff}
+.anlVorschau{display:flex;flex-direction:column;gap:4px;padding:10px 12px;border-radius:12px;background:#f5f3ff;font-size:12.5px;color:#374151}
+.anlVorschau span{display:flex;justify-content:space-between}.anlVorschau b{font-family:var(--mono);color:#111827}
+.anlForm .sfKaufen{background:#7c3aed}
+@media (max-width:860px){.anlLayout{grid-template-columns:1fr}}
+/* Tutorial: Schritt auslassen */
+#tutWait button{border:1px solid var(--line);background:transparent;color:var(--dim);border-radius:6px;padding:2px 7px;font:500 11px var(--font);cursor:pointer;margin-left:4px}
+#tutWait button:hover{color:var(--text);border-color:var(--accent)}
+#tutWait{flex-wrap:wrap}
+/* Firmen-Websites nach Design (Website-Generator) */
+.fw{--fw:#0f766e;--fwR:12px;--fwTitel:var(--font);display:flex;flex-direction:column;gap:14px;color:#18202e}
+.fw-elegant{--fwR:4px;--fwTitel:"Fraunces","Playfair Display",Georgia,serif}
+.fw-bunt{--fwR:20px;--fwTitel:"Fredoka",var(--font)}
+.fwHero{position:relative;display:flex;flex-direction:column;gap:14px;padding:26px 24px 18px;border-radius:var(--fwR);background:var(--fw);color:#fff;overflow:hidden}
+.fw-klar .fwHero{background:linear-gradient(135deg,var(--fw),color-mix(in srgb,var(--fw) 70%,#000))}
+.fw-elegant .fwHero{background:#fff;color:#111827;border:1px solid #e5e7eb;border-top:5px solid var(--fw);text-align:center;align-items:center}
+.fw-bunt .fwHero{background:radial-gradient(circle at 85% 15%,color-mix(in srgb,var(--fw) 40%,#fff) 0 60px,transparent 61px),radial-gradient(circle at 10% 110%,color-mix(in srgb,var(--fw) 25%,#fde68a) 0 90px,transparent 91px),var(--fw)}
+.fwHeroMarke{display:flex;align-items:center;gap:14px}
+.fw-elegant .fwHeroMarke{flex-direction:column;gap:8px}
+.fwHero h1{margin:0;font:800 30px/1.1 var(--fwTitel);letter-spacing:-.01em}
+.fw-elegant .fwHero h1{font-weight:700;font-size:34px}
+.fw-bunt .fwHero h1{font-weight:700;font-size:32px}
+.fwHero p{margin:4px 0 0;font-size:15px;opacity:.92}
+.fw-elegant .fwHero p{font-style:italic;color:#4b5563}
+.fwLogo{width:56px;height:56px;border-radius:calc(var(--fwR) + 2px);display:grid;place-items:center;font:800 26px var(--font);color:#fff;flex:none;object-fit:cover;box-shadow:0 0 0 3px rgba(255,255,255,.35)}
+.fw-elegant .fwLogo{box-shadow:none;border-radius:50%}
+.fwHeroLeiste{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+.fwHeroLeiste>span:not(.fwKnopf){padding:4px 10px;border-radius:999px;background:rgba(255,255,255,.18);font-size:12px}
+.fw-elegant .fwHeroLeiste{justify-content:center}.fw-elegant .fwHeroLeiste>span:not(.fwKnopf){background:#f3f4f6;color:#374151}
+.fwKnopf{display:inline-flex;align-items:center;gap:6px;border:0;border-radius:var(--fwR);padding:8px 14px;background:var(--fw);color:#fff;font:700 13px var(--font);cursor:pointer}
+.fwKnopf.hell{margin-left:auto;background:#fff;color:color-mix(in srgb,var(--fw) 80%,#000)}
+.fw-elegant .fwKnopf.hell{margin-left:0;background:var(--fw);color:#fff}
+.fwKnopf:disabled{opacity:.45;cursor:default}button.fwKnopf:not(:disabled):hover{filter:brightness(1.08)}
+.fwAbschnitt{display:flex;flex-direction:column;gap:10px;padding:16px 18px;border-radius:var(--fwR);background:#fff;border:1px solid #e3e6ee}
+.fw-bunt .fwAbschnitt{border:0;background:color-mix(in srgb,var(--fw) 7%,#fff);box-shadow:0 3px 0 color-mix(in srgb,var(--fw) 25%,#fff)}
+.fwAbschnitt h2{margin:0;font:800 18px var(--fwTitel);color:#111827}
+.fw-klar .fwAbschnitt h2{padding-left:10px;border-left:4px solid var(--fw)}
+.fw-elegant .fwAbschnitt h2{font-weight:600;font-size:21px;text-align:center}
+.fw-elegant .fwAbschnitt h2::after{content:"";display:block;width:40px;height:2px;margin:6px auto 0;background:var(--fw)}
+.fw-bunt .fwAbschnitt h2{font-weight:700;color:color-mix(in srgb,var(--fw) 75%,#000)}
+.fwAbschnitt>small{font-size:12.5px;color:#4b5563}
+.fwProdukte{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:8px}
+.fwProdukt{display:flex;flex-direction:column;align-items:center;gap:2px;padding:12px 8px;border-radius:var(--fwR);background:#f8fafc;border:1px solid #eef0f4;text-align:center}
+.fwProdukt span{font-size:26px}.fwProdukt b{font-size:13px}.fwProdukt small{font:500 11.5px var(--mono);color:#4b5563}
+.fwBetriebe{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:8px}
+.fwBetrieb{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:var(--fwR);background:#f8fafc;font-size:13px}
+.fwBetrieb img{width:40px;height:40px;object-fit:contain;image-rendering:pixelated}
+.fwGalerie{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
+.fwGalerie figure{margin:0;display:flex;flex-direction:column;align-items:center;gap:6px;padding:14px 8px 10px;border-radius:var(--fwR);background:linear-gradient(180deg,color-mix(in srgb,var(--fw) 14%,#fff),#fff)}
+.fwGalerie img{width:96px;height:96px;object-fit:contain;image-rendering:pixelated}
+.fwGalerie figcaption{font-size:12.5px;color:#374151}
+.fwUeber p{margin:0;font-size:14.5px;line-height:1.55;color:#374151}
+.fw-elegant .fwUeber p{text-align:center;font-family:"Fraunces",Georgia,serif;font-size:16px}
+.fwStimmen{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:8px}
+.fwStimmen blockquote{margin:0;display:flex;flex-direction:column;gap:4px;padding:12px;border-radius:var(--fwR);background:#f8fafc;border-left:3px solid var(--fw)}
+.fwStimmen blockquote span{color:#d97706;letter-spacing:1px}.fwStimmen p{margin:0;font-size:13.5px;color:#111827}.fwStimmen cite{font-size:11.5px;color:#4b5563;font-style:normal}
+.fwAktie{display:flex;flex-wrap:wrap;align-items:center;gap:12px}
+.fwAktie>b{font-size:22px}.fwAktie em{font-style:normal;font-weight:700}.fwAktie em.auf{color:#16a34a}.fwAktie em.ab{color:#dc2626}
+.fwAktie .fwKnopf{margin-left:auto}
+.fwAngebote{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:8px}
+.fwAngebot{display:flex;flex-direction:column;gap:6px;padding:12px;border-radius:var(--fwR);border:1px solid #e3e6ee;background:#fff}
+.fwAngebotIcon{font-size:24px}.fwAngebot>small{font-size:11.5px;color:#4b5563}
+.fwListe{display:flex;flex-direction:column;gap:4px;font-size:12.5px;color:#374151}
+.fwHinweis{font-style:italic}
+.fwEigen{font-size:12px;color:#4b5563;font-weight:600}
+.fwBau{padding:10px 14px;border-radius:10px;background:#fef3c7;border:1px solid #fcd34d;color:#78350f;font-size:13px;font-weight:600}
+.fwEigenes{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:10px;margin-top:14px}
+/* Generator-Fenster: Editor links, Vorschau rechts */
+#genFenster{position:fixed;inset:0;z-index:250;display:grid;place-items:center;padding:16px;background:rgba(3,6,12,.62);backdrop-filter:blur(3px)}
+#genFenster[hidden]{display:none}
+.genRahmen{width:min(1180px,100%);height:min(760px,calc(100vh - 32px));display:grid;grid-template-columns:330px minmax(0,1fr);border-radius:14px;overflow:hidden;background:#fff;color:#18202e;box-shadow:0 30px 80px rgba(0,0,0,.45)}
+.genEditor{display:flex;flex-direction:column;gap:12px;padding:16px;overflow-y:auto;background:#f8fafc;border-right:1px solid #e3e6ee}
+.genKopf b{display:block;font-size:16px;color:#111827}.genKopf small{font-size:12px;color:#4b5563}
+.genFrist{font-family:var(--mono);font-weight:700;color:#b45309}
+.genQualitaet{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:8px;font-size:12.5px;font-weight:600}
+.genBalken{height:8px;border-radius:999px;background:#e5e7eb;overflow:hidden}.genBalken i{display:block;height:100%;background:linear-gradient(90deg,#f59e0b,#16a34a);transition:width .2s}
+.genTipp{font-size:11.5px;color:#4b5563;line-height:1.4}
+.genGruppe,.genFeld{display:flex;flex-direction:column;gap:6px}
+.genGruppe>span,.genFeld>span{font-size:11.5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#4b5563}
+.genFeld small{text-transform:none;letter-spacing:0;font-weight:500}
+.genFeld input,.genFeld textarea{border:1px solid #d4d8e2;border-radius:8px;padding:8px 10px;font:inherit;font-size:13px;color:#111827;background:#fff;resize:vertical}
+.genVorlagen{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+.genVorlagen button{padding:8px 4px;border-radius:8px;border:1px solid #d4d8e2;background:#fff;color:#111827;font:600 12.5px var(--font);cursor:pointer}
+.genVorlagen button.on{border-color:#111827;background:#111827;color:#fff}
+.genFarben{display:flex;flex-wrap:wrap;gap:6px}
+.genFarben button{width:28px;height:28px;border-radius:50%;border:2px solid #fff;box-shadow:0 0 0 1px #d4d8e2;cursor:pointer}
+.genFarben button.on{box-shadow:0 0 0 2px #111827}
+.genAbschnitte{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:4px;counter-reset:gen}
+.genAbschnitte li{display:flex;align-items:center;justify-content:space-between;gap:6px;padding:6px 8px;border-radius:8px;background:#fff;border:1px solid #e3e6ee;font-size:13px;counter-increment:gen}
+.genAbschnitte li b::before{content:counter(gen) ". ";color:#9ca3af}
+.genPfeile{display:flex;gap:3px}
+.genPfeile button{width:24px;height:24px;border-radius:6px;border:1px solid #d4d8e2;background:#fff;color:#374151;cursor:pointer;font-size:12px}
+.genPfeile button:disabled{opacity:.35;cursor:default}
+.genNeu{display:flex;flex-wrap:wrap;gap:5px}
+.genNeu button{padding:5px 9px;border-radius:999px;border:1px dashed #94a3b8;background:#fff;color:#1f2937;font:500 12px var(--font);cursor:pointer}
+.genNeu button:hover{border-style:solid;border-color:#111827}
+.genSenden{margin-top:auto;padding:11px;--sys:#16a34a}
+.genVorschau{display:flex;flex-direction:column;min-width:0;min-height:0;background:#e5e8ef}
+.genSeite{flex:1;overflow-y:auto;padding:16px;background:#f4f6f8}
+@media (max-width:760px){.genRahmen{grid-template-columns:1fr;grid-template-rows:minmax(0,46%) minmax(0,1fr);height:calc(100vh - 32px)}.genEditor{border-right:0;border-bottom:1px solid #e3e6ee}}
+/* Software-Cockpit (Reiter „Übersicht“) */
+.swCockpit{display:flex;flex-direction:column;gap:12px}
+.swcZahlen{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px}
+.swcZahlen>div{display:flex;flex-direction:column;gap:2px;padding:10px 12px;border-radius:10px;background:var(--panel2,rgba(255,255,255,.04));border:1px solid var(--line,rgba(255,255,255,.08))}
+.swcZahlen span{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--dim)}
+.swcZahlen b{font:700 20px var(--mono)}.swcZahlen b small{font-size:11px;font-weight:500;color:var(--dim)}
+.swcZahlen small{font-size:11.5px;color:var(--dim)}.swcZahlen small.swcWarn{color:var(--down);font-weight:700}
+.swcBox{display:flex;flex-direction:column;gap:8px;padding:12px;border-radius:12px;border:1px solid var(--line,rgba(255,255,255,.08));background:var(--panel2,rgba(255,255,255,.03))}
+.swcBoxKopf{display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap}
+.swcBoxKopf b{font-size:14px}.swcBoxKopf small,.swcLeer,.swcFuss{font-size:12px;color:var(--dim)}
+.swcAuftraege{display:flex;flex-direction:column;gap:6px}
+.swcAuftrag{display:grid;grid-template-columns:minmax(0,1fr) auto auto auto;align-items:center;gap:10px;padding:8px 10px;border-radius:10px;background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.35)}
+.swcAuftrag .buyb{padding:7px 14px;border-radius:8px;border:0;font-weight:700;cursor:pointer}
+.swcFrist{font-weight:700;color:#d97706}.swcFrist.knapp{color:var(--down)}
+.swcKunden{display:flex;flex-wrap:wrap;gap:6px}
+.swcKunden button{padding:4px 10px;border-radius:999px;border:1px solid var(--line,rgba(255,255,255,.15));background:transparent;color:inherit;font:500 12px var(--font);cursor:pointer}
+.swcKunden button:hover{border-color:var(--accent,#60a5fa)}
+.swcProdukte{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}
+.swcProdukt{display:flex;flex-direction:column;align-items:flex-start;gap:2px;padding:10px 12px;border-radius:12px;border:1px dashed var(--line,rgba(255,255,255,.2));background:transparent;color:inherit;font:inherit;text-align:left;cursor:pointer;transition:transform .15s}
+.swcProdukt.an{border-style:solid;background:var(--panel2,rgba(255,255,255,.04))}
+.swcProdukt:not(:disabled):hover{transform:translateY(-2px);border-color:var(--accent,#60a5fa)}
+.swcProdukt:disabled{opacity:.45;cursor:default}
+.swcIcon{font-size:22px}.swcProdukt b{font-size:13.5px}.swcProdukt em{font-style:normal;font-size:11.5px;font-weight:700;color:var(--up)}
+.swcProdukt:not(.an) em{color:var(--dim)}.swcProdukt small{font-size:11.5px;color:var(--dim)}
+.swcTipps{display:flex;flex-direction:column;gap:6px}
+.swcTipp{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:10px;font-size:13px}
+.swcTipp>span{font-size:18px}.swcTipp p{margin:0}
+.swcKnopf{padding:6px 12px;border-radius:8px;border:1px solid var(--line,rgba(255,255,255,.18));background:transparent;color:inherit;font:600 12.5px var(--font);cursor:pointer;white-space:nowrap}
+.swcKnopf:hover{border-color:var(--accent,#60a5fa)}
+.swcLinks{display:flex;gap:8px;flex-wrap:wrap}
+@media (max-width:560px){.swcAuftrag{grid-template-columns:1fr auto}.swcTipp{grid-template-columns:auto 1fr}.swcTipp .swcKnopf{grid-column:2}}
+/* Weitere Vorlagen */
+.fw-dunkel{--fwTitel:"Space Grotesk",var(--font);color:#e5e7eb}
+.fw-dunkel .fwHero{background:#0b1220;border:1px solid color-mix(in srgb,var(--fw) 60%,#0b1220);box-shadow:inset 0 -3px 0 var(--fw)}
+.fw-dunkel .fwAbschnitt{background:#111827;border-color:#1f2937}
+.fw-dunkel .fwAbschnitt h2{color:#f9fafb}.fw-dunkel .fwAbschnitt h2::before{content:"// ";color:var(--fw)}
+.fw-dunkel .fwProdukt,.fw-dunkel .fwBetrieb,.fw-dunkel .fwStimmen blockquote,.fw-dunkel .fwZahlen>div,.fw-dunkel .fwTeam>div,.fw-dunkel .fwKontakt>div,.fw-dunkel .fwFaq details,.fw-dunkel .fwNews>div{background:#0b1220;border-color:#1f2937}
+.fw-dunkel .fwGalerie figure{background:linear-gradient(180deg,color-mix(in srgb,var(--fw) 25%,#111827),#111827)}
+.fw-dunkel .fwProdukt small,.fw-dunkel .fwGalerie figcaption,.fw-dunkel .fwUeber p,.fw-dunkel .fwStimmen p,.fw-dunkel .fwStimmen cite,.fw-dunkel small{color:#cbd5e1}
+.fw-dunkel .fwStimmen p,.fw-dunkel .fwFaq summary,.fw-dunkel .fwNews b{color:#f3f4f6}
+.fw-dunkel .fwAngebot{background:#0b1220;border-color:#1f2937}
+.fw-retro{--fwR:0;--fwTitel:"Bebas Neue",Impact,sans-serif;background:#fdf6e3;padding:10px;border-radius:6px}
+.fw-retro .fwHero{background:var(--fw);border:3px solid #1f2937;box-shadow:6px 6px 0 #1f2937}
+.fw-retro .fwHero h1{font-weight:400;font-size:44px;letter-spacing:.03em}
+.fw-retro .fwAbschnitt{border:3px solid #1f2937;box-shadow:4px 4px 0 #1f2937;background:#fffbeb}
+.fw-retro .fwAbschnitt h2{font-weight:400;font-size:26px;letter-spacing:.04em}
+.fw-retro .fwKnopf{border:2px solid #1f2937;box-shadow:2px 2px 0 #1f2937}
+.fw-natur{--fwR:16px;--fwTitel:"DM Serif Display",Georgia,serif;background:#f5f1e6;padding:10px;border-radius:14px}
+.fw-natur .fwHero{background:linear-gradient(160deg,color-mix(in srgb,var(--fw) 85%,#365314),color-mix(in srgb,var(--fw) 60%,#a3a380))}
+.fw-natur .fwHero h1{font-weight:400}
+.fw-natur .fwAbschnitt{background:#fffdf7;border-color:#e7e0cc}
+.fw-natur .fwAbschnitt h2{font-weight:400;font-size:22px;color:color-mix(in srgb,var(--fw) 70%,#1c1917)}
+.fw-natur .fwAbschnitt h2::before{content:"🌿 ";font-size:16px}
+.fw-modern{--fwR:14px;--fwTitel:"Archivo",var(--font)}
+.fw-modern .fwHero{background:#fff;color:#0f172a;border:1px solid #e5e7eb;padding:34px 28px 24px}
+.fw-modern .fwHero h1{font-size:40px;font-weight:900;letter-spacing:-.03em;background:linear-gradient(90deg,var(--fw),color-mix(in srgb,var(--fw) 50%,#f59e0b));-webkit-background-clip:text;background-clip:text;color:transparent}
+.fw-modern .fwHero p{color:#475569}
+.fw-modern .fwHeroLeiste>span:not(.fwKnopf){background:#f1f5f9;color:#334155}
+.fw-modern .fwKnopf.hell{background:var(--fw);color:#fff}
+.fw-modern .fwAbschnitt{border:0;box-shadow:0 1px 2px rgba(15,23,42,.06),0 8px 24px rgba(15,23,42,.06)}
+.fw-modern .fwAbschnitt h2{font-weight:900;letter-spacing:-.02em}
+/* Schrift */
+.fwS-modern{--fwTitel:"Space Grotesk",var(--font)}
+.fwS-serif{--fwTitel:"Playfair Display","Fraunces",Georgia,serif}
+.fwS-rund{--fwTitel:"Fredoka",var(--font)}
+.fwS-kraft{--fwTitel:"Bebas Neue",Impact,sans-serif}.fwS-kraft .fwHero h1,.fwS-kraft .fwAbschnitt h2{font-weight:400;letter-spacing:.03em}.fwS-kraft .fwHero h1{font-size:44px}
+.fwS-hand{--fwTitel:"Caveat",cursive}.fwS-hand .fwHero h1{font-size:46px}.fwS-hand .fwAbschnitt h2{font-size:26px}
+.fwS-pixel{--fwTitel:"Press Start 2P",monospace}.fwS-pixel .fwHero h1{font-size:22px;line-height:1.4}.fwS-pixel .fwAbschnitt h2{font-size:13px;line-height:1.5}
+/* Kopf */
+.fwK-verlauf .fwHero{background:linear-gradient(135deg,var(--fw),color-mix(in srgb,var(--fw) 55%,#000));color:#fff;border:0;box-shadow:none;text-align:left;align-items:stretch}
+.fwK-flach .fwHero{background:var(--fw);color:#fff;border:0;box-shadow:none;text-align:left;align-items:stretch}
+.fwK-verlauf .fwHeroMarke,.fwK-flach .fwHeroMarke{flex-direction:row}
+.fwK-verlauf .fwHero h1,.fwK-flach .fwHero h1{background:none;color:#fff;-webkit-background-clip:border-box;background-clip:border-box}
+.fwK-verlauf .fwHero p,.fwK-flach .fwHero p{color:rgba(255,255,255,.9)}
+.fwK-verlauf .fwHeroLeiste>span:not(.fwKnopf),.fwK-flach .fwHeroLeiste>span:not(.fwKnopf){background:rgba(255,255,255,.18);color:#fff}
+.fwK-verlauf .fwKnopf.hell,.fwK-flach .fwKnopf.hell{margin-left:auto;background:#fff;color:color-mix(in srgb,var(--fw) 80%,#000)}
+.fwK-zentriert .fwHero{text-align:center;align-items:center}.fwK-zentriert .fwHeroMarke{flex-direction:column;gap:8px}.fwK-zentriert .fwHeroLeiste{justify-content:center}.fwK-zentriert .fwKnopf.hell{margin-left:0}
+.fwK-gross .fwHero{min-height:240px;justify-content:flex-end;padding:40px 30px 24px}.fwK-gross .fwHero h1{font-size:48px}.fwK-gross .fwLogo{width:72px;height:72px;font-size:32px}
+/* Muster: eigene Ebene über dem Kopf-Hintergrund */
+.fwHero>*{position:relative;z-index:1}
+[class*="fwM-"] .fwHero::before{content:"";position:absolute;inset:0;pointer-events:none;--m:rgba(255,255,255,.2)}
+.fw-elegant[class*="fwM-"] .fwHero::before,.fw-modern[class*="fwM-"]:not(.fwK-verlauf):not(.fwK-flach) .fwHero::before{--m:color-mix(in srgb,var(--fw) 18%,transparent)}
+.fwM-punkte .fwHero::before{background:radial-gradient(var(--m) 1.6px,transparent 1.7px) 0 0/16px 16px}
+.fwM-streifen .fwHero::before{background:repeating-linear-gradient(45deg,var(--m) 0 8px,transparent 8px 22px);opacity:.7}
+.fwM-wellen .fwHero::before{background:radial-gradient(circle at 50% 120%,transparent 17px,var(--m) 18px 21px,transparent 22px) 0 0/44px 22px}
+.fwM-raster .fwHero::before{background:linear-gradient(var(--m) 1px,transparent 1px) 0 0/22px 22px,linear-gradient(90deg,var(--m) 1px,transparent 1px) 0 0/22px 22px;opacity:.8}
+/* Ecken */
+.fwE-eckig{--fwR:0}.fwE-normal{--fwR:10px}.fwE-rund{--fwR:24px}
+/* Neue Abschnitte */
+.fwZahlen{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:8px}
+.fwZahlen>div{display:flex;flex-direction:column;align-items:center;gap:2px;padding:14px 8px;border-radius:var(--fwR);background:#f8fafc;border:1px solid #eef0f4}
+.fwZahlen b{font:800 26px var(--fwTitel);color:var(--fw)}.fwZahlen span{font-size:12px;color:#4b5563}
+.fwTeam{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px}
+.fwTeam>div{display:flex;flex-direction:column;align-items:center;gap:3px;padding:14px 8px;border-radius:var(--fwR);background:#f8fafc;border:1px solid #eef0f4;text-align:center}
+.fwTeam span{width:54px;height:54px;border-radius:50%;display:grid;place-items:center;font-size:28px;background:color-mix(in srgb,var(--fw) 15%,#fff)}
+.fwTeam b{font-size:13.5px}.fwTeam small{font-size:11.5px;color:#4b5563}
+.fwKontakt{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:8px}
+.fwKontakt>div{display:grid;grid-template-columns:auto 1fr;column-gap:10px;align-items:center;padding:10px 12px;border-radius:var(--fwR);background:#f8fafc;border:1px solid #eef0f4}
+.fwKontakt span{grid-row:span 2;font-size:22px}.fwKontakt b{font-size:13px}.fwKontakt small{font-size:12px;color:#4b5563}
+.fwFaq{display:flex;flex-direction:column;gap:6px}
+.fwFaq details{border-radius:var(--fwR);background:#f8fafc;border:1px solid #eef0f4;padding:10px 12px}
+.fwFaq summary{cursor:pointer;font-weight:700;font-size:13.5px;color:#111827}
+.fwFaq summary::marker{color:var(--fw)}.fwFaq p{margin:6px 0 0;font-size:13px;color:#374151}
+.fwNews{display:flex;flex-direction:column;gap:6px}
+.fwNews>div{display:flex;flex-direction:column;gap:2px;padding:9px 12px;border-radius:var(--fwR);background:#f8fafc;border-left:3px solid var(--fw)}
+.fwNews small{font-size:10.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--fw);font-weight:700}.fwNews b{font-size:13.5px;color:#111827}
+/* Generator: neue Gruppen */
+.genVorlagen.viele{grid-template-columns:repeat(4,1fr)}
+.genChips{display:flex;flex-wrap:wrap;gap:5px}
+.genChips button{padding:5px 10px;border-radius:999px;border:1px solid #d4d8e2;background:#fff;color:#111827;font:500 12px var(--font);cursor:pointer}
+.genChips button.on{background:#111827;border-color:#111827;color:#fff}
+.genChips button[data-gens="schrift:serif"]{font-family:"Playfair Display",Georgia,serif}.genChips button[data-gens="schrift:rund"]{font-family:"Fredoka",sans-serif}
+.genChips button[data-gens="schrift:kraft"]{font-family:"Bebas Neue",Impact,sans-serif;font-size:14px;letter-spacing:.04em}.genChips button[data-gens="schrift:hand"]{font-family:"Caveat",cursive;font-size:15px}
+.genChips button[data-gens="schrift:pixel"]{font-family:"Press Start 2P",monospace;font-size:8.5px}
+.genZufall{padding:8px;border-radius:8px;border:1px dashed #94a3b8;background:#fff;color:#111827;font:600 12.5px var(--font);cursor:pointer}
+.genZufall:hover{border-style:solid;border-color:#111827}
+.genMehr{border-top:1px solid #e3e6ee;padding-top:10px;display:flex;flex-direction:column;gap:10px}
+.genMehr>summary{cursor:pointer;font-size:11.5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#4b5563}
+.fw-dunkel .fwFaq p,.fw-dunkel .fwTeam small,.fw-dunkel .fwKontakt small,.fw-dunkel .fwZahlen span{color:#cbd5e1}
+.fw-dunkel .fwTeam b,.fw-dunkel .fwKontakt b{color:#f3f4f6}
+
+/* ---- Krypto-Börse im Stadtnetz (krypto.js) ----
+ * Setzt auf die Klassen der Warenbörse (bw*) auf; hier nur, was dazukommt:
+ * Kontozeile über dem Formular, Verwaltung der eigenen Börse, Vertragsliste.
+ * Die Stadtnetz-Seiten sind hell, deshalb helle Flächen statt der Spielfarben. */
+.krFremd{font-style:normal;font-size:9.5px;letter-spacing:.05em;text-transform:uppercase;color:#6d28d9;background:#ede9fe;border-radius:4px;padding:1px 5px;margin-left:6px}
+.krKonto{display:flex;justify-content:space-between;align-items:center;gap:14px;flex-wrap:wrap;background:#fff;border:1px solid #e6e9f0;border-radius:16px;padding:12px 14px}
+.krKontoWerte{display:flex;gap:26px;flex-wrap:wrap}
+.krKonto small{display:block;font-size:11px;color:#4b5563}
+.krKonto b{font-size:17px;color:#111827}
+.krKontoForm{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.krKontoForm input{width:100px;border:1px solid #d4d8e2;border-radius:9px;padding:8px 10px;font:600 13px var(--mono);color:#111827;background:#fff}
+.krKontoLeer b{display:block;font-size:14px;color:#111827}
+.krKontoLeer small{display:block;margin-top:2px}
+.krVerwaltung{display:flex;flex-direction:column;gap:12px;background:#fff;border:1px solid #e6e9f0;border-radius:16px;padding:14px}
+.krVerwaltungKopf{display:flex;justify-content:space-between;align-items:baseline;gap:10px}
+.krVerwaltungKopf b{font-size:14px;color:#111827}
+.krVerwaltungKopf small{font-size:11.5px;color:#6b7280}
+.krVerwaltungGrid{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(240px,1fr))}
+.krBox{background:#f8fafc;border:1px solid #e6e9f0;border-radius:12px;padding:10px 12px}
+.krBox>small{display:block;font-size:11px;font-weight:700;color:#374151;margin-bottom:8px}
+.krBox>span{display:block;margin-top:8px;font-size:11.5px;color:#6b7280}
+.krBoxForm{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.krBoxForm input{width:88px;border:1px solid #d4d8e2;border-radius:9px;padding:8px 10px;font:600 13px var(--mono);color:#111827;background:#fff}
+.krBoxForm span{font-size:13px;color:#4b5563}
+.krVertraege>small{display:block;font-size:11px;font-weight:700;color:#374151;margin-bottom:4px}
+.krVertraege>span{display:block;margin-top:10px;font-size:11.5px;color:#6b7280}
+.krVertrag{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:12px;align-items:center;padding:8px 0;border-top:1px solid #eef1f6;color:#111827;font-size:13px}
+.krSeitenBox p{margin:6px 0 10px;font-size:12px;color:#4b5563}
+#netzFenster .mini{background:#f1f5f9;color:#111827;border:1px solid #d4d8e2}
+#netzFenster .mini:hover{background:#e2e8f0}
+#netzFenster .buyb{background:#16a34a;color:#fff}
+#netzFenster .sellb{background:#dc2626;color:#fff}
+
+/* ---- Dashboard der Software-Firma (eigene Stadtnetz-Seite) ---- */
+.dsLayout{display:flex;flex-direction:column;gap:14px;padding:4px 2px}
+.dsKennzahlen{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.dsKennzahlen>div{background:#f8fafc;border:1px solid #e9edf4;border-radius:12px;padding:10px 12px;display:flex;flex-direction:column;gap:2px}
+.dsKennzahlen small{font-size:11px;color:#64748b}
+.dsKennzahlen b{font-size:19px;color:#0f172a}
+.dsKennzahlen span{font-size:11px;color:#94a3b8}
+.dsChart{background:#0f172a;border-radius:14px;padding:10px 12px}
+.dsBloecke{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:10px}
+.dsTabelle{background:#fff;border:1px solid #e9edf4;border-radius:14px;padding:12px 14px}
+.dsTabelleKopf{display:flex;justify-content:space-between;align-items:baseline;border-bottom:1px solid #eef2f7;padding-bottom:7px;margin-bottom:4px}
+.dsTabelleKopf b{font-size:14px;color:#0f172a}
+.dsTabelleKopf small{font-size:11px;color:#94a3b8}
+.dsZeile{display:grid;grid-template-columns:minmax(0,1fr) auto auto auto;gap:10px;align-items:center;padding:7px 0;border-bottom:1px solid #f4f6fa;font-size:12.5px}
+.dsZeile:last-of-type{border-bottom:none}
+.dsWer{display:flex;align-items:center;gap:7px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#0f172a}
+.dsLogo{width:18px;height:18px;border-radius:5px;flex:0 0 auto}
+.dsStatus{font-size:11px;color:#64748b}
+.dsJa{font-style:normal;background:#dcfce7;color:#166534;border-radius:5px;padding:1px 6px;font-size:10.5px;font-weight:600}
+.dsNein{font-style:normal;background:#fee2e2;color:#991b1b;border-radius:5px;padding:1px 6px;font-size:10.5px;font-weight:600}
+.dsHinweis{display:block;font-size:11px;color:#94a3b8;margin-top:8px}
+.dsAktion{display:flex;gap:10px;justify-content:flex-end}
+.dsLeer{background:#fff;border:1px solid #e9edf4;border-radius:14px;padding:22px;text-align:center;max-width:520px;margin:24px auto}
+.dsLeer h3{margin:0 0 6px;font-size:17px;color:#0f172a}
+.dsLeer p{margin:0 0 14px;font-size:13px;color:#64748b;line-height:1.5}
+.dsLeer .krBoxForm{justify-content:center}
+.krVon{display:block;font-size:11px;color:#94a3b8;margin-top:2px}
+#netzFenster .krBoxForm input[maxlength]{min-width:0;flex:1 1 90px}
+.krVertrag small{color:#94a3b8;font-weight:400;font-size:11px}
+.dsWer small{color:#94a3b8;font-weight:400;font-size:11px}
+.krTrend{font-style:normal;background:#fef3c7;color:#92400e;border-radius:5px;padding:1px 5px;font-size:10px;font-weight:700;letter-spacing:.3px}
+.dsTrend{font-style:normal;background:#fef3c7;color:#92400e;border-radius:5px;padding:1px 6px;font-size:10.5px;font-weight:700}
+.dsZeile.dsCoin{grid-template-columns:minmax(0,1fr) auto minmax(0,auto) auto auto}
+/* ================================================================
+ * Renntag-Meldung im Stadtnetz
+ * Frueher sprang der Renntag als Overlay ueber die ganze Karte. Jetzt steht
+ * er als eine Zeile auf jeder Seite des Stadtnetzes — sichtbar, aber im Weg
+ * ist er niemandem.
+ * ================================================================ */
+.netzRenn{display:flex;align-items:center;gap:12px;flex-shrink:0;padding:10px 20px;
+  background:linear-gradient(90deg,#fef3c7,#fffbeb);border-bottom:1px solid #fcd34d;color:#78350f}
+.netzRenn[hidden]{display:none}
+.netzRennFlagge{width:28px;height:28px;border-radius:8px;flex:none;display:grid;place-items:center;
+  background:rgba(180,83,9,.14);font-size:14px}
+.netzRennText{flex:1;min-width:0;font-size:13.5px}
+.netzRennUhr{flex:none;font-size:13px;font-weight:600;padding:3px 9px;border-radius:7px;
+  background:rgba(180,83,9,.12)}
+.netzRenn button{flex:none;border:0;border-radius:9px;padding:7px 14px;cursor:pointer;
+  font:600 13px var(--font);background:#b45309;color:#fff}
+.netzRenn button:hover{background:#92400e}
+.casBrowser .netzRenn{background:linear-gradient(90deg,rgba(233,196,106,.18),rgba(233,196,106,.05));
+  border-bottom-color:rgba(233,196,106,.28);color:#f6e7bf}
+.casBrowser .netzRennFlagge{background:rgba(233,196,106,.18)}
+.casBrowser .netzRennUhr{background:rgba(233,196,106,.14);color:#e9c46a}
+.casBrowser .netzRenn button{background:#e9c46a;color:#23190a}
+
+/* ================================================================
+ * Stadt-Casino (casino.cs)
+ * Eigene dunkle Marke im hellen Stadtnetz-Browser: Nachtblau, Champagner-Gold
+ * fuer das Haus, Smaragd fuer Gewinn, Rubin fuer Verlust.
+ * ================================================================ */
+.casBrowser{--casNacht:#080b14;--casFlaeche:#111726;--casHoch:#222b43;
+  --casLinie:rgba(148,174,220,.14);--casLinie2:rgba(148,174,220,.26);
+  --casText:#e8eefb;--casDim:#8a97b4;--casDim2:#616e8c;
+  --casGold:#e9c46a;--casSmaragd:#2dd4a7;--casRubin:#f0536b}
+.casBrowser .sfKopf{background:linear-gradient(135deg,#141a2e,#0d1222 55%,#161124);
+  color:var(--casText);border-bottom:1px solid var(--casLinie)}
+.casBrowser .sfKopf b{color:var(--casText)}
+.casBrowser .sfKopf small{color:var(--casDim)}
+.casBrowser .netzInhalt{background:
+  radial-gradient(900px 400px at 10% -10%,rgba(45,212,167,.05),transparent 60%),var(--casNacht);
+  color:var(--casText)}
+.casBrowser .sfFuss{background:#0b101d;color:var(--casDim2);border-top:1px solid var(--casLinie)}
+.casBrowser .netzAbschnittKopf b{color:var(--casText)}
+.casBrowser .netzAbschnittKopf small{color:var(--casDim2)}
+.casBrowser .netzBox{background:var(--casFlaeche);border:1px solid var(--casLinie);
+  box-shadow:none;color:var(--casText)}
+.casBrowser .netzBox>b{color:var(--casText)}
+.casBrowser .anlLeer{color:var(--casDim2)}
+.casLogo{background:linear-gradient(160deg,#f3d58c,#c99b3a)!important;color:#23190a!important}
+.casBadge{background:rgba(45,212,167,.16)!important;color:#5eead4!important}
+
+.casLayout{display:grid;grid-template-columns:minmax(0,1fr) 280px;gap:16px;align-items:start}
+.casHaupt{display:flex;flex-direction:column;gap:13px;min-width:0}
+.casSeite{display:flex;flex-direction:column;gap:13px}
+.casHinweisText{margin:2px 0 0;font-size:12.5px;line-height:1.5;color:var(--casDim)}
+
+.casKarten{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:14px}
+.casKarte{display:flex;flex-direction:column;padding:0;border:1px solid var(--casLinie);
+  border-radius:16px;overflow:hidden;background:var(--casFlaeche);cursor:pointer;
+  font:inherit;color:var(--casText);text-align:left;transition:transform .15s,border-color .15s}
+.casKarte:hover{transform:translateY(-2px);border-color:var(--casLinie2)}
+.casBild{position:relative;height:124px;display:grid;place-items:center;overflow:hidden}
+.casQuote{position:absolute;right:11px;top:11px;font-size:10.5px;font-weight:600;font-style:normal;
+  padding:3px 8px;border-radius:999px;background:rgba(8,11,20,.55);color:#fff;
+  border:1px solid rgba(255,255,255,.18)}
+.casName{position:absolute;left:14px;bottom:10px;font-size:19px;font-weight:700;color:#fff;
+  text-shadow:0 2px 10px rgba(0,0,0,.55)}
+.casFuss{display:flex;align-items:center;gap:7px;padding:9px 13px 10px;font-size:11.5px;
+  color:var(--casDim);border-top:1px solid var(--casLinie)}
+.casPunkt{width:6px;height:6px;border-radius:50%;background:var(--casSmaragd);flex:none;
+  box-shadow:0 0 7px rgba(45,212,167,.8)}
+.casFuss em{margin-left:auto;font-style:normal;font-size:11px;color:var(--casDim2)}
+
+.casLogZeile{display:flex;align-items:center;gap:9px;font-size:12.5px}
+.casLogZeile b{display:block;font-size:13px;color:var(--casText)}
+.casLogZeile small{display:block;font-size:11px;color:var(--casDim2)}
+.casLogZeile>span:nth-child(2){flex:1;min-width:0}
+.casLogZeile em{font-style:normal;font-size:12px;font-weight:600}
+.casLogPunkt{width:7px;height:7px;border-radius:50%;flex:none}
+.casKasse strong{font-size:22px;color:#5eead4}
+.casKasse small{font-size:11.5px;color:var(--casDim2)}
+
+/* ---- Spielansicht ---- */
+.casSpiel{display:grid;grid-template-columns:minmax(0,1fr) 282px;gap:16px;align-items:start}
+.casTisch{position:relative;border-radius:18px;padding:52px 26px 56px;min-height:300px;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;
+  background:radial-gradient(520px 320px at 50% 38%,#1b2440,#0b101d 78%);
+  border:1px solid var(--casLinie);overflow:hidden}
+.casTischKopf{position:absolute;top:16px;left:20px;right:20px;display:flex;align-items:center;gap:9px}
+.casTischKopf b{font-size:14px;color:var(--casText)}
+.casTischKopf em{font-style:normal;font-size:11px;font-weight:600;color:var(--casGold);
+  padding:3px 9px;border-radius:999px;background:rgba(233,196,106,.12);
+  border:1px solid rgba(233,196,106,.25)}
+.casFair{margin-left:auto;font-size:10.5px;color:var(--casDim2)}
+
+.casMuenze{position:relative;width:140px;height:140px;border-radius:50%;display:grid;place-items:center;
+  background:radial-gradient(circle at 34% 28%,#fbeec0,#f0d492 22%,#d8ad50 52%,#a97c28 80%,#7d5a1c);
+  box-shadow:0 20px 46px rgba(0,0,0,.6),inset 0 0 0 7px rgba(255,255,255,.14),
+    inset 0 -8px 20px rgba(0,0,0,.3)}
+.casMuenze.faellt{animation:casFlip .75s cubic-bezier(.3,.7,.3,1)}
+.casMuenzeZahl{font-size:54px;font-weight:700;color:#6b4b14}
+@keyframes casFlip{
+  0%{transform:rotateX(0) translateY(0)}
+  45%{transform:rotateX(900deg) translateY(-34px)}
+  100%{transform:rotateX(1800deg) translateY(0)}}
+
+.casWuerfel{position:relative;width:132px;height:132px;border-radius:22px;
+  background:linear-gradient(145deg,#fff,#cfd9e8);box-shadow:0 20px 46px rgba(0,0,0,.55)}
+.casWuerfel.rollt{animation:casRoll .6s ease-out}
+.casWuerfel i{position:absolute;width:19px;height:19px;border-radius:50%;background:#0a5c4e;
+  transform:translate(-50%,-50%)}
+.casWartet{position:absolute;inset:0;display:grid;place-items:center;font-size:54px;
+  font-weight:700;color:#8a97b4}
+@keyframes casRoll{
+  0%{transform:rotate(0) scale(.85)}
+  60%{transform:rotate(290deg) scale(1.06)}
+  100%{transform:rotate(360deg) scale(1)}}
+
+.casWalzen{display:flex;gap:11px}
+.casWalzen span{width:84px;height:104px;border-radius:12px;display:grid;place-items:center;
+  font-size:42px;background:linear-gradient(180deg,#faf3e4,#e4d7bd);
+  box-shadow:inset 0 -6px 14px rgba(0,0,0,.15),0 14px 30px rgba(0,0,0,.45)}
+.casWalzen.dreht span{animation:casSpin .6s cubic-bezier(.2,.8,.3,1) both}
+@keyframes casSpin{
+  0%{transform:translateY(-120%);filter:blur(5px);opacity:.2}
+  70%{transform:translateY(7%);filter:blur(0);opacity:1}
+  100%{transform:translateY(0)}}
+
+.casRadBox{position:relative;width:172px;height:172px;display:grid;place-items:center}
+.casRadZeiger{position:absolute;top:-9px;left:50%;transform:translateX(-50%);z-index:2;
+  width:0;height:0;border-left:10px solid transparent;border-right:10px solid transparent;
+  border-top:17px solid var(--casGold);filter:drop-shadow(0 2px 4px rgba(0,0,0,.5))}
+.casRad{border-radius:50%;box-shadow:0 18px 40px rgba(0,0,0,.55)}
+.casRad.dreht{animation:casRadDreh 1.5s cubic-bezier(.17,.67,.2,1) both}
+@keyframes casRadDreh{
+  from{transform:rotate(calc(var(--dreh) - 1080deg))}
+  to{transform:rotate(var(--dreh))}}
+
+.casErgebnis{margin-top:20px;text-align:center;font-size:19px;font-weight:700}
+.casErgebnis small{display:block;margin-top:4px;font-size:12px;font-weight:500;color:var(--casDim)}
+.casErgebnis.gut{color:var(--casSmaragd);text-shadow:0 0 24px rgba(45,212,167,.35)}
+.casErgebnis.halb{color:var(--casGold)}
+.casErgebnis.schlecht{color:var(--casRubin)}
+.casErgebnis.warte{font-size:13.5px;font-weight:500;color:var(--casDim2)}
+
+.casPanel{display:flex;flex-direction:column;gap:12px;border-radius:18px;padding:16px;
+  background:var(--casFlaeche);border:1px solid var(--casLinie)}
+.casZurueck{align-self:flex-start;border:0;background:none;padding:0;cursor:pointer;
+  font:600 12px var(--font);color:var(--casDim)}
+.casZurueck:hover{color:var(--casText)}
+.casLbl{display:block;margin-bottom:6px;font:500 10.5px var(--mono);letter-spacing:.1em;
+  text-transform:uppercase;color:var(--casDim2)}
+.casFeld{display:flex;align-items:center;gap:8px;padding:8px 13px;border-radius:11px;
+  background:#0b101d;border:1px solid var(--casLinie2)}
+.casFeld input{flex:1;min-width:0;border:0!important;background:none!important;padding:0;
+  font:600 20px var(--mono);color:var(--casText)!important}
+.casFeld input:focus{outline:none;box-shadow:none!important}
+.casFeld span{color:var(--casDim2);font-size:13px}
+.casChips{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+.casChips button{border:1px solid transparent;border-radius:9px;padding:7px 0;cursor:pointer;
+  font:600 12px var(--mono);background:rgba(148,174,220,.08);color:var(--casDim)}
+.casChips button.on{background:rgba(233,196,106,.16);color:var(--casGold);
+  border-color:rgba(233,196,106,.35)}
+.casTipps{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.casTipps button{border:1px solid var(--casLinie2);border-radius:12px;padding:12px 0;cursor:pointer;
+  font:700 14px var(--font);background:rgba(148,174,220,.07);color:var(--casDim)}
+.casTipps button.rot{background:rgba(180,38,60,.22);color:#fca5b5}
+.casTipps button.schwarz{background:rgba(28,35,53,.9);color:#b8c4dc}
+.casTipps button.on{background:linear-gradient(160deg,#f3d58c,#c99b3a);color:#23190a;
+  border-color:transparent;box-shadow:0 8px 20px rgba(201,155,58,.28)}
+.casTippsRad{grid-template-columns:repeat(4,1fr);gap:6px}
+.casTippsRad button{padding:9px 0;font-size:13px}
+.casTippsRad button:nth-child(-n+2){grid-column:span 2;font-size:14px}
+.casAus{display:flex;justify-content:space-between;align-items:baseline;font-size:12.5px;
+  color:var(--casDim)}
+.casAus b{font-size:13px;color:var(--casSmaragd)}
+.casSetzen{border:0;border-radius:12px;padding:13px;cursor:pointer;font:700 15px var(--font);
+  background:var(--casSmaragd);color:#05251c;box-shadow:0 10px 26px rgba(45,212,167,.25)}
+.casSetzen:hover{filter:brightness(1.06)}
+.casRegel{font-size:11.5px;line-height:1.5;color:var(--casDim2)}
+@media (max-width:860px){
+  .casLayout,.casSpiel{grid-template-columns:minmax(0,1fr)}
+  .casTisch{padding:52px 16px 48px}}
+
+/* Private Fonds einer Software-Börse — Karten in der Stadtbank und Picker im Software-Panel */
+.pbfKarte{flex-wrap:wrap;align-items:flex-start}
+.pbfKarte>div:last-child{flex-wrap:wrap;justify-content:flex-end}
+.pbfBetrag{width:88px}
+.pbfPick{cursor:pointer}
+.pbfPick input[type=checkbox]{margin:0 10px 0 0;width:auto}

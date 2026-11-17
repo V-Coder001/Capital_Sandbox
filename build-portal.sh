@@ -28,6 +28,9 @@ HIER="$(cd "$(dirname "$0")" && pwd)"
 ZIEL="$HIER/build/portal"
 rm -rf "$ZIEL"; mkdir -p "$ZIEL"
 cp -R "$HIER/public/." "$ZIEL/"
+# Auf der Webseite ist index.html die Download-Seite, das Spiel liegt in spiel.html.
+# Im Portal ist das Spiel die Startseite.
+mv "$ZIEL/spiel.html" "$ZIEL/index.html"
 
 # Die eine Zeile, die diese Fassung ausmacht.
 # Seit dem Aufteilen steht das Hauptskript in app.js, nicht mehr in index.html.
@@ -35,9 +38,9 @@ python3 - "$ZIEL/app.js" "$SERVER" <<'PY'
 import sys
 pfad, server = sys.argv[1], sys.argv[2]
 s = open(pfad, encoding="utf-8").read()
-alt = 'const SERVER = "";'
+alt = 'const SERVER_VORGABE = "";'
 if alt not in s:
-    sys.exit("const SERVER = \"\"; nicht gefunden — hat sich app.js geaendert?")
+    sys.exit("const SERVER_VORGABE = \"\"; nicht gefunden — hat sich app.js geaendert?")
 open(pfad, "w", encoding="utf-8").write(s.replace(alt, f'const SERVER = "{server}";', 1))
 print(f"  Serveradresse gesetzt: {server}")
 PY

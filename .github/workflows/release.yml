@@ -1,0 +1,88 @@
+# Baut die Desktop-Pakete fuer macOS, Windows und Linux und haengt sie an ein
+# GitHub-Release.
+#
+# Warum hier und nicht auf dem eigenen Rechner: Der Windows-Installer (NSIS)
+# laesst sich auf einem Mac nur ueber Wine bauen, und ein Linux-AppImage
+# ebenso wenig. Jedes System baut sein eigenes Paket — das ist der einzige Weg,
+# der ohne Bastelei verlaesslich durchlaeuft.
+#
+# Und warum die Pakete nicht ins Render-Deploy gehoeren: Sie sind zusammen
+# ueber ein halbes Gigabyte. GitHub liefert Release-Anhaenge kostenlos aus,
+# die Download-Seite verlinkt also nur dorthin, statt den Spielserver mit
+# Dateiauslieferung zu beschaeftigen.
+#
+# Ausloesen:
+#   git tag v0.1.0 && git push origin v0.1.0
+# oder von Hand ueber "Run workflow" im Actions-Tab.
+#
+# Das Release entsteht als ENTWURF. Sichtbar — und damit herunterladbar —
+# wird es erst, wenn jemand es auf GitHub veroeffentlicht. Das ist Absicht:
+# die Pakete sind unsigniert, und wann sie an die Oeffentlichkeit gehen, ist
+# eine Entscheidung und kein Nebeneffekt eines Tags.
+
+name: Desktop-Pakete bauen
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+jobs:
+  bauen:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    strategy:
+      # Faellt ein System aus, sollen die anderen trotzdem fertig bauen —
+      # sonst steht wegen einer Plattform das ganze Release still.
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            name: macOS (Intel + Apple Silicon)
+            ziel: --mac
+          - os: windows-latest
+            name: Windows
+            ziel: --win
+          - os: ubuntu-latest
+            name: Linux
+            ziel: --linux
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Abhaengigkeiten installieren
+        run: npm ci
+
+      - name: Paket bauen und ans Release haengen
+        run: npx electron-builder ${{ matrix.ziel }} --publish always
+        env:
+          # Reicht fuer das Anlegen des Entwurfs und das Hochladen der Dateien;
+          # die Rechte dafuer stehen unten unter "permissions".
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Ohne Entwicklerzertifikat soll electron-builder gar nicht erst
+          # nach einem suchen — sonst bricht der Mac-Build mit einem
+          # Signierfehler ab, statt ein unsigniertes Paket zu liefern.
+          CSC_IDENTITY_AUTO_DISCOVERY: false
+
+      - name: Pakete auch als Artefakt behalten
+        # Damit ein Probelauf ohne Tag (workflow_dispatch) etwas Greifbares
+        # hinterlaesst, auch wenn noch kein Release existiert.
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pakete-${{ matrix.os }}
+          path: |
+            dist/desktop/*.dmg
+            dist/desktop/*.exe
+            dist/desktop/*.AppImage
+          if-no-files-found: ignore
+          retention-days: 7
+
+permissions:
+  contents: write   # Release anlegen und Dateien hochladen

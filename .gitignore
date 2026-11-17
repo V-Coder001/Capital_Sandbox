@@ -162,3 +162,6 @@ marketing/capital-sandbox-itch.zip
 # Mit fuehrendem Schraegstrich, damit nur dieser Ordner im Projektstamm gemeint
 # ist und nicht jedes "build" irgendwo tiefer im Baum.
 /build/
+
+# portables Node aus start.sh
+.node/

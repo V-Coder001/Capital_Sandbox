@@ -100,6 +100,23 @@ function sparklineVon(h, breite = 62, hoehe = 18) {
     <polyline points="${pts}" fill="none" stroke="${farbe}" stroke-width="1.4" stroke-linejoin="round" stroke-linecap="round"/></svg>`;
 }
 const sparkline = (g, breite = 62, hoehe = 18) => sparklineVon(priceHist[g], breite, hoehe);
+/* Veränderung über die letzten 10 Minuten. Ein Punkt je 10 Sekunden, also 60
+ * Punkte — über den GANZEN Verlauf gerechnet stand am Rundenanfang überall
+ * dieselbe Zahl, weil der Startwert nie aus dem Fenster fällt. */
+function aend10(h) {
+  if (!h || h.length < 2) return null;
+  const a = h[Math.max(0, h.length - 61)];
+  return a ? (h[h.length - 1] / a - 1) * 100 : null;
+}
+/* Logo-Kachel einer Firma in der Kurstafel: gemaltes Logo, sonst der
+ * Anfangsbuchstabe auf der Firmenfarbe. Bewusst immer dieselbe Größe — die
+ * freigestellten Wortmarken der Bots waren in der Tafel mal 42 px breit, mal
+ * 180, und der Firmenname verschwand im weißen Bildhintergrund. */
+function bankAvatar(p) {
+  const bild = logoBild(p.id);
+  return bild ? `<img class="bzLogo hatBild" src="${bild}" alt="">`
+              : `<span class="bzLogo" style="background:${p.color || "#64748b"}">${rohText(p.name || "?").slice(0, 1)}</span>`;
+}
 /* Welche Firmen in der Kurstafel gerade aufgeklappt sind. Muss ausserhalb des
  * Renderns leben: die Tafel wird jede Sekunde neu gebaut, ein Zustand im DOM
  * waere danach jedes Mal weg. */
@@ -155,7 +172,7 @@ function verlaufChart(h, titel, geldFormat = fp, breite = 300, hoehe = 90) {
   const trend = h[0] ? (h[h.length - 1] / h[0] - 1) * 100 : null;
   const farbe = trend == null || Math.abs(trend) < 0.5 ? "var(--dim)" : trend > 0 ? "var(--up)" : "var(--down)";
   const minuten = Math.max(1, Math.round(h.length * 10 / 60));
-  return `<div style="background:rgba(12,18,28,.5);border:1px solid rgba(36,48,68,.7);border-radius:8px;padding:8px 10px;margin:6px 0">
+  return `<div class="vChart" style="background:rgba(12,18,28,.5);border:1px solid rgba(36,48,68,.7);border-radius:8px;padding:8px 10px;margin:6px 0">
     <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:2px">
       <span class="meta">${titel} · letzte ${minuten} min</span>
       <span style="font-family:var(--mono);font-size:12px;color:${farbe}">${trend == null ? "" : (trend > 0 ? "+" : "") + trend.toFixed(1) + " %"}</span>
@@ -174,8 +191,11 @@ const kursChart = g => verlaufChart(priceHist[g], "Kursverlauf");
 const fmt = n => "$" + Math.round(n).toLocaleString("de-DE");
 const fp = n => n < 10 ? "$" + (+n).toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : fmt(n);   // Preise: Cents bei billigen Waren
 const TOAST_MAX = 4;   // mehr passen ohne Überdecken der Karte nicht übereinander
+/* Firmennamen kommen vom Server maskiert an (&amp; …). Als textContent ist das
+ * ohnehin sicher — also zurückverwandeln, sonst stand „Montan &amp; Bau“ da. */
+const TOAST_ENT = { "&amp;": "&", "&lt;": "<", "&gt;": ">", "&quot;": '"', "&#39;": "'" };
 const toast = (msg, err) => { const d = document.createElement("div");
-  d.className = "toast" + (err ? " err" : ""); d.textContent = msg;
+  d.className = "toast" + (err ? " err" : ""); d.textContent = String(msg ?? "").replace(/&(?:amp|lt|gt|quot|#39);/g, e => TOAST_ENT[e]);
   const box = document.getElementById("toasts");
   box.append(d);
   /* Gedeckelt, weil jede Meldung 4 s stehen bleibt: Treffen mehrere Ereignisse
@@ -209,7 +229,18 @@ const act = (ev, payload) => socket.emit(ev, payload, res => {
  * Bewusst eine einzige Stelle fuer Socket UND die /api-Aufrufe: Waere die
  * Adresse an neun Stellen verteilt, wuerde beim naechsten Hosterwechsel genau
  * eine davon vergessen — und die faellt erst im Betrieb auf. */
-const SERVER = "";
+const SERVER_VORGABE = "";
+/* Seit der Desktop-Fassung ist die Adresse nicht mehr fuer die ganze Sitzung
+ * festgenagelt: dort laeuft beim Start ein eigener Server auf 127.0.0.1
+ * (Vorgabe bleibt also leer), aber derselbe Programmstart soll auch zu einer
+ * Online-Runde auf capitalsandbox.io wechseln koennen, ohne neu geladen zu
+ * werden. Deshalb ist SERVER veraenderlich — umgestellt wird er ausschliesslich
+ * ueber serverWechseln(), damit Socket und /api-Aufrufe nie auseinanderlaufen.
+ *
+ * Die Build-Vorgabe oben bleibt der Normalfall und gewinnt, wenn sie gesetzt
+ * ist: eine Portalfassung liegt auf fremdem CDN und hat gar keinen eigenen
+ * Server, zu dem sie zurueckfallen koennte. */
+let SERVER = SERVER_VORGABE;
 /* Alle Serverpfade laufen hierueber. Bei leerem SERVER kommt exakt der
  * bisherige relative Pfad heraus. */
 const api = pfad => SERVER + pfad;
@@ -1566,7 +1597,10 @@ function zeigeAuswertung(state) {
   document.getElementById("winMein").innerHTML = ich ? `<div class="winMeinBox${ich.sieger ? " sieg" : ""}">
       <span class="winMeinPlatz">${ichIdx + 1}.</span>
       <div><b>${ich.sieger ? "Glückwunsch — du hast gewonnen!" : `Dein Platz: ${ichIdx + 1} von ${r.zeilen.length}`}</b>
-        <span class="meta">${fmt(ich.netWorth)} Nettovermögen · ${fmt(ich.umsatz)} Umsatz · ${ich.gebaeude} Gebäude</span></div></div>` : "";
+        <span class="meta">${fmt(ich.netWorth)} Nettovermögen · ${fmt(ich.umsatz)} Umsatz · ${ich.gebaeude} Gebäude${r.stadt ? ` · ${ich.arbeiter} Arbeiter` : ""}</span></div></div>` : "";
+  if (r.stadt) document.getElementById("winMein").innerHTML += `<div class="winStadt"><b>${r.stadt.einwohner.toLocaleString("de-DE")}</b>
+      <span>${t("Einwohner — die Stadt ist in dieser Runde von")} ${r.stadt.start} ${t("auf")} ${r.stadt.einwohner.toLocaleString("de-DE")} ${t("gewachsen")}
+      · ${r.stadt.bloecke.map((n, i) => n ? `${n}× ${t(r.stadt.stufen[i])}` : "").filter(Boolean).join(", ")}</span></div>`;
   /* Endstand: Balken relativ zum Sieger */
   const maxNw = Math.max(1, ...r.zeilen.map(z => z.netWorth));
   document.getElementById("wintable").innerHTML = r.zeilen.map((z, i) => `
@@ -1747,9 +1781,55 @@ function startHosting(retriesLeft = 2) {
  * gehabt — inklusive des WebRTC-Beitritts weiter unten, den es im
  * Gateway-Modus gar nicht braucht (alle erreichen ja denselben Server). */
 let MULTIROOM = false, GATEWAY_BOOT_ID = null, myRoomCode = null;
-const multiroomReady = fetch(api("/api/mode")).then(r => r.ok ? r.json() : { multiroom: false })
+/* Eigene Funktion statt einer einmaligen Kette, weil die Frage nach einem
+ * Serverwechsel neu beantwortet werden muss: der lokale server.js kennt
+ * /api/mode gar nicht, das Gateway schon. */
+const modusLaden = () => fetch(api("/api/mode")).then(r => r.ok ? r.json() : { multiroom: false })
   .then(d => { MULTIROOM = !!d.multiroom; GATEWAY_BOOT_ID = d.bootId || null; })
-  .catch(() => { MULTIROOM = false; });
+  .catch(() => { MULTIROOM = false; GATEWAY_BOOT_ID = null; });
+let multiroomReady = modusLaden();
+
+/* ---- Serverwechsel zur Laufzeit ----
+ * Der eine erlaubte Weg, SERVER zu aendern. Dieselben drei Schritte wie bei
+ * connectToRoom() weiter unten — alte Verbindung kappen, Kartencache verwerfen
+ * (die andere Seite hat eine andere Welt), neu binden —, nur dass hier auch die
+ * Adresse selbst wechselt und deshalb der Modus neu erfragt werden muss.
+ *
+ * Adresse leer = zurueck zur eigenen Herkunft, also in der Desktop-App der
+ * mitgelieferte Server auf 127.0.0.1. */
+async function serverWechseln(adresse) {
+  const neu = String(adresse || "").replace(/\/+$/, "");
+  if (neu === SERVER) return SERVER;
+  /* Eine Portalfassung hat keinen eigenen Server: dort waere ein Wechsel auf
+   * "gleiche Herkunft" eine Verbindung ins Leere. */
+  if (!neu && SERVER_VORGABE) return SERVER;
+  /* Erst anklopfen, dann umziehen: Scheitert das, bleibt die bestehende
+   * Verbindung unangetastet — sonst stuende der Spieler nach einem
+   * Fehlversuch ohne Server da. /api/mode gibt es nur beim Gateway, und genau
+   * dorthin fuehrt der Online-Weg. */
+  if (neu) {
+    const erreichbar = await fetch(neu + "/api/mode").then(r => r.ok).catch(() => false);
+    if (!erreichbar) throw new Error("Server nicht erreichbar: " + neu);
+  }
+  try { socket.disconnect?.(); } catch {}
+  cachedFullMap = null;
+  myRoomCode = null;
+  SERVER = neu;
+  multiroomReady = modusLaden();
+  await multiroomReady;
+  socket = io(SERVER || undefined);
+  bindSocketEvents(socket);
+  return SERVER;
+}
+/* Fuer den Join-Screen (und zum Nachsehen in der Konsole). Die Desktop-Huelle
+ * reicht ihre Online-Adresse ueber window.CS_DESKTOP herein, ohne dass dafuer
+ * eine zweite Fassung des Clients gebaut werden muesste. */
+window.CS_SERVER = {
+  aktuell: () => SERVER,
+  vorgabe: SERVER_VORGABE,
+  online: () => window.CS_DESKTOP?.onlineServer || SERVER_VORGABE || "",
+  wechseln: serverWechseln,
+};
 /* Wechselt die aktive Verbindung auf eine bestimmte Runde. Genau wie beim
  * WebRTC-Beitritt weiter unten: alte Verbindung sauber kappen, Kartencache
  * verwerfen (die neue Runde hat eine andere Karte), neu binden. */
@@ -1814,6 +1894,10 @@ try { const g = localStorage.getItem("cs_lang"); if (g === "en" || g === "de") S
 const EN = {
   /* Startbildschirm */
   "Neue Runde starten": "Start a new round", "Einer Runde beitreten": "Join a round",
+  "Online-Runde erstellen": "Create an online round",
+  "Verbinde mit dem Online-Server …": "Connecting to the online server …",
+  "Der Online-Server ist gerade nicht erreichbar — es geht auf diesem Rechner weiter.":
+    "The online server cannot be reached right now — carrying on with the round on this computer.",
   "Tutorial spielen": "Play the tutorial", "Runde erstellen": "Create round",
   "Spielanleitung lesen": "Read the manual", "Lieber ausprobieren": "Rather try it out",
   "Vorlesen": "Read aloud", "Stopp": "Stop", "Spielanleitung": "Manual",
@@ -2000,9 +2084,671 @@ const EN = {
   "Ab 20.000 $ gelten die normalen Sätze. Darunter steigen sie: bis 3.000 $ um 10 %, darunter um 25 % (Notstand). Die 20.000 $ Grundstock fasst die Stadt nie an — die Lage sinkt nur, wenn die Bank bei Kurswetten verliert. Geprüft wird jede Minute.":
     "From 20,000 $ the normal rates apply. Below that they rise: by 10 % down to 3,000 $, by 25 % below (emergency). The city never touches its 20,000 $ base fund — the situation only drops when the bank loses on stock bets. Checked every minute.",
   "Börsengebühr": "Exchange fee",
+  /* Stadtwachstum (2026-10-24) */
+  "Die Stadt": "The city", "baut Wohnungen aus der Stadtkasse, Bewohner ziehen zu": "builds housing from the city treasury, residents move in",
+  "Einwohner": "Residents", "Wohnungen": "Homes", "frei": "free", "Zufriedenheit": "Satisfaction",
+  "Wegzug letzte Minute": "moved out last minute", "Zuzug letzte Minute": "moved in last minute",
+  "Bewohner ziehen weg": "Residents are leaving", "bremst oder beschleunigt den Zuzug": "slows or speeds up new arrivals",
+  "Einwohnerverlauf": "Population history", "Einwohner im Verlauf der Runde": "Residents over the round",
+  "Siedlungshaus": "House", "Mietblock": "Apartment block", "Wohnturm": "Residential tower",
+  "Stadtbild": "Cityscape", "Versorgung": "Supply", "Steuerlage": "Tax situation",
+  "Noch kein Stadtprojekt fertig": "No city project finished yet", "Schonfrist zum Rundenstart": "Grace period at round start",
+  "Strom, Wasser und Lebensmittel zu kaufen": "Power, water and food for sale",
+  "Wohnbau": "Housing", "Baustelle läuft": "construction site active", "Baustellen laufen": "construction sites active",
+  "Wartet auf Geld": "Waiting for money", "Kasse bleibt über": "treasury stays above",
+  "Genug freie Wohnungen": "Enough free homes", "Kein Bauland mehr frei": "No building land left",
+  "Miete an die Stadt": "Rent to the city", "je Einwohner und Minute": "per resident and minute",
+  "Belegschaft": "Staff", "pausiert — Arbeiter frei": "paused — workers released", "steht still (unter 25 %)": "stopped (below 25 %)", "Leistung": "output",
+  "Zu wenig Arbeiter": "Not enough workers",
+  "Die Stadt hat gerade nicht genug Leute. Höhere Löhne (Firma-Panel) holen sie von anderen Firmen — oder warte, bis neue Bewohner zuziehen.": "The city is short of people right now. Higher wages (company panel) draw them from other companies — or wait for new residents.",
+  "Löhne": "Wages", "Arbeiter": "workers", "Sparlohn": "Low wage", "Tariflohn": "Standard wage", "Spitzenlohn": "Top wage", "je Arbeiter/min": "per worker/min",
+  "Lohnkosten": "Wage costs", "Insgesamt gezahlt": "Paid in total", "Senkung auf": "Cut to", "in": "in", "Kündigungsfrist": "notice period",
+  "Löhne nicht voll bezahlt — du bekommst zuletzt Arbeiter, bis du wieder zahlst.": "Wages not paid in full — you get workers last until you pay again.",
+  "Sind Arbeiter knapp, gehen sie zuerst zur Firma mit dem höchsten Lohn. Vom Lohn gehen 30 % als Steuer und Miete an die Stadt — damit baut sie Wohnungen.": "When workers are scarce they go to the company paying most. 30 % of wages go to the city as tax and rent — it builds housing with that.",
+  "Arbeitsmarkt": "Labour market", "der Einwohner arbeiten": "of residents work", "Beschäftigt / Stellen": "Employed / jobs", "beschäftigt": "employed", "Stellen offen": "jobs open",
+  "arbeitslos": "unemployed", "Stellen": "jobs", "Löhne aller Firmen": "Wages of all companies", "Lohnsteuer + Miete an die Stadt": "Wage tax + rent to the city", "der Löhne": "of wages",
+  "Stütze für Arbeitslose": "Benefits for the unemployed", "Arbeit": "Work",
+  "Rüstungsaufträge": "Arms contracts", "Ausschreibung": "Tender", "Lieferung": "Delivery", "Lieferruf": "Delivery reputation",
+  "Polizei": "Police", "Stadtwache": "City guard", "Schützenverein": "Shooting club", "Grenzschutz": "Border guard",
+  "Gebote noch": "Bids for", "Gebote": "bids", "Dein Gebot": "Your bid", "Bieten": "Bid", "Gebot ändern": "Change bid",
+  "% vom Listenpreis": "% of list price", "Zuschlag an": "Awarded to", "Frist noch": "Deadline in",
+  "Nächste Ausschreibung in": "Next tender in", "dich": "you",
+  "Das günstigste Gebot gewinnt, gewichtet mit dem Lieferruf. Wer nicht rechtzeitig liefert, zahlt 20 % des fehlenden Werts als Strafe und verliert Ruf.":
+    "The cheapest bid wins, weighted by delivery reputation. If you miss the deadline you pay 20 % of the missing value as a penalty and lose reputation.",
+  "Einwohner — die Stadt ist in dieser Runde von": "residents — this round the city grew from", "auf": "to", "gewachsen": "",
+  "Fachkräfte": "Skilled workers", "der Arbeitenden, mehr durch die Stadtbibliothek": "of the workforce, more via the city library",
+  "Stadtanleihen": "City bonds", "gezeichnet, an der Stadtbank": "subscribed, at the city bank",
+  "Baumaterial für die Stadt": "Building materials for the city", "15 % über Kurs, bezahlt sofort": "15 % above market, paid at once",
+  "noch": "", "danach kauft die Stadt den Rest anderswo": "s left, then the city buys the rest elsewhere", "Lager": "Stock", "Menge": "Qty", "Liefern": "Deliver",
+  "die Hälfte der Stellen hier verlangt Fachkräfte. Mehr bildet die Stadtbibliothek aus (Stadtprojekt).": "half the jobs here need skilled workers. The city library (city project) trains more.",
+  "Steuerungssoftware spart hier ein Viertel der Arbeiter.": "Control software saves a quarter of the workers here.",
+  "Stadt & Arbeit": "City & work", "Wohnblöcke der Stadt": "City housing", "Stufe": "Level", "Plätze": "Homes", "Kosten": "Cost", "ab Einwohnern": "from residents",
+  "Rund 1 Arbeiter je 250 $ Baukosten (2 bis 30), +50 % je Ausbaustufe. Leistung = Besetzung, unter 25 % Stillstand. Labor, Studio und Chipfabrik: die Hälfte Fachkräfte. Steuerungssoftware: −25 %.": "About 1 worker per $250 building cost (2 to 30), +50 % per upgrade. Output = staffing, below 25 % it stops. Lab, studio and chip factory: half skilled workers. Control software: −25 %.",
+  "30 % der Löhne gehen als Lohnsteuer und Miete an die Stadt, 20 % ins Bürgerdepot.": "30 % of wages go to the city as wage tax and rent, 20 % into the citizens' depot.",
+  "höchstens": "at most", "Schulden": "debt", "Bürger-Apps und Jobbörse": "Citizen apps and job board",
+  "Bürger-App: bis 85 % der Einwohner zahlen ein Abo je Minute, 200 Nutzer je Rechenzentrums-Stufe des Anbieters. Jobbörse: Vorrang wie +0,3 bis +0,7 Lohnstufen gegen eine Gebühr je Arbeiter, 3 Abos je Rechenzentrums-Stufe.": "Citizen app: up to 85 % of residents pay a subscription per minute, 200 users per data-centre level of the provider. Job board: priority like +0.3 to +0.7 wage levels for a fee per worker, 3 subscriptions per data-centre level.",
+  /* Stadtkurier */
+  "Anleihenmarkt": "Bond market",
+  "Geld leihen und verleihen — mit Zins je Minute": "Borrow and lend money — with interest per minute",
+  "am Markt": "on the market",
+  "angelegt": "invested",
+  "Schulden": "debt",
+  "Stadtanleihe für den Wohnbau": "City bond for housing",
+  "Firmenanleihe": "Corporate bond",
+  "Nennwert": "Face value",
+  "Zins": "Interest",
+  "Laufzeit": "Term",
+  "Zinsen bis zum Ende": "Interest until maturity",
+  "im Verzug": "in default",
+  "noch nicht verkauft": "not sold yet",
+  "Verzug": "default",
+  "Anleihen am Markt": "Bonds on the market",
+  "Stadtanleihen zuerst, dann nach Zins": "city bonds first, then by interest",
+  "Gerade wird keine Anleihe angeboten. Ratings entstehen aus Vermögen und Schulden der Firmen.": "No bond is on offer right now. Ratings come from companies' assets and debt.",
+  "Vertragsangebote an dich": "Contract offers to you",
+  "Annehmen": "Accept",
+  "Ablehnen": "Decline",
+  "Zwangsversteigerungen": "Foreclosure auctions",
+  "gepfändete Gebäude von Firmen im Verzug": "seized buildings of defaulting companies",
+  "Mindestgebot": "Minimum bid",
+  "Höchstgebot": "Highest bid",
+  "Bieten": "Bid",
+  "Keine laufenden Auktionen.": "No running auctions.",
+  "Anleihe ausgeben": "Issue bond",
+  "Du bekommst den Nennwert sofort und zahlst jede Minute Zins. Am Ende zahlst du den Nennwert zurück — bei Verzug wird gepfändet.": "You receive the face value at once and pay interest every minute. At maturity you repay the face value — default leads to seizure.",
+  "Nennwert $": "Face value $",
+  "Zins % je Minute": "Interest % per minute",
+  "Laufzeit in Minuten": "Term in minutes",
+  "Zins je Minute": "Interest per minute",
+  "Zinsen gesamt": "Total interest",
+  "Rückzahlung am Ende": "Repayment at maturity",
+  "Deine Anlagen": "Your investments",
+  "Du hältst keine Anleihen.": "You hold no bonds.",
+  "Deine Schulden": "Your debts",
+  "Keine eigenen Anleihen offen.": "No own bonds outstanding.",
+  "Der Anleihenmarkt wird von der Stadt betrieben · Firmenanteile handelst du auf bank.cs": "The bond market is run by the city · trade company shares on bank.cs",
+  "Nennwert, Zins und Laufzeit eingeben": "Enter face value, interest and term",
+  "Kurse, Fonds und Aktien der Stadt": "Prices, funds and shares of the city",
+  "Marktübersicht": "Market overview",
+  "Aktien": "Shares",
+  "Handeln & Depot": "Trading & portfolio",
+  "Aktie suchen": "Search share",
+  "Aktie suchen …": "Search share …",
+  "Stadtindex": "City index",
+  "Fonds": "fund",
+  "Veränderung in 2 Minuten": "Change over 2 minutes",
+  "steigt": "rising",
+  "gleich": "flat",
+  "fällt": "falling",
+  "Zur Aktie": "To share",
+  "Fonds kaufen": "Buy funds",
+  "Alle Aktien": "All shares",
+  "Analysen und Nachrichten": "Analyses and news",
+  "Noch keine Analysen.": "No analyses yet.",
+  "Website besuchen": "Visit website",
+  "Hier könnte Ihre Firma stehen": "Your company could be here",
+  "Anzeigen buchen Firmen über das Werbenetz der Software-Firmen.": "Companies book ads via the software companies' ad network.",
+  "du hältst": "you hold",
+  "Marktwert": "Market value",
+  "Wert je Aktie (F)": "Value per share (F)",
+  "Umsatz 10 min": "Revenue 10 min",
+  "Dividendenrendite": "Dividend yield",
+  "Angebote ansehen und kaufen": "offers — view and buy",
+  "Handeln: Kaufanfrage stellen": "Trade: place a bid",
+  "Website der Firma": "Company website",
+  "Suche": "Search",
+  "nach Marktwert": "by market value",
+  "Firma": "Company",
+  "Kurs": "Price",
+  "10 min": "10 min",
+  "Keine Aktie gefunden.": "No share found.",
+  "Der Verlauf erscheint nach den ersten Minuten.": "The chart appears after the first minutes.",
+  "Verlauf": "Chart",
+  "Start": "Start",
+  "jetzt": "now",
+  "Stadtbank": "City bank",
+  "Aktienhandel, Übernahmen, Kurswetten und Depot": "Share trading, takeovers, stock bets and portfolio",
+  "Firmen an der Börse": "listed companies",
+  "Aktien, Übernahmen, Kurswetten": "Shares, takeovers, stock bets",
+  "Die Stadtbank wird von der Stadt betrieben · das Gebäude im Zentrum führt hierher": "The city bank is run by the city · the building in the centre leads here",
+  "für Verkäufer": "for sellers",
+  "Versorgung": "Utilities",
+  "Rohwaren": "Raw goods",
+  "Verarbeitet": "Processed",
+  "Baumaterial": "Building materials",
+  "Fahrzeuge": "Vehicles",
+  "Motorsport": "Motorsport",
+  "Ø · Trend · Orders": "avg · trend · orders",
+  "Ø-Kurs": "avg price",
+  "Bestes Angebot": "Best offer",
+  "Bestes Gesuch": "Best bid",
+  "verfügbar": "available",
+  "niemand verkauft": "no one is selling",
+  "gesucht": "wanted",
+  "niemand sucht": "no one is buying",
+  "Dein Lager": "Your stock",
+  "Wert": "Value",
+  "Kaufen": "Buy",
+  "Verkaufen": "Sell",
+  "Preis je Stück": "Price per unit",
+  "Kauforder platzieren": "Place buy order",
+  "Verkaufsorder platzieren": "Place sell order",
+  "Liegt ein Angebot zu diesem Preis oder billiger, wird sofort gekauft. Sonst bleibt die Order stehen; das Geld liegt so lange treuhänderisch fest.": "If an offer at this price or cheaper exists, you buy at once. Otherwise the order stays; the money is held in escrow meanwhile.",
+  "Liegt ein Gesuch zu diesem Preis oder teurer, wird sofort verkauft. Sonst bleibt die Order stehen.": "If a bid at this price or higher exists, you sell at once. Otherwise the order stays.",
+  "Angebote": "Offers",
+  "Gesuche": "Bids",
+  "jemand verkauft — du kaufst": "someone sells — you buy",
+  "jemand kauft — du lieferst": "someone buys — you deliver",
+  "Keine Angebote": "No offers",
+  "Keine Gesuche": "No bids",
+  "Kauf": "Buy",
+  "Verkauf": "Sell",
+  "Menge und Preis eingeben": "Enter quantity and price",
+  "Order platziert": "Order placed",
+  "Warenbörse": "Goods exchange",
+  "Orders von Firmen und dem Stadtnetz": "Orders from companies and the city grid",
+  "offene Orders": "open orders",
+  "Börsengebühr": "Exchange fee",
+  "Kurse": "Prices",
+  "Die Warenbörse wird von der Stadt betrieben · Ware und Geld liegen bis zum Handel treuhänderisch fest": "The goods exchange is run by the city · goods and money are held in escrow until traded",
+  "Nachrichten alle zwei Minuten": "news every two minutes",
+  " und ": " and ",
+  "AKTION LÄUFT": "CAMPAIGN ON",
+  "ANZEIGE": "AD",
+  "Alle": "All",
+  "Alle Nachrichten": "All news",
+  "Alles, was die Stadt online anbietet": "Everything the city offers online",
+  "Archiv": "Archive",
+  "Aufträge suchen Baumaterial": "orders need building materials",
+  "Ausgabe": "Issue",
+  "Beliebte Seiten": "Popular sites",
+  "Besuchen": "Visit",
+  "Den Zuschlag hat": "The contract went to",
+  "Die Frist läuft noch": "Time left:",
+  "Die Stadt hat jetzt": "The city now has",
+  "Direkt kaufen, sofort im Lager.": "Buy directly, instantly in stock.",
+  "EILMELDUNG": "BREAKING",
+  "Eilmeldung": "Breaking",
+  "Einwohner, die Zufriedenheit liegt bei": "residents, satisfaction is at",
+  "Erste Ausgabe nach zwei Minuten": "First issue after two minutes",
+  "Firma, Ware oder Branche — z. B. Obst, Strom, Hotel": "Company, goods or industry — e.g. fruit, power, hotel",
+  "Großauftrag aus": "Group order from",
+  "Hotels und Camping — Zimmer direkt buchen.": "Hotels and camping — book rooms directly.",
+  "Im Topf liegen rund": "The pot holds about",
+  "In diesem Ressort gibt es noch nichts Neues.": "Nothing new in this section yet.",
+  "Jede Firma kann einzahlen; abgerechnet wird zum doppelten Ø-Kurs.": "Any company can contribute; paid at twice the average price.",
+  "Kurse in 2 Minuten": "Prices over 2 minutes",
+  "Minuten lang kommen mehr Gäste in die Stadt; alle Hotels profitieren, der Veranstalter am meisten.": "minutes more guests come to the city; all hotels benefit, the organiser most.",
+  "Neu im Stadtnetz": "New in the city network",
+  "Nichts gefunden. Versuch es mit einer Ware wie „Strom“ oder „Obst“.": "Nothing found. Try a good like “power” or “fruit”.",
+  "Noch": "For another",
+  "Noch gibt es nichts zu berichten.": "Nothing to report yet.",
+  "Noch zu früh — die Kurse vergleicht der Kurier nach zwei Minuten.": "Too early — the courier compares prices after two minutes.",
+  "Rüstungsfirmen geben jetzt ein verdecktes Gebot zwischen 80 und 140 % des Listenpreises ab. Mit Ausschreibungsportal zählen Gebote 5 % günstiger.": "Defence companies now place a sealed bid between 80 and 140 % of list price. With a tender portal bids count 5 % cheaper.",
+  "Stadtkurier": "City Courier",
+  "Stadtkurier · erscheint alle zwei Minuten · Anzeigen aus dem Werbenetz": "City Courier · published every two minutes · ads from the ad network",
+  "Treffer": "results",
+  "Wirtschaft": "Economy",
+  "Zu den Ausschreibungen": "To the tenders",
+  "Zum Artikel": "Read article",
+  "Zum Großauftrag": "To the group order",
+  "Zur Buchungsseite": "To the booking page",
+  "Zur Börse": "To the exchange",
+  "Zur Stadt": "To the city",
+  "Zur Stadtbank": "To the city bank",
+  "Zur Website": "To the website",
+  "Zurück zur Übersicht": "Back to overview",
+  "bekommen.": ".",
+  "betrieben von der Stadt": "run by the city",
+  "braucht": "needs",
+  "gerade eben": "just now",
+  "im Topf, noch": "in the pot,",
+  "lädt zum": "invites to the",
+  "schreibt aus": "tenders",
+  "sortiert nach Besuchern": "sorted by visitors",
+  "zu": "at",
+  /* Stadtnetz (Etappe 8) */
+  "Ab Website-Modul „Aktionen“ (v3): 5 Minuten +25 % Reichweite.": "From website module “Campaigns” (v3): +25 % reach for 5 minutes.",
+  "Aktie an der Stadtbank": "Shares at the city bank",
+  "Aktion starten": "Start campaign",
+  "Alle Websites der Stadt": "All websites in the city",
+  "Anbieter vergleichen": "Compare providers",
+  "Anzeige": "Ad",
+  "Ausschreibungen": "Tenders",
+  "Ausschreibungsportal": "Tender portal",
+  "Baustoff-Portal": "Building-materials portal",
+  "Baustoff-Woche": "Building-materials week",
+  "Besucher/min": "visitors/min",
+  "Bieten und liefern im Firma-Panel": "Bid and deliver in the company panel",
+  "Das Stadtnetz": "The city network",
+  "Das Stadtnetz wird von der Stadt betrieben": "The city network is run by the city",
+  "Dein Angebot": "Your offer",
+  "Deine Firma ist im Stadtnetz nicht zu finden — ohne Website sehen dich Kunden nicht.": "Your company can't be found in the city network — without a website customers don't see you.",
+  "Deine Website: So sehen Kunden und Mitspieler deine Firma im Stadtnetz.": "Your website: this is how customers and other players see your company in the city network.",
+  "Du hast noch keine Website. Software-Firmen bauen sie dir — oder das Stadtportal die Grundseite.": "You have no website yet. Software companies build one for you — or the city portal builds the basic site.",
+  "Einwohner online": "residents online",
+  "Erntefest-Rabatt": "Harvest-festival sale",
+  "Firma oder Ware suchen …": "Search company or goods …",
+  "Firmen": "Companies",
+  "Frühbucher-Aktion": "Early-bird offer",
+  "Gebote offen": "bids open",
+  "Gerade kein offener Auftrag.": "No open order right now.",
+  "Gratis-Monat": "Free month",
+  "Großhandel": "Wholesale",
+  "Grundseite vom Stadtportal": "Basic site from the city portal",
+  "Hofladen": "Farm shop",
+  "Im Stadtnetz (Knopf unten) stehen alle Firmen mit Website. Mit einem Branchenportal kaufst du dort direkt ein — zum Beispiel Obst im Hofladen oder Strom im Kundenportal.": "The city network (button at the bottom) lists every company with a website. With an industry portal you buy directly there — for example fruit in the farm shop or power in the customer portal.",
+  "Im Stadtnetz stehen alle Firmen mit Website, sortiert nach Besuchern. Branchenportal: Direktkauf zum Ø-Kurs plus 5 % (Hofladen, Großhandel, Baustoff-Portal, Kundenportal), Rohstoff +5 % auf Wohnbau-Lieferungen, Rüstung 5 % günstigere Gebote, +15 % je Lieferung und häufigere Ausschreibungen. Aktionen: 600 $, 5 Minuten +25 % Reichweite, danach 15 Minuten Pause.": "The city network lists every company with a website, sorted by visitors. Industry portal: direct purchase at average price plus 5 % (farm shop, wholesale, building-materials portal, customer portal), raw materials +5 % on housing deliveries, defence 5 % cheaper bids, +15 % per delivery and more frequent tenders. Campaigns: 600 $, +25 % reach for 5 minutes, then a 15-minute break.",
+  "Kundenportal": "Customer portal",
+  "Liefern im Stadt-Panel": "Deliver in the city panel",
+  "Läuft": "Running",
+  "Läuft gerade": "Happening now",
+  "Messeauftritt": "Trade-fair appearance",
+  "Mit dem Modul „Branchenportal“ wird deine Website zum Laden: Mitspieler kaufen direkt bei dir, Rohstoff und Rüstung bekommen Auftrags-Boni.": "With the “Industry portal” module your website becomes a shop: other players buy directly from you, raw materials and defence get order bonuses.",
+  "Modul wechseln bei": "Switch module at",
+  "Nichts gefunden.": "Nothing found.",
+  "Noch hat keine Firma eine Website.": "No company has a website yet.",
+  "Noch keine eigene Ware.": "No own goods yet.",
+  "Noch nichts gebaut.": "Nothing built yet.",
+  "Nächste Aktion in": "Next campaign in",
+  "Nächste Ausschreibung kommt bald.": "Next tender coming soon.",
+  "Produkt-Launch": "Product launch",
+  "Rechenzentren und Software": "Data centres and software",
+  "Seiten": "pages",
+  "Stadtnetz": "City network",
+  "Stadtnetz und Branchenportale": "City network and industry portals",
+  "Suchen": "Search",
+  "Unsere Betriebe": "Our venues",
+  "Website von": "Website by",
+  "Wechselprämie": "Switching bonus",
+  "Wohnbau-Aufträge der Stadt": "City housing orders",
+  "Wohnbau-Aufträge suchen Baumaterial": "housing orders need building materials",
+  "Zum Online-Shop": "To the online shop",
+  "Zurück zum Stadtnetz": "Back to the city network",
+  /* Renntag-Meldung im Stadtnetz (ersetzt das frühere Pop-up) */
+  "Renntag läuft — die Anmeldung auf der Rennstrecke ist offen.": "Race day — entries are open at the track.",
+  "Das Rennen läuft gerade.": "The race is under way.",
+  "Siegerehrung auf der Rennstrecke.": "Podium ceremony at the track.",
+  "Zum Renntag": "To the race day", "Zuschauen": "Watch", "Ergebnis ansehen": "See the result",
+  /* Stadt-Casino (casino.cs) */
+  "Stadt-Casino": "City casino",
+  "Betrieben von der Stadt · Spielgeld, kein echtes Geld": "Run by the city · play money, no real money",
+  "Spielgeld": "play money", "Spiele": "games", "Runden": "rounds", "je Runde": "per round",
+  "Einnahmen der Stadt": "City revenue", "Letzte Runden": "Last rounds",
+  "Noch hat niemand gespielt.": "Nobody has played yet.",
+  "Stadt-Originale": "City originals", "vom Spielhaus selbst betrieben": "run by the casino itself",
+  "Alle Spiele": "All games", "offen": "open", "Dein Tipp": "Your call", "Setzen": "Place bet",
+  "Auszahlung bei Gewinn": "Payout if you win", "Drei gleiche": "Three of a kind",
+  "Ergebnis vom Server": "Result from the server",
+  "Setz deinen Einsatz und spiel eine Runde.": "Set your stake and play a round.",
+  "Münzwurf": "Coin toss", "Würfel": "Dice", "Stadtwalzen": "City reels", "Rad": "Wheel",
+  "Kopf oder Zahl": "Heads or tails", "Hoch oder Tief": "High or low",
+  "Drei Symbole": "Three symbols", "Setz auf dein Feld": "Bet on your field",
+  "Kopf": "Heads", "Zahl": "Tails", "Hoch (4–6)": "High (4–6)", "Tief (1–3)": "Low (1–3)",
+  "Rot": "Red", "Schwarz": "Black", "bis 50×": "up to 50×", "bis 12,3×": "up to 12.3×",
+  "Das Ergebnis jeder Runde würfelt der Server, nicht dein Browser. Der Überschuss des Hauses fließt in die Stadtkasse und bezahlt damit denselben Topf wie Steuern und Wohnbau.": "Every round is rolled by the server, not by your browser. The house surplus goes into the city treasury and pays into the same pot as taxes and housing.",
+  "Triffst du, bekommst du das 1,9-Fache deines Einsatzes.": "Call it right and you get 1.9 times your stake.",
+  "Drei gleiche Symbole zahlen den Faktor des Symbols (Stadtwappen 50×, Glocke 15×, Stern 10×, Münze 8×, Kleeblatt 6×). Zwei gleiche geben den halben Einsatz zurück.": "Three matching symbols pay that symbol's factor (city crest 50×, bell 15×, star 10×, coin 8×, clover 6×). Two matching return half the stake.",
+  "Eine Zahl zahlt 12,3×, Rot oder Schwarz zahlt 2,05×. Das Feld ★ gehört der Stadt — dann gewinnt das Haus.": "A number pays 12.3×, red or black pays 2.05×. The ★ field belongs to the city — then the house wins.",
+  "Das Stadt-Casino wird von der Stadt betrieben · Einsatz": "The city casino is run by the city · stake",
+  "Spielgeld, nur zur Unterhaltung": "Play money, for entertainment only",
+  "Zuschlag": "Awarded",
+  "gekauft": "bought",
+  "hat noch keine Website.": "has no website yet.",
+  "je Stück": "per unit",
+  "keine Website": "no website",
+  "mehr Reichweite für": "more reach for",
+  "mit Portal +5 % auf jede Lieferung": "with portal +5 % on every delivery",
+  "mit Portal: Gebote zählen 5 % günstiger, Lieferungen +15 %, Ausschreibungen häufiger": "with portal: bids count 5 % cheaper, deliveries +15 %, more frequent tenders",
+  "nach Besuchern": "by visitors",
+  "sofort verfügbar": "available now",
+  /* Rechenzentren und Websites (Etappe 7) */
+  "200 Strom kaufen": "Buy 200 power",
+  "Aktionen": "Campaigns",
+  "Ansehen": "View",
+  "Auf Stufe": "To level",
+  "Ausbau, Preise, Platzverteilung, Websites": "Expansion, prices, capacity split, websites",
+  "Ausfall – Strom fehlte": "Outage – no power",
+  "Ausfälle": "outages",
+  "Ausfall": "outage",
+  "Ausgebucht — dem Anbieter fehlen Plätze im Rechenzentrum.": "Fully booked — the provider lacks data-centre slots.",
+  "Bezahlen im Online-Marktplatz": "Payments in the online marketplace",
+  "Branchenportal": "Industry portal",
+  "Buchungsseite, Baustoff-Portal, Kundenportal oder Ausschreibungen — je nach Branche.": "Booking page, building-materials portal, customer portal or tenders — depending on industry.",
+  "Bürger-App-Nutzer": "Citizen-app users",
+  "Dein Preis": "Your price",
+  "Deine Statusseite: So sehen Kunden und Mitspieler deine Rechenzentren. Ausbau, Preise und Platzverteilung stellst du hier direkt ein.": "Your status page: this is how customers and other players see your data centres. Set expansion, prices and capacity split right here.",
+  "Deine Website läuft hier": "Your website runs here",
+  "Diese Seite läuft mit": "This page runs on",
+  "Du hast keinen Online-Marktplatz": "You have no online marketplace",
+  "Einnahmen aus Websites": "Website income",
+  "Einrichtung": "Setup",
+  "Firmen-Website": "Company website",
+  "Gebaut von": "Built by",
+  "Gebäude gesteuert": "buildings controlled",
+  "Gemüsekisten-Abo, Launch-Events, Feste online buchen.": "Veg-box subscriptions, launch events, book festivals online.",
+  "Grundseite": "Basic site",
+  "Grundseite beim Stadtportal": "Basic site from the city portal",
+  "Grundseite beim Stadtportal bestellt": "Basic site ordered from the city portal",
+  "Hosting & Preise": "Hosting & prices",
+  "Hosting für Shops, Apps und Websites": "Hosting for shops, apps and websites",
+  "Kauforder": "Buy order",
+  "Kein passender Anbieter?": "No suitable provider?",
+  "Keine Ausfälle": "No outages",
+  "Keine passende Fabrik — ": "No suitable factory — ",
+  "Leitstand für Fabriken": "Control room for factories",
+  "Logo, Häuser oder Produkte, Bewertungen und Kontakt.": "Logo, venues or products, reviews and contact.",
+  "Mehr Ausstoß oder weniger Rohstoffe, je nach Branchenbaum": "More output or fewer inputs, depending on the industry tree",
+  "Mehr Reichweite: Läden, Gäste und Grundbedarf": "More reach: shops, guests and basic needs",
+  "Mehr für Websites heißt weniger für Shops und Apps": "More for websites means less for shops and apps",
+  "Minuten Vorrat. Fällt er aus, gehen Shops, Apps und Websites deiner Kunden offline.": "minutes of supply left. If it runs out, your customers' shops, apps and websites go offline.",
+  "Name deines Baukastens": "Name of your builder",
+  "Noch kein Rechenzentrum gebaut.": "No data centre built yet.",
+  "Noch kein Shop-System fertig": "No shop system finished yet",
+  "Noch kein System": "No system yet",
+  "Noch keine Kunden.": "No customers yet.",
+  "Noch keine Software-Firma mit Rechenzentrum.": "No software company with a data centre yet.",
+  "Noch keine volle Minute gemessen.": "No full minute measured yet.",
+  "Platzverteilung": "Capacity split",
+  "Plätze frei": "slots free",
+  "Rechenzentren": "Data centres",
+  "Rechenzentren und Websites": "Data centres and websites",
+  "Rechenzentrum": "Data centre",
+  "Rechenzentrum ausgebaut": "Data centre upgraded",
+  "Shop-Systeme und Steuerungen": "Shop systems and controls",
+  "Shops und Steuerungen": "Shops and controls",
+  "Software-Baukasten öffnen": "Open software builder",
+  "Software-Firmen entwickeln einen Website-Baukasten (Grundseite, Branchenportal, Aktionen). Andere Firmen zahlen 400 $ Einrichtung und ein Abo je Minute und bekommen +5 / +10 / +15 % Reichweite: schneller verkaufen, mehr Gäste, mehr Grundbedarf. Je Rechenzentrums-Stufe 2 Websites; der Anbieter verteilt seine Plätze selbst. Ohne Anbieter: Stadtportal-Grundseite für 600 $ und 45 $/min.": "Software companies develop a website builder (basic site, industry portal, campaigns). Other companies pay 400 $ setup plus a subscription per minute and get +5 / +10 / +15 % reach: faster sales, more guests, more basic needs. 2 websites per data-centre level; the provider splits its capacity. Without a provider: city-portal basic site for 600 $ and 45 $/min.",
+  "Stadtportal": "City portal",
+  "Status": "Status",
+  "Statusseite": "Status page",
+  "Statusseite öffnen": "Open status page",
+  "Steuern": "Control",
+  "Steuerung": "Control",
+  "Strom fehlte": "no power",
+  "Strom wird knapp": "Power running low",
+  "Strom/min": "power/min",
+  "Verfügbarkeit": "Availability",
+  "Verfügbarkeit, Hosting, Websites bestellen": "Availability, hosting, order websites",
+  "Was hier läuft": "What runs here",
+  "Website": "Website",
+  "Website ansehen und bestellen": "View and order website",
+  "Website bestellt": "Website ordered",
+  "Website gekündigt": "Website cancelled",
+  "Website kündigen": "Cancel website",
+  "Website-Baukasten": "Website builder",
+  "Website-Baukasten angelegt": "Website builder created",
+  "Website-Baukasten anlegen": "Create website builder",
+  "Websites": "Websites",
+  "Websites und Rechenzentren": "Websites and data centres",
+  "Zum Baukasten": "To the builder",
+  "am Netz": "online",
+  "aus – Strom fehlt": "off – no power",
+  "ausbauen": "upgrade",
+  "ausgelastet": "utilised",
+  "bei": "at",
+  "bestellen": "order",
+  "braucht einen Baum für deine Branche": "needs a tree for your industry",
+  "deine Website": "your website",
+  "du hast noch keine Website": "you have no website yet",
+  "hat noch keinen Website-Baukasten.": "has no website builder yet.",
+  "in 10 Minuten": "in 10 minutes",
+  "installieren": "install",
+  "je Minute ab Grundseite": "per minute from basic site",
+  "je Minute und Gebäude": "per minute and building",
+  "je Verkauf": "per sale",
+  "letzte": "last",
+  "läuft hier": "runs here",
+  "mehr": "more",
+  "online": "online",
+  "vor": "",
+  "wechseln": "switch",
+  "weniger": "less",
+  "wird eingerichtet": "being set up",
+  "wird installiert": "is being installed",
+  "Eine Website für deine Firma": "A website for your company",
+  "Software-Firmen bauen jetzt Websites. Eine eigene Website bringt mehr Reichweite: Deine Läden verkaufen schneller, Hotels bekommen mehr Gäste. Bestellen kannst du sie auf der Statusseite eines Rechenzentrums.": "Software companies now build websites. Your own website brings more reach: your shops sell faster, hotels get more guests. Order one on a data centre's status page.",
+  /* Touristik (Etappe 6) */
+  "Auf der Karte zeigen": "Show on map",
+  "Ausgebucht — wir mussten woanders schlafen.": "Fully booked — we had to sleep elsewhere.",
+  "Buchen": "Book",
+  "Buchungsseite": "Booking page",
+  "Buchungsseite öffnen": "Open booking page",
+  "Campingplatz · fest 1 Stern": "Campground · fixed 1 star",
+  "Deine Buchungsseite öffnen": "Open your booking page",
+  "Deine Buchungsseite: So sehen Gäste und Mitspieler deine Häuser. Preis, Renovierung und Feste stellst du hier direkt ein.": "Your booking page: this is how guests and other players see your venues. Set price, renovation and festivals right here.",
+  "Frühstück inklusive": "Breakfast included",
+  "Frühstück? Fehlanzeige. Für so viele Sterne enttäuschend.": "Breakfast? None. Disappointing for so many stars.",
+  "Gebucht über das Stadtportal": "Booked via the city portal",
+  "Gäste diese Minute": "guests this minute",
+  "Gäste kommen gerade je Minute in die Stadt": "guests are arriving in the city per minute",
+  "Gästebewertungen": "Guest reviews",
+  "Haus": "venue",
+  "Hotels & Camping": "Hotels & camping",
+  "Häuser": "venues",
+  "Häuser, Preis, Renovieren und Feste wie auf einer Website": "Venues, price, renovation and festivals like a website",
+  "Häuser, Preise und Bewertungen": "Venues, prices and reviews",
+  "Höchste Stufe erreicht": "Top level reached",
+  "Küste": "coast",
+  "Minuten": "minutes",
+  "Noch kein Haus fertig.": "No venue finished yet.",
+  "Noch keine Gäste.": "No guests yet.",
+  "Ordentlich für eine Nacht.": "Fine for one night.",
+  "Preis übernehmen": "Apply price",
+  "Preis, Renovieren, Feste": "Price, renovation, festivals",
+  "Richtwert bei deiner Bewertung": "Guide price at your rating",
+  "Sauber, freundlich, gutes Frühstück.": "Clean, friendly, good breakfast.",
+  "Schön, aber für das Gebotene ganz schön teuer.": "Nice, but pricey for what you get.",
+  "Stadt": "City",
+  "Stadtfest buchen": "Book a city festival",
+  "Stern": "star",
+  "Traumhafter Blick aufs Meer, das Personal war super.": "Dreamy sea view, the staff were great.",
+  "Unschlagbarer Preis, wir kommen wieder!": "Unbeatable price, we'll be back!",
+  "Wegen des Stadtfests hier — tolle Stimmung in der Stadt!": "Here for the city festival — great atmosphere in town!",
+  "Zelten direkt im Grünen, einfach aber herzlich.": "Camping in the green, simple but warm.",
+  "Das Frühstücksbuffet allein ist die Reise wert.": "The breakfast buffet alone is worth the trip.",
+  "Gerne wieder, nur der Pool war voll.": "Happy to return, only the pool was crowded.",
+  "Die Duschen könnten neuer sein.": "The showers could be newer.",
+  "Zentral gelegen, nette Leute.": "Central location, nice people.",
+  "Etwas in die Jahre gekommen.": "A bit dated.",
+  "Zimmerpreis je Nacht": "Room price per night",
+  "ab": "from",
+  "im Grünen": "in the green",
+  "in der Stadt": "in town",
+  "ohne Zimmer": "without a room",
+  "renovieren": "renovate",
+  "seit Rundenbeginn": "since round start",
+  "veranstaltet von": "hosted by",
+  "veranstaltet von uns!": "hosted by us!",
+  "Auf": "To",
+  "Bewertung": "Rating",
+  "Deine Betriebe": "Your venues",
+  "Deine Touristik": "Your tourism",
+  "Die Sterne über 2 zählen nur anteilig. Kauf Obst, Honig, Saft oder Gebäck an der Börse.": "Stars above 2 only count partly. Buy fruit, honey, juice or pastries at the exchange.",
+  "Festival": "Festival",
+  "Frühstück fehlt": "Breakfast missing",
+  "Frühstück je Minute": "Breakfast per minute",
+  "Gäste": "Guests",
+  "Gäste der Stadt": "Guests in the city",
+  "Gäste für deine Hotels": "Guests for your hotels",
+  "Gäste je Minute": "guests per minute",
+  "Gäste kommen nur in eine wachsende Stadt (Sandkasten).": "Guests only come to a growing city (sandbox).",
+  "Gäste und Hotels": "Guests and hotels",
+  "Gäste wollten zu dir, aber dein Lager war leer. Mehr Übernachtungen produzieren — oder den Preis anheben.": "guests wanted to stay with you, but your stock was empty. Produce more lodging — or raise the price.",
+  "Gäste wählen nach Bewertung und Preis. Bei deiner Bewertung bringt etwa": "Guests choose by rating and price. At your rating, about",
+  "Gäste übernachten bei Touristik-Firmen auf Campingplätzen und in Strandhotels.": "Guests stay with tourism companies at campgrounds and beach hotels.",
+  "Hotels der Stadt": "Hotels in the city",
+  "Höchste Stufe": "Top level",
+  "Jede Minute 10 Gäste plus 4 je 100 Einwohner, mal Zufriedenheit. Sie wählen nach Bewertung und Zimmerpreis; wer zu teuer ist, verliert Gäste an andere Urlaubsorte. Strandhotel 2 bis 5 Sterne (Renovieren 1.500 / 3.000 / 5.000 $), ab 3 Sternen Frühstück für 3 / 5 / 8 $ je Gast. Stadtfeste: +60 bis +150 % Gäste für 5 bis 8 Minuten.": "Every minute 10 guests plus 4 per 100 residents, times satisfaction. They choose by rating and room price; too expensive loses guests to other destinations. Beach hotel 2 to 5 stars (renovation 1,500 / 3,000 / 5,000 $), from 3 stars breakfast worth 3 / 5 / 8 $ per guest. City festivals: +60 to +150 % guests for 5 to 8 minutes.",
+  "Jede Minute kommen Gäste in die Stadt und wählen ein Hotel nach Bewertung und Zimmerpreis. Renovierte Strandhotels bekommen mehr Sterne (ab 3 Sternen mit Frühstück), und ein Stadtfest lockt viele Gäste auf einmal.": "Every minute guests come to the city and pick a hotel by rating and room price. Renovated beach hotels get more stars (breakfast from 3 stars), and a city festival brings many guests at once.",
+  "Konzert": "Concert",
+  "Lebensmittel für": "food worth",
+  "Noch kein Hotel fertig.": "No hotel finished yet.",
+  "Renovieren bringt Sterne, ab 3 Sternen gibt es Frühstück": "renovating adds stars, breakfast from 3 stars",
+  "Renoviert": "Renovated",
+  "Restzeit": "time left",
+  "Stadtfest veranstalten": "Host a city festival",
+  "Sterne": "stars",
+  "Sterne renovieren": "stars — renovate",
+  "Strandfest": "Beach party",
+  "Touristik-Panel öffnen": "Open tourism panel",
+  "Zimmer je Minute": "rooms per minute",
+  "Zimmerpreis": "Room price",
+  "Zimmerpreis $ je Gast": "Room price $ per guest",
+  "Zimmerpreis, Gäste, Stadtfeste": "Room price, guests, city festivals",
+  "am meisten ein, solange genug Zimmer da sind. Zu teuer: Gäste fahren woanders hin.": "earns the most while you have enough rooms. Too expensive: guests go elsewhere.",
+  "fest 1 Stern": "fixed 1 star",
+  "finden kein Zimmer": "find no room",
+  "gerade läuft eins": "one is running",
+  "im Bau": "under construction",
+  "im Lager": "in stock",
+  "in den Läden": "in shops",
+  "je Minute": "per minute",
+  "je Nacht": "per night",
+  "kommen": "arrive",
+  "lockt Gäste für alle Hotels, du bekommst mehr davon": "draws guests for all hotels, you get more of them",
+  "mit Frühstück": "with breakfast",
+  "nächstes in": "next in",
+  "zu teuer — fahren woanders hin": "too expensive — go elsewhere",
+  "übernachten": "stay overnight",
+  "Markt": "Market", "Mein System": "My system", "Entwicklung": "Development", "Design": "Design", "Produkte": "Products",
+  "Shop-System": "Shop system", "Bürger-App": "Citizen app", "Bürger-Apps": "Citizen apps", "Jobbörse": "Job board", "Jobbörsen": "Job boards", "Börsen-App": "Stock app", "Malprogramm": "Paint program",
+  "fehlt": "missing", "Nutzer": "users", "Abos": "subscriptions", "verkauft": "sold", "EP-Vorrat": "EP stock", "ein Studio: 1 EP/s": "one studio: 1 EP/s",
+  "Software für die Einwohner": "software for residents", "Software gegen Arbeitermangel": "software against labour shortage", "Ab Shop-System v": "From shop system v",
+  "bis": "up to", "der Einwohner nutzen Apps": "of residents use apps", "Qualität": "quality",
+  "Einwohner zahlen ein Abo je Minute. Sie wählen nach Qualität und Preis. Je Rechenzentrums-Stufe bedienst du": "Residents pay a subscription per minute and choose by quality and price. Each data-centre level serves",
+  "Version": "Version", "Nutzer / Kapazität": "users / capacity", "würden sie nutzen": "would use it", "Einnahmen 10 min": "income 10 min",
+  "Nutzer finden keinen Platz — ein weiteres Rechenzentrum oder ein Ausbau hilft.": "users find no room — another data centre or an upgrade helps.",
+  "Name": "Name", "Abo $ je Nutzer und Minute": "Subscription $ per user and minute", "Übernehmen": "Apply", "Bürger-App anlegen": "Create citizen app",
+  "in Arbeit": "in progress", "entwickeln": "develop", "Voll ausgebaut": "Fully developed", "Vorrang wie": "priority like", "Lohnstufen": "wage levels",
+  "Firmen abonnieren sie und bekommen bei knappen Arbeitern Vorrang. Sie zahlen dir eine Gebühr je beschäftigtem Arbeiter und Minute. Für dich selbst wirkt sie kostenlos. Je Rechenzentrums-Stufe": "Companies subscribe and get priority when workers are scarce. They pay you a fee per employed worker and minute. For you it works for free. Per data-centre level",
+  "Abos / Plätze": "subscriptions / slots", "Vorrang": "priority", "Gebühr $ je Arbeiter und Minute": "Fee $ per worker and minute", "Jobbörse anlegen": "Create job board",
+  "Bürger-Apps der Stadt": "Citizen apps in the city", "von": "of", "Einwohnern nutzen eine": "residents use one",
+  "Noch keine Bürger-App fertig — Software-Firmen entwickeln sie im Reiter „Produkte“.": "No citizen app yet — software companies develop them in the “Products” tab.",
+  "Vorrang bei knappen Arbeitern": "priority when workers are scarce", "deine": "yours", "Kündigen": "Cancel", "Abonnieren": "Subscribe", "Noch keine Jobbörse fertig.": "No job board yet.",
+  "eigene": "own", "Vorrang ohne höheren Lohn": "priority without higher wages", "kein Abo": "no subscription", "kündigen": "cancel",
+  "ab der Hälfte der Einwohner: Digitale Stadt +5 %": "from half the residents: digital city +5 %", "Digitale Stadt": "Digital city",
+  "Bürger-App gespeichert": "Citizen app saved", "Jobbörse gespeichert": "Job board saved", "Entwicklung gestartet": "Development started",
+  "Erst brauchst du ein eigenes Shop-System — lege es im Reiter „Mein System“ an.": "First you need your own shop system — create it in the “My system” tab.",
+  "Glas-Effekt": "Glass effect", "Unschärfe hinter Leisten und Fenstern — kostet viel Grafikleistung": "Blur behind bars and windows — costs a lot of graphics power",
+  "Automatisch anpassen": "Adjust automatically", "Ruckelt das Spiel, schaltet es die Grafik stufenweise herunter": "If the game stutters, graphics are lowered step by step",
+  "Bildrate anzeigen": "Show frame rate", "Kleine Anzeige unten links: Bilder pro Sekunde": "Small display bottom left: frames per second",
+  "— vorerst wird nur der Sandkasten gespielt": "— for now only sandbox is played", "Freies Wirtschaften mit wachsender Stadt": "Free economy with a growing city",
+  "Planwirtschaft · gesperrt": "Planned economy · locked", "Einsteiger · gesperrt": "Beginner · locked", "Race Day · gesperrt": "Race Day · locked", "Kartell · gesperrt": "Cartel · locked",
+  "Zeitlimit": "Time limit", "kein Zeitlimit": "no time limit", "30 Minuten": "30 minutes", "45 Minuten": "45 minutes", "60 Minuten": "60 minutes", "90 Minuten": "90 minutes",
+  "$100.000 · etwa 30–40 Minuten": "$100,000 · about 30–40 minutes", "$250.000 · etwa 1 Stunde": "$250,000 · about 1 hour", "$500.000 · etwa 2 Stunden": "$500,000 · about 2 hours",
+  "Die Stadt wächst mit": "The city grows with you", "Stadtübersicht": "City overview", "Dir fehlen Arbeiter": "You are short of workers", "Firma-Panel": "Company panel",
+  "Oben neben deinem Geld steht, wie viele Einwohner die Stadt hat. Sie wohnen im Wohngebiet, arbeiten in euren Gebäuden und kaufen in euren Läden. Ein Klick auf die Einwohnerzahl öffnet die Stadtübersicht.": "Next to your money at the top you see how many residents the city has. They live in the residential ring, work in your buildings and buy in your shops. Click the population for the city overview.",
+  "Deine Gebäude sind nicht voll besetzt und stellen weniger her. Ein höherer Lohn holt Leute von anderen Firmen — günstiger ist oft eine Jobbörse. Beides findest du im Firma-Panel.": "Your buildings are not fully staffed and produce less. Higher wages draw people from other companies — a job board is often cheaper. Both are in the company panel.",
+  "Jede Minute zahlst du deinen Arbeitern Lohn. 30 % davon gehen als Steuer und Miete an die Stadt — damit baut sie neue Wohnungen, und es ziehen mehr Leute zu.": "Every minute you pay your workers. 30 % goes to the city as tax and rent — it builds new homes with that, and more people move in.",
+  "Die Stadt kauft Baumaterial": "The city buys building materials",
+  "Für neue Wohnblöcke bestellt die Stadt Ziegel, Beton, Stahl oder Elektronik und zahlt 15 % über Kurs. Liefern kannst du in der Stadtübersicht.": "For new housing the city orders bricks, concrete, steel or electronics and pays 15 % above market. Deliver in the city overview.",
+  "Der Stadt fehlt etwas": "The city is missing something",
+  "In keinem Online-Marktplatz gibt es gerade Strom, Wasser oder Lebensmittel. Dann ziehen weniger Leute zu. Wer das ins Regal stellt, hat sichere Kundschaft.": "No online marketplace currently sells power, water or food. Fewer people move in then. Whoever stocks it has guaranteed customers.",
+  "Das Finanzamt": "The tax office", "Finanzamt": "Tax office",
+  "Alle 10 Minuten zahlst du Gewinnsteuer. Bauen und Ausbauen senken den Gewinn nach und nach (Abschreibung). Die Steuer geht an die Stadt.": "Every 10 minutes you pay profit tax. Building and upgrading lower your profit over time (depreciation). The tax goes to the city.",
+  "Die Stadt leiht sich Geld": "The city borrows money", "Stadtbank": "City bank",
+  "Für neue Wohnungen gibt die Stadt eine Anleihe aus. Wer sie zeichnet, bekommt jede Minute Zinsen und das Geld nach 15 Minuten zurück — zu finden an der Stadtbank.": "For new homes the city issues a bond. Whoever buys it gets interest every minute and the money back after 15 minutes — at the city bank.",
+  "Dein Software-Panel": "Your software panel", "Software": "Software",
+  "Als Software-Firma baust du Shop-Systeme, Bürger-Apps und Jobbörsen für die anderen. Alles liegt im Software-Panel in Reitern: Markt, Mein System, Entwicklung, Design und Produkte.": "As a software company you build shop systems, citizen apps and job boards for the others. Everything is in the software panel's tabs: Market, My system, Development, Design and Products.",
+  "Aktien und Übernahmen": "Shares and takeovers",
+  "Jede Firma hat 100 Aktien. An der Stadtbank kaufst du Anteile anderer Firmen und kassierst Dividende — oder übernimmst eine Firma ganz. Behalte die Mehrheit an deiner eigenen.": "Every company has 100 shares. At the city bank you buy stakes in other companies and collect dividends — or take one over. Keep the majority of your own.",
+  "Auf dem Weg zum Ziel": "On the way to the goal",
+  "Es gewinnt, wer zuerst das Vermögensziel erreicht (oben links). Vermögen sind Geld, Lager, Gebäude und Beteiligungen — Ausbauen lohnt sich also, auch wenn dabei Geld aus der Kasse geht.": "Whoever first reaches the net-worth goal wins (top left). Net worth is cash, stock, buildings and holdings — so upgrading pays off even though cash goes down.",
+  "Verstanden": "Got it", "Keine Hinweise mehr": "No more hints", "Schließen": "Close", "Hinweise im Spiel": "In-game hints",
+  "Kurze Erklärung, wenn ein System zum ersten Mal wichtig wird": "Short explanation when a system first matters",
+  "Grafik automatisch reduziert": "Graphics reduced automatically", "Glas-Effekt aus": "glass effect off", "Auflösung 75 %": "resolution 75 %",
+  "Wolken aus": "clouds off", "animierter Hintergrund aus": "animated background off", "Auflösung 50 %": "resolution 50 %",
+  "Ändern unter Einstellungen → Grafik.": "Change under Settings → Graphics.",
+  "Nachfrage in den Läden": "Demand in shops", "wächst mit der Einwohnerzahl": "grows with the population", "Einw.": "res.",
   "der Verkäufer gibt sie vom Erlös ans Finanzamt ab": "the seller pays it from sale proceeds to the tax office",
+  /* Website-Generator und Software-Cockpit */
+  "Website-Generator": "Website generator",
+  "Website für": "Website for",
+  "Honorar": "Fee",
+  "Mehr Abschnitte (bis 4), ein Slogan und ein Text „Über uns“ heben die Qualität — und damit die Reichweite deines Kunden.": "More sections (up to 4), a slogan and an “About us” text raise the quality — and with it your client's reach.",
+  "Vorlage": "Template",
+  "Klar": "Clean",
+  "Elegant": "Elegant",
+  "Bunt": "Colourful",
+  "Farbe": "Colour",
+  "Titel": "Title",
+  "Slogan": "Slogan",
+  "z. B. Frisch vom Hof in die Stadt": "e.g. Fresh from the farm to the city",
+  "Abschnitte": "Sections",
+  "nach oben": "move up",
+  "nach unten": "move down",
+  "entfernen": "remove",
+  "Noch kein Abschnitt — füg unten einen hinzu.": "No section yet — add one below.",
+  "Über uns": "About us",
+  "Wer seid ihr, was macht euch besonders?": "Who are you, what makes you special?",
+  "Website ausliefern": "Deliver website",
+  "Änderungen veröffentlichen": "Publish changes",
+  "Website ausgeliefert": "Website delivered",
+  "Betriebe": "Facilities",
+  "Direktkauf": "Direct purchase",
+  "Bewertungen": "Reviews",
+  "Aktie": "Share",
+  "Galerie": "Gallery",
+  "Waren mit Ø-Kurs und Link zum Shop": "Goods with average price and shop link",
+  "Alle Gebäude der Firma": "All of the company's buildings",
+  "Hofladen, Großhandel … (ab Branchenportal)": "Farm shop, wholesale … (from industry portal)",
+  "Stimmen von Kunden": "What customers say",
+  "Eigener Text über die Firma": "Your own text about the company",
+  "Kurs und Verlauf der Aktie": "Share price and chart",
+  "Große Bilder der Gebäude": "Large pictures of the buildings",
+  "Unsere Aktie": "Our share",
+  "An der Stadtbank": "At the city bank",
+  "Hier steht der Text über die Firma.": "The text about the company goes here.",
+  "Erscheint, sobald die Firma das Modul „Branchenportal“ hat.": "Appears once the company has the “Industry portal” module.",
+  "gestaltet diese Website gerade": "is designing this website right now",
+  "Diese Website wird gerade gestaltet": "This website is being designed right now",
+  "Übersicht": "Overview",
+  "Kunden gesamt": "Total customers",
+  "keine Entwicklung": "no development",
+  "keins": "none",
+  "Strom": "power",
+  "Website-Aufträge": "Website orders",
+  "noch kein Website-Baukasten": "no website builder yet",
+  "Gestalten": "Design",
+  "Website überarbeiten": "Revise website",
+  "Läuft die Frist ab, geht die Standard-Vorlage online und du bekommst nur das halbe Honorar.": "If the deadline passes, the standard template goes online and you only get half the fee.",
+  "Gerade kein offener Auftrag. Neue Bestellungen erscheinen hier — mit Frist und Honorar.": "No open order right now. New orders appear here — with deadline and fee.",
+  "Mit einem Website-Baukasten (auf deiner Statusseite) bestellen Firmen bei dir Websites, die du selbst gestaltest.": "With a website builder (on your status page), companies order websites from you that you design yourself.",
+  "noch nicht": "not yet",
+  "anlegen →": "create →",
+  "später": "later",
+  "Was jetzt?": "What now?",
+  "Meine Statusseite": "My status page",
+  "Leg dein Shop-System an — damit fängt alles an.": "Create your shop system — that's where it all starts.",
+  "Bau ein Rechenzentrum: Ohne Plätze kann niemand dein System, deine App oder Websites nutzen.": "Build a data center: without slots nobody can use your system, your app or websites.",
+  "Fällt er aus, gehen alle Kunden offline.": "If it runs out, all customers go offline.",
+  "Firma wartet auf ihre Website.": "company is waiting for its website.",
+  "Firmen warten auf ihre Website.": "companies are waiting for their website.",
+  "Dein Shop-System ist voll — mehr Plätze gibt es mit einem Rechenzentrums-Ausbau.": "Your shop system is full — upgrade a data center for more slots.",
+  "Gerade läuft keine Entwicklung — deine EP sammeln sich nur an.": "No development running — your DP are just piling up.",
+  "Leg einen Website-Baukasten an: Firmen bestellen Websites, du gestaltest sie und kassierst das Honorar.": "Create a website builder: companies order websites, you design them and collect the fee.",
+  "wird gestaltet": "being designed",
+  "Überrasch mich": "Surprise me", "Feinschliff": "Fine-tuning", "Schrift, Kopf, Ecken, Muster": "font, header, corners, pattern", "Schrift": "Font", "Kopf": "Header", "Ecken": "Corners", "Muster": "Pattern",
+  "Dunkel": "Dark", "Retro": "Retro", "Natur": "Nature", "Modern": "Modern", "Serif": "Serif", "Rund": "Round", "Kraftvoll": "Bold", "Handschrift": "Handwriting", "Pixel": "Pixel",
+  "Verlauf": "Gradient", "Flach": "Flat", "Zentriert": "Centered", "Groß": "Large", "Eckig": "Square", "Normal": "Normal", "Ohne": "None", "Punkte": "Dots", "Streifen": "Stripes", "Wellen": "Waves", "Raster": "Grid",
+  "Zahlen": "Numbers", "Team": "Team", "Kontakt": "Contact", "Fragen": "FAQ", "Neuigkeiten": "News", "In Zahlen": "In numbers", "Unser Team": "Our team", "Häufige Fragen": "Frequently asked questions",
+  "Adresse": "Address", "Öffnungszeiten": "Opening hours", "E-Mail": "Email", "Block": "Block", "Noch keine Meldungen.": "No news yet.", "Aktienkurs": "Share price", "Waren": "Goods",
+  "Große Kennzahlen: Betriebe, Waren, Besucher": "Big numbers: facilities, goods, visitors", "Die Menschen hinter der Firma": "The people behind the company", "Adresse, Öffnungszeiten, E-Mail": "Address, opening hours, email",
+  "Häufige Fragen zum Aufklappen": "Expandable FAQ", "Meldungen aus dem Stadtkurier": "Reports from the City Courier",
+  "Liefert ihr in die ganze Stadt?": "Do you deliver across the whole city?", "Ja — über den Markt und unseren Online-Shop erreichen wir jeden Block.": "Yes — through the market and our online shop we reach every block.",
+  "Wie kommen die Preise zustande?": "How are prices set?", "Wir orientieren uns am Ø-Kurs der Börse und geben gute Ernten und Großaufträge weiter.": "We follow the average exchange price and pass on good harvests and big orders.",
+  "Kann man bei euch Aktien kaufen?": "Can I buy your shares?", "Ja, an der Stadtbank. Bei Gewinn schütten wir regelmäßig aus.": "Yes, at the city bank. When we make a profit we pay dividends regularly.",
+  "Hofleitung": "Farm management", "Ernte & Lager": "Harvest & storage", "Hofladen": "Farm shop", "Bauleitung": "Site management", "Steinbruch": "Quarry", "Logistik": "Logistics", "Netzleitung": "Grid control", "Kraftwerk": "Power plant", "Kundendienst": "Customer service",
+  "Geschäftsführung": "Management", "Fertigung": "Production", "Vertrieb": "Sales", "Direktion": "Management", "Rezeption": "Reception", "Küche": "Kitchen", "Gründung": "Founders", "Entwicklung": "Development", "Support": "Support", "Behörden": "Government relations",
+  "Mo–Sa 6–18 Uhr": "Mon–Sat 6am–6pm", "Mo–Fr 7–17 Uhr": "Mon–Fri 7am–5pm", "rund um die Uhr": "around the clock", "Mo–Fr 8–18 Uhr": "Mon–Fri 8am–6pm", "Rezeption 24 h": "Reception 24 h", "Mo–Fr 9–19 Uhr": "Mon–Fri 9am–7pm", "nach Vereinbarung": "by appointment", "Mo–Fr 9–17 Uhr": "Mon–Fri 9am–5pm",
+  "Die Website ist gerade offline — dem Rechenzentrum des Anbieters fehlt Strom oder Platz.": "The website is offline right now — the provider's data center lacks power or space.",
+  "Die Software-Firma gestaltet deine Startseite individuell — Vorlage, Farben, Abschnitte. Die Einrichtung bekommt sie erst bei Lieferung.": "The software company designs your homepage individually — template, colours, sections. It only receives the setup fee on delivery."
 };
 const t = de => SPRACHE === "en" ? (EN[de] ?? de) : de;
+/* Gleiche Funktion unter anderem Namen — für Stellen, an denen eine Kachel-
+ * Variable `t` die Übersetzung verdeckt (Gebäudekarte). */
+const tUe = t;
 /* Feste Beschriftungen im Markup übersetzen. Sie stehen als deutscher Text
  * zwischen den Tags — genau die Form, die auch als Schlüssel dient. Ein Lauf
  * über die Textknoten spart es, 166 Stellen einzeln mit einem Attribut zu
@@ -2096,9 +2842,46 @@ document.querySelectorAll(".indopt:not(.netopt)").forEach(b => b.addEventListene
     socket.emit("brancheWaehlen", { industry: myIndustry },
       res => { if (res?.error) toast(res.error, true); });
 }));
+/* ---- Drei Wege in eine Runde (nur in der Desktop-App) ----
+ * Im Browser gibt es zwei: eine Runde aufmachen oder einer beitreten — die
+ * Seite kam ja vom Spielserver, die Adresse steht damit fest.
+ *
+ * Die Desktop-App bringt ihren eigenen Server mit. "Neue Runde starten" ist
+ * dort die Runde auf diesem Rechner (volle Grafik, kein Internet, Freunde im
+ * selben WLAN). Wer mit Freunden ausserhalb spielen will, braucht dagegen
+ * unseren oeffentlichen Server — deshalb hier die dritte Taste, die vor dem
+ * Erstellen auf dessen Adresse umschaltet. Beitreten geht immer dorthin. */
+const ortUmschalter = !!window.CS_DESKTOP && !!window.CS_SERVER?.online();
+if (ortUmschalter) {
+  document.querySelector('.netopt[data-ort="online"][data-net="host"]')?.removeAttribute("hidden");
+  document.getElementById("netmode")?.classList.add("drei");
+}
 /* Host vs. Beitreten-per-Code umschalten */
 let netMode = "host", remoteConn = null;
-document.querySelectorAll(".netopt").forEach(b => b.addEventListener("click", () => {
+document.querySelectorAll(".netopt").forEach(b => b.addEventListener("click", async () => {
+  /* Zuerst den Ort, dann alles andere: Ob es Rundencodes gibt, haengt am
+   * Server (MULTIROOM) — und das weiss der Client erst nach dem Wechsel. */
+  if (ortUmschalter && b.dataset.ort) {
+    const ziel = b.dataset.ort === "online" ? window.CS_SERVER.online() : "";
+    if (ziel !== window.CS_SERVER.aktuell()) {
+      const knoepfe = [...document.querySelectorAll(".netopt")];
+      const fehler = document.getElementById("joinErr");
+      knoepfe.forEach(x => x.disabled = true);
+      fehler.textContent = b.dataset.ort === "online" ? t("Verbinde mit dem Online-Server …") : "";
+      try {
+        await window.CS_SERVER.wechseln(ziel);
+        fehler.textContent = "";
+      } catch {
+        /* Zurueck auf den eigenen Server, sonst steht der Startbildschirm vor
+         * einer Adresse, die nicht antwortet. */
+        try { await window.CS_SERVER.wechseln(""); } catch {}
+        fehler.textContent = t("Der Online-Server ist gerade nicht erreichbar — es geht auf diesem Rechner weiter.");
+        b = document.querySelector('.netopt[data-ort="lokal"]') || b;
+      } finally {
+        knoepfe.forEach(x => x.disabled = false);
+      }
+    }
+  }
   netMode = b.dataset.net;
   document.querySelectorAll(".netopt").forEach(x => x.classList.toggle("on", x === b));
   document.getElementById("invite").style.display = netMode === "host" ? "" : "none";
@@ -2162,13 +2945,13 @@ document.getElementById("roomCodeTop").addEventListener("click", async () => {
 const lwEl = document.getElementById("lobbyWait");
 const escapeHtml = s => String(s).replace(/[&<>"']/g, c =>
   ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-let lwBotLevel = "mittel", lwBots = { agrar: 1, rohstoff: 1, versorger: 1, tech: 1, touristik: 1, ruestung: 1 };
+let lwBotLevel = "mittel", lwBots = { agrar: 1, rohstoff: 1, versorger: 1, tech: 1, touristik: 1, ruestung: 1, software: 1 };
 let lwEigeneAenderung = 0;   // kurz nach eigener Änderung nicht vom Server überschreiben lassen
 
 /* Kurznamen der Branchen fuer die Warteraumliste — die vollen Namen aus dem
  * Auswahlblock waeren dort zu lang. */
 const BRANCHE_NAME = { agrar: "Landwirtschaft", rohstoff: "Rohstoff & Bau", versorger: "Versorger",
-                       tech: "Technologie", touristik: "Touristik", ruestung: "Rüstung",
+                       tech: "Technologie", touristik: "Touristik", ruestung: "Rüstung", software: "Software",
                        rennclub: "Race Club", rennindustrie: "Rennindustrie" };
 function lobbyWaitZeichnen() {
   const { state, myId } = store.get();
@@ -2206,7 +2989,7 @@ function lobbyWaitZeichnen() {
   document.getElementById("lwPlayers").innerHTML = spieler.map(p => `
     <div class="pl">
       <span class="dot" style="background:${p.color};color:${p.color}"></span>
-      <span>${escapeHtml(p.name)}</span>
+      <span>${escapeHtml(rohText(p.name))}</span>
       ${p.id === state.hostId ? '<span class="tag">Host</span>' : ""}
       ${p.id === myId ? '<span class="tag">du</span>' : ""}
       <!-- Im Kartell zählt die Familie, sonst die Branche — man sieht, was
@@ -2237,6 +3020,7 @@ function lobbyWaitZeichnen() {
    * selbst würde ein Überschreiben kurz nach dem eigenen Klick zurückspringen. */
   if (state.lobby && Date.now() - lwEigeneAenderung > 1500) {
     document.getElementById("lwGoal").value = String(state.lobby.winGoal);
+    if (state.lobby.zeitLimit != null) document.getElementById("lwZeit").value = String(state.lobby.zeitLimit);
     if (state.lobby.botLevel) lwBotLevel = state.lobby.botLevel;
     if (state.lobby.bots) lwBots = { ...lwBots, ...state.lobby.bots };
     if (state.lobby.mode) { lwMode = state.lobby.mode; lwModeSpiegeln(); }
@@ -2271,11 +3055,13 @@ function lwSettingsSenden() {
   lwEigeneAenderung = Date.now();
   socket.emit("lobbySettings", {
     winGoal: +document.getElementById("lwGoal").value,
+    zeitLimit: +document.getElementById("lwZeit").value,
     saison: +document.getElementById("lwSaison").value,
     bots: lwBots, botLevel: lwBotLevel, mode: lwMode,
   });
 }
 document.getElementById("lwGoal").addEventListener("change", lwSettingsSenden);
+document.getElementById("lwZeit").addEventListener("change", lwSettingsSenden);
 document.getElementById("lwSaison").addEventListener("change", lwSettingsSenden);
 let lwMode = "sandbox";
 function lwModeSpiegeln() {
@@ -2380,7 +3166,15 @@ function tutErstBeiRundenstart() {
    * Schritten, ohne dass der Lernende sie je gesehen hat. */
   const vorbereiten = () => {
     TUT_GESEHEN.clear();
-    if (store.get().state?.mode === "einsteiger") TUT = TUT_EINSTEIGER;
+    const { state, myId, meta } = store.get();
+    const mode = state?.mode;
+    if (mode === "einsteiger") { TUT = TUT_EINSTEIGER; return; }
+    if (mode === "kartell") return;   // tutShow(0) baut das Kartell-Tutorial
+    /* Die Branche wird erst im Warteraum gewählt — also NACH der Registrierung,
+     * bei der TUT zuletzt gebaut wurde. Darum hier aus der tatsächlich
+     * gewählten Branche neu bauen, sonst zeigt z. B. Software den Agrar-Text. */
+    const ind = state?.players?.[myId]?.industry || meta?.industry || "agrar";
+    TUT = buildTut(ind);
   };
   if (store.get().state?.started) { vorbereiten(); tutShow(0); return; }
   const ab = store.subscribe(() => {
@@ -2691,7 +3485,7 @@ async function oeffentlicheLaden() {
         <span class="hofplatz p${i + 1}">${i + 1}</span>
         <span class="hofname"><b>${e.name}</b>${e.sieger ? " 👑" : ""}
           <span class="meta">${modusName[e.modus] || e.modus} · ${e.datum}</span></span>
-        <span class="hofwert"><b>${fmt(e.nw)}</b><span class="meta">in ${e.minuten} min</span></span>
+        <span class="hofwert"><b>${fmt(e.nw)}</b><span class="meta">in ${e.minuten} min${e.einwohner ? ` · ${e.einwohner.toLocaleString("de-DE")} ${t("Einw.")}` : ""}</span></span>
       </div>`).join("");
   }
   function statusZeichnen() {
@@ -3240,6 +4034,100 @@ for (let i = 1; i <= 4; i++) {
   img.src = `assets/deko/hochhaus-${i}.png`;
 }
 const dekoSprite = t => DEKOSPR[(t.deko - 1) % 4] || null;
+
+/* ---- Wohnblöcke der Stadt (Sandkasten) ----
+ * Prozedural wie die Altstadt-Häuser im Kartellmodus: drei Stufen
+ * (Siedlungshaus, Mietblock, Wohnturm), vier Fassadenfarben, je eine Tag-
+ * und eine Nachtfassung mit erleuchteten Fenstern. In doppelter Auflösung
+ * gezeichnet, damit sie auf Retina-Displays nicht verschwimmen. */
+const WOHN_FARBEN = [["#dcc7a8", "#b9a283"], ["#cbd5da", "#a5b2b9"], ["#e3c4b5", "#c09f90"], ["#d0d9c0", "#aab79a"]];
+const WOHN_GEO = [null, { fw: 15, hh: 13, reihen: 1, spalten: 2 }, { fw: 21, hh: 32, reihen: 3, spalten: 3 }, { fw: 19, hh: 66, reihen: 7, spalten: 3 }];
+const WOHN_W = 56, WOHN_H = 100, WOHN_BX = 28, WOHN_BY = 96;
+function mkWohn(stufe, v, nacht) {
+  const geo = WOHN_GEO[stufe], S = 2, c = document.createElement("canvas");
+  c.width = WOHN_W * S; c.height = WOHN_H * S;
+  const g = c.getContext("2d"); g.scale(S, S);
+  const [hell, dunkel] = WOHN_FARBEN[v % WOHN_FARBEN.length], { fw, hh } = geo, bx = WOHN_BX, by = WOHN_BY;
+  const poly = (...p) => { g.beginPath(); g.moveTo(p[0], p[1]); for (let i = 2; i < p.length; i += 2) g.lineTo(p[i], p[i + 1]); g.closePath(); g.fill(); };
+  g.fillStyle = dunkel; poly(bx, by, bx - fw, by - fw / 2, bx - fw, by - fw / 2 - hh, bx, by - hh);
+  g.fillStyle = hell;   poly(bx, by, bx + fw, by - fw / 2, bx + fw, by - fw / 2 - hh, bx, by - hh);
+  if (stufe === 1) {                                   // Satteldach
+    const ry = by - hh - fw * .75;
+    g.fillStyle = "#a8674f"; poly(bx, by - hh, bx + fw, by - fw / 2 - hh, bx, ry);
+    g.fillStyle = "#8a5241"; poly(bx, by - hh, bx - fw, by - fw / 2 - hh, bx, ry);
+  } else {                                             // Flachdach mit Attika
+    g.fillStyle = "#8d949c"; poly(bx, by - hh, bx + fw, by - fw / 2 - hh, bx, by - fw - hh, bx - fw, by - fw / 2 - hh);
+    g.strokeStyle = "rgba(255,255,255,.35)"; g.lineWidth = .8; g.stroke();
+    if (stufe === 3) {                                 // Technikaufbau auf dem Turm
+      const k = 6, top = by - fw - hh + fw / 2;
+      g.fillStyle = "#6f767e"; poly(bx - k, top - k / 2 + 4, bx, top + 4, bx, top - 4, bx - k, top - k / 2 - 4);
+      g.fillStyle = "#9aa1a8"; poly(bx, top + 4, bx + k, top - k / 2 + 4, bx + k, top - k / 2 - 4, bx, top - 4);
+    }
+  }
+  /* Fenster: je Wand Spalten × Geschosse, nachts zufällig erleuchtet */
+  const fh = (hh - 4) / geo.reihen, wh = Math.min(5, fh * .55);
+  for (const seite of [1, -1]) for (let k = 0; k < geo.spalten; k++) for (let r = 0; r < geo.reihen; r++) {
+    if (stufe === 1 && seite < 0 && k === 0) continue;      // dort ist die Haustür
+    const u = (k + .5) / geo.spalten * fw, x = bx + seite * u, y = by - u / 2 - hh + 3 + r * fh;
+    const an = nacht && (v * 7 + stufe * 3 + k * 5 + r * 11 + (seite > 0 ? 1 : 0)) % 3 !== 0;
+    g.fillStyle = an ? "#ffd27a" : seite > 0 ? "#45505e" : "#353e4a";
+    g.fillRect(x - 1.3, y, 2.6, wh);
+    if (stufe === 2 && seite > 0) { g.fillStyle = "rgba(255,255,255,.45)"; g.fillRect(x - 2.2, y + wh + .6, 4.4, .8); }
+  }
+  if (stufe === 1) {
+    g.fillStyle = "#5a4636"; g.fillRect(bx - fw * .25 - 1.6, by - fw * .125 - 8, 3.2, 7);
+    if (nacht) { g.fillStyle = "rgba(255,210,120,.3)"; g.fillRect(bx - fw * .25 - 3, by - fw * .125 - 9, 6, 9); }
+  }
+  c.anker = by - fw / 2;
+  return c;
+}
+const WOHNSPR = {};
+const wohnSprite = (stufe, v, nacht) => WOHNSPR[stufe + ":" + v + ":" + nacht] ??= mkWohn(stufe, v, nacht);
+/* Wohnblock auf seine Kachel: fertig als Haus, im Bau mit Gerüst und Kran.
+ * Bei einem Ausbau bleibt das alte Haus stehen, bis der neue Block fertig ist. */
+function wohnMalen(t, sx, sy, st) {
+  const wb = t.wohnblock, v = (t.x * 7 + t.y * 13) % WOHN_FARBEN.length, nacht = LICHT < .5;
+  const bau = (wb.bis && st.tick < wb.bis) || wb.auftrag, zeige = bau ? (wb.alt || 0) : wb.stufe;
+  if (zeige) {
+    const img = wohnSprite(zeige, v, nacht), oy = sy + TH / 2 - img.anker;
+    schattenMalen(img, sx, sy + TH / 2 + 2, oy, WOHN_W, false, .35);
+    cx.drawImage(img, sx - WOHN_BX, oy, WOHN_W, WOHN_H);
+  }
+  if (!bau) return;
+  if (wb.auftrag) {
+    /* Wartet auf Baumaterial: abgesteckter Bauplatz mit Ziegelpalette */
+    const { fw } = WOHN_GEO[wb.stufe], fy = sy + TH / 2 + fw / 2;
+    cx.save();
+    cx.strokeStyle = "rgba(251,191,36,.8)"; cx.lineWidth = 1; cx.setLineDash([2, 3]);
+    cx.beginPath(); cx.moveTo(sx, fy); cx.lineTo(sx + fw, fy - fw / 2); cx.lineTo(sx, fy - fw); cx.lineTo(sx - fw, fy - fw / 2); cx.closePath(); cx.stroke();
+    cx.setLineDash([]);
+    if (!wb.alt) {
+      cx.fillStyle = "#a8674f"; cx.fillRect(sx - 6, sy + TH / 2 - 4, 12, 5);
+      cx.fillStyle = "#c7825f"; cx.fillRect(sx - 4, sy + TH / 2 - 8, 8, 4);
+    }
+    cx.restore();
+    return;
+  }
+  const { fw, hh } = WOHN_GEO[wb.stufe], fy = sy + TH / 2 + fw / 2;   // fy = vordere Ecke der Grundfläche
+  cx.save();
+  cx.strokeStyle = "rgba(251,191,36,.75)"; cx.lineWidth = 1; cx.setLineDash([3, 2]);
+  cx.beginPath();
+  for (const [x, y] of [[sx, fy], [sx + fw, fy - fw / 2], [sx - fw, fy - fw / 2]]) { cx.moveTo(x, y); cx.lineTo(x, y - hh); }
+  cx.moveTo(sx - fw, fy - fw / 2 - hh); cx.lineTo(sx, fy - hh); cx.lineTo(sx + fw, fy - fw / 2 - hh);
+  cx.moveTo(sx - fw, fy - fw / 2); cx.lineTo(sx, fy); cx.lineTo(sx + fw, fy - fw / 2);
+  cx.stroke(); cx.setLineDash([]);
+  /* Kran: Mast hinten rechts, Ausleger nach links, schwingender Haken */
+  const mx = sx + fw - 3, mfuss = fy - fw / 2 - 4, mtop = mfuss - hh - 22;
+  cx.strokeStyle = "#f59e0b"; cx.lineWidth = 1.6;
+  cx.beginPath(); cx.moveTo(mx, mfuss); cx.lineTo(mx, mtop); cx.moveTo(mx + 6, mtop + 2); cx.lineTo(mx - fw * 1.6, mtop + 2); cx.stroke();
+  const hx = mx - fw * (1 + .25 * Math.sin(performance.now() / 900 + t.x));
+  cx.lineWidth = .8; cx.strokeStyle = "rgba(255,255,255,.7)";
+  cx.beginPath(); cx.moveTo(hx, mtop + 2); cx.lineTo(hx, mtop + 18); cx.stroke();
+  cx.restore();
+  const dauer = st.stadt?.bauDauer || 60, anteil = Math.max(0, Math.min(1, 1 - (wb.bis - st.tick) / dauer));
+  cx.fillStyle = "rgba(7,11,16,.7)"; cx.fillRect(sx - 14, sy + TH - 3, 28, 4);
+  cx.fillStyle = "#fbbf24"; cx.fillRect(sx - 14, sy + TH - 3, 28 * anteil, 4);
+}
 /* Wie breit der Sockel eines Sprites ist — die breiteste sichtbare Zeile im
  * untersten Fuenftel. spriteGeo() misst die Gesamtbreite, und die taeuscht bei
  * einem Turm mit schmalem Fuss und ausladendem Aufbau: hochhaus-3 ist unten 37
@@ -3308,6 +4196,9 @@ const rohText = v => String(v ?? "").replace(/&(?:amp|lt|gt|quot|#39);/g, e => E
 /* Gebaeude ohne eigenes Sprite leihen sich eins. Der Fan-Hub ist ein
  * Vermarktungsgebaeude wie die Werbeagentur und sieht auch so aus. */
 const SPRITE_LEIHE = { fanhub: "werbeagentur",
+  /* Software: Studio im Bürohaus, Rechenzentrum wie eine Chipfabrik, der
+   * Online-Marktplatz übernimmt das Haus der Werbeagentur (er ersetzt sie). */
+  entwicklerstudio: "buero", rechenzentrum: "chipfabrik", onlinemarkt: "werbeagentur",
   /* Kartellmodus: die Familien-Betriebe und das Casino tarnen sich als
    * unauffaellige Geschaefte — bis eigene Sprites da sind, passt das sogar
    * inhaltlich: illegale Betriebe SOLLEN aussehen wie legale. */
@@ -3586,9 +4477,14 @@ function drawAmbient(now) {
     });
     }
   });
-  /* Fußgänger: kleine Pendelwege auf den Straßenzügen (Bürgersteig-Ersatz) */
-  ROUTES.carLines.slice(4, 4 + AMBIENT.people.length).forEach((line, i) => {
-    const spr = AMBIENT.people[i]; if (!spr || line.length < 2) return;
+  /* Fußgänger: kleine Pendelwege auf den Straßenzügen (Bürgersteig-Ersatz).
+   * Im Sandkasten wächst ihre Zahl mit der Einwohnerzahl (Pendler) — tagsüber
+   * eine Figur je 120 Einwohner, höchstens 18; nachts bleibt es bei den sechs. */
+  const stadtJetzt = store.get().state?.stadt;
+  const pendler = stadtJetzt && LICHT > .35 ? Math.min(18, Math.floor(stadtJetzt.einwohner / 120)) : 0;
+  const nPers = Math.max(AMBIENT.people.length, pendler);
+  ROUTES.carLines.slice(4, 4 + nPers).forEach((line, i) => {
+    const spr = AMBIENT.people[i % AMBIENT.people.length]; if (!spr || line.length < 2) return;
     const pos = tilePosAtU(line, now / 1000 * (0.18 + i * 0.03) + i * 3); if (!pos) return;
     const [sx, sy] = iso(pos.x, pos.y);
     verkehrMerken(pos.x, pos.y, () => {
@@ -3611,10 +4507,12 @@ function makeCloud(seed) {
   const g = c.getContext("2d");
   let r = seed;
   const rnd = () => (r = (r * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff;
-  g.filter = "blur(10px)";
-  const n = 9 + Math.floor(rnd() * 6);
+  g.filter = "blur(16px)";
+  const n = 12 + Math.floor(rnd() * 7);
   for (let i = 0; i < n; i++) {
-    const x = 110 + rnd() * 340, y = 105 + rnd() * 70, rad = 34 + rnd() * 52;
+    /* Viele kleinere Bausche auf einer flachen Unterkante: Schönwetterwolke
+     * statt eines runden Flecks. */
+    const x = 100 + rnd() * 360, rad = 26 + rnd() * 44, y = 160 - rad * .4 - rnd() * 46;
     const grad = g.createRadialGradient(x, y, rad * .15, x, y, rad);
     grad.addColorStop(0, "rgba(255,255,255,.9)");
     grad.addColorStop(.7, "rgba(248,250,253,.45)");
@@ -3662,7 +4560,7 @@ function drawClouds(now) {
     const h = cl.w / 2;
     /* DDR-Optik: graue, tiefer hängende Wolkendecke statt Schäfchenwolken. */
     if (PLAN_LOOK) cx.filter = "brightness(.7) saturate(.4)";
-    cx.globalAlpha = PLAN_LOOK ? Math.min(1, cl.alpha + .18) : cl.alpha;
+    cx.globalAlpha = PLAN_LOOK ? Math.min(1, cl.alpha + .18) : cl.alpha * (.18 + .3 * LICHT);
     cx.drawImage(cl.puff, wx - cl.w / 2 + pxo, wy - h / 2 + pyo, cl.w, h);
     cx.filter = "none";
     cx.globalAlpha = 1;
@@ -3755,7 +4653,7 @@ function atmosphaereMalen() {
   let tint;
   if (LICHT > .55)      tint = lerp3([255, 246, 232], [255, 253, 250], (LICHT - .55) / .45);  // Tag: Hauch warm
   else if (LICHT > .28) tint = lerp3([255, 208, 162], [255, 246, 232], (LICHT - .28) / .27);  // goldene Stunde
-  else                  tint = lerp3([76, 90, 146], [255, 208, 162], LICHT / .28);            // Nacht: kühles Blau
+  else                  tint = lerp3([118, 134, 196], [255, 208, 162], LICHT / .28);            // Nacht: kühles Blau
   /* Kartenpapier: Die Karte soll wie gedruckt wirken — Tageszeit nur angedeutet,
    * sonst wird das helle Papier nachts zu einem schmutzigen Violett. */
   const PAPIER = document.documentElement.dataset.theme === "papier";
@@ -3781,13 +4679,13 @@ function atmosphaereMalen() {
   if (nacht > .02 && !PAPIER) {
     /* Rest-Dunkel deutlich schwächer als früher (das Multiply-Blau trägt
      * die Nacht) — dafür oben ein kühler Glanz, als stünde der Mond hoch. */
-    cx.fillStyle = `rgba(7,11,30,${(nacht * .34).toFixed(3)})`;
+    cx.fillStyle = `rgba(7,11,30,${(nacht * .14).toFixed(3)})`;
     cx.fillRect(0, 0, innerWidth, innerHeight);
     const m = Math.round(nacht * 100);
     if (!ATMO.mond || ATMO.mondKey !== m) {
       const g = cx.createRadialGradient(innerWidth * .5, -innerHeight * .15, 0,
                                         innerWidth * .5, -innerHeight * .15, innerHeight * .95);
-      g.addColorStop(0, `rgba(150,178,232,${(nacht * .14).toFixed(3)})`);
+      g.addColorStop(0, `rgba(150,178,232,${(nacht * .22).toFixed(3)})`);
       g.addColorStop(1, "rgba(150,178,232,0)");
       ATMO.mond = g; ATMO.mondKey = m;
     }
@@ -3943,6 +4841,97 @@ const GLOW = (() => {
   g.fillStyle = grad; g.fillRect(0, 0, 64, 64);
   return c;
 })();
+
+/* ---- Leuchtende Fenster bei Nacht ----
+ * Je Gebäude-Sprite wird einmal eine Lichtmaske gebaut: warme Pixel (die
+ * Sprites haben gemalte Fenster) leuchten, von bläulichen Glasflächen ein
+ * zufälliger Teil. Die Masken werden NACH dem Nacht-Farbton additiv gemalt —
+ * so bleiben die Fenster hell, während die Stadt abdunkelt. */
+const NACHTMASKE = new WeakMap();
+function nachtMaske(img) {
+  let m = NACHTMASKE.get(img);
+  if (m !== undefined) return m;
+  m = null;
+  try {
+    const w = img.naturalWidth || img.width, h = img.naturalHeight || img.height;
+    const c = document.createElement("canvas"); c.width = w; c.height = h;
+    const g = c.getContext("2d", { willReadFrequently: true });
+    g.drawImage(img, 0, 0);
+    const d = g.getImageData(0, 0, w, h), p = d.data;
+    const B = Math.max(1, Math.round(w / 64));       // ein Ursprungspixel nach dem Hochskalieren
+    let n = 0;
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+      const i = (y * w + x) * 4, r = p[i], gr = p[i + 1], b = p[i + 2];
+      let an = 0;
+      if (p[i + 3] > 200) {
+        if (r > 150 && gr > 95 && r > b * 1.4) an = 255;                        // gemaltes Fensterlicht
+        else if (b > 120 && b > r + 45 &&                                        // Glas: jedes fünfte Fenster brennt
+                 ((((x / B | 0) * 7919) ^ ((y / B | 0) * 104729)) >>> 0) % 100 < 20) an = 170;
+      }
+      if (an) { p[i] = 255; p[i + 1] = 208; p[i + 2] = 124; p[i + 3] = an; n++; } else p[i + 3] = 0;
+    }
+    if (n) {
+      g.putImageData(d, 0, 0);
+      const o = document.createElement("canvas"); o.width = w; o.height = h;
+      const og = o.getContext("2d");
+      og.filter = `blur(${B * 2.2}px)`; og.drawImage(c, 0, 0); og.drawImage(c, 0, 0);   // Schein
+      og.filter = "none"; og.globalAlpha = 1; og.drawImage(c, 0, 0);                    // Fenster selbst
+      m = o;
+    }
+  } catch { m = null; }
+  NACHTMASKE.set(img, m);
+  return m;
+}
+const LICHTER = [];
+const lichtMerken = (img, x, y, w, h) => { if (LICHT < .5) LICHTER.push({ img, x, y, w, h }); };
+function drawNachtlichter() {
+  const n = Math.min(1, Math.max(0, (.5 - LICHT) / .28));
+  if (!EINST.licht || n <= 0 || !draw.welt || document.documentElement.dataset.theme === "papier") { LICHTER.length = 0; return; }
+  cx.save();
+  cx.setTransform(draw.welt);
+  cx.globalCompositeOperation = "lighter"; cx.globalAlpha = n;
+  for (const l of LICHTER) { const m = nachtMaske(l.img); if (m) cx.drawImage(m, l.x, l.y, l.w, l.h); }
+  cx.restore();
+  LICHTER.length = 0;
+}
+/* Die Stadtbild-Türme sind sehr dunkel gemalt und gingen auf dem dunklen
+ * Boden unter — eine einmal aufgehellte Kopie hebt sie ab. */
+const HELLSPRITE = new WeakMap();
+function hellSprite(img) {
+  let h = HELLSPRITE.get(img);
+  if (h) return h;
+  try {
+    h = document.createElement("canvas"); h.width = img.naturalWidth || img.width; h.height = img.naturalHeight || img.height;
+    const g = h.getContext("2d"); g.filter = "brightness(1.55) saturate(1.15)"; g.drawImage(img, 0, 0);
+  } catch { h = img; }
+  HELLSPRITE.set(img, h);
+  return h;
+}
+
+/* ---- Beschriftungen auf der Karte ----
+ * Orte (Bank, Finanzamt …) und Bauzeiten bekommen ein kleines Schild in der
+ * Spielschrift. Gesammelt während des Kachel-Durchlaufs, gemalt danach —
+ * so verdeckt kein Gebäude davor die Schrift. */
+const KARTENLABELS = [];
+const kartenLabel = (text, x, y, farbe) => KARTENLABELS.push({ text, x, y, farbe });
+function drawKartenLabels() {
+  if (!KARTENLABELS.length) return;
+  const papier = document.documentElement.dataset.theme === "papier";
+  cx.save();
+  cx.font = "600 8.5px 'IBM Plex Mono',ui-monospace,monospace";
+  cx.textAlign = "center"; cx.textBaseline = "middle"; cx.lineWidth = .9;
+  for (const l of KARTENLABELS) {
+    const w = cx.measureText(l.text).width + 10, h = 13, x = l.x - w / 2, y = l.y - h / 2;
+    cx.beginPath();
+    if (cx.roundRect) cx.roundRect(x, y, w, h, 3.5); else cx.rect(x, y, w, h);
+    cx.fillStyle = papier ? "#f8f4ea" : "rgba(7,11,16,.86)"; cx.fill();
+    cx.strokeStyle = l.farbe; cx.stroke();
+    cx.fillStyle = papier ? "#1f1a14" : l.farbe;
+    cx.fillText(l.text, l.x, l.y + .5);
+  }
+  cx.restore();
+  KARTENLABELS.length = 0;
+}
 
 /* ---- Fabrikrauch ----
  * Aktive Industriegebäude stoßen kleine, aufsteigende Rauchwölkchen aus —
@@ -4182,6 +5171,41 @@ addEventListener("keydown", e => {
 });
 addEventListener("keyup", e => TASTEN.delete(e.key.toLowerCase()));
 addEventListener("blur", () => TASTEN.clear());
+/* ---- Bildrate: Anzeige und automatische Anpassung ----
+ * Misst die Abstände zwischen den Bildern. Mit „Automatisch anpassen“ schaltet
+ * das Spiel bei anhaltendem Ruckeln (unter ~40 Bilder/s) stufenweise herunter:
+ * erst den Glas-Effekt, dann die Auflösung, dann Wolken und Hintergrund. Nur
+ * bei sichtbarem Tab, laufender Runde und Ziel „Maximal“ — im 30er-Modus wäre
+ * jedes Bild „langsam“. */
+const LEISTUNG = { abst: [], letzt: 0, anzeigeT: 0, pruefT: 0, ruheBis: 0 };
+const AUTO_STUFEN = [["glas", false, "Glas-Effekt aus"], ["aufloesung", .75, "Auflösung 75 %"], ["wolken", false, "Wolken aus"],
+                     ["hintergrund", false, "animierter Hintergrund aus"], ["aufloesung", .5, "Auflösung 50 %"]];
+document.addEventListener("einstellung", () => { LEISTUNG.ruheBis = performance.now() + 4000; LEISTUNG.abst.length = 0; });
+addEventListener("resize", () => { LEISTUNG.ruheBis = performance.now() + 4000; LEISTUNG.abst.length = 0; });
+function leistungMessen(jetzt) {
+  const L = LEISTUNG;
+  /* Pausen über 250 ms sind kein Ruckeln, sondern ein gedrosseltes oder
+   * verdecktes Fenster (dort laufen 1–2 Bilder/s) — sie zählen nicht. */
+  if (L.letzt && jetzt - L.letzt < 250) { L.abst.push(jetzt - L.letzt); if (L.abst.length > 240) L.abst.shift(); }
+  L.letzt = jetzt;
+  const med = () => { const a = [...L.abst].sort((x, y) => x - y); return a[Math.floor(a.length / 2)] || 16.7; };
+  if (EINST.fpsAnzeige && jetzt - L.anzeigeT > 500) {
+    L.anzeigeT = jetzt;
+    let el = document.getElementById("fpsAnzeige");
+    if (!el) { el = document.createElement("div"); el.id = "fpsAnzeige"; document.body.append(el); }
+    const letzte = L.abst.slice(-60), ruckler = letzte.filter(x => x > 50).length;
+    el.textContent = `${Math.round(1000 / med())} Bilder/s${ruckler ? ` · ${ruckler} Hänger` : ""}\n${EINST.qualitaet} · ${Math.round(DPR() * 100) / 100}× · ${EINST.glas ? "Glas an" : "Glas aus"}`;
+  } else if (!EINST.fpsAnzeige) document.getElementById("fpsAnzeige")?.remove();
+  if (!EINST.autoQualitaet || EINST.fps !== 60 || document.visibilityState !== "visible" || !store.get().state?.started) return;
+  if (jetzt < L.ruheBis || jetzt - L.pruefT < 3000 || L.abst.length < 90) return;
+  L.pruefT = jetzt;
+  if (med() <= 25) return;
+  const stufe = AUTO_STUFEN.find(([k, v]) => k === "aufloesung" ? (EINST.aufloesung || 1) > v : EINST[k] !== v);
+  if (!stufe) return;
+  EINST.setzen(stufe[0], stufe[1]);
+  L.ruheBis = jetzt + 8000;
+  toast(`${t("Grafik automatisch reduziert")}: ${t(stufe[2])}. ${t("Ändern unter Einstellungen → Grafik.")}`);
+}
 function draw() {
   requestAnimationFrame(draw);
   /* Bildrate begrenzen (Einstellung „30 Bilder/s") — spart Akku und Lüfter. */
@@ -4236,6 +5260,13 @@ function draw() {
    * behalten ihren eigenen Look. */
   const FL = !!window.FLAECHE && !ITALIA_LOOK && !PLAN_LOOK;
   draw.welt = cx.getTransform();   // für den Atmosphären-Clip
+  /* Nur Sichtbares zeichnen: Kacheln außerhalb des Bildausschnitts (plus Rand
+   * für hohe Gebäude, die nach oben ins Bild ragen) überspringen. Bei
+   * hineingezoomter Karte fällt so der Großteil der 900 Kacheln weg. */
+  const kz = cam.z, SICHT = { x0: -(innerWidth / 2 + cam.x) / kz - 90, x1: (innerWidth / 2 - cam.x) / kz + 90,
+                              y0: -(120 + cam.y) / kz - 90, y1: (innerHeight - 120 - cam.y) / kz + 170 };
+  const imBild = t => { const sx = (t.x - t.y) * TW / 2, sy = (t.x + t.y) * TH / 2;
+    return sx >= SICHT.x0 && sx <= SICHT.x1 && sy >= SICHT.y0 && sy <= SICHT.y1; };
   /* Kamera bewegt? Dann pausiert der Topo-Hintergrund kurz (siehe startTopo). */
   const camSig = cam.x + "|" + cam.y + "|" + cam.z;
   if (draw.camSig !== camSig) { draw.camSig = camSig; window.KAMERA_BEWEGT = performance.now(); }
@@ -4354,14 +5385,14 @@ function draw() {
     for (const b of st.bezirke) {
       const zx = (b.id % 3) * 9 + 4, zy = Math.floor(b.id / 3) * 9 + 4;
       const [sx, sy] = iso(zx, zy);
-      cx.font = "700 11px sans-serif"; cx.textAlign = "center";
+      cx.font = "700 11px 'Space Grotesk','Archivo',sans-serif"; cx.textAlign = "center";
       cx.fillStyle = "rgba(8,12,20,.55)";
       cx.fillText(b.name, sx + 1, sy + 1);
       cx.fillStyle = b.kontrolle ? famFarbe[b.kontrolle] : "rgba(220,228,240,.5)";
       cx.fillText(b.name, sx, sy);
       if (b.kontrolle) {
         const fam = st.familien.find(f => f.id === b.kontrolle);
-        cx.font = "600 9px sans-serif";
+        cx.font = "600 9px 'Space Grotesk','Archivo',sans-serif";
         cx.fillStyle = "rgba(220,228,240,.65)";
         cx.fillText(fam?.name || "", sx, sy + 12);
         if (b.besatzung) {
@@ -4381,7 +5412,7 @@ function draw() {
         cx.fillStyle = fv; cx.fillRect(bx2 + w * (b.kampf.pa / gesamt), by2, w * (b.kampf.pv / gesamt), h);
         cx.fillStyle = "#fff";
         cx.fillRect(bx2 + w * (b.kampf.pa / gesamt) - 1, by2 - 1, 2, h + 2);
-        cx.font = "800 13px sans-serif";
+        cx.font = "800 13px 'Space Grotesk','Archivo',sans-serif";
         cx.fillStyle = "#ffd7d0";
         cx.fillText(`⚔️ ${b.kampf.pa} : ${b.kampf.pv} · ${b.kampf.rest}s`, sx, by2 + 24);
       }
@@ -4390,7 +5421,7 @@ function draw() {
   /* Wasser-Effekte in einem eigenen Durchgang — direkt beim Kachelzeichnen
    * würden die danach gemalten Nachbarrauten sie sofort wieder übermalen. */
   for (const t of st.map) {
-    if (!t.water) continue;
+    if (!t.water || !imBild(t)) continue;
     const [sx, sy] = iso(t.x, t.y);
     /* Wandernde Lichtglanzpunkte, damit die Fläche lebt. */
     const h = (t.x * 31 + t.y * 17) % 97;
@@ -4420,6 +5451,7 @@ function draw() {
    * kommt und ihn wieder uebermalen wuerde. Nach dem vollstaendigen Boden
    * gezeichnet, bleibt er liegen. */
   for (const t of st.map) {
+    if (!imBild(t)) continue;
     const spr = t.bank    ? (BANKSPR || spriteFor("kontor", t.x, t.y))
               : t.news    ? (NEWSSPR || spriteFor("buero", t.x, t.y))
               : t.finanzamt ? (STADT_SPR.finanzamt || spriteFor("buero", t.x, t.y))
@@ -4433,7 +5465,7 @@ function draw() {
     drawSchatten(spr, sx, sy, t.deko ? dekoGroesse(spr) : t.btype ? 64 : 72);
   }
   for (const t of st.map) {
-    if (!t.park || t.btype) continue;
+    if (!t.park || t.btype || !imBild(t)) continue;
     const [sx, sy] = iso(t.x, t.y);
     for (const b of dekoStellen(t)) drawSchatten(b.img, sx + b.ox, sy + b.oy, b.gr);
   }
@@ -4447,6 +5479,7 @@ function draw() {
   drawAmbient(now);
   drawTrucks(now);
   for (const t of st.map) {
+    if (!imBild(t)) continue;   // Verkehr dieser Kachel zeichnet verkehrRest() am Ende
     const [sx, sy] = iso(t.x, t.y);
     if (t.park && !t.btype) {
       /* Der fruehere dunkle Ellipsenfleck unter jedem Baum ist weg: einer je
@@ -4512,7 +5545,7 @@ function draw() {
         for (const [fx2, fy2] of [[bx2 + 4, by2 - 24], [bx2 + 12, by2 - 21], [bx2 - 8, by2 - 26], [bx2 - 14, by2 - 24]]) {
           cx.fillStyle = LICHT < .5 ? "#ffd27a" : "#2e3646"; cx.fillRect(fx2, fy2, 3.6, 5);
         }
-        cx.fillStyle = "#e8edf5"; cx.font = "700 6.5px sans-serif"; cx.textAlign = "center";
+        cx.fillStyle = "#e8edf5"; cx.font = "700 6.5px 'Space Grotesk','Archivo',sans-serif"; cx.textAlign = "center";
         cx.fillText("QUESTURA", bx2 + 9.5, by2 - 14.5);
         /* rotierendes Blaulicht über der Tür */
         const bl = (Math.sin(now / 180) + 1) / 2;
@@ -4544,7 +5577,7 @@ function draw() {
         }
         const neonPuls = .55 + ((Math.sin(now / 300) + 1) / 2) * .45;
         cx.fillStyle = `rgba(255,72,72,${neonPuls.toFixed(2)})`;   // Neon-Schriftzug
-        cx.font = "800 7px sans-serif"; cx.textAlign = "center";
+        cx.font = "800 7px 'Space Grotesk','Archivo',sans-serif"; cx.textAlign = "center";
         cx.fillText("CASINO", bx2 + 9.5, by2 - 12.5);
         /* Lichterkette an der Traufe: Lauflicht */
         for (let i = 0; i < 8; i++) {
@@ -4580,7 +5613,7 @@ function draw() {
           cx.fillStyle = fam.farbe;
           const weh = Math.sin(now / 300 + t.x) * 1.5;
           cx.beginPath(); cx.moveTo(bx2, by2 - 42); cx.lineTo(bx2 + 10, by2 - 39 + weh); cx.lineTo(bx2, by2 - 36); cx.closePath(); cx.fill();
-          cx.font = "700 6.5px sans-serif"; cx.textAlign = "center";
+          cx.font = "700 6.5px 'Space Grotesk','Archivo',sans-serif"; cx.textAlign = "center";
           cx.fillStyle = "rgba(9,13,20,.85)";
           const bw2 = cx.measureText(fam.name).width + 8;
           cx.fillRect(bx2 - bw2 / 2, by2 + 8, bw2, 9);
@@ -4598,9 +5631,9 @@ function draw() {
         cx.fillStyle = "#b99253";
         cx.beginPath(); cx.moveTo(bx2, by2 + 7); cx.lineTo(bx2 + 15, by2); cx.lineTo(bx2, by2 - 7); cx.lineTo(bx2 - 15, by2); cx.closePath(); cx.fill();
         cx.strokeStyle = "#7d6023"; cx.lineWidth = 1; cx.stroke();
-        cx.font = "22px sans-serif"; cx.textAlign = "center"; cx.textBaseline = "alphabetic";
+        cx.font = "22px 'Space Grotesk','Archivo',sans-serif"; cx.textAlign = "center"; cx.textBaseline = "alphabetic";
         cx.fillText(w.icon, bx2, by2 - 4);
-        cx.font = "700 6.5px sans-serif";
+        cx.font = "700 6.5px 'Space Grotesk','Archivo',sans-serif";
         cx.fillStyle = "rgba(9,13,20,.85)";
         const bw = cx.measureText(w.name).width + 8;
         cx.fillRect(bx2 - bw / 2, by2 + 8, bw, 9);
@@ -4773,10 +5806,12 @@ function draw() {
        * sollen sich nicht als bedienbar ausgeben. */
       const dimg = dekoSprite(t);
       if (dimg) {
-        const gr = dekoGroesse(dimg);
-        cx.drawImage(dimg, sx - gr / 2, standY(sy, dimg, gr), gr, gr);
+        const gr = dekoGroesse(dimg), dy = standY(sy, dimg, gr);
+        cx.drawImage(hellSprite(dimg), sx - gr / 2, dy, gr, gr);
+        lichtMerken(dimg, sx - gr / 2, dy, gr, gr);
       }
     }
+    if (t.wohnblock) wohnMalen(t, sx, sy, st);
     if (t.bank) {
       /* Bank: goldener Sockel, damit sie sich als städtisches Gebäude von den
        * Spielergebäuden abhebt, plus Beschriftung. */
@@ -4784,15 +5819,13 @@ function draw() {
       cx.beginPath(); cx.moveTo(sx,sy); cx.lineTo(sx+TW/2,sy+TH/2); cx.lineTo(sx,sy+TH); cx.lineTo(sx-TW/2,sy+TH/2); cx.closePath(); cx.fill();
       cx.strokeStyle = "#38bdf8"; cx.lineWidth = 1.6; cx.stroke(); cx.lineWidth = 1;
       const bimg = BANKSPR || spriteFor("kontor", t.x, t.y);
-      if (bimg) cx.drawImage(bimg, sx-36, standY(sy, bimg, 72), 72, 72);
-      cx.font = "bold 10px sans-serif"; cx.textAlign = "center"; cx.fillStyle = "#38bdf8";
-      cx.fillText(uebers("BANK"), sx, sy + TH / 2 + 16);
+      if (bimg) { cx.drawImage(bimg, sx-36, standY(sy, bimg, 72), 72, 72); lichtMerken(bimg, sx-36, standY(sy, bimg, 72), 72, 72); }
+      kartenLabel(uebers("BANK"), sx, sy + TH / 2 + 19, "#38bdf8");
     }
     if (t.news) {
       const nimg = NEWSSPR || spriteFor("buero", t.x, t.y);
-      if (nimg) cx.drawImage(nimg, sx-36, standY(sy, nimg, 72), 72, 72);
-      cx.font = "bold 10px sans-serif"; cx.textAlign = "center"; cx.fillStyle = "#fbbf24";
-      cx.fillText(uebers("NACHRICHTEN"), sx, sy + TH / 2 + 16);
+      if (nimg) { cx.drawImage(nimg, sx-36, standY(sy, nimg, 72), 72, 72); lichtMerken(nimg, sx-36, standY(sy, nimg, 72), 72, 72); }
+      kartenLabel(uebers("NACHRICHTEN"), sx, sy + TH / 2 + 19, "#fbbf24");
     }
     if (t.finanzamt) {
       /* Finanzamt: violetter Sockel wie die Bank, damit es als städtischer Ort lesbar ist */
@@ -4800,15 +5833,13 @@ function draw() {
       cx.beginPath(); cx.moveTo(sx,sy); cx.lineTo(sx+TW/2,sy+TH/2); cx.lineTo(sx,sy+TH); cx.lineTo(sx-TW/2,sy+TH/2); cx.closePath(); cx.fill();
       cx.strokeStyle = "#a78bfa"; cx.lineWidth = 1.6; cx.stroke(); cx.lineWidth = 1;
       const fimg = STADT_SPR.finanzamt || spriteFor("buero", t.x, t.y);
-      if (fimg) cx.drawImage(fimg, sx-36, standY(sy, fimg, 72), 72, 72);
-      cx.font = "bold 10px sans-serif"; cx.textAlign = "center"; cx.fillStyle = "#a78bfa";
-      cx.fillText(uebers("FINANZAMT"), sx, sy + TH / 2 + 16);
+      if (fimg) { cx.drawImage(fimg, sx-36, standY(sy, fimg, 72), 72, 72); lichtMerken(fimg, sx-36, standY(sy, fimg, 72), 72, 72); }
+      kartenLabel(uebers("FINANZAMT"), sx, sy + TH / 2 + 19, "#a78bfa");
     }
     if (t.denkmal) {
       const dimg2 = STADT_SPR[t.denkmal] || spriteFor("kontor", t.x, t.y);
       if (dimg2) cx.drawImage(dimg2, sx-36, standY(sy, dimg2, 72), 72, 72);
-      cx.font = "bold 10px sans-serif"; cx.textAlign = "center"; cx.fillStyle = "#fbbf24";
-      cx.fillText(String(t.denkmalName || "").toUpperCase(), sx, sy + TH / 2 + 16);
+      kartenLabel(String(t.denkmalName || "").toUpperCase(), sx, sy + TH / 2 + 19, "#fbbf24");
     }
     if (t.schwarz) {
       /* Schwarzmarkt-Baracke: rot markiert, bewusst unscheinbarer als die Bank. */
@@ -4817,8 +5848,7 @@ function draw() {
       cx.strokeStyle = "#f43f5e"; cx.lineWidth = 1.6; cx.stroke(); cx.lineWidth = 1;
       const simg = spriteFor("markt", t.x, t.y) || spriteFor("kontor", t.x, t.y);
       if (simg) cx.drawImage(simg, sx-36, standY(sy, simg, 72), 72, 72);
-      cx.font = "bold 10px sans-serif"; cx.textAlign = "center"; cx.fillStyle = "#f43f5e";
-      cx.fillText(uebers("SCHWARZMARKT"), sx, sy + TH / 2 + 16);
+      kartenLabel(uebers("SCHWARZMARKT"), sx, sy + TH / 2 + 19, "#f43f5e");
     }
     if (t.btype) {
       const owner = st.players[t.owner];
@@ -4840,6 +5870,16 @@ function draw() {
         // Sprite direkt auf die Kachel — Grundfläche mittig, ohne Bodenschatten
         const oben = standY(sy, spr, 64);
         cx.drawImage(spr, sx-32, oben, 64, 64);
+        lichtMerken(spr, sx-32, oben, 64, 64);
+        /* Firmenschild: das selbst gemalte Logo des Besitzers am Gebäude */
+        const schild = st.logoV?.[t.owner] != null && FLOGO[t.owner]?.canvas;
+        if (schild) {
+          const gx = sx + 12, gy = oben + 10;
+          cx.fillStyle = "#fff"; cx.fillRect(gx - 1.5, gy - 1.5, 19, 19);
+          cx.strokeStyle = col; cx.lineWidth = 1; cx.strokeRect(gx - 1.5, gy - 1.5, 19, 19);
+          const glatt = cx.imageSmoothingEnabled; cx.imageSmoothingEnabled = false;
+          cx.drawImage(schild, gx, gy, 16, 16); cx.imageSmoothingEnabled = glatt;
+        }
         /* Aktive Industrie raucht; pausierte nicht. */
         if (RAUCHER.has(t.btype) && !t.paused) drawRauch(sx, oben, t.x * 5 + t.y, now);
         /* Nachts warmes Fensterlicht über dem Gebäude. */
@@ -4865,10 +5905,9 @@ function draw() {
         const k = Math.max(0, Math.min(1, 1 - rest / dauer)), w = 30;
         cx.fillStyle = "rgba(10,14,21,.75)"; cx.fillRect(sx - w / 2 - 1, sy - 37, w + 2, 6);
         cx.fillStyle = "#f59e0b"; cx.fillRect(sx - w / 2, sy - 36, w * k, 4);
-        cx.font = "bold 9px sans-serif"; cx.textAlign = "center"; cx.fillStyle = "#f59e0b";
-        cx.fillText(`im Bau ${rest}s`, sx, sy - 40);
+        kartenLabel(`${rest}s`, sx, sy - 46, "#f59e0b");
       }
-      if (t.level > 1) { cx.font="bold 10px sans-serif"; cx.textAlign="center"; cx.fillStyle="#38bdf8";
+      if (t.level > 1) { cx.font="bold 10px 'Space Grotesk','Archivo',sans-serif"; cx.textAlign="center"; cx.fillStyle="#38bdf8";
         cx.fillText(`★${t.level}`, sx, sy - 48); }
     }
     /* Fahrzeuge auf dieser Kachel — nach ihrem Gebaeude, aber vor allen
@@ -4876,11 +5915,14 @@ function draw() {
     verkehrZeichnen(t.x, t.y);
   }
   verkehrRest();          // was ausserhalb der Karte liegt, nicht verschlucken
+  drawKartenLabels();
   if (FL) FLAECHE.schilder(cx, st.map);
   drawEffekte(now);
   drawClouds(now);
   drawAtmosphere();
+  drawNachtlichter();
   rennStreckeZeichnen();
+  leistungMessen(pnow);
 }
 requestAnimationFrame(draw);
 
@@ -4972,7 +6014,8 @@ function clickTile(e) {
   if (t?.schwarz && me) { openPanel("schwarz"); return; }
   if (t?.bank && me) { openPanel("bank"); return; }
   if (t?.news && me) { openPanel("news"); return; }
-  if ((t?.finanzamt || t?.denkmal) && me) { openPanel("finanzamt"); return; }
+  /* Wohngebiet: dort baut nur die Stadt — der Klick zeigt die Stadtübersicht im Finanzamt */
+  if ((t?.finanzamt || t?.denkmal || t?.wohnblock || (t?.zone === "wohnen" && !t.road)) && me) { openPanel("finanzamt"); return; }
   if (t?.gcasino && me) { gcasinoOeffnen(); return; }
   if (t?.wz && me) { wzOeffnen(t.wz); return; }
   if (t?.famhaus && me) { famOeffnen(t.famhaus); return; }
@@ -5042,10 +6085,10 @@ function clickTile(e) {
             <button class="mini tmOk" data-slot="${i}" aria-label="Regal ${i + 1} übernehmen">✓</button>
           </div>
           <div class="tmSlotInfo">${info}</div></div>`;
-      }).join("");
+      }).join("") + (bt.online ? `<div class="tmSlotInfo" style="margin-top:4px">Strom und Elektronik kauft die Stadt nur langsam — beides brauchen die Firmen. An der Börse wirst du es schneller los.</div>` : "");
     }
     const lvl = t.level || 1;
-    const canLevel = !!(bt.out || bt.proc || bt.racing);
+    const canLevel = !!(bt.out || bt.proc || bt.racing || bt.studio || bt.rz || bt.online);
     const lvlMult = 1 + 0.3 * (lvl - 1);
     let upgradeHtml = "";
     if (canLevel && mine) {
@@ -5054,7 +6097,7 @@ function clickTile(e) {
       } else {
         const ec = Math.ceil(bt.cost / 2500 * lvl), cc = Math.round(bt.cost * 0.35 * lvl);
         const afford = me.inv.elektronik >= ec && me.cash >= cc;
-        const nutzen = bt.racing ? `${lvl + 1} Stellplätze statt ${lvl}` : "+30 % Ausstoß";
+        const nutzen = bt.racing ? `${lvl + 1} Stellplätze statt ${lvl}` : bt.online ? `${(t.shop || []).length + 1} Regale statt ${(t.shop || []).length}` : bt.rz ? `${(lvl + 1) * bt.rz.plaetze} Kunden statt ${lvl * bt.rz.plaetze}` : bt.studio ? "+30 % Entwicklungspunkte" : "+30 % Ausstoß";
         const fehlt = [me.inv.elektronik < ec ? `${ec - (me.inv.elektronik || 0)} Elektronik` : "",
                        me.cash < cc ? fmt(cc - me.cash) : ""].filter(Boolean).join(" + ");
         upgradeHtml = `<button class="tmHaupt" id="upgrade" ${afford ? "" : "disabled"}>
@@ -5107,6 +6150,91 @@ function clickTile(e) {
           Ohne neue Kampagne ist die Reichweite in gut zwei Minuten aufgebraucht.
         </div>` + pakete;
     }
+    /* Software: Shop-System auf dem Online-Marktplatz, Studio, Rechenzentrum */
+    let swHtml = "";
+    const swListe = store.get().state.software || [];
+    const swTick = store.get().state.tick;
+    const swName = id => swListe.find(x => x.id === id);
+    const swChips = x => Object.entries(x.module || {}).filter(([m, an]) => an && !m.includes(":"))
+      .map(([m]) => store.get().state.swModule?.[m]?.name || m).join(", ") || "keine Extras";
+    if (bt.online) {
+      const sys = t.system, akt = sys ? swName(sys.produktId) : null;
+      const rest = sys ? sys.bis - swTick : 0;
+      const offen = akt && rest <= 0;
+      const shopKnopf = offen ? `<button class="tmHaupt" id="shopAuf"><span>🛒 Online-Shop öffnen</span><small>${mine ? "So sehen deine Kunden den Shop" : `Einkaufen, bezahlt mit ${akt.name}`}</small></button>` : "";
+      if (!mine) {
+        swHtml = shopKnopf + `<div class="tmHinweis">${akt ? `Läuft mit <b>${akt.name}</b> von ${akt.anbieter}.` : "Noch kein Shop-System installiert — der Shop ist geschlossen."}</div>`;
+      } else {
+        const status = !sys ? `<div class="tmSwStatus zu">Kein System — der Marktplatz verkauft noch nichts.</div>`
+          : rest > 0 ? `<div class="tmSwStatus warn">${akt?.name ?? "System"} wird installiert · noch ${rest}s</div>`
+          : `<div class="tmSwStatus an">${akt?.name ?? "System"} v${akt?.version ?? "?"} läuft${akt?.faktor < 1 ? ` · <b>überlastet (${Math.round(akt.faktor * 100)} %)</b>` : ""}</div>`;
+        const werbung = akt?.module?.werbung && rest <= 0
+          ? `<button class="opt" id="swWerbung" data-an="${sys.werbung ? 0 : 1}">${sys.werbung ? "Werbemodul ausschalten" : "Werbemodul einschalten"}
+              <small>${fmt(akt.werbeAbo)}/min je Marktplatz · bis +${Math.round((store.get().state.swCfg?.werbeBoost || .2) * 100)} % über Ø-Kurs ohne Tempoverlust</small></button>` : "";
+        const meineBranche = store.get().state.players[myId]?.industry;
+        const wertFuer = x => x.wertJe?.[meineBranche] ?? x.wert;
+        const baumTxt = x => (x.branchen || []).map(br => `${store.get().state.swBaeume?.[br]?.name || br} ${"●".repeat(x.stufen?.[br] || 0)}${"○".repeat(3 - (x.stufen?.[br] || 0))}`).join(" · ");
+        const optionen = swListe.filter(x => x.version >= 1).sort((a, b) => wertFuer(b) - wertFuer(a)).map(x => {
+          const voll = !x.portal && x.plaetze != null && x.kunden >= x.plaetze && x.id !== sys?.produktId;
+          const aus = !x.portal && x.plaetze === 0;
+          const jetzt = x.id === sys?.produktId;
+          return `<button class="opt tmSwOpt${jetzt ? " jetzt" : ""}" data-sys="${x.id}" ${jetzt || voll || me.cash < x.einrichtung ? "disabled" : ""}>
+            <span><i style="background:${x.farbe}"></i>${x.name} v${x.version}<em>${x.anbieter}</em></span>
+            <small>${x.einrichtung ? fmt(x.einrichtung) + " einmalig" : "keine Einrichtung"} · ${String(x.gebuehr).replace(".", ",")} % je Verkauf · ${swChips(x)}${baumTxt(x) ? ` · <b>${baumTxt(x)}</b>` : ""}${x.portal ? "" : ` · Ruf ${x.ruf}`}${aus ? " · <b>fällt gerade aus</b>" : voll ? " · <b>voll</b>" : jetzt ? " · <b>aktiv</b>" : ""}</small></button>`;
+        }).join("");
+        swHtml = status + shopKnopf + werbung + `<div class="tmHinweis" style="margin:8px 2px 6px">${sys ? "Wechseln" : "Installieren"} (dauert ${store.get().state.swCfg?.install ?? 45} s, Stadtportal ${store.get().state.swCfg?.portalInstall ?? 90} s):</div>`
+          + optionen + `<button class="tmKlein" id="swPanel" style="margin-top:4px">Alle Systeme vergleichen</button>`;
+      }
+    }
+    if (bt.studio || bt.rz) {
+      const meins = swListe.find(x => x.ownerId === t.owner && !x.portal);
+      const zeilen = [];
+      if (bt.rz) zeilen.push(`Rechenzentrum ${t.rzAktiv ? "<b style=\"color:var(--up)\">am Netz</b>" : "<b style=\"color:var(--down)\">aus — Strom fehlt</b>"}`,
+        meins ? `${meins.name}: <b>${meins.kunden}</b> Kunden auf <b>${meins.plaetze ?? 0}</b> Plätzen` : "Noch kein Shop-System");
+      if (bt.studio) zeilen.push(meins?.entwicklung ? `Entwickelt ${meins.name} v${meins.entwicklung.version}: <b>${meins.entwicklung.ep}/${meins.entwicklung.ziel} EP</b>`
+        : meins ? `${meins.name} v${meins.version} · ${swChips(meins)}` : "Noch kein Shop-System angelegt");
+      swHtml = `<div class="tmHinweis">${zeilen.join("<br>")}</div>`
+        + (bt.rz && store.get().state.stadt ? `<button class="tmHaupt" id="rzAuf"><span>🌐 ${tUe("Statusseite öffnen")}</span><small>${mine ? tUe("Ausbau, Preise, Platzverteilung, Websites") : tUe("Verfügbarkeit, Hosting, Websites bestellen")}</small></button>` : "")
+        + (mine ? `<button class="${bt.rz && store.get().state.stadt ? "tmKlein" : "tmHaupt"}" id="swPanel" style="margin-top:4px">${bt.rz && store.get().state.stadt ? tUe("Software-Baukasten öffnen") : "<span>Software-Baukasten öffnen</span><small>Name, Preise, neue Versionen</small>"}</button>` : "");
+    }
+    /* Steuerungssoftware auf Produktionsgebäuden: Systeme mit einem Baum für
+     * die Branche dieses Gebäudes, Wirkung je nach Stufe, Abo je Minute. */
+    let steuerHtml = "";
+    const stCfg = store.get().state.steuerung || {}, stDef = stCfg[bt.industry];
+    if (mine && stDef && (bt.proc || bt.out) && !bt.retail && !bt.studio && !bt.rz) {
+      const stufeAnteil = store.get().state.steuerStufe || [0, .5, .8, 1];
+      const tick = store.get().state.tick;
+      const art = stDef.art === "in" && bt.proc ? "weniger Rohstoffe" : "mehr Ausstoß";
+      const wirkung = x => Math.round(stDef.wert * stufeAnteil[x.stufen?.[bt.industry] || 0] * 100);
+      const akt = t.steuerung ? swListe.find(x => x.id === t.steuerung.produktId) : null;
+      const rest = t.steuerung ? Math.max(0, t.steuerung.bis - tick) : 0;
+      const status = !akt ? `<div class="tmSwStatus zu">Keine Steuerung — ${stDef.name}-Software bringt bis zu ${Math.round(stDef.wert * 100)} % ${art}.</div>`
+        : rest > 0 ? `<div class="tmSwStatus warn">${akt.name} wird installiert · noch ${rest}s</div>`
+        : `<div class="tmSwStatus an">${stDef.name} von ${akt.name}: <b>${Math.round(wirkung(akt) * Math.min(1, akt.faktor ?? 1))} % ${art}</b>${akt.faktor < 1 ? ` · überlastet (${Math.round(akt.faktor * 100)} %)` : ""}</div>`;
+      const optionen = swListe.filter(x => !x.portal && x.version >= 1 && (x.stufen?.[bt.industry] || 0) >= 1).sort((a, b) => wirkung(b) - wirkung(a) || a.steuerAbo - b.steuerAbo).map(x => {
+        const jetzt = x.id === t.steuerung?.produktId, voll = x.plaetze != null && x.kunden >= x.plaetze && !jetzt;
+        const abo = x.ownerId === myId ? 0 : x.steuerAbo;
+        return `<button class="opt tmSwOpt${jetzt ? " jetzt" : ""}" data-steuer="${x.id}" ${jetzt || voll || me.cash < abo ? "disabled" : ""}>
+          <span><i style="background:${x.farbe}"></i>${x.name} v${x.version}<em>${x.anbieter}</em></span>
+          <small>${wirkung(x)} % ${art} · ${abo ? fmt(abo) + "/min" : "eigenes System, kein Abo"}${voll ? " · <b>voll</b>" : jetzt ? " · <b>aktiv</b>" : ""}</small></button>`;
+      }).join("");
+      steuerHtml = status + (optionen
+        ? `<div class="tmHinweis" style="margin:8px 2px 6px">${akt ? "Wechseln" : "Installieren"} (dauert ${store.get().state.swCfg?.install ?? 45} s, keine Einrichtung):</div>` + optionen
+        : `<div class="tmHinweis">Noch kein Shop-System hat einen Baum für ${store.get().state.swBaeume?.[bt.industry]?.name ?? "diese Branche"}.</div>`)
+        + (akt ? `<button class="tmHaupt" id="leitAuf" style="margin-top:6px"><span>🎛 Leitstand öffnen</span><small>Anzeigen${akt.version >= (store.get().state.leitFunktion?.turbo ?? 2) ? ", Turbo" : ""}${akt.version >= (store.get().state.leitFunktion?.nachkauf ?? 3) ? ", Nachkauf" : ""} — im Design von ${akt.anbieter}</small></button>`
+          + `<button class="tmKlein" id="steuerAus" style="margin-top:4px">Steuerung abschalten</button>` : "");
+    }
+    /* Touristik (Etappe 6): Sterne, Renovieren, Weg ins Touristik-Panel */
+    let tourHtml = "";
+    const tCfg = store.get().state.touristikCfg;
+    if (store.get().state.touristik && tCfg && (t.btype === "campingplatz" || t.btype === "strandhotel")) {
+      const s = t.btype === "campingplatz" ? 1 : (t.sterne || tCfg.START_STERNE), kosten = tCfg.RENOVIEREN[s];
+      const firma = store.get().state.touristik.firmen.find(f => f.id === t.owner);
+      tourHtml = `<div class="tmHinweis">${sterneHtml(s)} ${s} ${tUe("Sterne")}${s >= 3 ? ` · ${tUe("mit Frühstück")}` : ""}${firma ? `<br>${tUe("Firma")}: ${firma.gaeste} ${tUe("Gäste je Minute")} · ${fmt(firma.preis)} ${tUe("je Nacht")}` : ""}</div>`
+        + (mine && t.btype === "strandhotel" && s < tCfg.MAX_STERNE ? `<button class="tmKlein" id="renov" style="margin-top:4px" ${me.cash < kosten ? "disabled" : ""}>${tUe("Auf")} ${s + 1} ${tUe("Sterne renovieren")} · ${fmt(kosten)}</button>` : "")
+        + `<button class="tmHaupt" id="hotelAuf" style="margin-top:6px"><span>🌐 ${tUe("Buchungsseite öffnen")}</span><small>${mine ? tUe("Preis, Renovieren, Feste") : tUe("Häuser, Preise und Bewertungen")}</small></button>`
+        + (mine ? `<button class="tmKlein" id="tourPanel" style="margin-top:4px">🏨 ${tUe("Touristik-Panel öffnen")}</button>` : "");
+    }
     /* Übersichtliche Gebäudekarte: Kopf (Bild, Name, Stufe, Besitzer, Status),
      * zwei bis drei Kennzahlen, EIN Hauptknopf, kleine Nebenknöpfe. Die
      * Erklärtexte stehen eingeklappt unter „Mehr erfahren". */
@@ -5114,19 +6242,36 @@ function clickTile(e) {
     const sprSrc = spriteUrl(t.btype, t.x, t.y);
     const imBauNoch = t.bauBis && store.get().state.tick < t.bauBis ? t.bauBis - store.get().state.tick : 0;
     const status = imBauNoch ? ["warn", `Im Bau · noch ${imBauNoch}s`] : t.lien ? ["warn", "Pfandrecht"] : t.paused ? ["aus", "Pausiert"]
-      : (bt.out || bt.proc || bt.retail) ? ["an", "Läuft"] : null;
+      : (bt.online && !(t.system && store.get().state.tick >= t.system.bis)) ? ["warn", "Kein System"]
+      : (bt.rz && !t.rzAktiv) ? ["warn", "Kein Strom"]
+      : (bt.out || bt.proc || bt.retail || bt.studio || bt.rz) ? ["an", "Läuft"] : null;
     const kennzahlen = [];
     if (bt.out) kennzahlen.push(["Produziert", `${(bt.rate * lvlMult).toFixed(2)}/s`, gname(bt.out)]);
     if (bt.proc) kennzahlen.push(
       ["Stellt her", `${(bt.proc.rate * lvlMult).toFixed(2)}/s`, gname(bt.proc.out)],
       ["Verbraucht", Object.entries(bt.proc.in).map(([g, n]) => `${(n * lvlMult).toFixed(2)} ${gname(g)}`).join(" + "), "pro Sekunde"]);
     if (bt.racing) kennzahlen.push(["Garage", `${(t.autos || []).length}/${lvl}`, "Stellplätze"]);
+    if (bt.studio) kennzahlen.push(["Entwickelt", `${(bt.studio.ep * lvlMult).toFixed(2)} EP/s`, "Entwicklungspunkte"],
+      ["Verbraucht", Object.entries(bt.studio.in).map(([g, n]) => `${(n * lvlMult).toFixed(2)} ${gname(g)}`).join(" + "), "pro Sekunde"]);
+    if (bt.rz) kennzahlen.push(["Plätze", `${bt.rz.plaetze * lvl}`, "Marktplätze + Steuerungen"], ["Verbraucht", `${(bt.rz.in.strom * lvlMult).toFixed(2)} ${gname("strom")}`, "pro Sekunde"]);
+    /* Belegschaft (Sandkasten): mit 3 von 5 Arbeitern läuft das Gebäude zu 60 % */
+    const belegt = store.get().state.stadt && t.arbeiterSoll ? { ist: t.arbeiter ?? t.arbeiterSoll, soll: t.arbeiterSoll } : null;
+    const mehr0 = [];
+    if (belegt) {
+      const q = belegt.ist / belegt.soll;
+      if (t.fachSoll) mehr0.push(`<b>${tUe("Fachkräfte")}:</b> ${t.fach ?? 0} / ${t.fachSoll} — ${tUe("die Hälfte der Stellen hier verlangt Fachkräfte. Mehr bildet die Stadtbibliothek aus (Stadtprojekt).")}`);
+      kennzahlen.push([tUe("Belegschaft"), `${belegt.ist}/${belegt.soll}`, t.paused ? tUe("pausiert — Arbeiter frei") : q < .25 ? tUe("steht still (unter 25 %)") : `${Math.round(Math.min(1, q) * 100)} % ${tUe("Leistung")}`]);
+    }
     const mehr = [];
     if (bt.out && lvl > 1) mehr.push(`Basisrate ${bt.rate}/s × ${lvlMult.toFixed(1)} durch Stufe ${lvl}.`);
     if (bt.boosts) mehr.push(`<b>Boost:</b> ${bt.boosts.map(r => gname(r)).join(" + ")} im Lager bringen je +75 % Tempo und werden dabei verbraucht.`);
     if (bt.retail) mehr.push(`Dein Preis bestimmt das Tempo: Ø-Kurs = volle Rate, teurer = langsamer, billiger = schneller (max. ×2).`
       + ((me.ad?.boost || 1) > 1.001 ? ` <b style="color:var(--accent2)">Werbung aktiv: bis ${Math.round((me.ad.boost - 1) * 100)} % über Ø-Kurs ohne Tempoverlust.</b>` : ""));
     if (t.lien) mehr.push("Auf dem Gebäude liegt ein Pfandrecht — Abreißen ist gesperrt, bis die Anleihe bedient ist.");
+    mehr.push(...mehr0);
+    if (t.steuerung && belegt) mehr.push(tUe("Steuerungssoftware spart hier ein Viertel der Arbeiter."));
+    if (belegt && belegt.ist < belegt.soll && mine && !t.paused)
+      mehr.push(`<b>${tUe("Zu wenig Arbeiter")}:</b> ${tUe("Die Stadt hat gerade nicht genug Leute. Höhere Löhne (Firma-Panel) holen sie von anderen Firmen — oder warte, bis neue Bewohner zuziehen.")}`);
     if (imBauNoch) mehr.push(`Anlage in Arbeit: Das Gebäude produziert erst nach der Bauzeit. Sein Wert zählt aber schon jetzt voll zum Firmenwert — Bauen senkt den Wert deiner Firma nicht.`);
     const nebenKnoepfe = [
       (bt.retail || bt.proc) && mine ? `<button class="tmKlein" id="pause">${t.paused ? "▶ Fortsetzen" : "❚❚ Pausieren"}</button>` : "",
@@ -5146,6 +6291,9 @@ function clickTile(e) {
         ${status ? `<span class="tmStatus ${status[0]}">${status[1]}</span>` : ""}
       </div>
       ${kennzahlen.length ? `<div class="tmZahlen">${kennzahlen.map(([k, v, u]) => `<div><span>${k}</span><b class="${String(v).length > 10 ? "lang" : ""}">${v}</b><small>${u}</small></div>`).join("")}</div>` : ""}
+      ${swHtml ? `<div class="tmAbschnitt">${bt.online ? "Shop-System" : "Software"}</div>${swHtml}` : ""}
+      ${steuerHtml ? `<div class="tmAbschnitt">Steuerungssoftware</div>${steuerHtml}` : ""}
+      ${tourHtml ? `<div class="tmAbschnitt">${tUe("Gäste")}</div>${tourHtml}` : ""}
       ${shopHtml ? `<div class="tmAbschnitt">Regale</div>${shopHtml}` : ""}
       ${stallHtml ? `<div class="tmAbschnitt">Garage</div>${stallHtml}` : ""}
       ${adHtml ? `<div class="tmAbschnitt">Werbung</div>${adHtml}` : ""}
@@ -5158,6 +6306,23 @@ function clickTile(e) {
       act("bookAd", { paket: b.dataset.ad }); tm.style.display = "none";
     }));
     tm.querySelector("#pause")?.addEventListener("click", () => { act("togglePause", { x: t.x, y: t.y }); tm.style.display = "none"; });
+    tm.querySelectorAll("[data-sys]").forEach(b => b.addEventListener("click", () => {
+      act("installSystem", { x: t.x, y: t.y, produktId: b.dataset.sys }); tm.style.display = "none";
+    }));
+    tm.querySelectorAll("[data-steuer]").forEach(b => b.addEventListener("click", () => {
+      act("installSteuerung", { x: t.x, y: t.y, produktId: b.dataset.steuer }); tm.style.display = "none";
+    }));
+    tm.querySelector("#steuerAus")?.addEventListener("click", () => { act("entferneSteuerung", { x: t.x, y: t.y }); tm.style.display = "none"; });
+    tm.querySelector("#leitAuf")?.addEventListener("click", () => { tm.style.display = "none"; leitOeffnen(t.x, t.y); });
+    tm.querySelector("#swWerbung")?.addEventListener("click", ev => {
+      act("systemWerbung", { x: t.x, y: t.y, an: ev.currentTarget.dataset.an === "1" }); tm.style.display = "none";
+    });
+    tm.querySelector("#swPanel")?.addEventListener("click", () => { tm.style.display = "none"; openPanel("software"); });
+    tm.querySelector("#tourPanel")?.addEventListener("click", () => { tm.style.display = "none"; openPanel("touristik"); });
+    tm.querySelector("#hotelAuf")?.addEventListener("click", () => { tm.style.display = "none"; hotelOeffnen(t.owner); });
+    tm.querySelector("#rzAuf")?.addEventListener("click", () => { tm.style.display = "none"; rzOeffnen(t.owner); });
+    tm.querySelector("#renov")?.addEventListener("click", () => { act("renovieren", { x: t.x, y: t.y }); tm.style.display = "none"; });
+    tm.querySelector("#shopAuf")?.addEventListener("click", () => { tm.style.display = "none"; shopOeffnen(t.x, t.y); });
     tm.querySelector("#upgrade")?.addEventListener("click", () => { act("upgradeBuilding", { x: t.x, y: t.y }); tm.style.display = "none"; });
     tm.querySelectorAll("[data-slot]").forEach(b => b.addEventListener("click", () => {
       const i = +b.dataset.slot;
@@ -5199,7 +6364,11 @@ function clickTile(e) {
     && !(kartellModus && b.racing)
     /* Familien-Gebäude: nur das der eigenen Familie, und nur im Kartellmodus */
     && !(b.familie && (!kartellModus || b.familie !== meineFamilie))
-    && !(b.casino && !kartellModus) && (
+    && !(b.casino && !kartellModus)
+    /* Regel 2: im Sandbox-Modus kommt Werbung aus dem Werbemodul der Shop-Systeme */
+    && !(b.ad && store.get().state?.mode === "sandbox")
+    /* Verkauft wird nur noch über den Online-Marktplatz */
+    && !(b.retail && !b.online) && (
     store.get().state?.mode === "renntag"
       ? rolleErlaubt.includes(bid)
       /* Kartellmodus: Familien bauen ALLES — Bezirkskontrolle zählt Gebäude,
@@ -5370,7 +6539,7 @@ addEventListener("keydown", e => {
 });
 
 /* ---- Dock & Panels ---- */
-const DOCK = [["karte","Karte"],["plan","Planbüro"],["kartell","Kartell"],["lager","Lager"],["boerse","Börse"],["bonds","Finanzen"],["firma","Firma"],["motorsport","Motorsport"],["lexikon","Lexikon"],["chat","Chat"]];
+const DOCK = [["karte","Karte"],["plan","Planbüro"],["kartell","Kartell"],["lager","Lager"],["boerse","Börse"],["bonds","Finanzen"],["firma","Firma"],["hauptsitz","Hauptsitz"],["netz","Stadtnetz"],["touristik","Touristik"],["motorsport","Motorsport"],["lexikon","Lexikon"],["chat","Chat"]];
 const dock = document.getElementById("dock");
 DOCK.forEach(([pid, label]) => { const b = document.createElement("button");
   b.className = "dockbtn"; b.dataset.p = pid; b.textContent = label;
@@ -5383,7 +6552,12 @@ DOCK.forEach(([pid, label]) => { const b = document.createElement("button");
   if (pid === "boerse") b.id = "dockBoerse";
   /* Motorsport erscheint erst mit dem ersten eigenen Rennstall — vorher wäre
    * es ein Knopf, hinter dem nichts steht. */
+  if (pid === "hauptsitz") { b.id = "dockHQ"; b.style.display = "none"; }
   if (pid === "motorsport") { b.id = "dockMotor"; b.style.display = "none"; }
+  /* Touristik: erst mit eigenem Campingplatz oder Strandhotel (Etappe 6) */
+  if (pid === "touristik") { b.id = "dockTour"; b.style.display = "none"; }
+  /* Stadtnetz (Etappe 8): kein Panel, sondern ein Browserfenster — nur mit wachsender Stadt */
+  if (pid === "netz") { b.id = "dockNetz"; b.style.display = "none"; b.addEventListener("click", () => netzOeffnen(null)); dock.append(b); return; }
   b.addEventListener("click", () => openPanel(pid)); dock.append(b); });
 /* stumm=true nur für den Aufruf beim Seitenaufbau: dort gibt es weder eine
  * Nutzergeste noch schon ein SFX-Modul (das entsteht erst weiter unten). */
@@ -5396,6 +6570,10 @@ function openPanel(pid, stumm = false) {
     toast("Im Kartell gibt es keine Börse — gehandelt wird über Hehler, Markthalle und Frachtdepot.");
     return;
   }
+  /* Im Sandkasten sind Warenbörse und Stadtbank Websites im Stadtnetz */
+  if (pid === "boerse" && store.get()?.state?.stadt) return netzOeffnen("boerse");
+  if (pid === "bank" && store.get()?.state?.stadt) return netzOeffnen("bank");
+  if (pid === "bonds" && store.get()?.state?.stadt) return netzOeffnen("anleihen");
   TUT_GESEHEN.add(pid);
   if (!stumm) SFX.spiel("klick");
   document.querySelectorAll(".panel").forEach(p => p.classList.remove("open"));
@@ -5458,6 +6636,50 @@ document.getElementById("bIssue").addEventListener("click", () => act("issueBond
  * Sonst kann ein Zustandsupdate zwischen Maus-runter und Maus-hoch den Knopf
  * austauschen — dann entsteht gar kein click-Event und der Klick verpufft. */
 let BANK_REITER = "markt";
+/* Vorschau und Hinweis unter den beiden Handelsformularen. Steht bewusst
+ * ausserhalb von render(): Wer gerade in einem Feld tippt, bekommt keinen
+ * Neuaufbau des Panels (sonst waere die Eingabe weg) — die Vorschau muss sich
+ * trotzdem bei jedem Tastendruck mitbewegen, sonst rechnet man im Kopf weiter. */
+function handelVorschau() {
+  const { state, me, myId, meta } = store.get();
+  if (!state || !me) return;
+  const geb = meta?.shareFee ?? 0;
+  /* Kaufseite */
+  const bidCo = document.getElementById("bidCompany"), bidV = document.getElementById("bidVorschau");
+  const ziel = state.players?.[bidCo?.value];
+  const bn = Math.max(1, +(document.getElementById("bidCount")?.value) || 1);
+  const bp = Math.max(0, +(document.getElementById("bidPrice")?.value) || 0);
+  if (bidV) {
+    const fair = (ziel?.kurs || 0) * bn;
+    const diff = fair ? Math.round((bp / fair - 1) * 100) : null;
+    bidV.innerHTML = ziel
+      ? `<span>${bn} × ${fk(ziel.kurs || 0)} = ${fmt(fair)}</span><b class="${diff == null ? "" : diff <= 0 ? "plus" : "minus"}">${fmt(bp)}${diff == null ? "" : ` <em>${diff >= 0 ? "+" : "−"}${Math.abs(diff)} %</em>`}</b>`
+      : `<span>Keine Firma wählbar</span>`;
+  }
+  const bidHint = document.getElementById("bidHint");
+  if (bidHint) bidHint.textContent = ziel
+    ? `${ziel.name} hält noch ${Math.round((ziel.ownPct || 0) * AKTIEN_JE_FIRMA() / 100)} eigene Aktien. Unter dem Kurs lehnen die meisten ab.`
+    : "Alle Firmen haben ihre eigenen Aktien bereits vollständig abgegeben.";
+  /* Verkaufsseite */
+  const shCo = document.getElementById("shCompany"), shV = document.getElementById("shVorschau");
+  const eigen = shCo?.value === myId;
+  const pos = eigen ? null : (me.portfolio || []).find(h => h.id === shCo?.value);
+  const kurs = eigen ? (me.kurs || 0) : (pos?.kurs || 0);
+  const hat = eigen ? (me.ownAktien ?? 0) : (pos?.count || 0);
+  const sn = Math.max(1, Math.min(hat || 1, +(document.getElementById("shCount")?.value) || 1));
+  const sp = Math.max(0, +(document.getElementById("shPrice")?.value) || 0);
+  if (shV) {
+    const fair = kurs * sn;
+    const diff = fair ? Math.round((sp / fair - 1) * 100) : null;
+    shV.innerHTML = hat
+      ? `<span>${sn} × ${fk(kurs)} = ${fmt(fair)}</span><b class="${diff == null ? "" : diff >= 0 ? "plus" : "minus"}">${fmt(sp)}${diff == null ? "" : ` <em>${diff >= 0 ? "+" : "−"}${Math.abs(diff)} %</em>`}</b>`
+      : `<span>Keine Aktien zum Abgeben</span>`;
+  }
+  const shHint = document.getElementById("shHint");
+  if (shHint) shHint.textContent = hat
+    ? `Du hältst ${hat} ${eigen ? "eigene" : "fremde"} Aktien${geb ? ` · ${Math.round(geb * 100)} % Börsengebühr` : ""}.`
+    : "Du hältst gerade keine Aktien zum Verkauf.";
+}
 function bankReiterZeigen() {
   document.querySelectorAll("#p-bank [data-breiter]").forEach(b => b.classList.toggle("on", b.dataset.breiter === BANK_REITER));
   document.querySelectorAll("#p-bank [data-bseite]").forEach(sx => sx.hidden = sx.dataset.bseite !== BANK_REITER);
@@ -5473,9 +6695,39 @@ document.getElementById("p-bank").addEventListener("click", e => {
   const wf = e.target.closest("[data-wfirma]");
   if (wf) { document.getElementById("wFirma").value = wf.dataset.wfirma; kurswettenRendern(); SFX.spiel("klick"); return; }
   const zuHandeln = e.target.closest("[data-zu-handeln]");
-  if (zuHandeln) { BANK_REITER = "handeln"; bankReiterZeigen();
+  if (zuHandeln) { BANK_REITER = "handeln"; bankReiterZeigen(); SFX.spiel("klick");
     const sel = document.getElementById("bidCompany"); if ([...sel.options].some(o => o.value === zuHandeln.dataset.zuHandeln)) sel.value = zuHandeln.dataset.zuHandeln;
+    render(store.get());
     return; }
+  /* „Anbieten" in der eigenen Zeile der Kurstafel: gleicher Reiter, aber die
+   * Verkaufsseite — von dort gibt man eigene Aktien ab. */
+  if (e.target.closest("[data-zu-verkauf]")) { BANK_REITER = "handeln"; bankReiterZeigen(); SFX.spiel("klick");
+    document.getElementById("shCount")?.focus();
+    return; }
+  /* Schnellwahl in den Handelsformularen. Menge und Gebot hängen am Kurs der
+   * gerade gewählten Firma — den holen wir frisch aus dem State, nicht aus dem
+   * zuletzt gerenderten Text. */
+  const bidAnteil = e.target.closest("[data-bidanteil]");
+  if (bidAnteil) {
+    const st = store.get().state, ziel = st?.players?.[document.getElementById("bidCompany").value];
+    const max = ziel ? Math.round((ziel.ownPct || 0) * AKTIEN_JE_FIRMA() / 100) : AKTIEN_JE_FIRMA();
+    const w = bidAnteil.dataset.bidanteil;
+    document.getElementById("bidCount").value = Math.max(1, w === "max" ? max : Math.min(+w, max || +w));
+    handelVorschau(); return;
+  }
+  const bidAuf = e.target.closest("[data-bidauf]");
+  if (bidAuf) {
+    const st = store.get().state, ziel = st?.players?.[document.getElementById("bidCompany").value];
+    const n = Math.max(1, +document.getElementById("bidCount").value || 1);
+    document.getElementById("bidPrice").value = Math.max(1, Math.round((ziel?.kurs || 0) * n * (1 + +bidAuf.dataset.bidauf / 100)));
+    handelVorschau(); return;
+  }
+  const shAnteil = e.target.closest("[data-shanteil]");
+  if (shAnteil) {
+    const feld = document.getElementById("shCount"), max = +feld.max || 1, w = shAnteil.dataset.shanteil;
+    feld.value = Math.max(1, w === "max" ? max : Math.min(+w, max));
+    handelVorschau(); return;
+  }
   const yes = e.target.closest("[data-merge-yes]");
   if (yes) { act("mergeCompany", { targetId: yes.dataset.mergeYes }); pendingMerge = null; render(store.get()); return; }
   if (e.target.closest("[data-merge-no]")) { pendingMerge = null; render(store.get()); return; }
@@ -5495,21 +6747,2993 @@ document.getElementById("p-bank").addEventListener("click", e => {
   if (bidNo) { act("declineShareBid", { bidId: +bidNo.dataset.bidno }); return; }
   const bidCancel = e.target.closest("[data-bidcancel]");
   if (bidCancel) { act("cancelShareBid", { bidId: +bidCancel.dataset.bidcancel }); return; }
+  const zulJa = e.target.closest("[data-bazulja]");
+  if (zulJa) { socket.emit("boerseZulassungEntscheiden", { venueId: zulJa.dataset.bazulja, ok: true }, r => { if (r?.error) return toast(r.error, true); toast("Börse zugelassen"); render(store.get()); }); return; }
+  const zulNein = e.target.closest("[data-bazulnein]");
+  if (zulNein) { socket.emit("boerseZulassungEntscheiden", { venueId: zulNein.dataset.bazulnein, ok: false }, r => { if (r?.error) return toast(r.error, true); toast("Abgelehnt"); render(store.get()); }); return; }
+  const pbfK = e.target.closest("[data-pbfkauf]");
+  if (pbfK) {
+    const betrag = +document.getElementById(pbfK.dataset.input)?.value;
+    socket.emit("boerseFondsKaufen", { venueId: pbfK.dataset.pbfkauf, betrag }, r => {
+      if (r?.error) return toast(r.error, true);
+      toast(`Gekauft: ${r.anteile.toFixed(2)} Anteile für ${fmt(betrag)}`); SFX.spiel("kasse"); render(store.get());
+    });
+    return;
+  }
+  const pbfV = e.target.closest("[data-pbfverkauf]");
+  if (pbfV) {
+    const anteile = +(document.getElementById(pbfV.dataset.input)?.value || "").replace(",", ".");
+    socket.emit("boerseFondsVerkaufen", { venueId: pbfV.dataset.pbfverkauf, anteile }, r => {
+      if (r?.error) return toast(r.error, true);
+      toast(`Verkauft: ${fmt(r.netto)} erhalten`); SFX.spiel("kasse"); render(store.get());
+    });
+    return;
+  }
 });
 /* ---------- Finanzamt-Panel ---------- */
+/* ---------- Software-Panel ----------
+ * Oben der Vergleich aller Shop-Systeme (so, wie auch die Bots rechnen),
+ * darunter für Software-Firmen der Baukasten: Name, Farbe, Preise sofort,
+ * neue Funktionen über eine neue Version. Eingaben leben in swEntwurf, damit
+ * das sekündliche Neuzeichnen sie nicht verwirft. */
+const swEntwurf = {};
+const SW_BAEUME_NAME = (state, br) => state.swBaeume?.[br] ? `für ${state.swBaeume[br].name}` : "allgemein";
+const swModulWahl = new Set();
+const swDesignEntwurf = {};
+/* Website-Baukasten: Optionen je Kategorie, Gesperrtes mit Mindestversion,
+ * daneben eine Live-Vorschau mit Beispielwaren — so sieht jede Kunden-Website
+ * aus, die mit diesem System läuft. */
+function swDesignHtml(state, eigene) {
+  const OPT = state.swDesign || {}, AB = state.swDesignAb || {};
+  const v = Math.max(1, eigene.version || 0);
+  const d = { ...(eigene.design || {}), ...swDesignEntwurf };
+  const farbe = swEntwurf.farbe || eigene.farbe;
+  const titel = { schrift: "Schrift", thema: "Thema", ecken: "Ecken", kopf: "Kopfzeile", karten: "Produktkarten", motiv: "Bezahlkarte", effekt: "Effekt" };
+  const reihen = Object.entries(titel).map(([k, t]) => `<div class="swDesignReihe"><span>${t}</span><div class="swDesignWahl">
+    ${Object.entries(OPT[k] || {}).map(([id, o]) => `<button type="button" data-swdes="${k}" data-wert="${id}" class="${d[k] === id ? "an" : ""}" ${o.ab > v ? "disabled" : ""}>${o.name}${o.ab > v ? `<em>🔒 v${o.ab}</em>` : ""}</button>`).join("")}
+  </div></div>`).join("");
+  const gesperrt = (k) => v < (AB[k] || 1);
+  const texte = `<div class="swDesignTexte">
+    <label>Slogan${gesperrt("slogan") ? ` 🔒 v${AB.slogan}` : ""}<input id="swdSlogan" maxlength="40" value="${escapeHtml(rohText(d.slogan || ""))}" placeholder="z. B. Einkaufen in Sekunden" ${gesperrt("slogan") ? "disabled" : ""}></label>
+    <label>Banner${gesperrt("banner") ? ` 🔒 v${AB.banner}` : ""}<input id="swdBanner" maxlength="70" value="${escapeHtml(rohText(d.banner || ""))}" placeholder="z. B. Heute Lieferung gratis!" ${gesperrt("banner") ? "disabled" : ""}></label>
+    <label>Zweitfarbe${gesperrt("akzent") ? ` 🔒 v${AB.akzent}` : ""}<input id="swdAkzent" type="color" value="${d.akzent || "#1f2937"}" ${gesperrt("akzent") ? "disabled" : ""}></label>
+  </div>`;
+  const ware = [["obst", 7.4, 128], ["honig", 15.2, 46]];
+  const vorschau = `<div class="sfBrowser sfMini" ${sfDesignAttr(d, farbe)}>
+    <div class="sfLeiste"><span class="sfPunkte"><i></i><i></i><i></i></span><span class="sfUrl">🔒 ${shopSlug(eigene.name)}.cs/deine-kunden</span></div>
+    <header class="sfKopf"><div class="sfMarke"><span class="sfLogo" style="background:#16a34a">A</span><div><b>Apfelhof</b><small>Online-Shop · 2 Produkte</small></div></div>
+      <span class="sfBadge">💳 Bezahlt mit <b>${escapeHtml(rohText(eigene.name))}</b> v${v}${d.slogan ? `<span class="sfSlogan">${escapeHtml(rohText(d.slogan))}</span>` : ""}</span></header>
+    ${d.banner ? `<div class="sfBanner"><b>✦</b><span>${escapeHtml(rohText(d.banner))}</span></div>` : ""}
+    <div class="sfInhalt"><div class="sfGrid">${ware.map(([g, pr, n]) => `<article class="sfProdukt">${eigene.module?.werbung ? `<span class="sfBand">Empfohlen</span>` : ""}
+      <div class="sfBild"><span>${WAREN_ICON[g]}</span></div><h5>${gname(g)}</h5><div class="sfPreis"><b>${fp(pr)}</b><span>je Stück</span></div>
+      <div class="sfInfo">${n} auf Lager</div><button type="button" class="sfKaufen" tabindex="-1">Kaufen</button></article>`).join("")}</div>
+      <div class="sfKarte"><div class="sfKarteOben"><b>${escapeHtml(rohText(eigene.name))}</b><span class="sfChip"></span></div><div class="sfKarteNr">•••• •••• •••• 4821</div><div class="sfKarteUnten"><span>Kunde</span><span>08/29</span></div></div></div>
+    <footer class="sfFuss">${logoHtml(eigene.ownerId, "sfFussLogo", farbe)}<span>Diese Website läuft mit <b>${escapeHtml(rohText(eigene.name))}</b> v${v} · entwickelt von <b>${escapeHtml(rohText(eigene.anbieter))}</b></span></footer>
+  </div>`;
+  const geaendert = Object.keys(swDesignEntwurf).length > 0;
+  return `<div class="sec" style="margin-top:16px">Website-Design · so sehen alle Shops mit deinem System aus</div>
+    <div class="note" style="margin:0 0 8px">Jede neue Version schaltet weitere Schriften, Themen und Effekte frei. Speichern kostet nichts.</div>
+    <div class="swDesign">${reihen}${texte}${vorschau}
+      <button class="buyb" id="swDesignSpeichern" ${geaendert ? "" : "disabled"}>${geaendert ? "Design übernehmen" : "Design ist aktuell"}</button></div>`;
+}
+/* Bürgerdepot: die Sparer der Stadt als Anleger (siehe depotTag im Server) */
+function depotKarte(d) {
+  if (!d) return "";
+  const voll = d.deckel > 0 ? Math.min(100, d.wert / d.deckel * 100) : 0;
+  const posten = [...(d.fonds || []).map(f => `${f.name}-Fonds ${fmt(f.wert)}`), ...(d.aktien || []).map(a => `${a.aktien} ${a.firma}`)];
+  return `<div class="sec bTafelKopf"><span>Bürgerdepot</span><span class="meta">die Sparer der Stadt</span></div>
+    <div class="bond depotKarte"><div style="min-width:0;flex:1">
+      <div class="swZahlen">
+        <div><b>${fmt(d.wert)}</b><span>Depotwert</span></div>
+        <div><b>${fmt(d.kasse)}</b><span>noch anzulegen</span></div>
+        <div><b>${d.appAnteil} %</b><span>über Börsen-Apps</span></div>
+        <div><b>${d.konsumBoost ? "+" + String(d.konsumBoost).replace(".", ",") + " %" : "—"}</b><span>Konsum in Shops</span></div></div>
+      <div class="swBalken" title="Obergrenze ${fmt(d.deckel)}"><i style="width:${voll.toFixed(1)}%"></i></div>
+      <div class="meta" style="padding-top:4px">Je 1 $ Einkauf in den Online-Shops sparen die Bewohner ${Math.round(d.sparquote * 100)} ct. Ohne Börsen-App kommt nur ${Math.round(d.sparkasseAnteil * 100)} % davon über die Stadtsparkasse an die Börse. Angelegt wird einmal je Markttag — überwiegend in Fonds, der Rest in günstige Aktien mit guter Dividende. Bei Panik oder Überbewertung verkauft das Depot. Höchstens bis ${fmt(d.deckel)} (Balken).</div>
+      ${posten.length ? `<div class="meta" style="padding-top:4px">Hält: ${posten.join(" · ")}</div>` : ""}
+    </div>${(d.verlauf || []).length > 1 ? sparklineVon(d.verlauf, 52, 16) : ""}</div>`;
+}
+const boerseEntwurf = {};
+/* Börsen-App: drittes Produkt einer Software-Firma (Vermittler). Über die
+ * Apps legen die Sparer der Stadt an (Bürgerdepot); jeder Lizenznehmer bringt
+ * die App unter seine Kunden und erhöht die Reichweite. */
+function boerseAppHtml(state, me, eigene) {
+  const cfg = state.boerseAppCfg || {}, STUFEN = cfg.stufen || [];
+  const ba = (state.boerseApp || []).find(x => x.ownerId === eigene.ownerId);
+  const kopf = `<div class="sec" style="margin-top:16px">Börsen-App · dein drittes Produkt</div>`;
+  if ((eigene.version || 0) < (cfg.abSystem || 2))
+    return kopf + `<div class="note">Ab Shop-System v${cfg.abSystem || 2} kannst du eine Börsen-App entwickeln. Über Börsen-Apps legen die Sparer der Stadt ihr Geld an — ohne App kommt nur die Hälfte über die Stadtsparkasse an die Börse. Du verdienst Provision auf alles, was über deine App läuft.</div>`;
+  const e = { name: ba?.name ?? "", preis: ba?.preis ?? 900, ...boerseEntwurf };
+  const stufeText = st => `${st.bewohner} Bewohner je Nutzer · ${String(st.provision).replace(".", ",")} % Provision`;
+  const laeden = ba?.laeden || state.map.filter(t => t.owner === eigene.ownerId && t.btype === "onlinemarkt").map(t => ({ x: t.x, y: t.y, offen: false }));
+  const offen = laeden.filter(l => l.offen);
+  const naechste = STUFEN[(ba?.version || 0)];
+  const dev = ba?.entwicklung;
+  return kopf + `<div class="note" style="margin:0 0 8px">Die Sparer der Stadt legen ihr Geld über Börsen-Apps an. Je mehr Bewohner deine App erreicht, desto mehr läuft über dich — und du bekommst Provision darauf. Firmen kaufen eine Lizenz in <b>deinem eigenen Online-Shop</b> und bringen die App unter ihre Kunden: Das erhöht deine Reichweite, und sie bekommen die Hälfte der Provision, die über sie kommt.</div>
+    ${ba ? `<div class="swZahlen">
+      <div><b>${ba.version >= 1 ? "v" + ba.version : "—"}</b><span>Version</span></div>
+      <div><b>${ba.verkauft}</b><span>Lizenzen verkauft</span></div>
+      <div><b>${ba.reichweite || 0}</b><span>Reichweite (Bewohner)</span></div>
+      <div><b style="color:var(--up)">${fmt(ba.einnahmen10 || 0)}</b><span>Provision 10 min</span></div></div>
+      ${state.depot ? `<div class="note" style="margin:4px 0 8px">${state.depot.appAnteil} % der Sparer handeln über Börsen-Apps · Lizenzpreis ${fmt(ba.preis)}</div>` : ""}` : ""}
+    ${ba?.version >= 1 && !offen.length ? `<div class="mpWarn">⚠ ${laeden.length ? "Dein Online-Marktplatz ist noch nicht offen — installiere ein Shop-System (z. B. dein eigenes)." : "Du hast keinen eigenen Online-Marktplatz. Ohne ihn kann niemand deine Börsen-App kaufen — bau einen im Zentrum und installiere dein System."}</div>` : ""}
+    <div class="swForm">
+      <label class="breit"><span>Name</span><input id="baName" maxlength="20" value="${escapeHtml(rohText(e.name))}" placeholder="z. B. TradeBot Pro"></label>
+      <label><span>Lizenzpreis $</span><input id="baPreis" type="number" min="${cfg.preisMin ?? 100}" max="${cfg.preisMax ?? 6000}" step="50" value="${e.preis}"></label>
+      <button class="buyb" id="baSpeichern">${ba ? "Übernehmen" : "Börsen-App anlegen"}</button>
+    </div>
+    ${ba ? (dev ? `<div class="swDev"><div class="swDevKopf"><span>${escapeHtml(rohText(ba.name))} v${dev.version} in Arbeit</span><b class="mono">${dev.ep} / ${dev.ziel} EP</b></div>
+        <div class="swBalken"><i style="width:${Math.min(100, dev.ep / dev.ziel * 100).toFixed(1)}%"></i></div>
+        <div class="note" style="margin:4px 0 0">Neu: ${stufeText(STUFEN[dev.version - 1])}${eigene.entwicklung ? " · teilt sich das Studio mit dem Shop-System" : ""}</div></div>`
+      : naechste ? `<button class="tmHaupt" id="baEntwickeln"><span>${escapeHtml(rohText(ba.name))} v${(ba.version || 0) + 1} entwickeln</span><small>${naechste.ep} EP · ${stufeText(naechste)}${eigene.entwicklung ? " · teilt sich das Studio mit dem Shop-System" : ""}</small></button>`
+      : `<div class="note">Voll ausgebaut: ${stufeText(STUFEN[STUFEN.length - 1])}.</div>`) : ""}
+    ${ba?.version >= 1 ? boerseHandelsplatzHtml(state, eigene, ba) : ""}`;
+}
+/* Handelsplatz der eigenen Börse: fremde Aktien anbieten (mit Zulassung der
+ * Firma), eine selbst gesetzte Handelsgebühr je Handel kassieren. */
+function boerseHandelsplatzHtml(state, eigene, ba) {
+  const gMin = 0.1, gMax = 3;
+  const g = ba.handelGebuehr ?? 1;
+  const zug = ba.zugelassen || [], anf = ba.anfragen || [];
+  const schonAngefragt = new Set([...zug.map(z => z.id), ...anf.map(a => a.id), eigene.ownerId]);
+  const kandidaten = Object.values(state.players || {}).filter(p => p.id !== eigene.ownerId && !schonAngefragt.has(p.id));
+  return `<div class="sec" style="margin-top:14px">Handelsplatz · fremde Aktien anbieten</div>
+    <div class="note" style="margin:0 0 8px">Mit Zustimmung einer Firma bietest du ihre Aktien an deiner Börse an und kassierst je Handel eine Gebühr. Firmen-Bots sagen nur zu, wenn über deine Börse schon viel läuft — mach Werbung für sie.</div>
+    <div class="swForm">
+      <label><span>Handelsgebühr %</span><input id="baGebuehr" type="number" min="${gMin}" max="${gMax}" step="0.1" value="${String(g).replace(".", ",")}"></label>
+      <button class="mini" id="baGebuehrSetzen">Gebühr übernehmen</button>
+    </div>
+    ${kandidaten.length ? `<div class="swForm" style="margin-top:6px">
+      <label class="breit"><span>Firma um Zulassung bitten</span><select id="baZulFirma">${kandidaten.map(p => `<option value="${p.id}">${escapeHtml(rohText(p.name))}${p.bot ? " · KI" : ""}</option>`).join("")}</select></label>
+      <button class="buyb" id="baZulAnfragen">Anfragen</button>
+    </div>` : `<div class="note" style="margin-top:6px">Alle Firmen sind angefragt oder zugelassen.</div>`}
+    ${anf.length ? `<div class="note" style="margin:8px 0 2px">Anfrage läuft: ${anf.map(a => escapeHtml(rohText(a.name))).join(", ")}</div>` : ""}
+    ${zug.length ? `<div class="sec" style="margin-top:8px;font-size:11px">Zugelassen (${zug.length})</div>
+      ${zug.map(z => `<div class="bond"><div><b>${escapeHtml(rohText(z.name))}</b><div class="meta">Aktien an deiner Börse handelbar</div></div>
+        <button class="mini" data-bazulende="${z.id}">Beenden</button></div>`).join("")}` : `<div class="note" style="margin-top:6px">Noch keine Firma zugelassen.</div>`}
+    ${ba.handelProvision ? `<div class="note" style="margin-top:6px">Aus Handelsgebühren bisher: <b style="color:var(--up)">${fmt(ba.handelProvision)}</b></div>` : ""}
+    ${boerseFondsEigenHtml(state, ba)}`;
+}
+
+/* Eigener Fonds einer Börse — Sicht des Eigentümers. Zeigt entweder das
+ * Anlegen-Formular (wenn noch kein Fonds besteht) oder die laufenden
+ * Kennzahlen plus die Aktionen Einlage, Firmen bearbeiten, Gebühr ändern
+ * und Fonds auflösen. */
+function boerseFondsEigenHtml(state, ba) {
+  const cfg = state.boerseAppCfg || {}, gMin = cfg.fondsGebMin ?? 0.5, gMax = cfg.fondsGebMax ?? 3, gStart = cfg.fondsGebStart ?? 1, minSeed = cfg.fondsMinSeed ?? 2000;
+  const zug = ba.zugelassen || [];
+  const f = ba.fonds;
+  if (!f) {
+    if (!zug.length) return `<div class="sec" style="margin-top:14px">Fonds · dein zweiter Vermögensbereich</div>
+      <div class="note">Du brauchst zuerst mindestens eine zugelassene Firma, dann kannst du einen Fonds auflegen.</div>`;
+    const e = fondsEntwurf;
+    e.firmen ??= new Set(zug.map(z => z.id));
+    return `<div class="sec" style="margin-top:14px">Fonds · dein zweiter Vermögensbereich</div>
+      <div class="note" style="margin:0 0 8px">Lege einen eigenen Fonds auf, der Aktien deiner zugelassenen Firmen hält. Beim Kauf und Verkauf von Fondsanteilen nimmst du die Gebühr. Dividenden fließen zu 80 % an die Anteilseigner weiter.</div>
+      <div class="swForm">
+        <label class="breit"><span>Name</span><input id="pbfName" maxlength="24" value="${escapeHtml(rohText(e.name || ""))}" placeholder="z. B. ByteFund"></label>
+        <label><span>Gebühr %</span><input id="pbfGebuehr" type="number" min="${gMin}" max="${gMax}" step="0.1" value="${String(e.gebuehr ?? gStart).replace(".", ",")}"></label>
+      </div>
+      <div class="note" style="margin-top:8px">Firmen im Fonds</div>
+      ${zug.map(z => `<label class="bond pbfPick" style="cursor:pointer" data-pbfpick="${z.id}"><input type="checkbox" ${e.firmen.has(z.id) ? "checked" : ""} style="margin:0 10px 0 0;width:auto"><b>${escapeHtml(rohText(z.name))}</b></label>`).join("")}
+      <div style="display:flex;justify-content:flex-end;margin-top:10px"><button class="buyb" id="pbfAnlegen">Fonds anlegen</button></div>`;
+  }
+  const wert = f.wert || 0, preis = f.preis || cfg.fondsStartPreis || 100;
+  const einlegen = fondsEntwurf.einlage ?? "";
+  return `<div class="sec" style="margin-top:14px">Fonds · ${escapeHtml(rohText(f.name))}</div>
+    <div class="swZahlen">
+      <div><b class="mono">${fmt(preis)}</b><span>Anteilspreis</span></div>
+      <div><b class="mono">${(f.anteile || 0).toLocaleString("de-DE", { maximumFractionDigits: 2 })}</b><span>Anteile gesamt</span></div>
+      <div><b class="mono" style="color:var(--up)">${fmt(wert)}</b><span>Fondswert</span></div>
+      <div><b class="mono">${fmt(f.kasse || 0)}</b><span>Barreserve</span></div>
+    </div>
+    ${f.aktien?.length ? f.aktien.map(h => `<div class="bond"><div><b>${escapeHtml(rohText(h.firma))}</b><div class="meta">${h.aktien} Aktien im Fonds</div></div></div>`).join("")
+      : `<div class="note" style="margin-top:4px">Der Fonds hält noch keine Aktien — kaufe welche über das Verkaufsformular der Stadtbank an deine Börse (Handelsplatz wählen) oder lass die Firma ihre Anteile hier anbieten.</div>`}
+    ${f.ausschuettungGesamt ? `<div class="note" style="margin-top:6px">Letzte Ausschüttung <b style="color:var(--up)">${fmt(f.ausschuettung)}</b> · bisher insgesamt <b>${fmt(f.ausschuettungGesamt)}</b></div>` : ""}
+    <div class="swForm" style="margin-top:10px">
+      <label><span>Einlage $</span><input id="pbfEinlage" type="number" min="${minSeed}" step="100" value="${einlegen || minSeed}" placeholder="min. ${minSeed}"></label>
+      <label><span>Gebühr %</span><input id="pbfGebuehrNeu" type="number" min="${gMin}" max="${gMax}" step="0.1" value="${String(f.gebuehr).replace(".", ",")}"></label>
+      <button class="buyb" id="pbfEinlegen">Einlegen</button>
+    </div>
+    <div class="aktion" style="display:flex;gap:8px;margin-top:8px">
+      <button class="mini" id="pbfGebuehrSetzen">Gebühr übernehmen</button>
+      <button class="mini" id="pbfSchliessen" style="color:var(--down);border-color:var(--down);background:transparent">Fonds auflösen</button>
+    </div>`;
+}
+const fondsEntwurf = {};
+const paintEntwurf = {};
+/* Malprogramm: das zweite Produkt einer Software-Firma, verkauft als Lizenz
+ * im eigenen Online-Shop. */
+function paintHtml(state, me, eigene) {
+  const cfg = state.paintCfg || {}, STUFEN = cfg.stufen || [];
+  const mp = (state.paint || []).find(x => x.ownerId === eigene.ownerId);
+  const kopf = `<div class="sec" style="margin-top:16px">Malprogramm · dein zweites Produkt</div>`;
+  if ((eigene.version || 0) < (cfg.abSystem || 2))
+    return kopf + `<div class="note">Ab Shop-System v${cfg.abSystem || 2} kannst du ein Malprogramm entwickeln. Firmen kaufen eine Lizenz in deinem Online-Shop und malen damit ihr Logo — es erscheint im Shop, an der Börse und als Schild an ihren Gebäuden.</div>`;
+  const e = { name: mp?.name ?? "", preis: mp?.preis ?? 900, ...paintEntwurf };
+  const stufeText = st => `${st.groesse}×${st.groesse} Pixel · ${st.farben ? `${st.farben} Farben` : "freie Farben"} · ${st.werkzeuge.map(w => ({ stift: "Stift", radierer: "Radierer", fuellen: "Füllen", spiegeln: "Spiegeln" })[w]).join(", ")}`;
+  const laeden = mp?.laeden || state.map.filter(t => t.owner === eigene.ownerId && t.btype === "onlinemarkt").map(t => ({ x: t.x, y: t.y, offen: false }));
+  const offen = laeden.filter(l => l.offen);
+  const naechste = STUFEN[(mp?.version || 0)];
+  const dev = mp?.entwicklung;
+  return kopf + `<div class="note" style="margin:0 0 8px">Firmen kaufen eine Lizenz in <b>deinem eigenen Online-Shop</b> und malen damit ihr Firmenlogo. Updates bekommen sie gratis — jede Version kann mehr.</div>
+    ${mp ? `<div class="swZahlen">
+      <div><b>${mp.version >= 1 ? "v" + mp.version : "—"}</b><span>Version</span></div>
+      <div><b>${mp.verkauft}</b><span>Lizenzen verkauft</span></div>
+      <div><b>${fmt(mp.preis)}</b><span>Lizenzpreis</span></div>
+      <div><b style="color:var(--up)">${fmt(mp.einnahmen10 || 0)}</b><span>Einnahmen 10 min</span></div></div>` : ""}
+    ${mp?.version >= 1 && !offen.length ? `<div class="mpWarn">⚠ ${laeden.length ? "Dein Online-Marktplatz ist noch nicht offen — installiere ein Shop-System (z. B. dein eigenes)." : "Du hast keinen eigenen Online-Marktplatz. Ohne ihn kann niemand dein Programm kaufen — bau einen im Zentrum und installiere dein System."}</div>` : ""}
+    <div class="swForm">
+      <label class="breit"><span>Name</span><input id="mpName" maxlength="16" value="${escapeHtml(rohText(e.name))}" placeholder="z. B. PixelPinsel"></label>
+      <label><span>Lizenzpreis $</span><input id="mpPreis" type="number" min="${cfg.preisMin ?? 100}" max="${cfg.preisMax ?? 6000}" step="50" value="${e.preis}"></label>
+      <button class="buyb" id="mpSpeichern">${mp ? "Übernehmen" : "Malprogramm anlegen"}</button>
+    </div>
+    ${mp ? (dev ? `<div class="swDev"><div class="swDevKopf"><span>${escapeHtml(rohText(mp.name))} v${dev.version} in Arbeit</span><b class="mono">${dev.ep} / ${dev.ziel} EP</b></div>
+        <div class="swBalken"><i style="width:${Math.min(100, dev.ep / dev.ziel * 100).toFixed(1)}%"></i></div>
+        <div class="note" style="margin:4px 0 0">Neu: ${stufeText(STUFEN[dev.version - 1])}${eigene.entwicklung ? " · wartet, bis das Shop-System fertig ist" : ""}</div></div>`
+      : naechste ? `<button class="tmHaupt" id="mpEntwickeln"><span>${escapeHtml(rohText(mp.name))} v${(mp.version || 0) + 1} entwickeln</span><small>${naechste.ep} EP · ${stufeText(naechste)}${eigene.entwicklung ? " · startet nach dem Shop-System" : ""}</small></button>`
+      : `<div class="note">Voll ausgebaut: ${stufeText(STUFEN[STUFEN.length - 1])}.</div>`) : ""}
+    ${mp?.version >= 1 ? `<div class="mpZeile"><button class="mini" id="mpMalen">🎨 Eigenes Logo malen</button>${offen[0] ? `<button class="mini" data-shopauf="${offen[0].x},${offen[0].y}">🛒 Deinen Shop ansehen</button>` : ""}</div>` : ""}`;
+}
+/* ---- Touristik-Panel (Etappe 6): Gäste, Zimmerpreis, Sterne, Stadtfeste ---- */
+const tourEntwurf = {};
+const sterneHtml = (n, max = 5) => `<span class="tourSterne" title="${String(Math.round(n * 10) / 10).replace(".", ",")} ${t("Sterne")}">${[1, 2, 3, 4, 5].slice(0, max).map(i => `<i class="${n >= i - .25 ? "on" : n >= i - .75 ? "halb" : ""}">★</i>`).join("")}</span>`;
+const tourQualiC = (cfg, s) => { const i = Math.max(0, Math.min(cfg.QUALI.length - 1, s - 1)), lo = Math.floor(i); return cfg.QUALI[lo] + ((cfg.QUALI[lo + 1] ?? cfg.QUALI[lo]) - cfg.QUALI[lo]) * (i - lo); };
+function touristikRendern(state, me, myId) {
+  const T = state.touristik, cfg = state.touristikCfg;
+  const betriebe = (state.map || []).filter(x => x.owner === myId && (x.btype === "campingplatz" || x.btype === "strandhotel"));
+  const knopf = document.getElementById("dockTour");
+  if (knopf) knopf.style.display = T && betriebe.length ? "" : "none";
+  const body = document.getElementById("tourbody");
+  if (!body || !document.getElementById("p-touristik").classList.contains("open")) return;
+  if (!T || !cfg) { body.innerHTML = `<div class="note">${t("Gäste kommen nur in eine wachsende Stadt (Sandkasten).")}</div>`; return; }
+  const meine = T.firmen.find(f => f.id === myId), fest = T.fest, tick = state.tick;
+  const festBanner = fest ? `<div class="tourFest">🎉 <b>${t(fest.name)}</b> ${t("von")} ${escapeHtml(rohText(fest.veranstalter))} · ${t("Restzeit")} ${Math.floor(fest.rest / 60)}:${String(fest.rest % 60).padStart(2, "0")} · +${Math.round(cfg.FESTE[fest.typ].gaeste * 100)} % ${t("Gäste")}</div>` : "";
+  const stadt = `<div class="sec">${t("Gäste der Stadt")} <span class="meta">· ${t("je Minute")}</span></div>
+    <div class="swZahlen">
+      <div><b>${T.gaeste}</b><span>${t("kommen")}</span></div>
+      <div><b style="color:var(--up)">${T.bedient}</b><span>${t("übernachten")}</span></div>
+      <div><b>${T.woanders}</b><span>${t("zu teuer — fahren woanders hin")}</span></div>
+      <div><b style="color:${T.abgewiesen ? "var(--down)" : "inherit"}">${T.abgewiesen}</b><span>${t("finden kein Zimmer")}</span></div></div>`;
+  let eigen = "";
+  if (betriebe.length) {
+    const preis = tourEntwurf.preis ?? meine?.preis ?? cfg.PREIS_REF;
+    const richt = Math.round(cfg.PREIS_REF * Math.sqrt(2 * tourQualiC(cfg, meine?.bewertung || 1)));
+    const pause = T.pause?.[myId] || 0;
+    const zeilen = betriebe.map(x => {
+      const s = x.btype === "campingplatz" ? 1 : (x.sterne || cfg.START_STERNE), imBau = x.bauBis && tick < x.bauBis;
+      const kosten = cfg.RENOVIEREN[s];
+      const aktion = x.btype !== "strandhotel" ? `<span class="meta">${t("fest 1 Stern")}</span>`
+        : s >= cfg.MAX_STERNE ? `<span class="meta">${t("Höchste Stufe")}</span>`
+        : `<button class="mini" data-renov="${x.x},${x.y}" ${imBau || me.cash < kosten ? "disabled" : ""}>${t("Auf")} ${s + 1} ★ · ${fmt(kosten)}</button>`;
+      return `<div class="swListeZeile"><span class="swName"><i style="background:${state.players?.[myId]?.color || "var(--accent)"}"></i><span><b>${bname(x.btype)}</b><small>${imBau ? t("im Bau") : `${t("Stufe")} ${x.level || 1}${s >= 3 ? ` · ${t("mit Frühstück")}` : ""}`}</small></span></span>
+        ${sterneHtml(s)}<span></span>${aktion}</div>`;
+    }).join("");
+    const lager = cfg.FRUEH_WAREN.map(g => `${gname(g)} ${Math.floor(me.inv?.[g] || 0)}`).join(" · ");
+    const festKnoepfe = Object.entries(cfg.FESTE).map(([k, f]) => {
+      const gesperrt = !!fest || pause > 0 || me.cash < f.kosten || !meine?.zimmer;
+      return `<button class="tourFestKnopf" data-fest="${k}" ${gesperrt ? "disabled" : ""}><b>${t(f.name)}</b><span>${fmt(f.kosten)} · ${f.dauer / 60} min</span>
+        <small>+${Math.round(f.gaeste * 100)} % ${t("Gäste")} · +${Math.round(f.zufr * 100)} % ${t("Zufriedenheit")}${f.laeden ? ` · +${Math.round(f.laeden * 100)} % ${t("in den Läden")}` : ""}</small></button>`;
+    }).join("");
+    eigen = `<div class="sec" style="margin-top:16px">${t("Deine Touristik")}</div>
+      <button type="button" class="tmHaupt" data-hotelauf="${myId}" style="margin:0 0 12px"><span>🌐 ${t("Deine Buchungsseite öffnen")}</span><small>${t("Häuser, Preis, Renovieren und Feste wie auf einer Website")}</small></button>
+      <div class="swZahlen">
+        <div><b>${meine?.gaeste ?? 0}</b><span>${t("Gäste je Minute")}</span></div>
+        <div><b>${sterneHtml(meine?.bewertung || 0)}</b><span>${t("Bewertung")} ${String(meine?.bewertung ?? 0).replace(".", ",")}</span></div>
+        <div><b>${meine?.zimmer ?? 0}</b><span>${t("Zimmer je Minute")} · ${t("Lager")} ${Math.floor(me.inv?.uebernachtung || 0)}</span></div>
+        <div><b style="color:var(--up)">${fmt(meine?.einnahmen10 || 0)}</b><span>${t("Einnahmen 10 min")}</span></div></div>
+      ${meine?.abgewiesen ? `<div class="mpWarn">⚠ ${meine.abgewiesen} ${t("Gäste wollten zu dir, aber dein Lager war leer. Mehr Übernachtungen produzieren — oder den Preis anheben.")}</div>` : ""}
+      ${meine && meine.fruehOk < .95 && meine.fruehSoll ? `<div class="mpWarn">⚠ ${t("Frühstück fehlt")} (${Math.round(meine.fruehOk * 100)} %): ${t("Die Sterne über 2 zählen nur anteilig. Kauf Obst, Honig, Saft oder Gebäck an der Börse.")}</div>` : ""}
+      <div class="swForm">
+        <label><span>${t("Zimmerpreis $ je Gast")}</span><input id="tourPreis" type="number" min="${cfg.PREIS_MIN}" max="${cfg.PREIS_MAX}" step="1" value="${preis}"></label>
+        <button class="buyb" id="tourPreisSpeichern" style="align-self:end">${t("Übernehmen")}</button>
+      </div>
+      <div class="note" style="margin:-4px 0 10px">${t("Gäste wählen nach Bewertung und Preis. Bei deiner Bewertung bringt etwa")} <b>${fmt(richt)}</b> ${t("am meisten ein, solange genug Zimmer da sind. Zu teuer: Gäste fahren woanders hin.")}</div>
+      <div class="sec">${t("Deine Betriebe")} <span class="meta">· ${t("Renovieren bringt Sterne, ab 3 Sternen gibt es Frühstück")}</span></div>
+      <div class="swListe">${zeilen}</div>
+      ${meine?.fruehSoll ? `<div class="note" style="margin:6px 0 0">${t("Frühstück je Minute")}: ${t("Lebensmittel für")} ${fmt(meine.fruehSoll)} · ${t("im Lager")}: ${lager}</div>` : ""}
+      <div class="sec" style="margin-top:16px">${t("Stadtfest veranstalten")} <span class="meta">· ${fest ? t("gerade läuft eins") : pause > 0 ? `${t("nächstes in")} ${Math.ceil(pause / 60)} min` : t("lockt Gäste für alle Hotels, du bekommst mehr davon")}</span></div>
+      <div class="tourFeste">${festKnoepfe}</div>`;
+  } else eigen = `<div class="note" style="margin-top:12px">${t("Gäste übernachten bei Touristik-Firmen auf Campingplätzen und in Strandhotels.")}</div>`;
+  const rang = T.firmen.filter(f => f.zimmer > 0).sort((a, b) => b.gaeste - a.gaeste);
+  const liste = `<div class="sec" style="margin-top:16px">${t("Hotels der Stadt")}</div>
+    ${rang.length ? `<div class="swListe">${rang.map(f => `<button type="button" class="swListeZeile tourHotel${f.id === myId ? " meins" : ""}" data-hotelauf="${f.id}" title="${t("Buchungsseite öffnen")}">
+      <span class="swName"><i style="background:${f.farbe}"></i><span><b>${escapeHtml(rohText(f.name))}</b><small>${f.zimmer} ${t("Zimmer je Minute")} · 🌐 ${t("Buchungsseite")}</small></span></span>
+      ${sterneHtml(f.bewertung)}<span class="mono">${fmt(f.preis)}</span><span class="mono">${f.gaeste} ${t("Gäste")}</span></button>`).join("")}</div>`
+      : `<div class="note">${t("Noch kein Hotel fertig.")}</div>`}`;
+  const html = festBanner + stadt + eigen + liste;
+  if (body._sig !== html) { body._sig = html; body.innerHTML = html; }
+}
+document.getElementById("p-touristik").addEventListener("input", e => { if (e.target.id === "tourPreis") tourEntwurf.preis = e.target.value; });
+document.getElementById("p-touristik").addEventListener("click", e => {
+  if (e.target.closest("#tourPreisSpeichern")) return socket.emit("zimmerpreis", { preis: +document.getElementById("tourPreis")?.value }, r => {
+    if (r?.error) return toast(r.error, true);
+    delete tourEntwurf.preis; toast(`${t("Zimmerpreis")}: ${fmt(r.preis)}`); render(store.get());
+  });
+  const rv = e.target.closest("[data-renov]");
+  if (rv) { const [x, y] = rv.dataset.renov.split(",").map(Number); return socket.emit("renovieren", { x, y }, r => { if (r?.error) return toast(r.error, true); toast(`${t("Renoviert")}: ${r.sterne} ★`); render(store.get()); }); }
+  const ha = e.target.closest("[data-hotelauf]");
+  if (ha) return hotelOeffnen(ha.dataset.hotelauf);
+  const fe = e.target.closest("[data-fest]");
+  if (fe) return socket.emit("festStarten", { typ: fe.dataset.fest }, r => { if (r?.error) return toast(r.error, true); render(store.get()); });
+});
+/* ---- Buchungsseite einer Touristik-Firma: wie die Shop-Seiten ein Browserfenster ----
+ * Jede Firma mit Campingplatz oder Strandhotel hat eine Seite: ihre Häuser als
+ * Karten, Zimmerpreis, Gästebewertungen. Auf der eigenen Seite stellt man Preis,
+ * Renovierung und Stadtfeste direkt ein. Geöffnet aus dem Touristik-Panel und
+ * über die Gebäudekarte. */
+const HOTEL = { offen: false, pid: null, sig: {} };
+const HOTEL_ICON = { campingplatz: "🏕️", strandhotel: "🏖️" };
+const HOTEL_GAESTE = ["Lena aus Bergstadt", "Familie Okafor", "Jonas, 34", "Mira & Tom", "Herr Brandt", "Aylin", "Reisegruppe Nord", "Pia mit Hund", "Kenji", "Oma Hilde"];
+function hotelOeffnen(pid) {
+  Object.assign(HOTEL, { offen: true, pid, sig: {} });
+  const el = document.getElementById("hotelFenster");
+  el.hidden = false;
+  el.innerHTML = `<div class="sfBrowser hfBrowser" role="dialog" aria-label="${t("Buchungsseite")}">
+    <div class="sfLeiste"><span class="sfPunkte"><i></i><i></i><i></i></span>
+      <span class="sfUrl"></span><button type="button" class="sfZu" data-hfzu aria-label="${t("Schließen")}">✕</button></div>
+    <header class="sfKopf"></header>
+    <div class="sfBanner" hidden></div>
+    <div class="sfHinweis" hidden></div>
+    <div class="sfInhalt"><div class="hfHaupt"></div>
+      <aside class="sfFeed"><h4><span class="sfLive"></span>${t("Gästebewertungen")}</h4><ul class="hfBewertungen"></ul></aside></div>
+    <footer class="sfFuss"></footer>
+  </div>`;
+  SFX.spiel("klick");
+  hotelZeichnen();
+}
+function hotelSchliessen() {
+  HOTEL.offen = false;
+  const el = document.getElementById("hotelFenster");
+  el.hidden = true; el.innerHTML = "";
+}
+const hotelSetze = (sel, html, key) => {
+  if (HOTEL.sig[key] === html) return;
+  HOTEL.sig[key] = html;
+  const el = document.querySelector("#hotelFenster " + sel); if (el) el.innerHTML = html;
+};
+/* Drei Bewertungen, abgeleitet aus Lage, Preis und Frühstück; sie wechseln jede Spielminute */
+function hotelBewertungen(f, cfg, fest, richt, nurCamping) {
+  const pool = [];
+  if (f.abgewiesen > 0) pool.push([1, "Ausgebucht — wir mussten woanders schlafen."]);
+  if (f.fruehSoll && f.fruehOk < .95) pool.push([2, "Frühstück? Fehlanzeige. Für so viele Sterne enttäuschend."]);
+  if (f.preis > richt * 1.2) pool.push([3, "Schön, aber für das Gebotene ganz schön teuer."]);
+  if (f.preis < richt * .8) pool.push([5, "Unschlagbarer Preis, wir kommen wieder!"]);
+  if (fest) pool.push([5, "Wegen des Stadtfests hier — tolle Stimmung in der Stadt!"]);
+  if (f.bewertung >= 4) pool.push([5, "Traumhafter Blick aufs Meer, das Personal war super."], [5, "Das Frühstücksbuffet allein ist die Reise wert."]);
+  else if (f.bewertung >= 3) pool.push([4, "Sauber, freundlich, gutes Frühstück."], [4, "Gerne wieder, nur der Pool war voll."]);
+  else if (nurCamping) pool.push([4, "Zelten direkt im Grünen, einfach aber herzlich."], [3, "Die Duschen könnten neuer sein."]);
+  else pool.push([3, "Ordentlich für eine Nacht."], [4, "Zentral gelegen, nette Leute."], [3, "Etwas in die Jahre gekommen."]);
+  const seed = Math.floor((store.get().state.tick || 0) / 60) + rohText(f.name).length;
+  const out = [];
+  for (let i = 0; i < Math.min(3, pool.length); i++) out.push([...pool[(seed + i) % pool.length], HOTEL_GAESTE[(seed * 3 + i * 7) % HOTEL_GAESTE.length]]);
+  return out;
+}
+function hotelZeichnen() {
+  const { state, me, myId } = store.get();
+  const T = state?.touristik, cfg = state?.touristikCfg;
+  const f = T?.firmen.find(x => x.id === HOTEL.pid), owner = state?.players?.[HOTEL.pid];
+  if (!T || !cfg || !owner) return hotelSchliessen();
+  const fenster = document.getElementById("hotelFenster"), meins = HOTEL.pid === myId, fest = T.fest, tick = state.tick;
+  const farbe = owner.color || "#0ea5e9";
+  fenster.querySelector(".sfBrowser").style.setProperty("--sys", farbe);
+  const haeuser = state.map.filter(x => x.owner === HOTEL.pid && HOTEL_ICON[x.btype]);
+  const richt = Math.round(cfg.PREIS_REF * Math.sqrt(2 * tourQualiC(cfg, f?.bewertung || 1)));
+  const schnitt = T.firmen.filter(x => x.zimmer > 0);
+  const stadtPreis = schnitt.length ? schnitt.reduce((a, x) => a + x.preis, 0) / schnitt.length : cfg.PREIS_REF;
+  hotelSetze(".sfUrl", `🔒 buchen.cs/${shopSlug(owner.name || "hotel")}`, "url");
+  hotelSetze(".sfKopf", `<div class="sfMarke">${logoHtml(HOTEL.pid, "sfLogo", farbe)}
+      <div><b>${escapeHtml(rohText(owner.name))}</b><small>${t("Hotels & Camping")} · ${haeuser.length} ${haeuser.length === 1 ? t("Haus") : t("Häuser")}${f?.zimmer ? ` · ${f.zimmer} ${t("Zimmer je Minute")}` : ""}</small></div></div>
+    <span class="sfBadge">${sterneHtml(f?.bewertung || 0)} ${String(f?.bewertung ?? 0).replace(".", ",")} · ${t("ab")} <b>${fmt(f?.preis ?? cfg.PREIS_REF)}</b> ${t("je Nacht")}</span>`, "kopf" + (logoBild(HOTEL.pid) || "").length);
+  const banner = fenster.querySelector(".sfBanner");
+  banner.hidden = !fest;
+  hotelSetze(".sfBanner", fest ? `<b>🎉</b><span>${t(fest.name)} ${t("in der Stadt")} — ${t("Restzeit")} ${Math.floor(fest.rest / 60)}:${String(fest.rest % 60).padStart(2, "0")} · ${fest.ownerId === HOTEL.pid ? t("veranstaltet von uns!") : `${t("veranstaltet von")} ${escapeHtml(rohText(fest.veranstalter))}`}</span>` : "", "banner");
+  fenster.querySelector(".sfHinweis").hidden = !meins;
+  hotelSetze(".sfHinweis", t("Deine Buchungsseite: So sehen Gäste und Mitspieler deine Häuser. Preis, Renovierung und Feste stellst du hier direkt ein."), "hinweis");
+  const karten = haeuser.map(x => {
+    const s = x.btype === "campingplatz" ? 1 : (x.sterne || cfg.START_STERNE), imBau = x.bauBis && tick < x.bauBis;
+    const bt = BTYPES()[x.btype], zimmer = Math.round((bt.proc ? bt.proc.rate : bt.rate) * (1 + 0.3 * ((x.level || 1) - 1)) * 60);
+    const kosten = cfg.RENOVIEREN[s], bild = spriteUrl(x.btype, x.x, x.y);
+    const aktion = meins && x.btype === "strandhotel" && s < cfg.MAX_STERNE
+      ? `<button type="button" class="sfKaufen" data-hfrenov="${x.x},${x.y}" ${imBau || me.cash < kosten ? "disabled" : ""}>${t("Auf")} ${s + 1} ★ ${t("renovieren")} · ${fmt(kosten)}</button>`
+      : meins ? `<div class="sfEigen">${x.btype === "campingplatz" ? t("Campingplatz · fest 1 Stern") : t("Höchste Stufe erreicht")}</div>` : "";
+    return `<article class="sfProdukt">
+      ${imBau ? `<span class="sfBand grau">${t("im Bau")}</span>` : s >= 3 ? `<span class="sfBand">☕ ${t("Frühstück inklusive")}</span>` : ""}
+      <div class="sfBild">${bild ? `<img src="${bild}" alt="" class="hfBild">` : `<span>${HOTEL_ICON[x.btype]}</span>`}</div>
+      <h5>${bname(x.btype)}</h5>
+      <div class="sfSterne">${"★".repeat(s)}${"☆".repeat(5 - s)}<em>${s} ${s === 1 ? t("Stern") : t("Sterne")}</em></div>
+      <div class="sfPreis"><b>${fmt(f?.preis ?? cfg.PREIS_REF)}</b><span>${t("je Nacht")} · ${t("Stadt")} Ø ${fmt(stadtPreis)}</span></div>
+      <div class="sfInfo">🛏️ ${zimmer} ${t("Zimmer je Minute")} · ${t("Stufe")} ${x.level || 1}${x.btype === "strandhotel" ? " · 🌊 " + t("Küste") : " · 🌳 " + t("im Grünen")}</div>
+      <div class="sfKauf">${aktion}<button type="button" class="hfKarte" data-hfkarte="${x.x},${x.y}">📍 ${t("Auf der Karte zeigen")}</button></div>
+    </article>`;
+  }).join("");
+  const zahlen = `<div class="hfZahlen">
+      <div><b>${f?.gaeste ?? 0}</b><span>${t("Gäste diese Minute")}</span></div>
+      <div><b>${f?.abgewiesen ?? 0}</b><span>${t("ohne Zimmer")}</span></div>
+      <div><b>${fmt(f?.einnahmen10 || 0)}</b><span>${t("Einnahmen 10 min")}</span></div>
+      <div><b>${fmt(f?.gesamt || 0)}</b><span>${t("seit Rundenbeginn")}</span></div></div>`;
+  let verwalten = "";
+  if (meins) {
+    const pause = T.pause?.[myId] || 0;
+    const preis = tourEntwurf.preis ?? f?.preis ?? cfg.PREIS_REF;
+    verwalten = `<div class="hfVerwalten">
+      <div class="hfPreis"><label><span>${t("Zimmerpreis je Nacht")}</span>
+        <span class="sfMenge"><button type="button" data-hfpm="-5">−</button><input type="number" id="hfPreis" min="${cfg.PREIS_MIN}" max="${cfg.PREIS_MAX}" step="1" value="${preis}"><button type="button" data-hfpm="5">+</button></span></label>
+        <button type="button" class="sfKaufen" data-hfpreis>${t("Preis übernehmen")}</button>
+        <small>${t("Richtwert bei deiner Bewertung")}: <b>${fmt(richt)}</b> · ${t("Stadt")} Ø ${fmt(stadtPreis)}</small></div>
+      <h4 class="hfTitel">🎪 ${t("Stadtfest buchen")} <small>${fest ? t("gerade läuft eins") : pause > 0 ? `${t("nächstes in")} ${Math.ceil(pause / 60)} min` : t("lockt Gäste für alle Hotels, du bekommst mehr davon")}</small></h4>
+      <div class="sfGrid hfFeste">${Object.entries(cfg.FESTE).map(([k, fd]) => `<article class="sfProdukt">
+        <div class="sfBild"><span>${{ strandfest: "🏐", konzert: "🎸", festival: "🎡" }[k] || "🎉"}</span></div>
+        <h5>${t(fd.name)}</h5>
+        <div class="sfPreis"><b>${fmt(fd.kosten)}</b><span>${fd.dauer / 60} ${t("Minuten")}</span></div>
+        <div class="sfInfo">+${Math.round(fd.gaeste * 100)} % ${t("Gäste")} · +${Math.round(fd.zufr * 100)} % ${t("Zufriedenheit")}${fd.laeden ? ` · +${Math.round(fd.laeden * 100)} % ${t("in den Läden")}` : ""}</div>
+        <div class="sfKauf"><button type="button" class="sfKaufen" data-hffest="${k}" ${fest || pause > 0 || me.cash < fd.kosten || !f?.zimmer ? "disabled" : ""}>${t("Buchen")} · ${fmt(fd.kosten)}</button></div>
+      </article>`).join("")}</div></div>`;
+  }
+  hotelSetze(".hfHaupt", zahlen + `<div class="sfGrid">${karten || `<div class="sfLeer">${t("Noch kein Haus fertig.")}</div>`}</div>` + verwalten, "haupt");
+  const bew = f ? hotelBewertungen(f, cfg, fest, richt, haeuser.every(x => x.btype === "campingplatz")) : [];
+  hotelSetze(".hfBewertungen", bew.map(([n, text, wer]) => `<li><span class="sfFeedIcon">${n >= 4 ? "😊" : n === 3 ? "🙂" : "😕"}</span>
+      <span><b class="hfSterneKlein">${"★".repeat(n)}${"☆".repeat(5 - n)}</b><small>„${t(text)}“ — ${wer}</small></span><span></span></li>`).join("")
+    || `<li class="sfLeerFeed">${t("Noch keine Gäste.")}</li>`, "bew");
+  hotelSetze(".sfFuss", `<span class="sfFussLogo">🏨</span><span>${t("Gebucht über das Stadtportal")} · ${T.gaeste} ${t("Gäste kommen gerade je Minute in die Stadt")}</span>`, "fuss");
+}
+document.getElementById("hotelFenster").addEventListener("input", e => { if (e.target.id === "hfPreis") tourEntwurf.preis = e.target.value; });
+document.getElementById("hotelFenster").addEventListener("click", e => {
+  if (e.target.closest("[data-hfzu]") || e.target.id === "hotelFenster") return hotelSchliessen();
+  const pm = e.target.closest("[data-hfpm]");
+  if (pm) { const inp = document.getElementById("hfPreis"); inp.value = Math.max(+inp.min, Math.min(+inp.max, (+inp.value || 0) + +pm.dataset.hfpm)); tourEntwurf.preis = inp.value; return; }
+  if (e.target.closest("[data-hfpreis]")) return socket.emit("zimmerpreis", { preis: +document.getElementById("hfPreis")?.value }, r => {
+    if (r?.error) return toast(r.error, true);
+    delete tourEntwurf.preis; toast(`${t("Zimmerpreis")}: ${fmt(r.preis)}`); render(store.get());
+  });
+  const rv = e.target.closest("[data-hfrenov]");
+  if (rv) { const [x, y] = rv.dataset.hfrenov.split(",").map(Number); return socket.emit("renovieren", { x, y }, r => { if (r?.error) return toast(r.error, true); toast(`${t("Renoviert")}: ${r.sterne} ★`); render(store.get()); }); }
+  const fe = e.target.closest("[data-hffest]");
+  if (fe) return socket.emit("festStarten", { typ: fe.dataset.hffest }, r => { if (r?.error) return toast(r.error, true); render(store.get()); });
+  const ka = e.target.closest("[data-hfkarte]");
+  if (ka) {
+    const [x, y] = ka.dataset.hfkarte.split(",").map(Number);
+    hotelSchliessen(); openPanel("karte");
+    cam.z = Math.max(cam.z, 1.2);
+    cam.x = -(x - y) * TW / 2 * cam.z;
+    cam.y = -(x + y) * TH / 2 * cam.z + innerHeight / 2 - 120;
+  }
+});
+/* ---- Statusseite einer Software-Firma (Etappe 7): Rechenzentren, Hosting, Website-Baukasten ----
+ * Ein Browserfenster wie Shop- und Buchungsseite, mit drei Reitern. Besucher
+ * installieren Shop-System und Steuerung direkt und bestellen Websites; der
+ * Inhaber baut aus, stellt Preise ein und verteilt seine Plätze. */
+const RZW = { offen: false, pid: null, reiter: "status", modul: "grund", sig: {} };
+const rzLvl = l => 1 + 0.3 * ((l || 1) - 1);
+function rzOeffnen(pid, reiter) {
+  TUT_GESEHEN.add("rz");
+  Object.assign(RZW, { offen: true, pid, reiter: reiter || "status", sig: {} });
+  const el = document.getElementById("rzFenster");
+  el.hidden = false;
+  el.innerHTML = `<div class="sfBrowser hfBrowser rzBrowser" role="dialog" aria-label="${t("Statusseite")}">
+    <div class="sfLeiste"><span class="sfPunkte"><i></i><i></i><i></i></span>
+      <span class="sfUrl"></span><button type="button" class="sfZu" data-rzzu aria-label="${t("Schließen")}">✕</button></div>
+    <header class="sfKopf"></header>
+    <nav class="rzReiter"></nav>
+    <div class="sfHinweis" hidden></div>
+    <div class="rzWarn" hidden></div>
+    <div class="rzInhalt"></div>
+    <footer class="sfFuss"></footer>
+  </div>`;
+  SFX.spiel("klick");
+  rzZeichnen();
+}
+function rzSchliessen() {
+  RZW.offen = false;
+  const el = document.getElementById("rzFenster");
+  el.hidden = true; el.innerHTML = "";
+}
+const rzSetze = (sel, html, key) => {
+  if (RZW.sig[key] === html) return;
+  RZW.sig[key] = html;
+  const el = document.querySelector("#rzFenster " + sel); if (el) el.innerHTML = html;
+};
+function rzZeichnen() {
+  const { state, me, myId } = store.get();
+  const owner = state?.players?.[RZW.pid];
+  if (!state?.stadt || !owner) return rzSchliessen();
+  const fenster = document.getElementById("rzFenster"), meins = RZW.pid === myId, tick = state.tick;
+  const sys = (state.software || []).find(x => x.ownerId === RZW.pid && !x.portal);
+  const app = (state.buergerApp || []).find(x => x.ownerId === RZW.pid);
+  const web = (state.website || []).find(x => x.ownerId === RZW.pid), wcfg = state.websiteCfg;
+  const rz = state.rechenzentren?.firmen?.[RZW.pid] || { uptime: [], verteilung: state.rzVerteilungStd || { shops: 50, apps: 30, web: 20 } };
+  const B = BTYPES(), farbe = sys?.farbe || owner.color || "#1d4ed8";
+  fenster.querySelector(".sfBrowser").style.setProperty("--sys", farbe);
+  const racks = state.map.filter(x => x.owner === RZW.pid && B[x.btype]?.rz);
+  const up = rz.uptime || [], upQuote = up.length ? Math.round(up.reduce((a, b) => a + b, 0) / up.length * 100) : 100;
+  const belegt = { shops: sys?.kunden || 0, apps: app?.nutzer || 0, web: web?.kunden || 0 };
+  const kap = { shops: sys?.plaetze || 0, apps: app?.kapazitaet || 0, web: web?.plaetze || 0 };
+  const frei = Math.max(0, kap.shops - belegt.shops) + Math.max(0, kap.web - belegt.web);
+  rzSetze(".sfUrl", `🔒 status.cs/${shopSlug(owner.name || "rz")}${RZW.reiter === "status" ? "" : RZW.reiter === "hosting" ? "/hosting" : "/websites"}`, "url");
+  rzSetze(".sfKopf", `<div class="sfMarke">${logoHtml(RZW.pid, "sfLogo", farbe)}
+      <div><b>${escapeHtml(rohText(owner.name))} ${t("Rechenzentren")}</b><small>${t("Hosting für Shops, Apps und Websites")}${sys?.version ? ` · ${escapeHtml(rohText(sys.name))} v${sys.version}` : ""}</small></div></div>
+    <span class="rzBadges"><span class="sfBadge">${upQuote} % ${t("online")} · ${up.length || 0} min</span><span class="sfBadge">${frei} ${t("Plätze frei")}</span></span>`, "kopf" + (logoBild(RZW.pid) || "").length);
+  rzSetze(".rzReiter", [["status", "Status"], ["hosting", "Hosting & Preise"], ["websites", "Website-Baukasten"]].map(([k, n]) =>
+    `<button type="button" data-rzreiter="${k}" class="${RZW.reiter === k ? "on" : ""}">${t(n)}</button>`).join(""), "reiter" + RZW.reiter);
+  fenster.querySelector(".sfHinweis").hidden = !meins;
+  rzSetze(".sfHinweis", t("Deine Statusseite: So sehen Kunden und Mitspieler deine Rechenzentren. Ausbau, Preise und Platzverteilung stellst du hier direkt ein."), "hinweis");
+  /* Strom: nur der Inhaber sieht, wie lange der Vorrat für die Rechenzentren reicht */
+  const stromJeMin = racks.filter(x => !(x.bauBis > tick)).reduce((a, x) => a + B[x.btype].rz.in.strom * rzLvl(x.level) * 60, 0);
+  const stromMin = stromJeMin ? Math.floor((me.inv?.strom || 0) / stromJeMin) : Infinity;
+  const warn = fenster.querySelector(".rzWarn");
+  warn.hidden = !(meins && stromMin < 6);
+  rzSetze(".rzWarn", meins && stromMin < 6 ? `<span><b>${t("Strom wird knapp")}:</b> ${t("noch")} ${stromMin} ${t("Minuten Vorrat. Fällt er aus, gehen Shops, Apps und Websites deiner Kunden offline.")}</span>
+    <button type="button" class="sfKaufen" data-rzstrom>${t("200 Strom kaufen")}</button>` : "", "warn" + stromMin);
+  let html = "";
+  if (RZW.reiter === "status") {
+    const n = Math.max(up.length, 1);
+    const balken = up.length ? up.map((u, i) => `<span class="rzUp ${u ? "an" : "aus"}" title="${t("vor")} ${up.length - i} min: ${u ? t("online") : t("Ausfall – Strom fehlte")}"></span>`).join("") : `<span class="meta">${t("Noch keine volle Minute gemessen.")}</span>`;
+    const ausfaelle = up.filter(u => !u).length;
+    const karten = racks.map(x => {
+      const lvl = x.level || 1, imBau = x.bauBis && tick < x.bauBis, an = x.rzAktiv && !imBau;
+      const plaetze = B[x.btype].rz.plaetze * lvl, ausl = kap.shops ? Math.min(100, Math.round(belegt.shops / Math.max(1, kap.shops) * 100)) : 0;
+      const kosten = { el: Math.ceil(B[x.btype].cost / 2500 * lvl), cash: Math.round(B[x.btype].cost * 0.35 * lvl) };
+      return `<article class="rzKarte">
+        <div class="rzKarteKopf"><b>${t("Rechenzentrum")} ${x.x}·${x.y}</b><span class="rzStatus ${an ? "an" : "aus"}">${imBau ? t("im Bau") : an ? t("am Netz") : t("aus – Strom fehlt")}</span></div>
+        <small>${t("Stufe")} ${lvl} · ${plaetze} ${t("Plätze")} · ${Math.round(B[x.btype].rz.in.strom * rzLvl(lvl) * 60)} ${t("Strom/min")}</small>
+        <div class="rzBalken"><i style="width:${an ? ausl : 0}%"></i></div>
+        <small class="mono">${an ? ausl : 0} % ${t("ausgelastet")}</small>
+        ${meins && lvl < 5 ? `<button type="button" class="sfKaufen" data-rzausbau="${x.x},${x.y}" ${imBau || me.cash < kosten.cash || (me.inv?.elektronik || 0) < kosten.el ? "disabled" : ""}>${t("Auf Stufe")} ${lvl + 1} ${t("ausbauen")} · ${fmt(kosten.cash)} + ${kosten.el} ${gname("elektronik")}</button>` : ""}
+        <button type="button" class="hfKarte" data-rzkarte="${x.x},${x.y}">📍 ${t("Auf der Karte zeigen")}</button>
+      </article>`;
+    }).join("");
+    const zeile = (name, b, k) => `<div class="rzZeile"><span>${name}</span><div class="rzBalken"><i style="width:${k ? Math.min(100, Math.round(b / k * 100)) : 0}%"></i></div><b class="mono">${b} / ${k}</b></div>`;
+    html = `<section class="rzBox"><div class="rzBoxKopf"><b>${t("Verfügbarkeit")} · ${t("letzte")} ${RZ_UPTIME_ANZ} ${t("Minuten")}</b><span class="mono">${upQuote} %</span></div>
+        <div class="rzUptime" style="grid-template-columns:repeat(${n},minmax(0,1fr))">${balken}</div>
+        <small>${ausfaelle ? `${ausfaelle} ${ausfaelle === 1 ? t("Ausfall") : t("Ausfälle")}: ${t("Strom fehlte")}` : t("Keine Ausfälle")}</small></section>
+      <div class="sfGrid rzKarten">${karten || `<div class="sfLeer">${t("Noch kein Rechenzentrum gebaut.")}</div>`}</div>
+      <section class="rzBox"><b>${t("Was hier läuft")}</b>
+        ${zeile(t("Shop-Systeme und Steuerungen"), belegt.shops, kap.shops)}
+        ${zeile(t("Bürger-App-Nutzer"), belegt.apps, kap.apps)}
+        ${zeile(t("Websites"), belegt.web, kap.web)}</section>`;
+  } else if (RZW.reiter === "hosting") {
+    const pm = (key, minus, plus) => meins ? `<div class="rzPreisZeile"><span>${t("Dein Preis")}</span><span class="sfMenge"><button type="button" data-rzpreis="${key}" data-d="-1" aria-label="${t("weniger")}">−</button><b class="mono">${minus}</b><button type="button" data-rzpreis="${key}" data-d="1" aria-label="${t("mehr")}">+</button></span></div>` : "";
+    /* Besucher: direkt auf den eigenen Gebäuden installieren */
+    const laeden = state.map.filter(x => x.owner === myId && B[x.btype]?.online);
+    const fabriken = sys ? state.map.filter(x => x.owner === myId && state.steuerung?.[B[x.btype]?.industry] && (B[x.btype]?.proc || B[x.btype]?.out) && !B[x.btype]?.retail && !B[x.btype]?.studio && !B[x.btype]?.rz && (sys.stufen?.[B[x.btype].industry] || 0) >= 1) : [];
+    const sysKnoepfe = !sys?.version ? `<div class="sfEigen">${t("Noch kein Shop-System fertig")}</div>`
+      : meins ? "" : laeden.length ? laeden.map(x => x.system?.produktId === sys.id ? `<div class="sfEigen">${bname(x.btype)} ${x.x}·${x.y}: ${t("läuft hier")}</div>`
+        : `<button type="button" class="sfKaufen" data-rzsys="${x.x},${x.y}" ${me.cash < sys.einrichtung || (sys.plaetze != null && sys.kunden >= sys.plaetze) ? "disabled" : ""}>${t("Auf")} ${bname(x.btype)} ${x.x}·${x.y} ${t("installieren")}</button>`).join("")
+        : `<div class="sfEigen">${t("Du hast keinen Online-Marktplatz")}</div>`;
+    const stKnoepfe = !sys?.version ? "" : meins ? "" : fabriken.length ? fabriken.slice(0, 4).map(x => x.steuerung?.produktId === sys.id ? `<div class="sfEigen">${bname(x.btype)}: ${t("läuft hier")}</div>`
+        : `<button type="button" class="sfKaufen" data-rzsteuer="${x.x},${x.y}" ${me.cash < (sys.steuerAbo || 0) || (sys.plaetze != null && sys.kunden >= sys.plaetze) ? "disabled" : ""}>${t("Steuern")}: ${bname(x.btype)}</button>`).join("")
+        : `<div class="sfEigen">${t("Keine passende Fabrik — ")}${escapeHtml(rohText(sys?.name || ""))} ${t("braucht einen Baum für deine Branche")}</div>`;
+    const v = rz.verteilung;
+    const vZeile = (k, name) => `<div class="rzZeile rzVert"><span>${name}</span><div class="rzBalken"><i style="width:${v[k]}%"></i></div><b class="mono">${v[k]} % · ${kap[k]}</b>
+      <span class="rzPM"><button type="button" data-rzvert="${k}" data-d="-5" aria-label="${t("weniger")}">−</button><button type="button" data-rzvert="${k}" data-d="5" aria-label="${t("mehr")}">+</button></span></div>`;
+    html = `<div class="sfGrid rzAngebote">
+        <article class="sfProdukt"><span class="sfBand">${t("Shop-System")}</span><div class="sfBild"><span>🛒</span></div>
+          <h5>${sys ? `${escapeHtml(rohText(sys.name))} v${sys.version || 0}` : t("Noch kein System")}</h5>
+          <div class="sfPreis"><b>${sys ? String(sys.gebuehr).replace(".", ",") + " %" : "—"}</b><span>${t("je Verkauf")} · ${t("Einrichtung")} ${fmt(sys?.einrichtung || 0)}</span></div>
+          <div class="sfInfo">${t("Bezahlen im Online-Marktplatz")} · ${sys?.plaetze != null ? Math.max(0, sys.plaetze - sys.kunden) : 0} ${t("Plätze frei")}</div>
+          ${meins && sys ? pm("gebuehr", String(sys.gebuehr).replace(".", ",") + " %") + pm("einrichtung", fmt(sys.einrichtung)) : ""}
+          <div class="sfKauf">${sysKnoepfe}</div></article>
+        <article class="sfProdukt"><span class="sfBand">${t("Steuerung")}</span><div class="sfBild"><span>🎛️</span></div>
+          <h5>${t("Leitstand für Fabriken")}</h5>
+          <div class="sfPreis"><b>${fmt(sys?.steuerAbo || 0)}</b><span>${t("je Minute und Gebäude")}</span></div>
+          <div class="sfInfo">${t("Mehr Ausstoß oder weniger Rohstoffe, je nach Branchenbaum")}${sys ? ` · ${sys.steuerKunden || 0} ${t("Gebäude gesteuert")}` : ""}</div>
+          ${meins && sys ? pm("steuerAbo", fmt(sys.steuerAbo || 0)) : ""}
+          <div class="sfKauf">${stKnoepfe}</div></article>
+        <article class="sfProdukt"><span class="sfBand">${t("Website")}</span><div class="sfBild"><span>🌐</span></div>
+          <h5>${web ? escapeHtml(rohText(web.name)) : t("Firmen-Website")}</h5>
+          <div class="sfPreis"><b>${web ? fmt(web.preis) : "—"}</b><span>${t("je Minute ab Grundseite")} · ${t("Einrichtung")} ${fmt(wcfg?.EINRICHTUNG || 400)}</span></div>
+          <div class="sfInfo">${t("Mehr Reichweite: Läden, Gäste und Grundbedarf")} · ${web ? Math.max(0, web.plaetze - web.kunden) : 0} ${t("Plätze frei")}</div>
+          ${meins && web ? pm("web", fmt(web.preis)) : ""}
+          <div class="sfKauf"><button type="button" class="sfKaufen" data-rzreiter="websites">${meins ? t("Zum Baukasten") : t("Website ansehen und bestellen")}</button></div></article>
+      </div>
+      ${meins ? `<section class="rzBox"><div class="rzBoxKopf"><b>${t("Platzverteilung")}</b><small>${t("Mehr für Websites heißt weniger für Shops und Apps")}</small></div>
+        ${vZeile("shops", t("Shops und Steuerungen"))}${vZeile("apps", t("Bürger-Apps"))}${vZeile("web", t("Websites"))}</section>` : ""}`;
+  } else {
+    const meineSeite = state.rechenzentren?.websites?.[myId];
+    const ver = web?.version || 0;
+    const module = wcfg ? Object.entries(wcfg.MODULE).map(([k, m]) => {
+      const offen = ver >= m.ab, preis = web ? Math.round(web.preis * m.faktor * 100) / 100 : 0;
+      return `<button type="button" class="rzModul${RZW.modul === k ? " on" : ""}${offen ? "" : " zu"}" data-rzmodul="${k}" ${offen ? "" : "disabled"}>
+        <span class="rzModulKopf"><b>${t(m.name)}</b><span class="mono">${web ? fmt(preis) + "/min" : "—"}</span></span>
+        <small>${t({ grund: "Logo, Häuser oder Produkte, Bewertungen und Kontakt.", portal: "Buchungsseite, Baustoff-Portal, Kundenportal oder Ausschreibungen — je nach Branche.", aktion: "Gemüsekisten-Abo, Launch-Events, Feste online buchen." }[k])}</small>
+        <em>${offen ? `+${Math.round(m.bonus * 100)} % ${t("Reichweite")}` : `${t("ab")} v${m.ab}`}</em></button>`;
+    }).join("") : "";
+    const gew = wcfg?.MODULE[RZW.modul];
+    let bestellen = "";
+    if (!meins && web?.version >= 1) {
+      const laeuft = meineSeite?.anbieter === web.id;
+      bestellen = laeuft && meineSeite.modul === RZW.modul
+        ? `<div class="sfEigen">${t("Deine Website läuft hier")}: ${t(wcfg.MODULE[meineSeite.modul].name)}${meineSeite.online ? "" : ` · ${t("wird eingerichtet")}`} · +${Math.round((meineSeite.bonus || 0) * 100)} % ${t("Reichweite")}</div>
+           <button type="button" class="hfKarte" data-rzkuendigen>${t("Website kündigen")}</button>`
+        : `<button type="button" class="sfKaufen" data-rzbestellen ${ver < (gew?.ab || 9) || (!laeuft && web.kunden >= web.plaetze) ? "disabled" : ""}>${t(gew.name)} ${laeuft ? t("wechseln") : t("bestellen")} · ${fmt(Math.round(web.preis * gew.faktor))}/min${laeuft ? "" : ` + ${fmt(wcfg.EINRICHTUNG)} ${t("Einrichtung")}`}</button>
+           ${!laeuft && web.kunden >= web.plaetze ? `<small>${t("Ausgebucht — dem Anbieter fehlen Plätze im Rechenzentrum.")}</small>` : ""}
+           ${!laeuft ? `<small>${t("Die Software-Firma gestaltet deine Startseite individuell — Vorlage, Farben, Abschnitte. Die Einrichtung bekommt sie erst bei Lieferung.")}</small>` : ""}`;
+    }
+    const entw = meins ? (web ? (web.entwicklung
+        ? `<div class="sfEigen">v${web.entwicklung.version} ${t("in Arbeit")}: ${web.entwicklung.ep} / ${web.entwicklung.ziel} EP</div>`
+        : ver < (wcfg?.STUFEN.length || 3) ? `<button type="button" class="sfKaufen" data-rzwebdev>${escapeHtml(rohText(web.name))} v${ver + 1} ${t("entwickeln")} · ${wcfg.STUFEN[ver].ep} EP</button>`
+        : `<div class="sfEigen">${t("Voll ausgebaut")}</div>`)
+      : (sys?.version || 0) >= (wcfg?.AB_SYSTEM || 2)
+        ? `<label class="rzNeu"><span>${t("Name deines Baukastens")}</span><input id="rzWebName" maxlength="20" placeholder="z. B. ${escapeHtml(rohText(owner.name)).slice(0, 12)} Web"></label><button type="button" class="sfKaufen" data-rzwebneu>${t("Website-Baukasten anlegen")}</button>`
+        : `<div class="sfEigen">${t("Ab Shop-System v")}${wcfg?.AB_SYSTEM || 2}</div>`) : "";
+    const kunden = (web?.liste || []).map(k => {
+      const hat = (state.touristik?.firmen || []).some(f => f.id === k.id && f.zimmer > 0);
+      return `<div class="rzKunde"><i class="${k.online ? "an" : "aus"}"></i><span><b>${escapeHtml(rohText(k.name))}</b><small class="mono">${shopSlug(k.name)}.cs · ${t(wcfg.MODULE[k.modul]?.name || "")}</small></span>
+        ${meins && k.auftrag === "offen" ? `<button type="button" class="sfKaufen" data-genauf="${k.id}">🛠 ${t("Gestalten")} · ${Math.floor(k.rest / 60)}:${String(k.rest % 60).padStart(2, "0")}</button>`
+          : k.auftrag === "offen" ? `<span class="rzOn aus">${t("wird gestaltet")}</span>`
+          : meins ? `<button type="button" class="hfKarte" data-genauf="${k.id}" title="${t("Website überarbeiten")}">✎ ${Math.round((k.qualitaet || 0) * 100)} %</button>`
+          : hat ? `<button type="button" class="hfKarte" data-hotelauf="${k.id}">${t("Ansehen")}</button>` : `<span class="rzOn ${k.online ? "an" : "aus"}">${k.online ? t("online") : t("wird eingerichtet")}</span>`}</div>`;
+    }).join("");
+    html = `<div class="rzZwei">
+      <section class="rzBox"><b>${t("Website-Baukasten")}${web ? ` · ${escapeHtml(rohText(web.name))} v${ver}` : ""}</b>
+        ${web || !meins ? (web ? module : `<div class="sfLeer">${escapeHtml(rohText(owner.name))} ${t("hat noch keinen Website-Baukasten.")}</div>`) : ""}
+        ${bestellen}${entw}</section>
+      <section class="rzBox"><b>${t("Gebaut von")} ${escapeHtml(rohText(owner.name))}</b>
+        ${kunden || `<div class="sfLeer">${t("Noch keine Kunden.")}</div>`}
+        ${meins && web ? `<small>${t("Einnahmen aus Websites")}: <b class="mono">${fmt(web.einnahmen10 || 0)}</b> ${t("in 10 Minuten")}</small>` : ""}</section>
+    </div>
+    ${!meins && !meineSeite ? `<div class="rzPortal">${t("Kein passender Anbieter?")} <button type="button" class="hfKarte" data-rzportal>${t("Grundseite beim Stadtportal")} · ${fmt(wcfg?.STADTPORTAL.einrichtung || 600)} + ${fmt(wcfg?.STADTPORTAL.preis || 45)}/min</button></div>` : ""}`;
+  }
+  rzSetze(".rzInhalt", html, "inhalt");
+  rzSetze(".sfFuss", `${sys && !sys.portal ? logoHtml(sys.ownerId, "sfFussLogo", sys.farbe) : `<span class="sfFussLogo">🏛</span>`}<span>${t("Diese Seite läuft mit")} <b>${sys ? escapeHtml(rohText(sys.name)) : t("Stadtportal")}</b>${sys?.version ? ` v${sys.version}` : ""}</span>`, "fuss");
+}
+const RZ_UPTIME_ANZ = 30;
+document.getElementById("rzFenster").addEventListener("click", e => {
+  if (e.target.closest("[data-rzzu]") || e.target.id === "rzFenster") return rzSchliessen();
+  const { state, me, myId } = store.get();
+  const em = (ev, d, ok) => socket.emit(ev, d, r => { if (r?.error) return toast(r.error, true); if (ok) toast(typeof ok === "function" ? ok(r) : ok); render(store.get()); });
+  const rt = e.target.closest("[data-rzreiter]");
+  if (rt) { RZW.reiter = rt.dataset.rzreiter; RZW.sig = {}; return rzZeichnen(); }
+  const md = e.target.closest("[data-rzmodul]");
+  if (md) { RZW.modul = md.dataset.rzmodul; RZW.sig.inhalt = null; return rzZeichnen(); }
+  const sys = (state.software || []).find(x => x.ownerId === RZW.pid && !x.portal), web = (state.website || []).find(x => x.ownerId === RZW.pid);
+  const xy = v => v.split(",").map(Number);
+  const a = e.target.closest("[data-rzausbau]");
+  if (a) { const [x, y] = xy(a.dataset.rzausbau); return em("upgradeBuilding", { x, y }, t("Rechenzentrum ausgebaut")); }
+  const k = e.target.closest("[data-rzkarte]");
+  if (k) { const [x, y] = xy(k.dataset.rzkarte); rzSchliessen(); openPanel("karte"); cam.z = Math.max(cam.z, 1.2); cam.x = -(x - y) * TW / 2 * cam.z; cam.y = -(x + y) * TH / 2 * cam.z + innerHeight / 2 - 120; return; }
+  if (e.target.closest("[data-rzstrom]")) {
+    const ask = (state.orders || []).filter(o => o.good === "strom" && o.side === "sell" && o.playerId !== myId).reduce((m, o) => Math.min(m, o.price), Infinity);
+    const preis = Number.isFinite(ask) ? ask : Math.round((state.avg?.strom || 2) * 1.1 * 100) / 100;
+    return em("placeOrder", { side: "buy", good: "strom", qty: 200, price: preis }, `${t("Kauforder")}: 200 ${gname("strom")} · ${fp(preis)}`);
+  }
+  const s = e.target.closest("[data-rzsys]");
+  if (s && sys) { const [x, y] = xy(s.dataset.rzsys); return em("installSystem", { x, y, produktId: sys.id }, `${sys.name} ${t("wird installiert")}`); }
+  const st = e.target.closest("[data-rzsteuer]");
+  if (st && sys) { const [x, y] = xy(st.dataset.rzsteuer); return em("installSteuerung", { x, y, produktId: sys.id }, `${t("Steuerung")} ${sys.name} ${t("wird installiert")}`); }
+  const pr = e.target.closest("[data-rzpreis]");
+  if (pr) {
+    const d = +pr.dataset.d, key = pr.dataset.rzpreis;
+    if (key === "web" && web) return em("webEinstellen", { name: web.name, preis: web.preis + d * 5 });
+    if (!sys) return;
+    const neu = { gebuehr: sys.gebuehr + d * 0.5, einrichtung: sys.einrichtung + d * 50, steuerAbo: (sys.steuerAbo || 0) + d * 2 }[key];
+    return em("softwareEinstellen", { name: sys.name, [key]: Math.max(0, neu) });
+  }
+  const vt = e.target.closest("[data-rzvert]");
+  if (vt) {
+    const v = { ...(state.rechenzentren?.firmen?.[myId]?.verteilung || state.rzVerteilungStd) }, key = vt.dataset.rzvert, d = +vt.dataset.d;
+    if (v[key] + d < 0 || v[key] + d > 100) return;
+    const ziel = Object.keys(v).filter(x => x !== key).sort((p1, p2) => d > 0 ? v[p2] - v[p1] : v[p1] - v[p2])[0];
+    if (v[ziel] - d < 0) return;
+    v[key] += d; v[ziel] -= d;
+    return em("rzVerteilung", v);
+  }
+  if (e.target.closest("[data-rzbestellen]") && web) return em("websiteBestellen", { anbieter: web.id, modul: RZW.modul }, r => `${t("Website bestellt")}${r.dauer ? ` · ${r.dauer} s ${t("Einrichtung")}` : ""}`);
+  if (e.target.closest("[data-rzportal]")) return em("websiteBestellen", { anbieter: "stadtportal", modul: "grund" }, t("Grundseite beim Stadtportal bestellt"));
+  if (e.target.closest("[data-rzkuendigen]")) return em("websiteKuendigen", {}, t("Website gekündigt"));
+  if (e.target.closest("[data-rzwebdev]")) return em("webEntwickeln", {}, r => `${t("Entwicklung gestartet")}: ${r.ep} EP`);
+  if (e.target.closest("[data-rzwebneu]")) return em("webEinstellen", { name: document.getElementById("rzWebName")?.value, preis: state.websiteCfg?.PREIS_START || 25 }, t("Website-Baukasten angelegt"));
+  const ha = e.target.closest("[data-hotelauf]");
+  if (ha) { rzSchliessen(); return hotelOeffnen(ha.dataset.hotelauf); }
+  const ga = e.target.closest("[data-genauf]");
+  if (ga) { rzSchliessen(); return genOeffnen(ga.dataset.genauf); }
+});
+/* Großer Verlauf für bank.cs: Fläche, gestrichelte Startlinie, Achse rechts */
+function bankChart(h, fmtW) {
+  if (!h || h.length < 2) return `<div class="bankChartLeer">${t("Der Verlauf erscheint nach den ersten Minuten.")}</div>`;
+  const W = 330, H = 230, min = Math.min(...h), max = Math.max(...h), span = max - min || 1;   // schmal, damit die Schrift lesbar bleibt
+  const x = i => i / (h.length - 1) * W, y = v => 10 + (1 - (v - min) / span) * (H - 20);
+  const auf = h[h.length - 1] >= h[0], c = auf ? "#16a34a" : "#dc2626";
+  const linie = h.map((v, i) => `${i ? "L" : "M"}${x(i).toFixed(1)} ${y(v).toFixed(1)}`).join(" ");
+  const minuten = Math.round(h.length * 10 / 60);
+  return `<div class="bankChart"><svg viewBox="0 0 ${W + 78} ${H + 24}" role="img" aria-label="${t("Verlauf")}">
+    <defs><linearGradient id="bankVerlauf" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${c}" stop-opacity=".35"></stop><stop offset="1" stop-color="${c}" stop-opacity=".02"></stop></linearGradient></defs>
+    ${[0, .5, 1].map(f => `<line x1="0" x2="${W}" y1="${10 + f * (H - 20)}" y2="${10 + f * (H - 20)}" stroke="#e5e7eb"></line><text x="${W + 6}" y="${14 + f * (H - 20)}" font-size="13" fill="#4b5563">${fmtW(max - f * span)}</text>`).join("")}
+    <line x1="0" x2="${W}" y1="${y(h[0])}" y2="${y(h[0])}" stroke="#374151" stroke-dasharray="4 4"></line>
+    <text x="6" y="${y(h[0]) - 6}" font-size="13" fill="#374151">${t("Start")}: ${fmtW(h[0])}</text>
+    <path d="${linie} L${W} ${H} L0 ${H} Z" fill="url(#bankVerlauf)"></path>
+    <path d="${linie}" fill="none" stroke="${c}" stroke-width="2"></path>
+    <text x="0" y="${H + 20}" font-size="13" fill="#4b5563">${t("vor")} ${minuten} min</text><text x="${W}" y="${H + 20}" font-size="13" fill="#4b5563" text-anchor="end">${t("jetzt")}</text>
+  </svg></div>`;
+}
+/* ---- Firmen-Website nach Design (Website-Generator) ----
+ * Rendert die Website einer Firma so, wie ihre Software-Firma sie gestaltet
+ * hat: Vorlage (klar/elegant/bunt), Farbe, Titel, Slogan und die Abschnitte in
+ * gewählter Reihenfolge. Das Stadtnetz zeigt sie, der Generator nutzt sie als
+ * Live-Vorschau (vorschau = true: Knöpfe ohne Wirkung). */
+const FW_ABSCHNITT = { produkte: "Produkte", betriebe: "Betriebe", angebot: "Direktkauf", bewertungen: "Bewertungen", ueber: "Über uns", aktie: "Aktie", galerie: "Galerie",
+  zahlen: "Zahlen", team: "Team", kontakt: "Kontakt", faq: "Fragen", news: "Neuigkeiten" };
+const FW_BESCHREIBUNG = { produkte: "Waren mit Ø-Kurs und Link zum Shop", betriebe: "Alle Gebäude der Firma", angebot: "Hofladen, Großhandel … (ab Branchenportal)",
+  bewertungen: "Stimmen von Kunden", ueber: "Eigener Text über die Firma", aktie: "Kurs und Verlauf der Aktie", galerie: "Große Bilder der Gebäude",
+  zahlen: "Große Kennzahlen: Betriebe, Waren, Besucher", team: "Die Menschen hinter der Firma", kontakt: "Adresse, Öffnungszeiten, E-Mail",
+  faq: "Häufige Fragen zum Aufklappen", news: "Meldungen aus dem Stadtkurier" };
+/* Feinschliff im Generator: "" = wie die Vorlage */
+const FW_OPTIONEN = {
+  schrift: { "": "Vorlage", modern: "Modern", serif: "Serif", rund: "Rund", kraft: "Kraftvoll", hand: "Handschrift", pixel: "Pixel" },
+  kopf: { "": "Vorlage", verlauf: "Verlauf", flach: "Flach", zentriert: "Zentriert", gross: "Groß" },
+  ecken: { "": "Vorlage", eckig: "Eckig", normal: "Normal", rund: "Rund" },
+  muster: { "": "Ohne", punkte: "Punkte", streifen: "Streifen", wellen: "Wellen", raster: "Raster" },
+};
+const FW_VORLAGE = { klar: "Klar", elegant: "Elegant", bunt: "Bunt", dunkel: "Dunkel", retro: "Retro", natur: "Natur", modern: "Modern" };
+const FW_TEAM = { agrar: ["Hofleitung", "Ernte & Lager", "Hofladen"], rohstoff: ["Bauleitung", "Steinbruch", "Logistik"], versorger: ["Netzleitung", "Kraftwerk", "Kundendienst"],
+  tech: ["Geschäftsführung", "Fertigung", "Vertrieb"], touristik: ["Direktion", "Rezeption", "Küche"], software: ["Gründung", "Entwicklung", "Support"], ruestung: ["Geschäftsführung", "Fertigung", "Behörden"] };
+const FW_ZEITEN = { agrar: "Mo–Sa 6–18 Uhr", rohstoff: "Mo–Fr 7–17 Uhr", versorger: "rund um die Uhr", tech: "Mo–Fr 8–18 Uhr", touristik: "Rezeption 24 h", software: "Mo–Fr 9–19 Uhr", ruestung: "nach Vereinbarung" };
+const FW_FAQ = [["Liefert ihr in die ganze Stadt?", "Ja — über den Markt und unseren Online-Shop erreichen wir jeden Block."],
+  ["Wie kommen die Preise zustande?", "Wir orientieren uns am Ø-Kurs der Börse und geben gute Ernten und Großaufträge weiter."],
+  ["Kann man bei euch Aktien kaufen?", "Ja, an der Stadtbank. Bei Gewinn schütten wir regelmäßig aus."]];
+const FW_STIMMEN = {
+  agrar: ["Das Obst schmeckt wie früher.", "Bester Honig der Stadt!", "Pünktlich geliefert, frisch wie versprochen."],
+  rohstoff: ["Ziegel in Top-Qualität, schnell da.", "Unser Wohnblock steht dank euch.", "Fairer Preis für Beton."],
+  versorger: ["Nie wieder Stromausfall.", "Wasser immer verfügbar — danke!", "Zuverlässig wie ein Uhrwerk."],
+  tech: ["Die Elektronik hat unseren Ausbau gerettet.", "Schnell, sauber, günstig.", "Bester Chip-Lieferant weit und breit."],
+  touristik: ["Traumhafter Blick aufs Meer.", "Das Frühstück war ein Gedicht.", "Wir kommen nächstes Jahr wieder!"],
+  software: ["Das Shop-System läuft wie geschmiert.", "Support antwortet sofort.", "Endlich eine App, die man versteht."],
+  ruestung: ["Zuverlässig und termingerecht geliefert.", "Die Stadtwache ist zufrieden.", "Präzise Arbeit."],
+};
+const FW_NAMEN = ["Lena B.", "Familie Okafor", "Jonas K.", "Mira S.", "Herr Brandt", "Aylin T.", "Kenji M.", "Oma Hilde"];
+function firmenSeiteHtml(state, me, myId, pid, design, vorschau = false) {
+  const p = state.players[pid], w = state.rechenzentren?.websites?.[pid], B = BTYPES(), ind = p?.industry, meins = pid === myId;
+  if (!p) return "";
+  const d = design || w?.design || { vorlage: "klar", farbe: p.color, titel: p.name, slogan: "", abschnitte: ["produkte", "betriebe"], ueber: "" };
+  const geb = {};
+  for (const x of state.map) if (x.owner === pid && x.btype) geb[x.btype] = (geb[x.btype] || 0) + 1;
+  const waren = [...new Set(Object.keys(geb).map(b => B[b]?.proc?.out || B[b]?.out).filter(Boolean))];
+  const shop = state.map.find(x => x.owner === pid && B[x.btype]?.online && x.system);
+  const knopf = (attr, text, cls = "fwKnopf") => vorschau ? `<span class="${cls}">${text}</span>` : `<button type="button" class="${cls}" ${attr}>${text}</button>`;
+  const titel = escapeHtml(rohText(d.titel || p.name)), slogan = d.slogan ? escapeHtml(rohText(d.slogan)) : "";
+  const hero = `<section class="fwHero"><div class="fwHeroMarke">${logoHtml(pid, "fwLogo", d.farbe)}<div><h1>${titel}</h1>${slogan ? `<p>${slogan}</p>` : ""}</div></div>
+    <div class="fwHeroLeiste"><span>${t(BRANCHE_NAME[ind] || "")}</span>${w ? `<span>${w.besucher} ${t("Besucher/min")}</span>` : ""}${shop ? knopf(`data-shopauf="${shop.x},${shop.y}"`, `🛒 ${t("Zum Online-Shop")}`, "fwKnopf hell") : ""}</div></section>`;
+  const abschnitt = typ => {
+    if (typ === "produkte") return `<section class="fwAbschnitt"><h2>${t("Produkte")}</h2><div class="fwProdukte">${waren.map(g => `<div class="fwProdukt"><span>${WAREN_ICON[g] || "📦"}</span><b>${gname(g)}</b><small>Ø ${fp(state.avg?.[g] || 0)}</small></div>`).join("") || `<small>${t("Noch keine eigene Ware.")}</small>`}</div></section>`;
+    if (typ === "betriebe") return `<section class="fwAbschnitt"><h2>${t("Unsere Betriebe")}</h2><div class="fwBetriebe">${Object.entries(geb).map(([b, n]) => `<div class="fwBetrieb">${spriteUrl(b, 0, 0) ? `<img src="${spriteUrl(b, 0, 0)}" alt="">` : ""}<span><b>${n}×</b> ${bname(b)}</span></div>`).join("") || `<small>${t("Noch nichts gebaut.")}</small>`}</div></section>`;
+    if (typ === "galerie") return `<section class="fwAbschnitt"><h2>${t("Galerie")}</h2><div class="fwGalerie">${Object.keys(geb).slice(0, 6).map(b => `<figure>${spriteUrl(b, 0, 0) ? `<img src="${spriteUrl(b, 0, 0)}" alt="">` : ""}<figcaption>${bname(b)}</figcaption></figure>`).join("") || `<small>${t("Noch nichts gebaut.")}</small>`}</div></section>`;
+    if (typ === "ueber") return `<section class="fwAbschnitt fwUeber"><h2>${t("Über uns")}</h2><p>${d.ueber ? escapeHtml(rohText(d.ueber)) : `<i>${t("Hier steht der Text über die Firma.")}</i>`}</p></section>`;
+    if (typ === "bewertungen") { const st = FW_STIMMEN[ind] || FW_STIMMEN.agrar, n0 = rohText(p.name).length;
+      return `<section class="fwAbschnitt"><h2>${t("Bewertungen")}</h2><div class="fwStimmen">${st.map((x, i) => `<blockquote><span>${"★".repeat(i === 2 ? 4 : 5)}${i === 2 ? "☆" : ""}</span><p>„${t(x)}“</p><cite>${FW_NAMEN[(n0 + i * 3) % FW_NAMEN.length]}</cite></blockquote>`).join("")}</div></section>`; }
+    if (typ === "aktie") { const h = firmHist[pid] || [], dd = h.length > 1 && h[0] ? (h[h.length - 1] / h[0] - 1) * 100 : 0;
+      return `<section class="fwAbschnitt"><h2>${t("Unsere Aktie")}</h2><div class="fwAktie"><b class="mono">${fk(p.kurs || 0)}</b><em class="${dd >= 0 ? "auf" : "ab"}">${dd >= 0 ? "+" : "−"}${Math.abs(dd).toFixed(1).replace(".", ",")} %</em>${h.length > 1 ? sparklineVon(h, 120, 32) : ""}${knopf(`data-netzaktie="${pid}"`, t("An der Stadtbank"))}</div></section>`; }
+    if (typ === "zahlen") { const anz = Object.values(geb).reduce((a, n) => a + n, 0);
+      return `<section class="fwAbschnitt"><h2>${t("In Zahlen")}</h2><div class="fwZahlen"><div><b>${anz}</b><span>${t("Betriebe")}</span></div><div><b>${waren.length}</b><span>${t("Waren")}</span></div><div><b>${w?.besucher || 0}</b><span>${t("Besucher/min")}</span></div><div><b>${fk(p.kurs || 0)}</b><span>${t("Aktienkurs")}</span></div></div></section>`; }
+    if (typ === "team") { const n0 = rohText(p.name).length, rollen = FW_TEAM[ind] || FW_TEAM.tech, gesichter = ["👩‍🌾", "👨‍🔧", "👩‍💼", "🧑‍🍳", "👨‍💻", "👩‍🔬", "🧔", "👵"];
+      return `<section class="fwAbschnitt"><h2>${t("Unser Team")}</h2><div class="fwTeam">${rollen.map((r, i) => `<div><span>${gesichter[(n0 + i * 3) % gesichter.length]}</span><b>${FW_NAMEN[(n0 + i * 5 + 1) % FW_NAMEN.length]}</b><small>${t(r)}</small></div>`).join("")}</div></section>`; }
+    if (typ === "kontakt") { const g = state.map.find(x => x.owner === pid && x.btype), slug = shopSlug(p.name);
+      return `<section class="fwAbschnitt"><h2>${t("Kontakt")}</h2><div class="fwKontakt"><div><span>📍</span><b>${t("Adresse")}</b><small>${g ? `${t("Block")} ${g.x}·${g.y}` : t("Capital City")}</small></div><div><span>🕘</span><b>${t("Öffnungszeiten")}</b><small>${t(FW_ZEITEN[ind] || "Mo–Fr 9–17 Uhr")}</small></div><div><span>✉️</span><b>${t("E-Mail")}</b><small class="mono">info@${slug}.cs</small></div></div></section>`; }
+    if (typ === "faq") return `<section class="fwAbschnitt"><h2>${t("Häufige Fragen")}</h2><div class="fwFaq">${FW_FAQ.map(([f, a]) => `<details><summary>${t(f)}</summary><p>${t(a)}</p></details>`).join("")}</div></section>`;
+    if (typ === "news") { const name = rohText(p.name), alle = typeof kurierArtikel === "function" ? kurierArtikel(state) : [];
+      const eigene = alle.filter(a => rohText(a.titel).includes(name)), liste = (eigene.length ? eigene : alle).slice(0, 3);
+      return `<section class="fwAbschnitt"><h2>${t("Neuigkeiten")}</h2><div class="fwNews">${liste.map(a => `<div><small>${t(a.ressort)}</small><b>${escapeHtml(rohText(a.titel))}</b></div>`).join("") || `<small>${t("Noch keine Meldungen.")}</small>`}</div></section>`; }
+    if (typ === "angebot") {
+      const name = state.rechenzentren?.portale?.[ind]?.name || "Branchenportal";
+      if (!(w?.stufe >= 2)) return vorschau || meins ? `<section class="fwAbschnitt"><h2>${t(name)}</h2><small class="fwHinweis">${t("Erscheint, sobald die Firma das Modul „Branchenportal“ hat.")}</small></section>` : "";
+      const angebot = (w.angebot || []).map(a => { const n = Math.max(1, Math.min(NETZ.menge[a.g] || 10, a.menge || 1));
+        return `<article class="fwAngebot"><span class="fwAngebotIcon">${WAREN_ICON[a.g] || "📦"}</span><b>${gname(a.g)}</b><span class="mono">${fp(a.preis)}</span><small>${a.menge} ${t("sofort verfügbar")}</small>
+          ${meins || vorschau ? `<span class="fwEigen">${t(meins ? "Dein Angebot" : "Kaufen")}</span>` : `<div class="sfMenge"><button type="button" data-netzm="${a.g}" data-d="-10" aria-label="${t("weniger")}">−</button><input type="number" min="1" max="${a.menge || 1}" value="${n}" data-netzn="${a.g}" aria-label="${t("Menge")}"><button type="button" data-netzm="${a.g}" data-d="10" aria-label="${t("mehr")}">+</button></div>
+          <button type="button" class="fwKnopf" data-netzkauf="${a.g}" ${a.menge < 1 || me.cash < a.preis ? "disabled" : ""}>${t("Kaufen")} · ${fmt(n * a.preis)}</button>`}</article>`; }).join("");
+      let extra = "";
+      if (ind === "rohstoff") extra = `<div class="fwListe"><b>${t("Wohnbau-Aufträge der Stadt")}</b>${(state.stadt?.auftraege || []).map(a => `<span>${escapeHtml(a.name)} · ${Object.entries(a.needs).map(([g, n]) => `${n.have}/${n.req} ${gname(g)}`).join(" · ")}</span>`).join("") || `<small>${t("Gerade kein offener Auftrag.")}</small>`}</div>`;
+      if (ind === "ruestung") extra = `<div class="fwListe"><b>${t("Ausschreibungen")}</b>${(state.stadt?.ruest?.auftraege || []).map(a => `<span>${a.name} · ${Object.entries(a.needs).map(([g, n]) => `${n.have}/${n.req} ${gname(g)}`).join(" · ")}</span>`).join("") || `<small>${t("Nächste Ausschreibung kommt bald.")}</small>`}</div>`;
+      return `<section class="fwAbschnitt"><h2>${t(name)}</h2>${angebot ? `<div class="fwAngebote">${angebot}</div>` : ""}${extra}</section>`;
+    }
+    return "";
+  };
+  const extra = ["schrift", "kopf", "ecken", "muster"].filter(k => d[k]).map(k => ` fw${k[0].toUpperCase()}-${d[k]}`).join("");
+  return `<div class="fw fw-${d.vorlage || "klar"}${extra}" style="--fw:${d.farbe || p.color || "#0f766e"}">${hero}${(d.abschnitte || []).map(abschnitt).join("")}</div>`;
+}
+/* ---- Website-Generator (Software-Firmen) ----
+ * Bestellt eine Firma eine Website, gestaltet die Software-Firma sie hier:
+ * Vorlage, Farbe, Titel, Slogan, Abschnitte (hinzufügen, verschieben,
+ * entfernen) und ein Text „Über uns“. Rechts läuft die Vorschau mit
+ * firmenSeiteHtml. Die Qualität (wie beim Server) bestimmt die Wirkung. */
+const GEN = { offen: false, kunde: null, e: null };
+const genQualitaet = d => Math.min(1, 0.7 + 0.05 * Math.min(4, d.abschnitte.length) + (d.slogan ? 0.05 : 0) + (d.abschnitte.includes("ueber") && (d.ueber || "").length >= 40 ? 0.05 : 0));
+function genOeffnen(kundeId) {
+  const st = store.get().state, k = st.players[kundeId], w = st.rechenzentren?.websites?.[kundeId];
+  if (!k) return;
+  const d = w?.design;
+  GEN.offen = true; GEN.kunde = kundeId;
+  GEN.e = d ? { ...d, titel: rohText(d.titel || k.name), slogan: rohText(d.slogan || ""), ueber: rohText(d.ueber || ""), abschnitte: [...(d.abschnitte || [])] }
+    : { vorlage: "klar", farbe: (st.rechenzentren?.design?.FARBEN || [])[0] || "#0f766e", titel: rohText(k.name), slogan: "", ueber: "", abschnitte: ["produkte", "betriebe"] };
+  const el = document.getElementById("genFenster");
+  el.hidden = false;
+  el.innerHTML = `<div class="genRahmen" role="dialog" aria-label="${t("Website-Generator")}">
+    <aside class="genEditor"></aside>
+    <div class="genVorschau"><div class="sfLeiste"><span class="sfPunkte"><i></i><i></i><i></i></span><span class="sfUrl">🔒 ${shopSlug(k.name)}.cs</span><button type="button" class="sfZu" data-genzu aria-label="${t("Schließen")}">✕</button></div><div class="genSeite"></div></div>
+  </div>`;
+  sfSchriftenLaden();
+  genEditor(); genVorschau();
+}
+function genSchliessen() { GEN.offen = false; const el = document.getElementById("genFenster"); el.hidden = true; el.innerHTML = ""; }
+function genEditor() {
+  const st = store.get().state, k = st.players[GEN.kunde], w = st.rechenzentren?.websites?.[GEN.kunde], D = st.rechenzentren?.design, e = GEN.e;
+  if (!k || !D) return genSchliessen();
+  const q = genQualitaet(e), auftrag = w?.auftrag?.status === "offen" ? w.auftrag : null;
+  const frei = D.ABSCHNITTE.filter(a => !e.abschnitte.includes(a));
+  document.querySelector("#genFenster .genEditor").innerHTML = `
+    <div class="genKopf"><b>${t("Website für")} ${escapeHtml(rohText(k.name))}</b><small>${t(BRANCHE_NAME[k.industry] || "")} · ${t(st.websiteCfg?.MODULE[w?.modul]?.name || "")}${auftrag ? ` · ${t("Honorar")} ${fmt(auftrag.honorar)} · ${t("noch")} <span class="genFrist">${Math.floor(auftrag.rest / 60)}:${String(auftrag.rest % 60).padStart(2, "0")}</span>` : ""}</small></div>
+    <div class="genQualitaet"><span>${t("Qualität")}</span><div class="genBalken"><i style="width:${Math.round(q * 100)}%"></i></div><b class="mono">${Math.round(q * 100)} %</b></div>
+    <small class="genTipp">${t("Mehr Abschnitte (bis 4), ein Slogan und ein Text „Über uns“ heben die Qualität — und damit die Reichweite deines Kunden.")}</small>
+    <button type="button" class="genZufall" data-genzufall>🎲 ${t("Überrasch mich")}</button>
+    <div class="genGruppe"><span>${t("Vorlage")}</span><div class="genVorlagen viele">${D.VORLAGEN.map(v => `<button type="button" class="${e.vorlage === v ? "on" : ""}" data-genvorlage="${v}">${t(FW_VORLAGE[v] || v)}</button>`).join("")}</div></div>
+    <div class="genGruppe"><span>${t("Farbe")}</span><div class="genFarben">${D.FARBEN.map(f => `<button type="button" class="${e.farbe === f ? "on" : ""}" style="background:${f}" data-genfarbe="${f}" aria-label="${f}"></button>`).join("")}</div></div>
+    <details class="genMehr" ${GEN.mehr ? "open" : ""}><summary>${t("Feinschliff")} · ${t("Schrift, Kopf, Ecken, Muster")}</summary>
+      ${[["schrift", "Schrift", D.SCHRIFTEN], ["kopf", "Kopf", D.KOEPFE], ["ecken", "Ecken", D.ECKEN], ["muster", "Muster", D.MUSTER]].filter(([, , l]) => l).map(([k, n, l]) =>
+        `<div class="genGruppe"><span>${t(n)}</span><div class="genChips">${l.map(v => `<button type="button" class="${(e[k] || "") === v ? "on" : ""}" data-gens="${k}:${v}">${t(FW_OPTIONEN[k][v] || v)}</button>`).join("")}</div></div>`).join("")}
+    </details>
+    <label class="genFeld"><span>${t("Titel")}</span><input id="genTitel" maxlength="30" value="${escapeHtml(e.titel)}"></label>
+    <label class="genFeld"><span>${t("Slogan")}</span><input id="genSlogan" maxlength="60" placeholder="${t("z. B. Frisch vom Hof in die Stadt")}" value="${escapeHtml(e.slogan)}"></label>
+    <div class="genGruppe"><span>${t("Abschnitte")} (${e.abschnitte.length}/${D.MAX_ABSCHNITTE})</span>
+      <ol class="genAbschnitte">${e.abschnitte.map((a, i) => `<li><b>${t(FW_ABSCHNITT[a])}</b><span class="genPfeile"><button type="button" data-genhoch="${i}" ${i ? "" : "disabled"} aria-label="${t("nach oben")}">↑</button><button type="button" data-genrunter="${i}" ${i < e.abschnitte.length - 1 ? "" : "disabled"} aria-label="${t("nach unten")}">↓</button><button type="button" data-genweg="${i}" aria-label="${t("entfernen")}">✕</button></span></li>`).join("") || `<small>${t("Noch kein Abschnitt — füg unten einen hinzu.")}</small>`}</ol>
+      ${frei.length && e.abschnitte.length < D.MAX_ABSCHNITTE ? `<div class="genNeu">${frei.map(a => `<button type="button" data-genneu="${a}" title="${t(FW_BESCHREIBUNG[a])}">+ ${t(FW_ABSCHNITT[a])}</button>`).join("")}</div>` : ""}</div>
+    ${e.abschnitte.includes("ueber") ? `<label class="genFeld"><span>${t("Über uns")} <small>(${e.ueber.length}/220)</small></span><textarea id="genUeber" maxlength="220" rows="3" placeholder="${t("Wer seid ihr, was macht euch besonders?")}">${escapeHtml(e.ueber)}</textarea></label>` : ""}
+    <button type="button" class="sfKaufen genSenden" data-gensenden ${e.abschnitte.length ? "" : "disabled"}>${auftrag ? `${t("Website ausliefern")} · +${fmt(auftrag.honorar)}` : t("Änderungen veröffentlichen")}</button>`;
+}
+function genVorschau() {
+  const { state, me, myId } = store.get();
+  const el = document.querySelector("#genFenster .genSeite"); if (!el) return;
+  el.innerHTML = firmenSeiteHtml(state, me, myId, GEN.kunde, { ...GEN.e, titel: GEN.e.titel, slogan: GEN.e.slogan, ueber: GEN.e.ueber }, true);
+}
+document.getElementById("genFenster").addEventListener("input", e => {
+  if (!GEN.offen) return;
+  if (e.target.id === "genTitel") GEN.e.titel = e.target.value;
+  if (e.target.id === "genSlogan") GEN.e.slogan = e.target.value;
+  if (e.target.id === "genUeber") { GEN.e.ueber = e.target.value; const z = e.target.closest("label")?.querySelector("small"); if (z) z.textContent = `(${e.target.value.length}/220)`; }
+  const q = genQualitaet(GEN.e), b = document.querySelector("#genFenster .genQualitaet");
+  if (b) { b.querySelector("i").style.width = Math.round(q * 100) + "%"; b.querySelector("b").textContent = Math.round(q * 100) + " %"; }
+  genVorschau();
+});
+document.getElementById("genFenster").addEventListener("toggle", e => { if (e.target.classList?.contains("genMehr")) GEN.mehr = e.target.open; }, true);
+document.getElementById("genFenster").addEventListener("click", e => {
+  if (e.target.closest("[data-genzu]") || e.target.id === "genFenster") return genSchliessen();
+  const E = GEN.e; let neu = true;
+  const v = e.target.closest("[data-genvorlage]"), f = e.target.closest("[data-genfarbe]"), h = e.target.closest("[data-genhoch]"), r = e.target.closest("[data-genrunter]"), w = e.target.closest("[data-genweg]"), n = e.target.closest("[data-genneu]");
+  if (v) E.vorlage = v.dataset.genvorlage;
+  else if (f) E.farbe = f.dataset.genfarbe;
+  else if (h) { const i = +h.dataset.genhoch; [E.abschnitte[i - 1], E.abschnitte[i]] = [E.abschnitte[i], E.abschnitte[i - 1]]; }
+  else if (r) { const i = +r.dataset.genrunter; [E.abschnitte[i + 1], E.abschnitte[i]] = [E.abschnitte[i], E.abschnitte[i + 1]]; }
+  else if (w) E.abschnitte.splice(+w.dataset.genweg, 1);
+  else if (n) E.abschnitte.push(n.dataset.genneu);
+  else if (e.target.closest("[data-gens]")) { const [k, v] = e.target.closest("[data-gens]").dataset.gens.split(":"); E[k] = v; }
+  else if (e.target.closest("[data-genzufall]")) {
+    const D = store.get().state.rechenzentren?.design, z = l => l[Math.floor(Math.random() * l.length)];
+    Object.assign(E, { vorlage: z(D.VORLAGEN), farbe: z(D.FARBEN), schrift: z(D.SCHRIFTEN || [""]), kopf: z(D.KOEPFE || [""]), ecken: z(D.ECKEN || [""]), muster: z(D.MUSTER || [""]) });
+  }
+  else neu = false;
+  if (neu) { SFX.spiel("klick"); genEditor(); genVorschau(); return; }
+  if (e.target.closest("[data-gensenden]")) socket.emit("websiteGestalten", { kundeId: GEN.kunde, design: E }, res => {
+    if (res?.error) return toast(res.error, true);
+    toast(`${t("Website ausgeliefert")} · ${t("Qualität")} ${Math.round(res.qualitaet * 100)} %`); SFX.spiel("kasse"); genSchliessen(); render(store.get());
+  });
+});
+/* ---- Stadtkurier (ersetzt die Nachrichtenzentrale im Sandkasten) ----
+ * Die Artikel stellt der Client aus dem zusammen, was der Spielstand ohnehin
+ * kennt: Marktberichte (Wirtschaft), Aktienkäufe und Ausschüttungen (Börse),
+ * das Stadt-Log (Stadt), Software-Neuheiten, Bauten, Feste und Ausschreibungen
+ * (Firmen). Großauftrag und offene Ausschreibung laufen als Eilmeldung. */
+const KURIER = { gelesen: 0, kurse: [],
+  nr: st => Math.max(1, Math.floor((st.news?.[0]?.min || 0) / 2)),
+  /* Kurse: alle zwei Spielminuten einen Schnappschuss merken und damit vergleichen */
+  merken(st) {
+    const l = this.kurse[this.kurse.length - 1];
+    if (!st?.avg || (l && st.tick - l.tick < 120 && st.tick >= l.tick)) return;
+    if (l && st.tick < l.tick) this.kurse = [];
+    this.kurse.push({ tick: st.tick, avg: { ...st.avg } }); if (this.kurse.length > 3) this.kurse.shift();
+  },
+  veraenderung(st) {
+    const alt = this.kurse.length >= 2 ? this.kurse[this.kurse.length - 2] : null;
+    if (!alt) return [];
+    return Object.keys(st.avg || {}).map(g => ({ g, d: alt.avg[g] ? Math.round((st.avg[g] / alt.avg[g] - 1) * 100) : 0 }))
+      .filter(x => x.d).sort((a, b) => Math.abs(b.d) - Math.abs(a.d)).slice(0, 6).sort((a, b) => b.d - a.d);
+  } };
+function kurierArtikel(st) {
+  const out = [], vor = tick => { const m = Math.max(0, Math.round((st.tick - tick) / 60)); return m < 1 ? t("gerade eben") : `${t("vor")} ${m} min`; };
+  const go = st.groupOrder;
+  if (go) { const txt = Object.entries(go.needs).map(([g, n]) => `${n.req}× ${gname(g)}`).join(t(" und "));
+    const topf = Object.values(go.needs).reduce((a, n) => a + n.req * (n.pay || 0), 0);
+    out.push({ id: "grossauftrag-" + go.id, ressort: "Eilmeldung", eil: true, titel: `${t("Großauftrag aus")} ${go.city}: ${txt}`, zusatz: `${fmt(topf)} ${t("im Topf, noch")} ${Math.floor(go.ttl / 60)}:${String(go.ttl % 60).padStart(2, "0")}`,
+      absaetze: [`${go.city} ${t("braucht")} ${txt}. ${t("Jede Firma kann einzahlen; abgerechnet wird zum doppelten Ø-Kurs.")}`, `${t("Im Topf liegen rund")} ${fmt(topf)}. ${t("Die Frist läuft noch")} ${Math.ceil(go.ttl / 60)} min.`],
+      link: ["panel", "lager", "Zum Großauftrag"], tick: st.tick + 1 }); }
+  for (const a of st.stadt?.ruest?.auftraege || []) {
+    const txt = Object.entries(a.needs).map(([g, n]) => `${n.req}× ${gname(g)}`).join(t(" und "));
+    out.push({ id: "ruest-" + a.id, ressort: a.phase === "bieten" ? "Eilmeldung" : "Firmen", eil: a.phase === "bieten", titel: `${a.name} ${t("schreibt aus")}: ${txt}`,
+      zusatz: a.phase === "bieten" ? `${t("Gebote noch")} ${Math.max(0, a.bisBieten - st.tick)} s` : "",
+      absaetze: [a.phase === "bieten" ? `${t("Rüstungsfirmen geben jetzt ein verdecktes Gebot zwischen 80 und 140 % des Listenpreises ab. Mit Ausschreibungsportal zählen Gebote 5 % günstiger.")}` : `${t("Den Zuschlag hat")} ${rohText(a.gewinnerName || "—")} ${t("zu")} ${a.prozent} % ${t("bekommen.")}`],
+      link: ["panel", "firma", "Zu den Ausschreibungen"], tick: st.tick }); }
+  if (st.touristik?.fest) { const f = st.touristik.fest;
+    out.push({ id: "fest", ressort: "Firmen", titel: `${rohText(f.veranstalter)} ${t("lädt zum")} ${t(f.name)}`, absaetze: [`${t("Noch")} ${Math.ceil(f.rest / 60)} ${t("Minuten lang kommen mehr Gäste in die Stadt; alle Hotels profitieren, der Veranstalter am meisten.")}`],
+      link: ["hotel", f.ownerId, "Zur Buchungsseite"], tick: st.tick - 1 }); }
+  for (const b0 of st.news || []) { const b = (SPRACHE === "en" && b0.en) ? { ...b0.en, min: b0.min } : b0;
+    out.push({ id: "markt-" + b.min, ressort: "Wirtschaft", titel: b.schlagzeile, absaetze: b.absaetze, tick: b.min * 60, link: ["panel", "boerse", "Zur Börse"] }); }
+  const boerse = ["kauf", "verkauf", "ausschuettung", "panik"], firma = ["software", "bau", "flaute"];
+  for (const e of st.marktLog || []) {
+    if (!boerse.includes(e.art) && !firma.includes(e.art)) continue;
+    const w = e.firmaId && st.rechenzentren?.websites?.[e.firmaId]?.stufe;
+    out.push({ id: `log-${e.tick}-${e.art}-${(e.text || "").length}`, ressort: boerse.includes(e.art) ? "Börse" : "Firmen", titel: e.text, absaetze: [e.text],
+      link: boerse.includes(e.art) ? ["panel", "bank", "Zur Stadtbank"] : w ? ["firma", e.firmaId, "Zur Website"] : null, tick: e.tick });
+  }
+  for (const e of st.stadt?.log || []) out.push({ id: `stadt-${e.tick}-${(e.text || "").length}`, ressort: "Stadt", titel: e.text, absaetze: [e.text, `${t("Die Stadt hat jetzt")} ${st.stadt.einwohner.toLocaleString("de-DE")} ${t("Einwohner, die Zufriedenheit liegt bei")} ${Math.round((st.stadt.zufr || 1) * 100)} %.`],
+    link: ["panel", "finanzamt", "Zur Stadt"], tick: e.tick });
+  return out.sort((a, b) => b.tick - a.tick).slice(0, 40).map(a => ({ ...a, zeit: a.eil ? t("Eilmeldung") : vor(a.tick), anriss: (a.absaetze.find(x => x && x !== a.titel) || "").slice(0, 160) }));
+}
+/* Kasten mit den drei neuesten Schlagzeilen auf der Startseite */
+function kurierKasten(artikel) {
+  const drei = artikel.filter(a => !a.eil).slice(0, 3);
+  return `<section class="netzKurier"><div class="netzKurierKopf"><span><b>${t("Stadtkurier")}</b><small>${drei[0] ? drei[0].zeit : t("Erste Ausgabe nach zwei Minuten")}</small></span><button type="button" data-kurierauf="">${t("Alle Nachrichten")} →</button></div>
+    ${drei.length ? `<div class="netzKurierSchlag">${drei.map(a => `<button type="button" data-kurierauf="${a.id}"><span class="kurierRessort r-${a.ressort === "Börse" ? "boerse" : a.ressort.toLowerCase()}">${t(a.ressort)}</span><b>${escapeHtml(rohText(a.titel))}</b><small>${a.zeit}</small></button>`).join("")}</div>` : `<div class="netzLeer">${t("Noch gibt es nichts zu berichten.")}</div>`}</section>`;
+}
+/* ---- Stadtnetz und Firmen-Websites (Etappe 8) ----
+ * Startseite mit allen Websites der Stadt, sortiert nach Besuchern, und je
+ * Firma eine eigene Seite: Grundseite für alle, Branchenportal mit Direktkauf
+ * (Hofladen, Großhandel, Baustoff-Portal, Kundenportal) oder Ausschreibungen,
+ * Aktionen ab Modul v3. Touristik öffnet die Buchungsseite, Software die Statusseite. */
+const NETZ = { offen: false, seite: null, suche: "", menge: {}, sig: {}, kat: "alle", ressort: "alle", artikel: null,
+  /* Stadt-Casino: welches Spiel offen ist, der gewaehlte Tipp, der Einsatz und
+   * die zuletzt vom Server gewuerfelte Runde (nur zur Anzeige). */
+  casinoSpiel: null, casinoTipp: null, casinoEinsatz: 500, casinoErgebnis: null };
+
+/* ---- Stadt-Casino: Grafik und Beschriftung ----
+ * Die Spielbilder stehen bewusst als Inline-SVG hier und nicht als Bilddateien:
+ * So skalieren sie mit dem Fenster und der Build braucht keine neuen Dateien. */
+const CASINO_WAPPEN = (f, s = 1) => `<path d="M14 3 3.5 8v2h21V8L14 3Z" fill="${f}"/><rect x="6" y="12" width="2.6" height="9" fill="${f}"/><rect x="12.7" y="12" width="2.6" height="9" fill="${f}"/><rect x="19.4" y="12" width="2.6" height="9" fill="${f}"/><rect x="3.5" y="22.4" width="21" height="2.6" rx=".6" fill="${f}"/>`;
+const CASINO_BILD = {
+  muenze: `<svg width="92" height="92" viewBox="0 0 92 92" fill="none" aria-hidden="true">
+    <ellipse cx="46" cy="76" rx="27" ry="6" fill="rgba(0,0,0,.28)"/>
+    <circle cx="46" cy="42" r="28" fill="url(#casG1)"/>
+    <circle cx="46" cy="42" r="22" fill="none" stroke="rgba(90,62,11,.35)" stroke-width="2" stroke-dasharray="4 4"/>
+    <g transform="translate(32 28) scale(1)">${CASINO_WAPPEN("#7d5a1c")}</g>
+    <defs><radialGradient id="casG1" cx="34%" cy="28%"><stop offset="0" stop-color="#fbeec0"/><stop offset=".45" stop-color="#eccd83"/><stop offset="1" stop-color="#b98f35"/></radialGradient></defs></svg>`,
+  wuerfel: `<svg width="96" height="92" viewBox="0 0 96 92" fill="none" aria-hidden="true">
+    <ellipse cx="48" cy="78" rx="30" ry="6" fill="rgba(0,0,0,.28)"/>
+    <rect x="56" y="40" width="26" height="26" rx="6" fill="#dfe7f2" transform="rotate(12 69 53)"/>
+    <circle cx="69" cy="53" r="3.6" fill="#0a5c4e"/>
+    <rect x="20" y="22" width="44" height="44" rx="9" fill="url(#casG2)"/>
+    <circle cx="32" cy="34" r="4.2" fill="#0a5c4e"/><circle cx="52" cy="34" r="4.2" fill="#0a5c4e"/>
+    <circle cx="42" cy="44" r="4.2" fill="#0a5c4e"/>
+    <circle cx="32" cy="54" r="4.2" fill="#0a5c4e"/><circle cx="52" cy="54" r="4.2" fill="#0a5c4e"/>
+    <defs><linearGradient id="casG2" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fff"/><stop offset="1" stop-color="#cfd9e8"/></linearGradient></defs></svg>`,
+  walzen: `<svg width="112" height="88" viewBox="0 0 112 88" fill="none" aria-hidden="true">
+    <rect x="10" y="18" width="92" height="52" rx="10" fill="#2a1206" stroke="rgba(255,255,255,.14)"/>
+    <rect x="18" y="26" width="24" height="36" rx="6" fill="#faf3e4"/>
+    <rect x="44" y="26" width="24" height="36" rx="6" fill="#faf3e4"/>
+    <rect x="70" y="26" width="24" height="36" rx="6" fill="#faf3e4"/>
+    <text x="30" y="52" font-family="monospace" font-size="22" font-weight="700" fill="#c2410c" text-anchor="middle">7</text>
+    <text x="56" y="52" font-family="monospace" font-size="22" font-weight="700" fill="#c2410c" text-anchor="middle">7</text>
+    <circle cx="82" cy="44" r="9.5" fill="#e9c46a"/>
+    <g transform="translate(76.4 38.4) scale(.4)">${CASINO_WAPPEN("#8a2a08")}</g></svg>`,
+  rad: `<svg width="96" height="92" viewBox="0 0 96 92" fill="none" aria-hidden="true">
+    <ellipse cx="48" cy="78" rx="28" ry="6" fill="rgba(0,0,0,.3)"/>
+    <circle cx="48" cy="44" r="30" fill="#1b0f3d" stroke="#e9c46a" stroke-width="3"/>
+    <circle cx="48" cy="44" r="21" fill="none" stroke="rgba(233,196,106,.45)" stroke-width="1.5"/>
+    <path d="M48 14v60M18 44h60M27 23l42 42M69 23 27 65" stroke="rgba(233,196,106,.3)" stroke-width="1.4"/>
+    <circle cx="48" cy="44" r="8" fill="#e9c46a"/><circle cx="48" cy="23" r="4" fill="#2dd4a7"/></svg>`,
+};
+const CASINO_VERLAUF = { muenze: "#2b4bd4,#1a2a7a", wuerfel: "#0e8d78,#0a5c4e", walzen: "#c2410c,#8a2a08", rad: "#6d28d9,#4c1d95" };
+const CASINO_SYM = { wappen: "🏛", glocke: "🔔", stern: "★", muenze: "🪙", klee: "🍀" };
+/* Die Tipps je Spiel: Beschriftung und der Wert, den der Server erwartet. */
+const casinoTipps = (spiel, C) =>
+  spiel === "muenze" ? [["kopf", "Kopf"], ["zahl", "Zahl"]] :
+  spiel === "wuerfel" ? [["hoch", "Hoch (4–6)"], ["tief", "Tief (1–3)"]] :
+  spiel === "rad" ? [["rot", "Rot"], ["schwarz", "Schwarz"],
+    ...Array.from({ length: (C?.radFelder || 13) - 1 }, (_, i) => [String(i + 1), String(i + 1)])] :
+  [];
+/* Das Rad als Tortengrafik: 13 Felder, die 0 gehoert als "Stadt" dem Haus.
+ * Beim Ergebnis dreht die CSS-Animation das Rad so, dass das Siegerfeld oben
+ * unter dem Zeiger steht. */
+function casinoRadSvg(felder, treffer) {
+  const w = 360 / felder, mitte = 86, r = 78;
+  const stueck = (i) => {
+    const a1 = (i * w - 90) * Math.PI / 180, a2 = ((i + 1) * w - 90) * Math.PI / 180;
+    const f = i === 0 ? "#0f766e" : i % 2 ? "#b4263c" : "#1c2335";
+    return `<path d="M${mitte} ${mitte} L${(mitte + r * Math.cos(a1)).toFixed(1)} ${(mitte + r * Math.sin(a1)).toFixed(1)} A${r} ${r} 0 0 1 ${(mitte + r * Math.cos(a2)).toFixed(1)} ${(mitte + r * Math.sin(a2)).toFixed(1)} Z" fill="${f}" stroke="rgba(233,196,106,.45)" stroke-width="1"${i === treffer ? ` opacity="1"` : ``}/>`;
+  };
+  const zahl = (i) => {
+    const a = ((i + .5) * w - 90) * Math.PI / 180;
+    return `<text x="${(mitte + r * .74 * Math.cos(a)).toFixed(1)}" y="${(mitte + r * .74 * Math.sin(a) + 4).toFixed(1)}" text-anchor="middle" font-size="12" font-weight="700" fill="#f3e6c4" font-family="monospace">${i === 0 ? "★" : i}</text>`;
+  };
+  const dreh = treffer == null ? 0 : -((treffer + .5) * w);
+  return `<div class="casRadBox"><span class="casRadZeiger"></span>
+    <svg class="casRad${treffer == null ? "" : " dreht"}" style="--dreh:${dreh.toFixed(1)}deg" width="172" height="172" viewBox="0 0 172 172" aria-hidden="true">
+      ${Array.from({ length: felder }, (_, i) => stueck(i)).join("")}
+      ${Array.from({ length: felder }, (_, i) => zahl(i)).join("")}
+      <circle cx="86" cy="86" r="20" fill="#120c26" stroke="#e9c46a" stroke-width="2"/>
+      <g transform="translate(72 72) scale(1)">${CASINO_WAPPEN("#e9c46a")}</g>
+    </svg></div>`;
+}
+function netzOeffnen(pid = null) {
+  const st = store.get().state;
+  if (pid && st.players?.[pid]?.industry === "touristik") return hotelOeffnen(pid);
+  if (pid && st.players?.[pid]?.industry === "software" && !st.rechenzentren?.websites?.[pid]) return rzOeffnen(pid);
+  const el = document.getElementById("netzFenster");
+  if (!NETZ.offen) {
+    el.hidden = false;
+    el.innerHTML = `<div class="sfBrowser hfBrowser netzBrowser" role="dialog" aria-label="${t("Stadtnetz")}">
+      <div class="sfLeiste"><button type="button" class="sfZu" data-netzzurueck aria-label="${t("Zurück zum Stadtnetz")}">←</button>
+        <span class="sfUrl"></span><button type="button" class="sfZu" data-netzzu aria-label="${t("Schließen")}">✕</button></div>
+      <div class="netzEil" hidden></div>
+      <header class="sfKopf"></header>
+      <div class="netzRenn" hidden></div>
+      <div class="sfBanner" hidden></div>
+      <div class="sfHinweis" hidden></div>
+      <div class="rzInhalt netzInhalt"></div>
+      <footer class="sfFuss"></footer>
+    </div>`;
+    SFX.spiel("klick");
+  }
+  if (pid === "kurier") TUT_GESEHEN.add("kurier");
+  if (!pid) TUT_GESEHEN.add("netz");
+  if (pid === "boerse") TUT_GESEHEN.add("boerse");
+  if (pid !== "boerse") boerseHeimholen();
+  if (pid !== "bank") bankHeimholen();
+  if (pid === "bank") TUT_GESEHEN.add("bank");
+  if (pid === "anleihen") TUT_GESEHEN.add("bonds");
+  Object.assign(NETZ, { offen: true, seite: pid, sig: {}, artikel: pid === "kurier" ? NETZ.artikel : null });
+  netzZeichnen();
+}
+/* Warenbörse als Website: Formular und Orderbuch des bisherigen Panels werden
+ * in das Stadtnetz-Fenster gehängt — alle IDs und Klick-Handler bleiben gleich. */
+const BOERSE_BODY = document.querySelector("#p-boerse .pbody");
+function boerseHeimholen() { const p = document.getElementById("p-boerse"); if (BOERSE_BODY.parentElement !== p) p.appendChild(BOERSE_BODY); }
+/* Stadtbank als Website: Das ganze Bank-Panel wird in das Stadtnetz-Fenster
+ * gehängt — seine Klick-Handler hängen am Panel selbst, Reiter, Formulare und
+ * Kurswetten funktionieren dadurch unverändert. Beim Verlassen kehrt es zurück. */
+const BANK_EL = document.getElementById("p-bank");
+const BANK_HEIM = { parent: BANK_EL.parentElement, next: BANK_EL.nextSibling };
+function bankHeimholen() {
+  if (BANK_EL.parentElement === BANK_HEIM.parent) return;
+  BANK_HEIM.parent.insertBefore(BANK_EL, BANK_HEIM.next);
+  BANK_EL.classList.remove("imNetz", "open");
+}
+function netzSchliessen() {
+  boerseHeimholen();
+  bankHeimholen();
+  NETZ.offen = false;
+  const el = document.getElementById("netzFenster");
+  el.hidden = true; el.innerHTML = "";
+}
+const netzSetze = (sel, html, key) => {
+  if (NETZ.sig[key] === html) return;
+  NETZ.sig[key] = html;
+  const el = document.querySelector("#netzFenster " + sel); if (el) el.innerHTML = html;
+};
+function netzZeichnen() {
+  const { state, me, myId } = store.get();
+  if (!state?.stadt) return netzSchliessen();
+  const fenster = document.getElementById("netzFenster");
+  const W = state.rechenzentren?.websites || {}, cfg = state.websiteCfg;
+  fenster.querySelector("[data-netzzurueck]").style.visibility = NETZ.seite ? "visible" : "hidden";
+  const kopfEl = fenster.querySelector(".sfKopf");
+  kopfEl.style.display = "";
+  kopfEl.classList.toggle("netzHero", !NETZ.seite);
+  kopfEl.classList.toggle("netzZeitung", NETZ.seite === "kurier");
+  /* Das Casino bringt sein eigenes dunkles Haus mit — wie eine Website, die
+   * im Stadtnetz-Browser anders aussieht als die Seiten der Stadt. */
+  fenster.querySelector(".sfBrowser").classList.toggle("casBrowser", NETZ.seite === "casino");
+  /* Eilmeldung oben im Stadtnetz: Großauftrag oder offene Ausschreibung */
+  const artikel = kurierArtikel(state);
+  const eil = artikel.find(a => a.eil);
+  const eilEl = fenster.querySelector(".netzEil");
+  eilEl.hidden = !eil;
+  netzSetze(".netzEil", eil ? `<button type="button" data-kurierauf="${eil.id}"><span class="netzEilMarke">${t("EILMELDUNG")}</span><span class="netzEilText">${escapeHtml(rohText(eil.titel))}${eil.zusatz ? ` — ${escapeHtml(rohText(eil.zusatz))}` : ""}</span><span class="netzEilLink">${t("Zum Artikel")} →</span></button>` : "", "eil");
+  /* Renntag: Statt eines Pop-ups, das sich ungefragt vor die Karte legt, steht
+   * hier eine Zeile — auf jeder Seite des Stadtnetzes, solange der Renntag
+   * laeuft. Erst der Knopf oeffnet die Rennstrecke. */
+  const rennen = state.rennen;
+  fenster.querySelector(".netzRenn").hidden = !rennen;
+  if (rennen) {
+    const uhr = rennen.phase === "ergebnis" ? t("ZIEL")
+      : `${Math.floor(rennen.rest / 60)}:${String(rennen.rest % 60).padStart(2, "0")}`;
+    const [text, knopf] =
+      rennen.phase === "anmeldung" ? [t("Renntag läuft — die Anmeldung auf der Rennstrecke ist offen."), t("Zum Renntag")] :
+      rennen.phase === "laeuft" ? [t("Das Rennen läuft gerade."), t("Zuschauen")] :
+      [t("Siegerehrung auf der Rennstrecke."), t("Ergebnis ansehen")];
+    netzSetze(".netzRenn", `<span class="netzRennFlagge">🏁</span>
+      <span class="netzRennText">${text}</span>
+      <span class="netzRennUhr mono">${uhr}</span>
+      <button type="button" data-rennauf>${knopf}</button>`, "renn");
+  }
+  if (!NETZ.seite) {
+    fenster.querySelector(".sfBrowser").style.setProperty("--sys", "#0f766e");
+    netzSetze(".sfUrl", "🔒 stadtnetz.cs", "url");
+    /* Kopf einmal aufbauen; Suchfeld, Zahlen und Treffer werden einzeln
+     * nachgezogen, sonst verlöre das Suchfeld bei jedem Tick den Fokus. */
+    netzSetze(".sfKopf", `<svg class="netzSkyline" width="520" height="220" viewBox="0 0 520 220" fill="none" stroke="rgba(255,255,255,.12)" stroke-width="2" aria-hidden="true"><rect x="20" y="120" width="60" height="100"></rect><rect x="90" y="70" width="70" height="150"></rect><rect x="170" y="100" width="50" height="120"></rect><rect x="230" y="40" width="80" height="180"></rect><rect x="320" y="90" width="60" height="130"></rect><rect x="390" y="60" width="70" height="160"></rect><path d="M0 219 H520"></path></svg>
+      <div class="netzMarke"><span class="netzMarkeS">S</span><div><b>${t("Stadtnetz")}</b><small>${t("Alles, was die Stadt online anbietet")}</small></div></div>
+      <label class="netzSuchfeld"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#4b5563" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="M20 20l-3.5-3.5"></path></svg>
+        <span class="sr">${t("Suchen")}</span><input id="netzSuche" type="search" placeholder="${t("Firma, Ware oder Branche — z. B. Obst, Strom, Hotel")}"><span class="netzTreffer"></span></label>
+      <div class="netzStats"></div>`, "kopfStart");
+    const inp = document.getElementById("netzSuche");
+    if (inp && inp.value !== NETZ.suche && document.activeElement !== inp) inp.value = NETZ.suche;
+    const S = state.stadt, T = state.touristik;
+    const mitSeite = Object.entries(W).filter(([pid, w]) => state.players[pid] && w.stufe > 0);
+    netzSetze(".netzStats", `<span><b>${S.einwohner.toLocaleString("de-DE")}</b> ${t("Einwohner online")}</span><span><b>${mitSeite.length}</b> ${t("Websites")}</span><span><b>${Math.round((S.zufr || 1) * 100)} %</b> ${t("Zufriedenheit")}</span>${T ? `<span><b>${T.gaeste}</b> ${t("Gäste je Minute")}</span>` : ""}`, "stats");
+    fenster.querySelector(".sfBanner").hidden = true;
+    fenster.querySelector(".sfHinweis").hidden = !!W[myId]?.stufe || state.players?.[myId]?.industry === "software";
+    netzSetze(".sfHinweis", `${t("Deine Firma ist im Stadtnetz nicht zu finden — ohne Website sehen dich Kunden nicht.")} <button type="button" class="hfKarte" data-netzanbieter>${t("Anbieter vergleichen")}</button>`, "hinweisStart");
+    /* Firmen: Suche und Branchen-Filter */
+    const q = NETZ.suche.trim().toLowerCase();
+    const waren = pid => [...new Set(state.map.filter(x => x.owner === pid && x.btype).map(x => BTYPES()[x.btype]?.proc?.out || BTYPES()[x.btype]?.out).filter(Boolean))];
+    const passt = (pid, w) => { if (!q) return true; const p = state.players[pid];
+      return [rohText(p.name), BRANCHE_NAME[p.industry] || "", w.portal || "", ...waren(pid).map(gname), ...(p.industry === "touristik" ? ["hotel", "zimmer", "übernachtung"] : [])].join(" ").toLowerCase().includes(q); };
+    const branchen = [...new Set(mitSeite.map(([pid]) => state.players[pid].industry))];
+    if (NETZ.kat !== "alle" && !branchen.includes(NETZ.kat)) NETZ.kat = "alle";
+    const firmen = mitSeite.filter(([pid, w]) => (NETZ.kat === "alle" || state.players[pid].industry === NETZ.kat) && passt(pid, w)).sort((a, b) => b[1].besucher - a[1].besucher);
+    netzSetze(".netzTreffer", `${firmen.length} ${t("Treffer")}`, "treffer");
+    const chips = [["alle", t("Alle")], ...branchen.map(b => [b, t(BRANCHE_NAME[b] || b)])].map(([k, n]) => `<button type="button" class="netzKat${NETZ.kat === k ? " on" : ""}" data-netzkat="${k}">${n}</button>`).join("");
+    const bew = (pid, w) => state.players[pid].industry === "touristik" ? (T?.firmen || []).find(f => f.id === pid)?.bewertung || 0 : null;
+    const karte = ([pid, w]) => { const p = state.players[pid], b = bew(pid, w), tags = [];
+      if (w.stufe >= 2 && w.portal) tags.push(t(w.portal));
+      for (const g of waren(pid).slice(0, 3)) tags.push(gname(g));
+      const text = p.industry === "touristik" ? t("Hotels und Camping — Zimmer direkt buchen.") : w.stufe >= 2 && w.angebot?.some(a => a.menge > 0) ? t("Direkt kaufen, sofort im Lager.") : `${t(BRANCHE_NAME[p.industry] || "")} · ${t(cfg?.MODULE[w.modul]?.name || "")}`;
+      return `<button type="button" class="netzKarte" data-netzauf="${pid}">
+        <span class="netzKarteBand" style="background:${p.color}">${logoHtml(pid, "netzKarteLogo", p.color)}${w.aktion ? `<em>${t("AKTION LÄUFT")}</em>` : ""}</span>
+        <span class="netzKarteInhalt">
+          <span class="netzKarteName"><b>${escapeHtml(rohText(p.name))}</b>${b ? `<i>${"★".repeat(Math.round(b))}${"☆".repeat(5 - Math.round(b))}</i>` : ""}</span>
+          <small class="mono">${shopSlug(p.name)}.cs</small>
+          <span class="netzKarteText">${text}</span>
+          <span class="netzTags">${tags.map(x => `<span>${x}</span>`).join("")}</span>
+          <span class="netzKarteFuss"><span class="mono">${w.besucher} ${t("Besucher/min")}</span><span>${t("Besuchen")} →</span></span>
+        </span></button>`; };
+    /* Seitenleiste */
+    const laeuft = [];
+    if (T?.fest) laeuft.push(["F", "#0d9488", t(T.fest.name), `${escapeHtml(rohText(T.fest.veranstalter))} · ${t("noch")} ${Math.floor(T.fest.rest / 60)}:${String(T.fest.rest % 60).padStart(2, "0")}`, T.fest.ownerId]);
+    for (const a of S.ruest?.auftraege || []) laeuft.push(["A", "#e11d48", `${t("Ausschreibung")} ${a.name}`, a.phase === "bieten" ? t("Gebote offen") : `${t("Zuschlag")}: ${escapeHtml(rohText(a.gewinnerName || ""))}`, null]);
+    if (S.auftraege?.length) laeuft.push(["W", "#b45309", t("Wohnbau"), `${S.auftraege.length} ${t("Aufträge suchen Baumaterial")}`, null]);
+    for (const [pid, w] of mitSeite) if (w.aktion) laeuft.push(["⚡", "#d97706", t(w.aktion.name), escapeHtml(rohText(state.players[pid].name)), pid]);
+    const neu = mitSeite.slice().sort((a, b) => (b[1].seit || 0) - (a[1].seit || 0)).slice(0, 3);
+    const rz = Object.entries(state.rechenzentren?.firmen || {}).filter(([pid]) => state.players[pid]);
+    const anz = (state.anzeigen || [])[0];
+    netzSetze(".netzInhalt", `<div class="netzKats">${chips}</div>
+      <div class="netzSpalten"><div class="netzHaupt">
+        <div class="netzDienste">
+          <button type="button" class="netzDienst" data-kurierauf=""><span class="netzDienstIcon" style="background:#111827">📰</span><span><b>${t("Stadtkurier")}</b><small>kurier.cs · ${t("Nachrichten alle zwei Minuten")}</small></span></button>
+          <button type="button" class="netzDienst" data-netzauf="boerse"><span class="netzDienstIcon" style="background:#1d4ed8">📈</span><span><b>${t("Warenbörse")}</b><small>boerse.cs · ${state.orders.length} ${t("offene Orders")}</small></span></button>
+          <button type="button" class="netzDienst" data-netzauf="anleihen"><span class="netzDienstIcon" style="background:#7c3aed">%</span><span><b>${t("Anleihenmarkt")}</b><small>anleihen.cs · ${(state.bonds || []).filter(b => !b.holderId).length} ${t("am Markt")}</small></span></button>
+          <button type="button" class="netzDienst" data-netzauf="bank"><span class="netzDienstIcon" style="background:#0e7490">🏦</span><span><b>${t("Stadtbank")}</b><small>bank.cs · ${t("Aktien, Übernahmen, Kurswetten")}</small></span></button>
+        ${(state.krypto?.boersen || []).filter(x => x.aktiv && state.players[x.firmaId]).map(x => { const f = state.players[x.firmaId], n = (state.krypto.coins || []).filter(c => c.firmaId === x.firmaId || (state.krypto.vertraege || []).some(v => v.boerseId === x.firmaId && v.coinId === c.id)).length;
+          return `<button type="button" class="netzDienst" data-netzauf="krypto:${x.firmaId}"><span class="netzDienstIcon" style="background:${f.color || "#7c3aed"}">₿</span><span><b>${escapeHtml(rohText(f.name))} ${t("Coins")}</b><small>${shopSlug(f.name)}-coins.cs · ${x.online === false ? t("Börse gerade offline") : `${n} ${t("Coins")} · ${t("Gebühr")} ${(x.gebuehr * 100).toFixed(1)} %`}</small></span></button>`; }).join("")}
+        ${(() => { const ich = state.players?.[myId]; return ich && (ich.industries || [ich.industry]).includes("software")
+          ? `<button type="button" class="netzDienst" data-netzauf="dash:${myId}"><span class="netzDienstIcon" style="background:${ich.color || "#0f172a"}">⌘</span><span><b>${t("Dein Dashboard")}</b><small>${shopSlug(ich.name)}.cs/dashboard · ${t("Coin, Gebühr und Verträge")}</small></span></button>` : ""; })()}
+          <button type="button" class="netzDienst" data-netzauf="casino"><span class="netzDienstIcon" style="background:#c99b3a">🎰</span><span><b>${t("Stadt-Casino")}</b><small>casino.cs · ${Object.keys(state.casino?.spiele || {}).length} ${t("Spiele")} · ${t("Spielgeld")}</small></span></button>
+        </div>
+        ${kurierKasten(artikel)}
+        <section class="netzAbschnitt"><div class="netzAbschnittKopf"><b>${NETZ.kat === "alle" ? t("Beliebte Seiten") : t(BRANCHE_NAME[NETZ.kat] || "")}</b><small>${t("sortiert nach Besuchern")}</small></div>
+          ${firmen.length ? `<div class="netzKarten">${firmen.map(karte).join("")}</div>` : `<div class="netzLeer">${q ? t("Nichts gefunden. Versuch es mit einer Ware wie „Strom“ oder „Obst“.") : t("Noch hat keine Firma eine Website.")}</div>`}</section>
+      </div><aside class="netzSeite">
+        ${laeuft.length ? `<section class="netzBox"><b>${t("Läuft gerade")}</b>${laeuft.map(([k, c, ti, tx, pid]) => `<${pid ? `button type="button" data-netzauf="${pid}"` : "div"} class="netzLaeuft"><span style="background:${c}">${k}</span><span><b>${ti}</b><small>${tx}</small></span></${pid ? "button" : "div"}>`).join("")}</section>` : ""}
+        ${neu.length ? `<section class="netzBox"><b>${t("Neu im Stadtnetz")}</b>${neu.map(([pid, w]) => `<button type="button" class="netzNeu" data-netzauf="${pid}"><span>${escapeHtml(rohText(state.players[pid].name))} · ${t(w.stufe >= 2 && w.portal ? w.portal : cfg?.MODULE[w.modul]?.name || "")}</span><small>${t("vor")} ${Math.max(0, Math.round((state.tick - (w.seit || 0)) / 60))} min</small></button>`).join("")}</section>` : ""}
+        ${rz.length ? `<section class="netzBox"><b>${t("Rechenzentren")}</b>${rz.map(([pid, f]) => { const up = f.uptime || [], qu = up.length ? Math.round(up.reduce((a, b) => a + b, 0) / up.length * 100) : 100, web = (state.website || []).find(x => x.ownerId === pid);
+          return `<button type="button" class="netzRz" data-rzauf="${pid}"><span class="netzRzKopf"><span>${escapeHtml(rohText(state.players[pid].name))}</span><b class="mono">${qu} % ${t("online")}</b></span><span class="netzRzBalken"><i style="width:${web?.plaetze ? Math.min(100, Math.round(web.kunden / web.plaetze * 100)) : 0}%"></i></span></button>`; }).join("")}</section>` : ""}
+        ${anz ? `<button type="button" class="netzBox netzAnzeige" data-netzauf="${anz.firmaId}"><small>${t("ANZEIGE")}</small><b>${escapeHtml(rohText(anz.firma))}</b><span>${escapeHtml(rohText(anz.text))}</span></button>` : ""}
+      </aside></div>`, "inhaltStart");
+    netzSetze(".sfFuss", `<span class="sfFussLogo">🏛</span><span>${t("Das Stadtnetz wird von der Stadt betrieben")} · ${mitSeite.length + rz.length + 1} ${t("Seiten")}</span>`, "fussStart");
+    return;
+  }
+  /* ---- Warenbörse (boerse.cs) ----
+   * Übersichtlich in drei Teilen: links die Kursliste nach Warengruppen, oben
+   * die gewählte Ware mit Kurs, Verlauf und bestem Angebot/Gesuch, darunter
+   * Formular und Orderbuch NUR dieser Ware in zwei Spalten. */
+  if (NETZ.seite === "boerse") {
+    fenster.querySelector(".sfBrowser").style.setProperty("--sys", "#1d4ed8");
+    const F = state.finanzamt, avg = state.avg || {}, G0 = GOODS();
+    const waren = Object.keys(avg).filter(g => G0[g]);
+    if (!NETZ.ware || !waren.includes(NETZ.ware)) NETZ.ware = waren.slice().sort((x, y) => state.orders.filter(o => o.good === y).length - state.orders.filter(o => o.good === x).length)[0] || waren[0];
+    const g = NETZ.ware;
+    netzSetze(".sfUrl", `🔒 boerse.cs/${shopSlug(gname(g))}`, "url" + g);
+    netzSetze(".sfKopf", `<div class="sfMarke"><span class="sfLogo" style="background:#1e40af">B</span><div><b>${t("Warenbörse")}</b><small>${state.orders.length} ${t("offene Orders")}${F?.aktiv && F.boerse > 0 ? ` · ${t("Börsengebühr")} ${Math.round(F.boerse * 1000) / 10} % ${t("für Verkäufer")}` : ""}</small></div></div>`, "kopfBoerse" + state.orders.length);
+    fenster.querySelector(".sfBanner").hidden = true;
+    fenster.querySelector(".sfHinweis").hidden = true;
+    /* Kursliste nach Gruppen */
+    const GRUPPEN = [["Enabler", "Versorgung"], ["Erzeugnisse", "Rohwaren"], ["Verarbeitet", "Verarbeitet"], ["Baumaterial", "Baumaterial"], ["Fahrzeuge", "Fahrzeuge"], ["Rüstung", "Rüstung"], ["Motorsport", "Motorsport"]];
+    const anz = x => state.orders.filter(o => o.good === x && o.playerId !== myId).length;
+    const liste = GRUPPEN.map(([cat, name]) => { const ws = waren.filter(x => G0[x].cat === cat); if (!ws.length) return "";
+      return `<div class="bwGruppe">${t(name)}</div>` + ws.map(x => `<button type="button" class="bwZeile${x === g ? " on" : ""}" data-boersewahl="${x}"><span class="bwName">${gname(x)}</span><b class="mono">${fp(avg[x])}</b><span class="bwTrend">${trendLabel(x)}</span><span class="bwAnz">${anz(x) || ""}</span></button>`).join(""); }).join("");
+    /* Gewählte Ware */
+    const fremd = state.orders.filter(o => o.good === g && o.playerId !== myId);
+    const angebote = fremd.filter(o => o.side === "sell").sort((x, y) => x.price - y.price);
+    const gesuche = fremd.filter(o => o.side === "buy").sort((x, y) => y.price - x.price);
+    const meine = state.orders.filter(o => o.playerId === myId);
+    const lager = Math.floor(me.inv?.[g] || 0);
+    const seite = NETZ.bwSeite || "buy";
+    /* Kaufen/Beliefern nimmt die Menge aus dem Formular (Standard 10) — vorher
+     * das ganze Angebot: ein Klick kaufte 3.356 Strom für rund 8.000 $. */
+    const menge = NETZ.bwMenge || 10;
+    const zeile = (o, art) => { const n = Math.min(o.qty, art === "liefer" ? Math.min(menge, lager) : menge);
+      return `<div class="bwOrder"><span class="mono"><b>${o.qty}×</b> ${fp(o.price)}</span><span class="bwWer">${escapeHtml(rohText(o.player || ""))}</span>
+      <button type="button" class="${art === "kauf" ? "buyb" : "sellb"}" data-bwtake="${o.id}" data-bwn="${n}" ${n < 1 || (art === "kauf" && me.cash < o.price) ? "disabled" : ""}>${art === "kauf" ? t("Kaufen") : t("Beliefern")} ${n}× · ${fmt(n * o.price)}</button></div>`; };
+    const ruhig = document.activeElement && fenster.contains(document.activeElement) && document.activeElement.tagName === "INPUT";
+    netzSetze(".netzInhalt", `<div class="bwLayout"><aside class="bwListe"><div class="bwListeKopf"><b>${t("Kurse")}</b><small>${t("Ø · Trend · Orders")}</small></div><div class="bwListeInhalt"></div></aside><div class="bwHaupt"></div></div>`, "inhaltBoerse");
+    { const el = fenster.querySelector(".bwListeInhalt"), y = el?.scrollTop || 0;   // Scrollposition über Kurs-Updates halten
+      netzSetze(".bwListeInhalt", liste, "liste" + g + state.orders.length + JSON.stringify(avg)); if (el) el.scrollTop = y; }
+    if (!ruhig) netzSetze(".bwHaupt", `<section class="bwDetail">
+        <div class="bwDetailKopf"><div><span class="bwKat">${t((GRUPPEN.find(x => x[0] === G0[g].cat) || [])[1] || "")}</span><h3>${gname(g)}</h3></div>
+          <div class="bwPreis"><b class="mono">${fp(avg[g])}</b><span>${t("Ø-Kurs")} ${trendLabel(g)}</span></div></div>
+        <div class="bwKennzahlen">
+          <div><small>${t("Bestes Angebot")}</small><b class="mono">${angebote[0] ? fp(angebote[0].price) : "—"}</b><span>${angebote[0] ? `${angebote[0].qty}× ${t("verfügbar")}` : t("niemand verkauft")}</span></div>
+          <div><small>${t("Bestes Gesuch")}</small><b class="mono">${gesuche[0] ? fp(gesuche[0].price) : "—"}</b><span>${gesuche[0] ? `${gesuche[0].qty}× ${t("gesucht")}` : t("niemand sucht")}</span></div>
+          <div><small>${t("Dein Lager")}</small><b class="mono">${lager}</b><span>${t("Wert")} ${fmt(lager * (avg[g] || 0))}</span></div>
+        </div>
+        <div class="bwChart">${kursChart(g)}</div>
+      </section>
+      <section class="bwForm">
+        <div class="bwSeiten"><button type="button" class="${seite === "buy" ? "on kauf" : ""}" data-bwseite="buy">${t("Kaufen")}</button><button type="button" class="${seite === "sell" ? "on verkauf" : ""}" data-bwseite="sell">${t("Verkaufen")}</button></div>
+        <label><span>${t("Menge")}</span><input id="bwMenge" type="number" min="1" step="1" value="${NETZ.bwMenge || 10}"></label>
+        <label><span>${t("Preis je Stück")}</span><input id="bwPreis" type="number" min="0.01" step="0.01" value="${NETZ.bwPreis ?? (Math.round((avg[g] || 1) * 100) / 100)}"></label>
+        <button type="button" class="${seite === "buy" ? "buyb" : "sellb"} bwSenden" data-bwsenden>${seite === "buy" ? t("Kauforder platzieren") : t("Verkaufsorder platzieren")}</button>
+        <small>${seite === "buy" ? t("Liegt ein Angebot zu diesem Preis oder billiger, wird sofort gekauft. Sonst bleibt die Order stehen; das Geld liegt so lange treuhänderisch fest.") : `${t("Liegt ein Gesuch zu diesem Preis oder teurer, wird sofort verkauft. Sonst bleibt die Order stehen.")}${F?.aktiv && F.boerse > 0 ? ` ${t("Börsengebühr")} ${Math.round(F.boerse * 1000) / 10} %.` : ""}`}</small>
+      </section>
+      <div class="bwBuch">
+        <section><div class="bwBuchKopf verkauf"><b>${t("Angebote")}</b><small>${t("jemand verkauft — du kaufst")}</small></div>${angebote.map(o => zeile(o, "kauf")).join("") || `<div class="bwLeer">${t("Keine Angebote")}</div>`}</section>
+        <section><div class="bwBuchKopf kauf"><b>${t("Gesuche")}</b><small>${t("jemand kauft — du lieferst")}</small></div>${gesuche.map(o => zeile(o, "liefer")).join("") || `<div class="bwLeer">${t("Keine Gesuche")}</div>`}</section>
+      </div>
+      ${meine.length ? `<section class="bwMeine"><b>${t("Meine Orders")}</b>${meine.map(o => `<div class="bwOrder"><span class="${o.side === "buy" ? "bwK" : "bwV"}">${o.side === "buy" ? t("Kauf") : t("Verkauf")}</span><span class="mono"><b>${o.qty}×</b> ${gname(o.good)} · ${fp(o.price)}</span><button type="button" class="mini" data-bwstorno="${o.id}">${t("Storno")}</button></div>`).join("")}</section>` : ""}`, "haupt");
+    netzSetze(".sfFuss", `<span class="sfFussLogo">📈</span><span>${t("Die Warenbörse wird von der Stadt betrieben · Ware und Geld liegen bis zum Handel treuhänderisch fest")}</span>`, "fussBoerse");
+    return;
+  }
+  /* ---- Stadtbank (bank.cs) als Finanzportal ----
+   * Marktübersicht mit Kacheln (grün/rot nach Veränderung über 10 Minuten),
+   * großer Verlauf der gewählten Kachel, Anzeige aus dem Werbenetz, Analysen
+   * aus dem Kurier; Aktien mit Suche und Detailseite; Handeln & Depot ist die
+   * bisherige Bank, eingebettet wie ein Terminal. */
+  if (NETZ.seite === "bank") {
+    fenster.querySelector(".sfBrowser").style.setProperty("--sys", "#0e7490");
+    const tab = NETZ.bankTab || "markt";
+    netzSetze(".sfUrl", `🔒 bank.cs${tab === "markt" ? "" : tab === "aktien" ? (NETZ.bankAktie ? "/aktie/" + shopSlug(state.players[NETZ.bankAktie]?.name || "") : "/aktien") : "/handeln"}`, "url" + tab + (NETZ.bankAktie || ""));
+    netzSetze(".sfKopf", `<div class="sfMarke"><span class="sfLogo" style="background:#155e75">€</span><div><b>${t("Stadtbank")}</b><small>${t("Kurse, Fonds und Aktien der Stadt")}</small></div></div>
+      <nav class="bankNav"><button type="button" data-banktab="markt">${t("Marktübersicht")}</button><button type="button" data-banktab="aktien">${t("Aktien")}</button><button type="button" data-banktab="handeln">${t("Handeln & Depot")}</button>
+        <label class="bankSuche"><span class="sr">${t("Aktie suchen")}</span><input id="bankSuche" type="search" placeholder="${t("Aktie suchen …")}"></label></nav>`, "kopfBank");
+    fenster.querySelectorAll(".bankNav [data-banktab]").forEach(b => b.classList.toggle("on", b.dataset.banktab === tab));
+    const si = document.getElementById("bankSuche"); if (si && document.activeElement !== si && si.value !== (NETZ.bankSuche || "")) si.value = NETZ.bankSuche || "";
+    fenster.querySelector(".sfBanner").hidden = true;
+    fenster.querySelector(".sfHinweis").hidden = true;
+    netzSetze(".sfFuss", `<span class="sfFussLogo">🏦</span><span>${t("Die Stadtbank wird von der Stadt betrieben · das Gebäude im Zentrum führt hierher")}</span>`, "fussBank");
+    /* Anzeige: Werbenetz, sonst Hinweis für Firmen */
+    const anz = (state.anzeigen || [])[Math.floor(state.tick / 20) % Math.max(1, (state.anzeigen || []).length)];
+    const anzFirma = anz && state.players[anz.firmaId];
+    const anzeige = anz ? `<button type="button" class="bankAnzeige" data-netzauf="${anz.firmaId}" style="--af:${anzFirma?.color || "#0e7490"}"><small>${t("ANZEIGE")}</small>${logoHtml(anz.firmaId, "bankAnzLogo", anzFirma?.color)}<b>${escapeHtml(rohText(anz.firma))}</b><span>${escapeHtml(rohText(anz.text))}</span><em>${t("Website besuchen")}</em></button>`
+      : `<div class="bankAnzeige leer"><small>${t("ANZEIGE")}</small><b>${t("Hier könnte Ihre Firma stehen")}</b><span>${t("Anzeigen buchen Firmen über das Werbenetz der Software-Firmen.")}</span></div>`;
+    if (tab === "handeln") {
+      /* Handelsseite im selben Raster wie Marktübersicht und Aktien: Inhalt
+       * links, schmale Spalte rechts. Ohne sie stand ein Drittel der
+       * Fensterbreite leer, während die Kurstafel sich links quetschte. */
+      /* Das Gerüst bleibt Zeichen für Zeichen gleich, sonst baut netzSetze es
+       * bei jeder geänderten Zahl neu — und reißt dabei das Panel samt
+       * halb ausgefülltem Formular aus dem DOM. Die beweglichen Teile bekommen
+       * eigene Aufrufe. */
+      netzSetze(".netzInhalt", `<div class="bankPortal">
+        <div class="bankHaupt"><div class="bankSlot"></div></div>
+        <aside class="bankRand">
+          <section class="bankKarte bankTipp" id="bankTippDiv"></section>
+          <section class="bankKarte bankTipp"><h4>${t("Wert F")}</h4>
+            <p>${t("Liegt der Kurs unter dem Wert F, holt er meist auf. Die Kurstafel zeigt die Lücke je Firma.")}</p></section>
+          <div class="bankAnzSlot"></div></aside></div>`, "inhaltBankHandeln");
+      const meF = state.players[myId], rend = meF ? aktienRendite(meF) : null;
+      const divJe = meF ? aktienDividende(meF) : null;
+      const eigene = me?.ownAktien ?? 0;
+      netzSetze("#bankTippDiv", `<h4>${t("Dividende")}</h4>
+        <p>${!divJe ? t("Deine Firma schüttet noch nichts aus — dafür braucht sie Umsatz. Ausgeschüttet wird ein Teil des Umsatzes, verteilt auf alle Aktien.")
+          : `${t("Je Aktie fließen")} <b class="mono">${fk(divJe)}</b> ${t("je Ausschüttung zurück")}${eigene ? `, ${t("auf deine")} ${eigene} ${t("eigenen Aktien also")} <b class="mono">${fmt(divJe * eigene)}</b>` : ""}.${rend == null ? "" : ` ${t("Rendite zum Kurs")}: <b class="${rend >= 4 ? "auf" : ""}">${rend.toFixed(1).replace(".", ",")} %</b>.`}`}</p>`, "bankTippDiv");
+      netzSetze(".bankAnzSlot", anzeige, "bankAnzHandeln");
+      const slot = fenster.querySelector(".bankSlot");
+      if (slot && BANK_EL.parentElement !== slot) { slot.appendChild(BANK_EL); BANK_EL.classList.add("imNetz", "open"); render(store.get()); }
+      return;
+    }
+    bankHeimholen();
+    const firmen = Object.values(state.players || {});
+    const aend = h => h && h.length > 1 && h[0] ? (h[h.length - 1] / h[0] - 1) * 100 : 0;
+    /* Kacheln: Veränderung über 2 Minuten (12 Punkte à 10 s) — über 10 Minuten
+     * war am Rundenanfang jede Kachel tiefgrün */
+    const aend2 = h => { if (!h || h.length < 2) return 0; const a = h[Math.max(0, h.length - 13)]; return a ? (h[h.length - 1] / a - 1) * 100 : 0; };
+    const KURZ = { agrar: "Agrar", rohstoff: "Rohstoff", versorger: "Versorger", tech: "Technik", touristik: "Touristik", ruestung: "Rüstung", software: "Software" };
+    /* Stadtindex: Summe aller Firmenwerte, Punkt für Punkt von hinten ausgerichtet */
+    const laenge = Math.max(0, ...firmen.map(p => (firmHist[p.id] || []).length));
+    const index = Array.from({ length: laenge }, (_, i) => firmen.reduce((a, p) => { const h = firmHist[p.id] || []; const j = h.length - laenge + i; return a + (j >= 0 ? h[j] : (h[0] || 0)); }, 0));
+    const etfs = state.etf || [];
+    const kacheln = [
+      { id: "index", name: t("Stadtindex"), wert: index[index.length - 1] || 0, h: index, fmtW: v => Math.round(v).toLocaleString("de-DE") },
+      ...etfs.map(e => ({ id: "etf:" + e.branche, name: `${t("Fonds")} ${t(KURZ[e.branche] || e.name)}`, wert: e.preis || 0, h: e.verlauf || [], fmtW: v => v.toFixed(1).replace(".", ",") })),
+      ...firmen.slice().sort((a, b) => (b.marketValue || 0) - (a.marketValue || 0)).slice(0, 8).map(p => ({ id: "firma:" + p.id, name: rohText(p.name), wert: p.kurs || 0, h: firmHist[p.id] || [], fmtW: v => fk(v), firma: p.id })),
+    ];
+    if (!NETZ.bankWahl || !kacheln.some(k => k.id === NETZ.bankWahl)) NETZ.bankWahl = "index";
+    const farbe = d => d >= 2 ? "k-stark-auf" : d > 0.05 ? "k-auf" : d <= -2 ? "k-stark-ab" : d < -0.05 ? "k-ab" : "k-null";
+    const pz = d => `${d >= 0 ? "+" : "−"}${Math.abs(d).toFixed(2).replace(".", ",")} %`;
+    const wahl = kacheln.find(k => k.id === NETZ.bankWahl), dW = aend(wahl.h);
+    const chart = bankChart(wahl.h, wahl.fmtW);
+    if (tab === "markt") {
+      const analysen = kurierArtikel(state).filter(a => a.ressort === "Börse" || a.ressort === "Wirtschaft").slice(0, 3);
+      netzSetze(".netzInhalt", `<div class="bankPortal">
+        <div class="bankHaupt">
+          <div class="bankOben">
+            <section class="bankKarte"><div class="bankKarteKopf"><b>${t("Marktübersicht")}</b><small>${t("Veränderung in 2 Minuten")}</small></div>
+              <div class="bankKacheln">${kacheln.map(k => { const d = aend2(k.h); return `<button type="button" class="bankKachel ${farbe(d)}${k.id === NETZ.bankWahl ? " on" : ""}" data-bankwahl="${k.id}"><span>${escapeHtml(k.name)}</span><span class="bankKachelZahl"><b>${k.fmtW(k.wert)}</b><em>${pz(d)}</em></span></button>`; }).join("")}</div>
+              <div class="bankLegende"><span class="k-stark-auf"></span>+2 %<span class="k-auf"></span>${t("steigt")}<span class="k-null"></span>${t("gleich")}<span class="k-ab"></span>${t("fällt")}<span class="k-stark-ab"></span>−2 %</div></section>
+            <section class="bankKarte bankChartKarte"><div class="bankChartKopf"><div><b>${escapeHtml(wahl.name)}</b><span class="bankChartWert">${wahl.fmtW(wahl.wert)}</span></div><em class="${dW >= 0 ? "auf" : "ab"}">${pz(dW)}</em></div>
+              ${chart}
+              ${wahl.firma ? `<button type="button" class="bankLink" data-bankaktie="${wahl.firma}">${t("Zur Aktie")} ${escapeHtml(wahl.name)} ›</button>` : wahl.id.startsWith("etf:") ? `<button type="button" class="bankLink" data-banktab="handeln">${t("Fonds kaufen")} ›</button>` : `<button type="button" class="bankLink" data-banktab="aktien">${t("Alle Aktien")} ›</button>`}</section>
+          </div>
+          <section class="bankAnalysen"><h3>${t("Analysen und Nachrichten")}</h3><div class="bankAnalyseKarten">${analysen.map(a => `<button type="button" class="bankAnalyse" data-kurierauf="${a.id}"><span class="bankAnalyseBild r-${a.ressort === "Börse" ? "boerse" : "wirtschaft"}"><svg width="70" height="44" viewBox="0 0 96 64" fill="none" stroke="#ffffff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 56 L28 30 L44 42 L66 14 L90 30"></path></svg></span><span class="bankAnalyseText"><span class="kurierRessort r-${a.ressort === "Börse" ? "boerse" : "wirtschaft"}">${t(a.ressort)}</span><b>${escapeHtml(rohText(a.titel))}</b><small>${t("Stadtkurier")} · ${a.zeit}</small></span></button>`).join("") || `<div class="netzLeer">${t("Noch keine Analysen.")}</div>`}</div></section>
+        </div>
+        <aside class="bankRand">${anzeige}</aside></div>`, "inhaltMarkt");
+      return;
+    }
+    /* ---- Aktien: Suche, Liste, Detailseite ---- */
+    const q = (NETZ.bankSuche || "").trim().toLowerCase();
+    if (NETZ.bankAktie && state.players[NETZ.bankAktie]) {
+      const p = state.players[NETZ.bankAktie], h = firmHist[p.id] || [], d = aend(h), div = aktienDividende(p), rend = aktienRendite(p);
+      const held = p.id === myId ? (me.ownPct ?? 0) : ((me.portfolio || []).find(x => x.id === p.id)?.pct || 0);
+      const angebote = (state.shareListings || []).filter(l => l.companyId === p.id && l.sellerId !== myId && (!l.toId || l.toId === myId));
+      netzSetze(".netzInhalt", `<div class="bankPortal"><div class="bankHaupt">
+        <button type="button" class="bankLink zurueck" data-bankaktie="">‹ ${t("Alle Aktien")}</button>
+        <section class="bankKarte bankDetail"><div class="bankChartKopf"><div class="bankDetailName">${logoHtml(p.id, "bankDetailLogo", p.color)}<span><b>${escapeHtml(rohText(p.name))}</b><small>${t(BRANCHE_NAME[p.industry] || "")}${held ? ` · ${t("du hältst")} ${held} %` : ""}</small></span></div>
+          <div class="bankDetailKurs"><b class="mono">${fk(p.kurs || 0)}</b><em class="${d >= 0 ? "auf" : "ab"}">${pz(d)}</em></div></div>
+          ${bankChart(h, v => fmt(v))}
+          <div class="bankKennzahlen">
+            <div><small>${t("Marktwert")}</small><b>${fmt(p.marketValue || 0)}</b></div>
+            <div><small>${t("Wert je Aktie (F)")}</small><b>${fk(p.fundament || 0)}</b></div>
+            <div><small>${t("Umsatz 10 min")}</small><b>${fmt(p.rev10 || 0)}</b></div>
+            <div><small>${t("Dividendenrendite")}</small><b>${rend == null ? "—" : rend.toFixed(1).replace(".", ",") + " %"}</b></div>
+          </div>
+          <div class="bankDetailKnoepfe"><button type="button" class="sfKaufen" data-bankhandeln="${p.id}">${angebote.length ? `${angebote.length} ${t("Angebote ansehen und kaufen")}` : t("Handeln: Kaufanfrage stellen")}</button>${state.rechenzentren?.websites?.[p.id]?.stufe ? `<button type="button" class="hfKarte" data-netzauf="${p.id}">🌐 ${t("Website der Firma")}</button>` : ""}</div>
+        </section></div><aside class="bankRand">${anzeige}</aside></div>`, "inhaltAktie" + p.id);
+      return;
+    }
+    const liste = firmen.filter(p => !q || rohText(p.name).toLowerCase().includes(q) || (BRANCHE_NAME[p.industry] || "").toLowerCase().includes(q))
+      .sort((a, b) => (b.marketValue || 0) - (a.marketValue || 0));
+    netzSetze(".netzInhalt", `<div class="bankPortal"><div class="bankHaupt"><section class="bankKarte"><div class="bankKarteKopf"><b>${q ? `${t("Suche")}: „${escapeHtml(NETZ.bankSuche)}“` : t("Alle Aktien")}</b><small>${liste.length} ${t("Firmen")} · ${t("nach Marktwert")}</small></div>
+      <div class="bankTabelle"><div class="bankZeile kopf"><span>${t("Firma")}</span><span>${t("Kurs")}</span><span>${t("10 min")}</span><span>${t("Marktwert")}</span><span></span></div>
+      ${liste.map(p => { const d = aend(firmHist[p.id]); return `<button type="button" class="bankZeile" data-bankaktie="${p.id}"><span class="bankZeileName">${logoHtml(p.id, "bankZeileLogo", p.color)}<span><b>${escapeHtml(rohText(p.name))}</b><small>${t(BRANCHE_NAME[p.industry] || "")}</small></span></span><b class="mono">${fk(p.kurs || 0)}</b><em class="${d >= 0 ? "auf" : "ab"}">${pz(d)}</em><span class="mono">${fmt(p.marketValue || 0)}</span><span>${firmHist[p.id] ? sparklineVon(firmHist[p.id], 60, 18) : ""}</span></button>`; }).join("") || `<div class="netzLeer">${t("Keine Aktie gefunden.")}</div>`}</div></section></div>
+      <aside class="bankRand">${anzeige}</aside></div>`, "inhaltAktien" + q);
+    return;
+  }
+  /* ---- Anleihenmarkt (anleihen.cs) ----
+   * Eigene Website statt des dunklen Finanzen-Panels: Anleihen am Markt als
+   * Karten (mit Zinsen bis zum Ende), eigene Anleihen und Schulden, ein
+   * Formular mit Vorschau, Zwangsversteigerungen und Vertragsangebote. */
+  if (NETZ.seite === "anleihen") {
+    fenster.querySelector(".sfBrowser").style.setProperty("--sys", "#7c3aed");
+    netzSetze(".sfUrl", "🔒 anleihen.cs", "url");
+    const bonds = state.bonds || [], meinName = state.players[myId]?.name;
+    const markt = bonds.filter(b => !b.holderId && b.issuerId !== myId).sort((a, b) => (b.issuerId === "__stadt") - (a.issuerId === "__stadt") || b.rate - a.rate);
+    const meine = bonds.filter(b => b.holderId === myId), schulden = bonds.filter(b => b.issuerId === myId);
+    const zinsen = b => Math.round(b.principal * b.rate * b.termLeft / 60);
+    const summe = arr => arr.reduce((a, b) => a + b.principal, 0);
+    netzSetze(".sfKopf", `<div class="sfMarke"><span class="sfLogo" style="background:#6d28d9">%</span><div><b>${t("Anleihenmarkt")}</b><small>${t("Geld leihen und verleihen — mit Zins je Minute")}</small></div></div>
+      <span class="rzBadges"><span class="sfBadge">${markt.length} ${t("am Markt")}</span><span class="sfBadge">${t("angelegt")} ${fmt(summe(meine))}</span><span class="sfBadge">${t("Schulden")} ${fmt(summe(schulden))}</span></span>`, "kopfAnl" + markt.length + summe(meine) + summe(schulden));
+    fenster.querySelector(".sfBanner").hidden = true;
+    fenster.querySelector(".sfHinweis").hidden = true;
+    const badge = r => `<span class="anlRating" style="background:${RCOL[r]}22;color:${RCOL[r]}">${r}</span>`;
+    const karte = b => { const stadt = b.issuerId === "__stadt";
+      return `<article class="anlKarte${stadt ? " stadt" : ""}"><div class="anlKarteKopf">${stadt ? `<span class="anlStadt">🏛</span>` : logoHtml(b.issuerId, "anlLogo", state.players[b.issuerId]?.color)}<span><b>${escapeHtml(rohText(b.issuer))}</b><small>${stadt ? t("Stadtanleihe für den Wohnbau") : t("Firmenanleihe")}</small></span>${badge(b.issuerRating)}</div>
+        <div class="anlZahlen"><div><small>${t("Nennwert")}</small><b>${fmt(b.principal)}</b></div><div><small>${t("Zins")}</small><b>${(b.rate * 100).toFixed(1).replace(".", ",")} %/min</b></div><div><small>${t("Laufzeit")}</small><b>${Math.ceil(b.termLeft / 60)} min</b></div></div>
+        <div class="anlErtrag">${t("Zinsen bis zum Ende")} ≈ <b>${fmt(zinsen(b))}</b>${b.strikes > 0 ? ` · <em>${t("im Verzug")}</em>` : ""}</div>
+        <button type="button" class="sfKaufen" data-anlkauf="${b.id}" ${me.cash < b.principal ? "disabled" : ""}>${t("Kaufen")} · ${fmt(b.principal)}</button></article>`; };
+    const zeile = (b, art) => `<div class="anlZeile"><span><b>${escapeHtml(rohText(art === "meine" ? b.issuer : (b.holder || t("noch nicht verkauft"))))}</b><small>${fmt(b.principal)} · ${(b.rate * 100).toFixed(1).replace(".", ",")} %/min · ${t("noch")} ${Math.ceil(b.termLeft / 60)} min</small></span><span class="mono ${art === "meine" ? "auf" : "ab"}">${art === "meine" ? "+" : "−"}${fmt(Math.round(b.principal * b.rate))}/min</span>${b.strikes > 0 ? `<em class="anlVerzug">${t("Verzug")}</em>` : ""}</div>`;
+    const verträge = (state.contracts || []).filter(c => c.toId === myId);
+    const auktionen = state.auctions || [];
+    const ruhig = document.activeElement && fenster.contains(document.activeElement) && document.activeElement.tagName === "INPUT";
+    const nw = NETZ.anlNenn ?? 3000, zs = NETZ.anlZins ?? 8, lz = NETZ.anlLauf ?? 3;
+    if (!ruhig) netzSetze(".netzInhalt", `<div class="anlLayout"><div class="anlHaupt">
+        <section class="anlBox"><div class="anlBoxKopf"><b>${t("Anleihen am Markt")}</b><small>${t("Stadtanleihen zuerst, dann nach Zins")}</small></div>
+          ${markt.length ? `<div class="anlKarten">${markt.map(karte).join("")}</div>` : `<div class="netzLeer">${t("Gerade wird keine Anleihe angeboten. Ratings entstehen aus Vermögen und Schulden der Firmen.")}</div>`}</section>
+        ${verträge.length ? `<section class="anlBox"><div class="anlBoxKopf"><b>${t("Vertragsangebote an dich")}</b></div>${verträge.map(c => `<div class="anlZeile"><span><b>${escapeHtml(rohText(c.from))}</b><small>${c.qty}× ${gname(c.good)} · ${fmt(c.price)}/Stk = ${fmt(c.qty * c.price)}</small></span><span class="anlKnoepfe"><button type="button" class="buyb" data-anlvertrag="${c.id}">${t("Annehmen")}</button><button type="button" class="mini" data-anlablehnen="${c.id}">${t("Ablehnen")}</button></span></div>`).join("")}</section>` : ""}
+        <section class="anlBox"><div class="anlBoxKopf"><b>${t("Zwangsversteigerungen")}</b><small>${t("gepfändete Gebäude von Firmen im Verzug")}</small></div>
+          ${auktionen.length ? auktionen.map(a => `<div class="anlZeile"><span><b>${bname(a.btype)}</b><small>${t("Mindestgebot")} ${fmt(a.minBid)} · ${t("Höchstgebot")} ${a.bestBid ? fmt(a.bestBid) : "—"} · ${a.tLeft}s</small></span><span class="anlKnoepfe"><input type="number" id="anlGebot-${a.id}" placeholder="${Math.max(a.minBid, (a.bestBid || 0) + 1)}"><button type="button" class="buyb" data-anlbieten="${a.id}">${t("Bieten")}</button></span></div>`).join("") : `<small class="anlLeer">${t("Keine laufenden Auktionen.")}</small>`}</section>
+      </div><aside class="anlSeite">
+        <section class="anlBox anlForm"><b>${t("Anleihe ausgeben")}</b><small>${t("Du bekommst den Nennwert sofort und zahlst jede Minute Zins. Am Ende zahlst du den Nennwert zurück — bei Verzug wird gepfändet.")}</small>
+          <label><span>${t("Nennwert $")}</span><input id="anlNenn" type="number" min="100" step="100" value="${nw}"></label>
+          <label><span>${t("Zins % je Minute")}</span><input id="anlZins" type="number" min="1" max="50" step="0.5" value="${zs}"></label>
+          <label><span>${t("Laufzeit in Minuten")}</span><input id="anlLauf" type="number" min="1" step="1" value="${lz}"></label>
+          <div class="anlVorschau"><span>${t("Zins je Minute")}<b>${fmt(nw * zs / 100)}</b></span><span>${t("Zinsen gesamt")}<b>${fmt(nw * zs / 100 * lz)}</b></span><span>${t("Rückzahlung am Ende")}<b>${fmt(nw)}</b></span></div>
+          <button type="button" class="sfKaufen" data-anlausgeben>${t("Anleihe ausgeben")}</button></section>
+        <section class="anlBox"><b>${t("Deine Anlagen")}</b>${meine.map(b => zeile(b, "meine")).join("") || `<small class="anlLeer">${t("Du hältst keine Anleihen.")}</small>`}</section>
+        <section class="anlBox"><b>${t("Deine Schulden")}</b>${schulden.map(b => zeile(b, "schuld")).join("") || `<small class="anlLeer">${t("Keine eigenen Anleihen offen.")}</small>`}</section>
+      </aside></div>`, "inhaltAnl");
+    netzSetze(".sfFuss", `<span class="sfFussLogo">%</span><span>${t("Der Anleihenmarkt wird von der Stadt betrieben · Firmenanteile handelst du auf bank.cs")}</span>`, "fussAnl");
+    return;
+  }
+  /* ---- Stadt-Casino (casino.cs) ----
+   * Ein Haus der Stadt: Der Server wuerfelt, diese Seite zeigt nur an. Links
+   * die Lobby mit den Spielen, im Spiel der Tisch und rechts der Einsatz. */
+  if (NETZ.seite === "casino") {
+    const C = state.casino;
+    if (!C) return netzOeffnen(null);
+    fenster.querySelector(".sfBrowser").style.setProperty("--sys", "#c99b3a");
+    const spiel = NETZ.casinoSpiel && C.spiele[NETZ.casinoSpiel] ? NETZ.casinoSpiel : null;
+    const erg = NETZ.casinoErgebnis?.spiel === spiel ? NETZ.casinoErgebnis : null;
+    netzSetze(".sfUrl", `🔒 casino.cs${spiel ? "/" + spiel : ""}`, "url");
+    netzSetze(".sfKopf", `<div class="sfMarke"><span class="sfLogo casLogo">${CASINO_SYM.wappen}</span><div><b>${t("Stadt-Casino")}</b><small>${t("Betrieben von der Stadt · Spielgeld, kein echtes Geld")}</small></div></div>
+      <span class="rzBadges"><span class="sfBadge">${t("Guthaben")} ${fmt(me.cash)}</span><span class="sfBadge casBadge">${t("Einnahmen der Stadt")} ${fmt(C.einnahmen)}</span><span class="sfBadge">${C.runden} ${t("Runden")}</span></span>`, "kopfCas");
+    fenster.querySelector(".sfBanner").hidden = true;
+    fenster.querySelector(".sfHinweis").hidden = true;
+    const letzte = (C.log || []).map(l => `<div class="casLogZeile"><span class="casLogPunkt" style="background:${l.netto >= 0 ? "#2dd4a7" : "#f0536b"}"></span><span><b>${escapeHtml(rohText(l.name))}</b><small>${t(C.spiele[l.spiel]?.name || l.spiel)} · ${escapeHtml(l.text)}</small></span><em class="mono ${l.netto >= 0 ? "auf" : "ab"}">${l.netto >= 0 ? "+" : "−"}${fmt(Math.abs(l.netto))}</em></div>`).join("");
+
+    if (!spiel) {
+      const kachel = ([id2, s]) => `<button type="button" class="casKarte" data-casinospiel="${id2}">
+        <span class="casBild" style="background:linear-gradient(150deg,${CASINO_VERLAUF[id2]})">
+          <em class="casQuote mono">${t(s.quote)}</em>${CASINO_BILD[id2] || ""}
+          <b class="casName">${t(s.name).toUpperCase()}</b></span>
+        <span class="casFuss"><i class="casPunkt"></i>${t("offen")}<em class="mono">${t(s.kurz)}</em></span></button>`;
+      netzSetze(".netzInhalt", `<div class="casLayout"><div class="casHaupt">
+          <div class="netzAbschnittKopf"><b>${t("Stadt-Originale")}</b><small>${t("vom Spielhaus selbst betrieben")}</small></div>
+          <div class="casKarten">${Object.entries(C.spiele).map(kachel).join("")}</div>
+          <p class="casHinweisText">${t("Das Ergebnis jeder Runde würfelt der Server, nicht dein Browser. Der Überschuss des Hauses fließt in die Stadtkasse und bezahlt damit denselben Topf wie Steuern und Wohnbau.")}</p>
+        </div><aside class="casSeite">
+          <section class="netzBox"><b>${t("Letzte Runden")}</b>${letzte || `<small class="anlLeer">${t("Noch hat niemand gespielt.")}</small>`}</section>
+          <section class="netzBox casKasse"><b>${t("Einnahmen der Stadt")}</b><strong class="mono">${fmt(C.einnahmen)}</strong><small>${t("aus")} ${C.runden} ${t("Runden")}</small></section>
+        </aside></div>`, "inhaltCas");
+      netzSetze(".sfFuss", `<span class="sfFussLogo">${CASINO_SYM.wappen}</span><span>${t("Das Stadt-Casino wird von der Stadt betrieben · Einsatz")} ${fmt(C.min)} – ${fmt(C.max)} · ${t("Spielgeld, nur zur Unterhaltung")}</span>`, "fussCas");
+      return;
+    }
+
+    /* ---- Spielansicht ---- */
+    const def = C.spiele[spiel];
+    const tipps = casinoTipps(spiel, C);
+    if (tipps.length && !tipps.some(([v]) => v === NETZ.casinoTipp)) NETZ.casinoTipp = tipps[0][0];
+    const buehne = (() => {
+      if (spiel === "muenze") {
+        const seite = erg ? erg.ergebnis : null;
+        return `<div class="casMuenze${erg ? " faellt" : ""}">${seite === "zahl" ? `<span class="casMuenzeZahl mono">$</span>` : `<svg width="62" height="62" viewBox="0 0 28 28" aria-hidden="true">${CASINO_WAPPEN("#6b4b14")}</svg>`}</div>`;
+      }
+      if (spiel === "wuerfel") {
+        const augen = erg ? erg.ergebnis : null;
+        const punkte = { 1: [[1, 1]], 2: [[0, 0], [2, 2]], 3: [[0, 0], [1, 1], [2, 2]], 4: [[0, 0], [2, 0], [0, 2], [2, 2]],
+          5: [[0, 0], [2, 0], [1, 1], [0, 2], [2, 2]], 6: [[0, 0], [2, 0], [0, 1], [2, 1], [0, 2], [2, 2]] }[augen] || [];
+        return `<div class="casWuerfel${erg ? " rollt" : ""}">${augen
+          ? punkte.map(([x, y]) => `<i style="left:${18 + x * 31}%;top:${18 + y * 31}%"></i>`).join("")
+          : `<span class="casWartet">?</span>`}</div>`;
+      }
+      if (spiel === "walzen") {
+        const w = erg ? erg.ergebnis : ["wappen", "glocke", "stern"];
+        return `<div class="casWalzen${erg ? " dreht" : ""}">${w.map((s, i) =>
+          `<span style="animation-delay:${i * .12}s">${CASINO_SYM[s] || "?"}</span>`).join("")}</div>`;
+      }
+      return casinoRadSvg(C.radFelder, erg ? erg.ergebnis : null);
+    })();
+    const meldung = erg
+      ? `<div class="casErgebnis ${erg.gewonnen ? "gut" : erg.auszahlung > 0 ? "halb" : "schlecht"}">${escapeHtml(erg.text)}
+          <small class="mono">${erg.netto >= 0 ? "+" : "−"}${fmt(Math.abs(erg.netto))}</small></div>`
+      : `<div class="casErgebnis warte">${t("Setz deinen Einsatz und spiel eine Runde.")}</div>`;
+    netzSetze(".netzInhalt", `<div class="casSpiel">
+        <section class="casTisch">
+          <header class="casTischKopf"><b>${t(def.name)}</b><em class="mono">${t(def.quote)}</em><span class="casFair mono">${t("Ergebnis vom Server")}</span></header>
+          ${buehne}${meldung}
+        </section>
+        <aside class="casPanel" id="casPanel"></aside>
+      </div>`, "inhaltCas" + spiel);
+    /* Das Einsatzfeld getrennt zeichnen und waehrend des Tippens in Ruhe
+     * lassen — der Sekundentakt wuerde sonst den Fokus aus dem Feld nehmen. */
+    const tippt = fenster.contains(document.activeElement) && document.activeElement?.id === "casEinsatz";
+    if (!tippt) {
+      const einsatz = Math.min(C.max, Math.max(C.min, Math.floor(NETZ.casinoEinsatz) || C.min));
+      const zahlTipp = /^[0-9]+$/.test(String(NETZ.casinoTipp));
+      const faktor = spiel === "walzen" ? null : spiel === "rad" ? (zahlTipp ? 12.3 : 2.05) : 1.9;
+      netzSetze("#casPanel", `
+        <button type="button" class="casZurueck" data-casinolobby>← ${t("Alle Spiele")}</button>
+        <div><span class="casLbl">${t("Einsatz")}</span>
+          <div class="casFeld"><input id="casEinsatz" type="number" min="${C.min}" max="${C.max}" step="50" value="${einsatz}"><span class="mono">$</span></div></div>
+        <div class="casChips">${[100, 500, 1000, 2000].map(v => `<button type="button" class="${v === einsatz ? "on" : ""}" data-casinochip="${v}">${v >= 1000 ? v / 1000 + "k" : v}</button>`).join("")}</div>
+        ${tipps.length ? `<div><span class="casLbl">${t("Dein Tipp")}</span>
+          <div class="casTipps${spiel === "rad" ? " casTippsRad" : ""}">${tipps.map(([v, n]) =>
+            `<button type="button" class="${NETZ.casinoTipp === v ? "on" : ""}${v === "rot" ? " rot" : v === "schwarz" ? " schwarz" : ""}" data-casinotipp="${v}">${t(n)}</button>`).join("")}</div></div>` : ""}
+        ${faktor ? `<div class="casAus"><span>${t("Auszahlung bei Gewinn")}</span><b class="mono">${fmt(Math.round(einsatz * faktor))}</b></div>`
+          : `<div class="casAus"><span>${t("Drei gleiche")}</span><b class="mono">${t("bis")} ${fmt(einsatz * 50)}</b></div>`}
+        <button type="button" class="casSetzen" data-casinosetzen>${t("Setzen")}</button>
+        <div class="casRegel">${spiel === "walzen"
+          ? t("Drei gleiche Symbole zahlen den Faktor des Symbols (Stadtwappen 50×, Glocke 15×, Stern 10×, Münze 8×, Kleeblatt 6×). Zwei gleiche geben den halben Einsatz zurück.")
+          : spiel === "rad" ? t("Eine Zahl zahlt 12,3×, Rot oder Schwarz zahlt 2,05×. Das Feld ★ gehört der Stadt — dann gewinnt das Haus.")
+          : t("Triffst du, bekommst du das 1,9-Fache deines Einsatzes.")}</div>`, "panelCas" + spiel);
+    }
+    netzSetze(".sfFuss", `<span class="sfFussLogo">${CASINO_SYM.wappen}</span><span>${t("Einsatz")} ${fmt(C.min)} – ${fmt(C.max)} ${t("je Runde")} · ${t("Spielgeld, nur zur Unterhaltung")}</span>`, "fussCas");
+    return;
+  }
+  /* ---- Stadtkurier ---- */
+  if (NETZ.seite === "kurier") {
+    KURIER.gelesen = Math.max(KURIER.gelesen, (state.news || [])[0]?.ts || 0);
+    fenster.querySelector(".sfBrowser").style.setProperty("--sys", "#111827");
+    const offen = NETZ.artikel && artikel.find(a => a.id === NETZ.artikel);
+    netzSetze(".sfUrl", `🔒 kurier.cs${offen ? "/" + offen.id : ""}`, "url");
+    const ausgabe = (state.news || []).length ? `${t("Ausgabe")} ${KURIER.nr(state)} · ${t("Minute")} ${state.news[0].min}` : t("Erste Ausgabe nach zwei Minuten");
+    netzSetze(".sfKopf", `<b class="netzZeitungTitel">${t("Stadtkurier")}</b><small>${ausgabe} · ${t("betrieben von der Stadt")} · ${state.stadt.einwohner.toLocaleString("de-DE")} ${t("Einwohner")}</small>`, "kopfKurier" + ausgabe);
+    fenster.querySelector(".sfBanner").hidden = true;
+    fenster.querySelector(".sfHinweis").hidden = true;
+    const sicht = artikel.filter(a => NETZ.ressort === "alle" || a.ressort === NETZ.ressort || (NETZ.ressort === "Firmen" && a.ressort === "Eilmeldung"));
+    const reiter = [["alle", "Alle"], ["Wirtschaft", "Wirtschaft"], ["Börse", "Börse"], ["Stadt", "Stadt"], ["Firmen", "Firmen"]]
+      .map(([k, n]) => `<button type="button" class="${NETZ.ressort === k ? "on" : ""}" data-kurierressort="${k}">${t(n)}</button>`).join("");
+    const marke = a => `<span class="kurierRessort r-${a.ressort === "Börse" ? "boerse" : a.ressort.toLowerCase()}">${t(a.ressort)}</span>`;
+    const link = a => a.link ? `<button type="button" class="sfKaufen" data-kurierlink="${a.link[0]}:${a.link[1] ?? ""}">${t(a.link[2])}</button>` : "";
+    let haupt;
+    if (offen) haupt = `<article class="kurierArtikel">${marke(offen)}<h2>${escapeHtml(rohText(offen.titel))}</h2><small>${offen.zeit}</small>
+        ${offen.absaetze.map(x => `<p>${escapeHtml(rohText(x))}</p>`).join("")}
+        <div class="kurierKnoepfe">${link(offen)}<button type="button" class="hfKarte" data-kurierauf="">${t("Zurück zur Übersicht")}</button></div></article>`;
+    else if (!sicht.length) haupt = `<div class="netzLeer">${t("In diesem Ressort gibt es noch nichts Neues.")}</div>`;
+    else { const auf = sicht.find(a => a.ressort === "Wirtschaft") || sicht[0], rest = sicht.filter(a => a !== auf);   // Aufmacher: der aktuelle Marktbericht
+      haupt = `<button type="button" class="kurierAufmacher" data-kurierauf="${auf.id}"><span class="kurierBild r-${auf.ressort === "Börse" ? "boerse" : auf.ressort.toLowerCase()}"><svg width="96" height="64" viewBox="0 0 96 64" fill="none" stroke="#ffffff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 56 L28 30 L44 42 L66 14 L90 30"></path><path d="M78 14 H90 V26"></path></svg></span>
+          <span class="kurierAufText">${marke(auf)}<b>${escapeHtml(rohText(auf.titel))}</b><span>${escapeHtml(rohText(auf.anriss))}</span><small>${auf.zeit}</small></span></button>
+        <div class="kurierListe">${rest.slice(0, 12).map(a => `<button type="button" class="kurierKarte" data-kurierauf="${a.id}">${marke(a)}<b>${escapeHtml(rohText(a.titel))}</b><span>${escapeHtml(rohText(a.anriss))}</span><small>${a.zeit}</small></button>`).join("")}</div>`; }
+    const kurse = KURIER.veraenderung(state);
+    const anz = (state.anzeigen || [])[0];
+    const archiv = (state.news || []).map((b, i) => `<button type="button" class="kurierArchiv" data-kurierauf="markt-${b.min}"><span>${t("Ausgabe")} ${KURIER.nr(state) - i}</span><small class="mono">${t("Minute")} ${b.min}</small></button>`).join("");
+    netzSetze(".netzInhalt", `<nav class="kurierReiter">${reiter}</nav>
+      <div class="netzSpalten"><div class="netzHaupt">${haupt}</div><aside class="netzSeite">
+        <section class="netzBox"><b>${t("Kurse in 2 Minuten")}</b>${kurse.length ? kurse.map(k => `<span class="kurierKurs"><span>${gname(k.g)}</span><b class="mono ${k.d >= 0 ? "auf" : "ab"}">${k.d >= 0 ? "+" : "−"}${Math.abs(k.d)} %</b></span>`).join("") : `<small>${t("Noch zu früh — die Kurse vergleicht der Kurier nach zwei Minuten.")}</small>`}</section>
+        ${anz ? `<button type="button" class="netzBox netzAnzeige" data-netzauf="${anz.firmaId}"><small>${t("ANZEIGE")}</small><b>${escapeHtml(rohText(anz.firma))}</b><span>${escapeHtml(rohText(anz.text))}</span></button>` : ""}
+        ${archiv ? `<section class="netzBox"><b>${t("Archiv")}</b>${archiv}</section>` : ""}
+      </aside></div>`, "inhaltKurier");
+    netzSetze(".sfFuss", `<span class="sfFussLogo">📰</span><span>${t("Stadtkurier · erscheint alle zwei Minuten · Anzeigen aus dem Werbenetz")}</span>`, "fussKurier");
+    return;
+  }
+  /* ---- Krypto-Börse einer Software-Firma (krypto.js) ---- */
+  if (String(NETZ.seite).startsWith("krypto:")) return kryptoSeite(fenster, state, me, myId);
+  if (String(NETZ.seite).startsWith("dash:")) return dashboardSeite(fenster, state, me, myId);
+  /* ---- Seite einer Firma ---- */
+  const pid = NETZ.seite, p = state.players[pid], w = W[pid];
+  if (!p) return netzOeffnen(null);
+  const meins = pid === myId, B = BTYPES(), ind = p.industry;
+  const anbieter = w && (w.anbieter === "stadtportal" ? null : (state.website || []).find(x => x.id === w.anbieter));
+  fenster.querySelector(".sfBrowser").style.setProperty("--sys", p.color || "#0f766e");
+  netzSetze(".sfUrl", `🔒 ${shopSlug(p.name)}.cs`, "url" + pid);
+  kopfEl.style.display = w?.stufe ? "none" : "";   // mit Website zeigt der Hero der Seite Name und Logo
+  if (w?.design) sfSchriftenLaden();   // Vorlagen und Schriften brauchen die Shop-Schriften
+  netzSetze(".sfKopf", `<div class="sfMarke">${logoHtml(pid, "sfLogo", p.color)}<div><b>${escapeHtml(rohText(p.name))}</b><small>${t(BRANCHE_NAME[ind] || "")}${w ? ` · ${t(cfg?.MODULE[w.modul]?.name || "")}` : ""}</small></div></div>
+    <span class="rzBadges">${w ? `<span class="sfBadge">${w.besucher} ${t("Besucher/min")}</span><span class="sfBadge">+${Math.round((w.bonus || 0) * 100)} % ${t("Reichweite")}</span>` : `<span class="sfBadge">${t("keine Website")}</span>`}</span>`, "kopf" + pid + (logoBild(pid) || "").length);
+  const banner = fenster.querySelector(".sfBanner");
+  banner.hidden = !w?.aktion;
+  netzSetze(".sfBanner", w?.aktion ? `<b>⚡</b><span>${t(w.aktion.name)} — ${t("noch")} ${Math.floor(w.aktion.rest / 60)}:${String(w.aktion.rest % 60).padStart(2, "0")} · +${Math.round((state.rechenzentren.aktion?.boost || .25) * 100)} % ${t("Reichweite")}</span>` : "", "banner" + pid);
+  fenster.querySelector(".sfHinweis").hidden = !meins;
+  netzSetze(".sfHinweis", t("Deine Website: So sehen Kunden und Mitspieler deine Firma im Stadtnetz."), "hinweis");
+  if (!w?.stufe) {
+    netzSetze(".netzInhalt", `<div class="sfLeer">${w ? `⚠ ${t("Die Website ist gerade offline — dem Rechenzentrum des Anbieters fehlt Strom oder Platz.")}` : meins ? t("Du hast noch keine Website. Software-Firmen bauen sie dir — oder das Stadtportal die Grundseite.") : `${escapeHtml(rohText(p.name))} ${t("hat noch keine Website.")}`}</div>
+      ${meins && !w ? `<div class="netzMitte"><button type="button" class="sfKaufen" data-netzanbieter>${t("Anbieter vergleichen")}</button></div>` : ""}`, "leer" + pid + !!w);
+    netzSetze(".sfFuss", "", "fuss" + pid);
+    return;
+  }
+  /* Inhalt nach dem Design der Software-Firma (firmenSeiteHtml) */
+  const auftrag = w.auftrag?.status === "offen" ? w.auftrag : null;
+  let eigenes = "";
+  if (meins && w.stufe < 2) eigenes += `<section class="rzBox"><b>${t(state.rechenzentren?.portale?.[ind]?.name || "Branchenportal")}</b><small>${t("Mit dem Modul „Branchenportal“ wird deine Website zum Laden: Mitspieler kaufen direkt bei dir, Rohstoff und Rüstung bekommen Auftrags-Boni.")}</small>
+      ${anbieter ? `<button type="button" class="sfKaufen" data-rzauf="${anbieter.ownerId}" data-rzreiterziel="websites">${t("Modul wechseln bei")} ${escapeHtml(rohText(anbieter.name))}</button>` : `<button type="button" class="sfKaufen" data-netzanbieter>${t("Anbieter vergleichen")}</button>`}</section>`;
+  const A = state.rechenzentren?.aktion;
+  if (meins) eigenes += w.stufe >= 3 ? `<section class="rzBox"><div class="rzBoxKopf"><b>⚡ ${t(A?.namen?.[ind] || "Aktion")}</b><small>${Math.round((A?.boost || .25) * 100)} % ${t("mehr Reichweite für")} ${(A?.dauer || 300) / 60} min · ${fmt(A?.kosten || 600)}</small></div>
+      ${w.aktion ? `<div class="sfEigen">${t("Läuft")} · ${t("noch")} ${Math.ceil(w.aktion.rest / 60)} min</div>` : w.aktionPause ? `<div class="sfEigen">${t("Nächste Aktion in")} ${Math.ceil(w.aktionPause / 60)} min</div>`
+        : `<button type="button" class="sfKaufen" data-netzaktion ${me.cash < (A?.kosten || 600) ? "disabled" : ""}>${t("Aktion starten")} · ${fmt(A?.kosten || 600)}</button>`}</section>`
+    : `<section class="rzBox"><b>⚡ ${t("Aktionen")}</b><small>${t("Ab Website-Modul „Aktionen“ (v3): 5 Minuten +25 % Reichweite.")}</small></section>`;
+  /* Krypto-Börse dieser Firma: Verweis auf ihre eigene Seite (siehe krypto.js) */
+  const krB = (state.krypto?.boersen || []).find(x => x.firmaId === pid && x.aktiv);
+  const krCount = krB ? (state.krypto.coins || []).filter(c => c.firmaId === pid || (state.krypto.vertraege || []).some(v => v.boerseId === pid && v.coinId === c.id)).length : 0;
+  const krypto = krB
+    ? `<section class="rzBox krSeitenBox"><div class="rzBoxKopf"><b>₿ ${t("Krypto-Börse")}</b><small>${krCount} ${t("Coins")} · ${t("Gebühr")} ${(krB.gebuehr * 100).toFixed(1)} %</small></div>
+         <p>${t("Coins dieser Firma und ihrer Vertragspartner — handelbar für alle.")}</p>
+         <button type="button" class="sfKaufen" data-netzauf="krypto:${pid}">${t("Zur Krypto-Börse")} →</button>
+         ${meins ? `<button type="button" class="sfKaufen" data-netzauf="dash:${pid}">${t("Zum Dashboard")} →</button>` : ""}</section>`
+    : meins && ind === "software"
+      ? `<section class="rzBox krSeitenBox"><div class="rzBoxKopf"><b>₿ ${t("Krypto-Börse eröffnen")}</b><small>${t("eigene Seite im Stadtnetz")}</small></div>
+         <p>${t("Du gibst einen eigenen Coin aus und lässt ihn auf deiner Börse handeln. Die Gebühr ist deine Einnahme und trägt den Kurs.")}</p>
+         <div class="krBoxForm"><input id="krNeuGebuehr" type="number" min="0" max="5" step="0.1" value="2"><span>% ${t("Gebühr")}</span><button type="button" class="sfKaufen" data-krneu>${t("Börse eröffnen")}</button></div>
+         <button type="button" class="sfKaufen" data-netzauf="dash:${pid}">${t("Zum Dashboard")} →</button></section>`
+      : "";
+  if (krypto) eigenes += krypto;
+  netzSetze(".netzInhalt", `${auftrag ? `<div class="fwBau">🛠 ${anbieter ? `${escapeHtml(rohText(anbieter.anbieter))} ${t("gestaltet diese Website gerade")}` : t("Diese Website wird gerade gestaltet")} · ${t("noch")} ${Math.floor(auftrag.rest / 60)}:${String(auftrag.rest % 60).padStart(2, "0")}</div>` : ""}
+    ${firmenSeiteHtml(state, me, myId, pid, null)}${eigenes ? `<div class="fwEigenes">${eigenes}</div>` : ""}`, "inhalt" + pid);
+  netzSetze(".sfFuss", anbieter ? `${logoHtml(anbieter.ownerId, "sfFussLogo", anbieter.farbe)}<span>${t("Website von")} <b>${escapeHtml(rohText(anbieter.name))}</b> · ${escapeHtml(rohText(anbieter.anbieter))}</span>` : `<span class="sfFussLogo">🏛</span><span>${t("Grundseite vom Stadtportal")}</span>`, "fuss" + pid);
+}
+document.getElementById("netzFenster").addEventListener("input", e => {
+  if (e.target.id === "netzSuche") { NETZ.suche = e.target.value; netzZeichnen(); }
+  if (["anlNenn", "anlZins", "anlLauf"].includes(e.target.id)) { const k = { anlNenn: "anlNenn", anlZins: "anlZins", anlLauf: "anlLauf" }[e.target.id]; NETZ[k] = +e.target.value || 0;
+    const v = document.querySelector("#netzFenster .anlVorschau"); if (v) { const nw = NETZ.anlNenn ?? 3000, zs = NETZ.anlZins ?? 8, lz = NETZ.anlLauf ?? 3; const b = v.querySelectorAll("b"); b[0].textContent = fmt(nw * zs / 100); b[1].textContent = fmt(nw * zs / 100 * lz); b[2].textContent = fmt(nw); } }
+  if (e.target.id === "bankSuche") { NETZ.bankSuche = e.target.value; NETZ.bankTab = "aktien"; NETZ.bankAktie = null; netzZeichnen(); }
+  if (e.target.id === "bwMenge") { NETZ.bwMenge = Math.max(1, Math.floor(+e.target.value) || 1); NETZ.sig.haupt = null; }
+  if (e.target.id === "bwPreis") NETZ.bwPreis = +e.target.value || null;
+  /* Krypto-Börse: Eingaben merken, damit ein Tick sie nicht zurücksetzt */
+  if (e.target.id === "krMenge") { NETZ.krMenge = Math.max(1, Math.floor(+e.target.value) || 1); NETZ.sig.krHaupt = null; }
+  if (e.target.id === "krPreis") NETZ.krPreis = +e.target.value || null;
+  if (e.target.id === "krBetrag") NETZ.krBetrag = Math.max(0, +e.target.value || 0);
+  /* Nur merken, nicht neu zeichnen: Das Feld soll beim Tippen den Fokus behalten. */
+  if (e.target.id === "casEinsatz") NETZ.casinoEinsatz = +e.target.value || 0;
+  const n = e.target.closest?.("[data-netzn]"); if (n) NETZ.menge[n.dataset.netzn] = Math.max(1, Math.floor(+n.value) || 1);
+});
+document.getElementById("netzFenster").addEventListener("click", e => {
+  if (e.target.closest("[data-netzzu]") || e.target.id === "netzFenster") return netzSchliessen();
+  if (e.target.closest("[data-netzzurueck]")) {
+    if (NETZ.seite === "kurier" && NETZ.artikel) { NETZ.artikel = null; NETZ.sig = {}; return netzZeichnen(); }
+    /* Im Casino fuehrt der Zurueck-Pfeil aus dem Spiel erst in die Lobby. */
+    if (NETZ.seite === "casino" && NETZ.casinoSpiel) { NETZ.casinoSpiel = null; NETZ.casinoErgebnis = null; NETZ.sig = {}; return netzZeichnen(); }
+    return netzOeffnen(null);
+  }
+  /* Renntag: Der Knopf in der Meldung ist der einzige Weg zur Rennstrecke. */
+  if (e.target.closest("[data-rennauf]")) { netzSchliessen(); rennMinimiert = false; rennenRendern.sig = ""; return render(store.get()); }
+  /* Stadt-Casino */
+  const csp = e.target.closest("[data-casinospiel]");
+  if (csp) { NETZ.casinoSpiel = csp.dataset.casinospiel; NETZ.casinoTipp = null; NETZ.casinoErgebnis = null; NETZ.sig = {}; SFX.spiel("klick"); return netzZeichnen(); }
+  if (e.target.closest("[data-casinolobby]")) { NETZ.casinoSpiel = null; NETZ.casinoErgebnis = null; NETZ.sig = {}; return netzZeichnen(); }
+  const cch = e.target.closest("[data-casinochip]");
+  if (cch) { NETZ.casinoEinsatz = +cch.dataset.casinochip; NETZ.sig = {}; return netzZeichnen(); }
+  const cti = e.target.closest("[data-casinotipp]");
+  if (cti) { NETZ.casinoTipp = cti.dataset.casinotipp; NETZ.sig = {}; return netzZeichnen(); }
+  if (e.target.closest("[data-casinosetzen]")) {
+    const C = store.get().state.casino;
+    const einsatz = Math.min(C.max, Math.max(C.min, Math.floor(+document.getElementById("casEinsatz")?.value) || C.min));
+    NETZ.casinoEinsatz = einsatz;
+    return socket.emit("casinoSpielen", { spiel: NETZ.casinoSpiel, tipp: NETZ.casinoTipp, einsatz }, r => {
+      if (r?.error) return toast(r.error, true);
+      NETZ.casinoErgebnis = { ...r, spiel: NETZ.casinoSpiel };
+      NETZ.sig = {};
+      SFX.spiel(r.netto >= 0 ? "geld" : "hinweis");
+      render(store.get());
+    });
+  }
+  /* Anleihenmarkt */
+  const ak = e.target.closest("[data-anlkauf]");
+  if (ak) return act("buyBond", { bondId: +ak.dataset.anlkauf });
+  const av = e.target.closest("[data-anlvertrag]");
+  if (av) return act("acceptContract", { contractId: +av.dataset.anlvertrag });
+  const aa = e.target.closest("[data-anlablehnen]");
+  if (aa) return act("declineContract", { contractId: +aa.dataset.anlablehnen });
+  const ab = e.target.closest("[data-anlbieten]");
+  if (ab) return act("bid", { auctionId: +ab.dataset.anlbieten, amount: document.getElementById("anlGebot-" + ab.dataset.anlbieten)?.value });
+  if (e.target.closest("[data-anlausgeben]")) {
+    const nenn = +document.getElementById("anlNenn")?.value, zins = +document.getElementById("anlZins")?.value, lauf = +document.getElementById("anlLauf")?.value;
+    if (!(nenn > 0 && zins > 0 && lauf > 0)) return toast(t("Nennwert, Zins und Laufzeit eingeben"), true);
+    return act("issueBond", { principal: nenn, rate: zins / 100, term: Math.round(lauf * 60) });
+  }
+  /* Stadtbank-Portal */
+  const btab = e.target.closest("[data-banktab]");
+  if (btab) { NETZ.bankTab = btab.dataset.banktab; if (NETZ.bankTab === "aktien") NETZ.bankAktie = null; NETZ.sig = {}; return netzZeichnen(); }
+  const bwahl = e.target.closest("[data-bankwahl]");
+  if (bwahl) { NETZ.bankWahl = bwahl.dataset.bankwahl; return netzZeichnen(); }
+  const bak = e.target.closest("[data-bankaktie]");
+  if (bak) { NETZ.bankTab = "aktien"; NETZ.bankAktie = bak.dataset.bankaktie || null; NETZ.sig = {}; return netzZeichnen(); }
+  const bh = e.target.closest("[data-bankhandeln]");
+  if (bh) { firmenAuf.add(bh.dataset.bankhandeln); BANK_REITER = "markt"; bankReiterZeigen(); NETZ.bankTab = "handeln"; NETZ.sig = {}; return netzZeichnen(); }
+  const na = e.target.closest("[data-netzaktie]");
+  if (na) { NETZ.bankTab = "aktien"; NETZ.bankAktie = na.dataset.netzaktie; return netzOeffnen("bank"); }
+  const bw = e.target.closest("[data-boersewahl]");
+  if (bw) { NETZ.ware = bw.dataset.boersewahl; NETZ.bwPreis = null; return netzZeichnen(); }
+  const bs = e.target.closest("[data-bwseite]");
+  if (bs) { NETZ.bwSeite = bs.dataset.bwseite; return netzZeichnen(); }
+  const bt = e.target.closest("[data-bwtake]");
+  if (bt) return socket.emit("takeOrder", { orderId: +bt.dataset.bwtake, qty: +bt.dataset.bwn || 10 }, r => { if (r?.error) return toast(r.error, true); SFX.spiel("kasse"); render(store.get()); });
+  const bst = e.target.closest("[data-bwstorno]");
+  if (bst) return act("cancelOrder", { orderId: +bst.dataset.bwstorno });
+  if (e.target.closest("[data-bwsenden]")) {
+    const qty = Math.floor(+document.getElementById("bwMenge")?.value || 0), price = +document.getElementById("bwPreis")?.value || 0;
+    if (!(qty > 0) || !(price > 0)) return toast(t("Menge und Preis eingeben"), true);
+    return socket.emit("placeOrder", { side: NETZ.bwSeite || "buy", good: NETZ.ware, qty, price }, r => { if (r?.error) return toast(r.error, true); toast(t("Order platziert")); NETZ.bwPreis = null; render(store.get()); });
+  }
+  const kat = e.target.closest("[data-netzkat]");
+  if (kat) { NETZ.kat = kat.dataset.netzkat; return netzZeichnen(); }
+  const ka = e.target.closest("[data-kurierauf]");
+  if (ka) { NETZ.artikel = ka.dataset.kurierauf || null; if (NETZ.seite !== "kurier") return netzOeffnen("kurier"); NETZ.sig = {}; return netzZeichnen(); }
+  const kr = e.target.closest("[data-kurierressort]");
+  if (kr) { NETZ.ressort = kr.dataset.kurierressort; NETZ.artikel = null; return netzZeichnen(); }
+  const kl = e.target.closest("[data-kurierlink]");
+  if (kl) { const [art, wert] = kl.dataset.kurierlink.split(":");
+    if (art === "firma") return netzOeffnen(wert);
+    netzSchliessen();
+    if (art === "hotel") return hotelOeffnen(wert);
+    if (art === "panel") return openPanel(wert);
+    return; }
+  const auf = e.target.closest("[data-netzauf]");
+  if (auf) { const pid = auf.dataset.netzauf, ind = store.get().state.players?.[pid]?.industry; if (ind === "touristik" || (ind === "software" && !store.get().state.rechenzentren?.websites?.[pid])) netzSchliessen(); return netzOeffnen(pid); }
+  const rz = e.target.closest("[data-rzauf]");
+  if (rz) { netzSchliessen(); return rzOeffnen(rz.dataset.rzauf, rz.dataset.rzreiterziel); }
+  if (e.target.closest("[data-netzanbieter]")) { netzSchliessen(); SW_REITER = "markt"; return openPanel("software"); }
+  const pn = e.target.closest("[data-netzpanel]");
+  if (pn) { netzSchliessen(); return openPanel(pn.dataset.netzpanel); }
+  /* Online-Shop direkt öffnen — der Handler für data-shopauf hängt nur am Firma-Panel */
+  const sa = e.target.closest("[data-shopauf]");
+  if (sa) { const [x, y] = sa.dataset.shopauf.split(",").map(Number); netzSchliessen(); return shopOeffnen(x, y); }
+  const m = e.target.closest("[data-netzm]");
+  if (m) { const g = m.dataset.netzm, inp = document.querySelector(`#netzFenster [data-netzn="${g}"]`); const v = Math.max(1, Math.min(+inp.max || 1, (+inp.value || 1) + +m.dataset.d)); inp.value = v; NETZ.menge[g] = v; NETZ.sig.inhalt = null; return netzZeichnen(); }
+  const k = e.target.closest("[data-netzkauf]");
+  if (k) { const g = k.dataset.netzkauf, qty = NETZ.menge[g] || +document.querySelector(`#netzFenster [data-netzn="${g}"]`)?.value || 10;
+    return socket.emit("direktKaufen", { firmaId: NETZ.seite, good: g, qty }, r => { if (r?.error) return toast(r.error, true); toast(`${r.qty}× ${gname(g)} ${t("gekauft")} · ${fmt(r.summe)}`); render(store.get()); }); }
+  if (e.target.closest("[data-netzaktion]")) return socket.emit("webAktionStarten", {}, r => { if (r?.error) return toast(r.error, true); toast(`⚡ ${t(r.name)} ${t("läuft")}`); render(store.get()); });
+});
+/* ---- Software-Panel: Reiter, Überblick, Bürger-App und Jobbörse (Etappe 5) ---- */
+let SW_REITER = (() => { try { return localStorage.getItem("cs_swReiter") || "uebersicht"; } catch { return "uebersicht"; } })();
+const appEntwurf = {}, jobEntwurf = {};
+/* Einnahmen aller eigenen Produkte auf einen Blick, über den Reitern */
+/* Cockpit für Software-Firmen: alles Wichtige auf einen Blick — wie im
+ * Touristik-Panel. Kennzahlen, offene Website-Aufträge mit Frist, je Produkt
+ * Stand und der nächste Schritt, dazu Hinweise, was gerade fehlt. */
+function swCockpit(state, me, myId, eigene) {
+  const eig = arr => (arr || []).find(x => x.ownerId === myId);
+  const app = eig(state.buergerApp), job = eig(state.jobboerse), ba = eig(state.boerseApp), mp = eig(state.paint), web = eig(state.website);
+  const B = BTYPES(), racks = state.map.filter(x => x.owner === myId && B[x.btype]?.rz);
+  const am = racks.filter(x => !(x.bauBis > state.tick));
+  const stromJeMin = am.reduce((a, x) => a + B[x.btype].rz.in.strom * rzLvl(x.level) * 60, 0);
+  const stromMin = stromJeMin ? Math.floor((me.inv?.strom || 0) / stromJeMin) : Infinity;
+  const summe = [eigene, app, job, ba, web].reduce((a, x) => a + (x?.einnahmen10 || 0), 0);
+  const kunden = (eigene?.kunden || 0) + (app?.nutzer || 0) + (job?.abonnenten || 0) + (web?.kunden || 0);
+  const dev = [eigene, app, job, ba, web, mp].find(x => x?.entwicklung);
+  const auftraege = (web?.liste || []).filter(k => k.auftrag === "offen").sort((a, b) => a.rest - b.rest);
+  const zeit = s => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+  /* Was jetzt? — die dringendsten Punkte zuerst */
+  const tipps = [];
+  if (!eigene) tipps.push(["🚀", t("Leg dein Shop-System an — damit fängt alles an."), "system", t("Mein System")]);
+  if (state.stadt && !racks.length) tipps.push(["🏢", t("Bau ein Rechenzentrum: Ohne Plätze kann niemand dein System, deine App oder Websites nutzen."), null, null]);
+  if (racks.length && stromMin < 6) tipps.push(["⚡", `${t("Strom wird knapp")}: ${t("noch")} ${stromMin} min. ${t("Fällt er aus, gehen alle Kunden offline.")}`, "rz", t("Statusseite")]);
+  if (auftraege.length) tipps.push(["🛠", `${auftraege.length} ${t(auftraege.length === 1 ? "Firma wartet auf ihre Website." : "Firmen warten auf ihre Website.")}`, null, null]);
+  if (eigene?.version >= 1 && eigene.plaetze && eigene.kunden >= eigene.plaetze) tipps.push(["📦", t("Dein Shop-System ist voll — mehr Plätze gibt es mit einem Rechenzentrums-Ausbau."), "rz", t("Statusseite")]);
+  if (eigene && !dev) tipps.push(["🧪", t("Gerade läuft keine Entwicklung — deine EP sammeln sich nur an."), "entwicklung", t("Entwicklung")]);
+  if (eigene?.version >= 1 && !web) tipps.push(["🌐", t("Leg einen Website-Baukasten an: Firmen bestellen Websites, du gestaltest sie und kassierst das Honorar."), "rz", t("Statusseite")]);
+  /* Produkt-Kacheln: Stand, Kennzahl, nächster Schritt */
+  const produkt = (icon, name, x, zahl, ziel, ab = true) => `<button type="button" class="swcProdukt${x?.version >= 1 ? " an" : ""}" ${ziel === "rz" ? `data-rzauf="${myId}"` : `data-swreiter="${ziel}"`} ${ab ? "" : "disabled"}>
+    <span class="swcIcon">${icon}</span><b>${t(name)}</b><em>${x ? (x.version >= 1 ? "v" + x.version : t("in Arbeit")) : t("noch nicht")}</em><small>${x ? zahl : t(ab ? "anlegen →" : "später")}</small></button>`;
+  return `<div class="swCockpit">
+    <div class="swcZahlen">
+      <div><span>${t("Einnahmen 10 min")}</span><b style="color:var(--up)">${fmt(summe)}</b></div>
+      <div><span>${t("Kunden gesamt")}</span><b>${kunden}</b></div>
+      <div><span>${t("EP-Vorrat")}</span><b>${me.swEp || 0}</b><small>${dev ? `${escapeHtml(rohText(dev.name))} v${dev.entwicklung.version}: ${Math.round(dev.entwicklung.ep / dev.entwicklung.ziel * 100)} %` : t("keine Entwicklung")}</small></div>
+      ${state.stadt ? `<div><span>${t("Rechenzentren")}</span><b>${am.length}${racks.length > am.length ? ` <small>+${racks.length - am.length} ${t("im Bau")}</small>` : ""}</b><small class="${stromMin < 6 ? "swcWarn" : ""}">${racks.length ? (stromMin === Infinity ? "—" : `⚡ ${stromMin} min ${t("Strom")}`) : t("keins")}</small></div>` : ""}
+    </div>
+    ${state.stadt ? `<section class="swcBox"><div class="swcBoxKopf"><b>🛠 ${t("Website-Aufträge")}</b><small>${web ? `${escapeHtml(rohText(web.name))} v${web.version} · ${web.kunden}/${web.plaetze} ${t("Kunden")}` : t("noch kein Website-Baukasten")}</small></div>
+      ${auftraege.length ? `<div class="swcAuftraege">${auftraege.map(k => { const p = state.players[k.id];
+        return `<div class="swcAuftrag"><span class="swName"><i style="background:${p?.color || "#64748b"}"></i><span><b>${escapeHtml(rohText(k.name))}</b><small>${t(BRANCHE_NAME[p?.industry] || "")} · ${t(state.websiteCfg?.MODULE[k.modul]?.name || "")}</small></span></span>
+          <span class="mono swcFrist${k.rest < 60 ? " knapp" : ""}">⏱ ${zeit(k.rest)}</span><b class="mono">+${fmt(k.honorar)}</b><button type="button" class="buyb" data-genauf="${k.id}">${t("Gestalten")}</button></div>`; }).join("")}</div>
+        <small class="swcFuss">${t("Läuft die Frist ab, geht die Standard-Vorlage online und du bekommst nur das halbe Honorar.")}</small>`
+      : `<small class="swcLeer">${web ? t("Gerade kein offener Auftrag. Neue Bestellungen erscheinen hier — mit Frist und Honorar.") : t("Mit einem Website-Baukasten (auf deiner Statusseite) bestellen Firmen bei dir Websites, die du selbst gestaltest.")}</small>`}
+      ${(web?.liste || []).some(k => k.auftrag !== "offen") ? `<div class="swcKunden">${web.liste.filter(k => k.auftrag !== "offen").map(k => `<button type="button" data-genauf="${k.id}" title="${t("Website überarbeiten")}">${escapeHtml(rohText(k.name))} <span class="mono">${Math.round((k.qualitaet || 0) * 100)} %</span></button>`).join("")}</div>` : ""}
+    </section>` : ""}
+    <div class="swcProdukte">
+      ${produkt("🛒", "Shop-System", eigene, `${eigene?.kunden || 0}/${eigene?.plaetze ?? 0} ${t("Kunden")} · ${fmt(eigene?.einnahmen10 || 0)}`, eigene ? "system" : "system")}
+      ${state.stadt ? produkt("🌐", "Website-Baukasten", web, `${web?.kunden || 0} ${t("Kunden")} · ${fmt(web?.einnahmen10 || 0)}`, "rz", !!eigene) : ""}
+      ${state.stadt ? produkt("📱", "Bürger-App", app, `${app?.nutzer || 0} ${t("Nutzer")} · ${fmt(app?.einnahmen10 || 0)}`, "produkte", !!eigene) : ""}
+      ${state.stadt ? produkt("👷", "Jobbörse", job, `${job?.abonnenten || 0} ${t("Abos")} · ${fmt(job?.einnahmen10 || 0)}`, "produkte", !!eigene) : ""}
+      ${produkt("📈", "Börsen-App", ba, fmt(ba?.einnahmen10 || 0), "produkte", !!eigene)}
+      ${produkt("🎨", "Malprogramm", mp, `${mp?.verkauft ?? 0} ${t("verkauft")}`, "produkte", !!eigene)}
+    </div>
+    ${tipps.length ? `<section class="swcBox"><div class="swcBoxKopf"><b>💡 ${t("Was jetzt?")}</b></div><div class="swcTipps">${tipps.slice(0, 4).map(([i, txt, ziel, knopf]) => `<div class="swcTipp"><span>${i}</span><p>${txt}</p>${ziel ? `<button type="button" class="swcKnopf" ${ziel === "rz" ? `data-rzauf="${myId}"` : `data-swreiter="${ziel}"`}>${knopf} →</button>` : ""}</div>`).join("")}</div></section>` : ""}
+    ${state.stadt ? `<div class="swcLinks"><button type="button" class="swcKnopf" data-rzauf="${myId}">🌐 ${t("Meine Statusseite")}</button><button type="button" class="swcKnopf" data-swnetz>🔎 ${t("Stadtnetz")}</button></div>` : ""}
+  </div>`;
+}
+function swUeberblick(state, me, myId, eigene) {
+  const eig = arr => (arr || []).find(x => x.ownerId === myId);
+  const app = eig(state.buergerApp), job = eig(state.jobboerse), ba = eig(state.boerseApp), mp = eig(state.paint);
+  const kachel = (name, x, wert) => `<div title="${name}"><span>${name}</span><b>${x ? (x.version >= 1 ? "v" + x.version : "in Arbeit") : "—"}</b><small>${x ? wert : t("fehlt")}</small></div>`;
+  return `<div class="swUeberblick">
+    ${kachel(t("Shop-System"), eigene, `${fmt(eigene?.einnahmen10 || 0)} / 10 min`)}
+    ${state.stadt ? kachel(t("Bürger-App"), app, `${app?.nutzer || 0} ${t("Nutzer")} · ${fmt(app?.einnahmen10 || 0)}`) : ""}
+    ${state.stadt ? kachel(t("Jobbörse"), job, `${job?.abonnenten || 0} ${t("Abos")} · ${fmt(job?.einnahmen10 || 0)}`) : ""}
+    ${kachel(t("Börsen-App"), ba, fmt(ba?.einnahmen10 || 0))}
+    ${kachel(t("Malprogramm"), mp, `${mp?.verkauft ?? 0} ${t("verkauft")}`)}
+    <div><span>${t("EP-Vorrat")}</span><b>${me.swEp || 0}</b><small>${t("ein Studio: 1 EP/s")}</small></div>
+  </div>`;
+}
+/* Eigene Bürger-App anlegen, bepreisen, entwickeln */
+function buergerAppHtml(state, me, eigene) {
+  const cfg = state.buergerAppCfg, app = (state.buergerApp || []).find(x => x.ownerId === eigene.ownerId);
+  if (!state.stadt || !cfg) return "";
+  const kopf = `<div class="sec">${t("Bürger-App")} · ${t("Software für die Einwohner")}</div>`;
+  if ((eigene.version || 0) < cfg.AB_SYSTEM) return kopf + `<div class="note">${t("Ab Shop-System v")}${cfg.AB_SYSTEM}.</div>`;
+  const e = { name: app?.name ?? "", preis: app?.preis ?? cfg.PREIS_START, ...appEntwurf };
+  const st = v => cfg.STUFEN[v - 1], text = s2 => `${t("bis")} ${Math.round(s2.quote * 100)} % ${t("der Einwohner nutzen Apps")} · ${t("Qualität")} ×${String(s2.quali).replace(".", ",")}`;
+  const dev = app?.entwicklung, naechste = st((app?.version || 0) + 1);
+  return kopf + `<div class="note" style="margin:0 0 8px">${t("Einwohner zahlen ein Abo je Minute. Sie wählen nach Qualität und Preis. Je Rechenzentrums-Stufe bedienst du")} ${cfg.NUTZER_JE_STUFE} ${t("Nutzer")}.</div>
+    ${app ? `<div class="swZahlen">
+      <div><b>${app.version >= 1 ? "v" + app.version : "—"}</b><span>${t("Version")}</span></div>
+      <div><b>${app.nutzer} / ${app.kapazitaet}</b><span>${t("Nutzer / Kapazität")}</span></div>
+      <div><b>${app.wunsch}</b><span>${t("würden sie nutzen")}</span></div>
+      <div><b style="color:var(--up)">${fmt(app.einnahmen10)}</b><span>${t("Einnahmen 10 min")}</span></div></div>
+      ${app.version >= 1 && app.wunsch > app.kapazitaet ? `<div class="mpWarn">⚠ ${app.wunsch - app.kapazitaet} ${t("Nutzer finden keinen Platz — ein weiteres Rechenzentrum oder ein Ausbau hilft.")}</div>` : ""}` : ""}
+    <div class="swForm">
+      <label class="breit"><span>${t("Name")}</span><input id="appName" maxlength="20" value="${escapeHtml(rohText(e.name))}" placeholder="z. B. StadtChat"></label>
+      <label><span>${t("Abo $ je Nutzer und Minute")}</span><input id="appPreis" type="number" min="${cfg.PREIS_MIN}" max="${cfg.PREIS_MAX}" step="0.01" value="${e.preis}"></label>
+      <button class="buyb" id="appSpeichern">${app ? t("Übernehmen") : t("Bürger-App anlegen")}</button>
+    </div>
+    ${app ? (dev ? `<div class="swDev"><div class="swDevKopf"><span>${escapeHtml(rohText(app.name))} v${dev.version} ${t("in Arbeit")}</span><b class="mono">${dev.ep} / ${dev.ziel} EP</b></div>
+        <div class="swBalken"><i style="width:${Math.min(100, dev.ep / dev.ziel * 100).toFixed(1)}%"></i></div></div>`
+      : naechste ? `<button class="tmHaupt" id="appEntwickeln"><span>${escapeHtml(rohText(app.name))} v${(app.version || 0) + 1} ${t("entwickeln")}</span><small>${naechste.ep} EP · ${text(naechste)}</small></button>`
+      : `<div class="note">${t("Voll ausgebaut")}: ${text(st(cfg.STUFEN.length))}.</div>`) : ""}`;
+}
+/* Eigene Jobbörse anlegen, bepreisen, entwickeln */
+function jobboerseHtml(state, me, eigene) {
+  const cfg = state.jobboerseCfg, job = (state.jobboerse || []).find(x => x.ownerId === eigene.ownerId);
+  if (!state.stadt || !cfg) return "";
+  const kopf = `<div class="sec" style="margin-top:16px">${t("Jobbörse")} · ${t("Software gegen Arbeitermangel")}</div>`;
+  if ((eigene.version || 0) < cfg.AB_SYSTEM) return kopf + `<div class="note">${t("Ab Shop-System v")}${cfg.AB_SYSTEM}.</div>`;
+  const e = { name: job?.name ?? "", gebuehr: job?.gebuehr ?? cfg.GEB_START, ...jobEntwurf };
+  const text = s2 => `${t("Vorrang wie")} +${String(s2.vorrang).replace(".", ",")} ${t("Lohnstufen")}`;
+  const dev = job?.entwicklung, naechste = cfg.STUFEN[(job?.version || 0)];
+  return kopf + `<div class="note" style="margin:0 0 8px">${t("Firmen abonnieren sie und bekommen bei knappen Arbeitern Vorrang. Sie zahlen dir eine Gebühr je beschäftigtem Arbeiter und Minute. Für dich selbst wirkt sie kostenlos. Je Rechenzentrums-Stufe")} ${cfg.ABOS_JE_STUFE} ${t("Abos")}.</div>
+    ${job ? `<div class="swZahlen">
+      <div><b>${job.version >= 1 ? "v" + job.version : "—"}</b><span>${t("Version")}</span></div>
+      <div><b>${job.abonnenten} / ${job.plaetze}</b><span>${t("Abos / Plätze")}</span></div>
+      <div><b>+${String(job.vorrang).replace(".", ",")}</b><span>${t("Vorrang")}</span></div>
+      <div><b style="color:var(--up)">${fmt(job.einnahmen10)}</b><span>${t("Einnahmen 10 min")}</span></div></div>` : ""}
+    <div class="swForm">
+      <label class="breit"><span>${t("Name")}</span><input id="jobName" maxlength="20" value="${escapeHtml(rohText(e.name))}" placeholder="z. B. StadtJobs"></label>
+      <label><span>${t("Gebühr $ je Arbeiter und Minute")}</span><input id="jobGeb" type="number" min="${cfg.GEB_MIN}" max="${cfg.GEB_MAX}" step="0.05" value="${e.gebuehr}"></label>
+      <button class="buyb" id="jobSpeichern">${job ? t("Übernehmen") : t("Jobbörse anlegen")}</button>
+    </div>
+    ${job ? (dev ? `<div class="swDev"><div class="swDevKopf"><span>${escapeHtml(rohText(job.name))} v${dev.version} ${t("in Arbeit")}</span><b class="mono">${dev.ep} / ${dev.ziel} EP</b></div>
+        <div class="swBalken"><i style="width:${Math.min(100, dev.ep / dev.ziel * 100).toFixed(1)}%"></i></div></div>`
+      : naechste ? `<button class="tmHaupt" id="jobEntwickeln"><span>${escapeHtml(rohText(job.name))} v${(job.version || 0) + 1} ${t("entwickeln")}</span><small>${naechste.ep} EP · ${text(naechste)}</small></button>`
+      : `<div class="note">${t("Voll ausgebaut")}: ${text(cfg.STUFEN[cfg.STUFEN.length - 1])}.</div>`) : ""}`;
+}
+/* Markt-Reiter: alle Bürger-Apps und Jobbörsen der Stadt, Jobbörse abonnieren */
+/* Rechenzentren der Stadt und die eigene Website (Etappe 7) */
+function rzMarktHtml(state, myId) {
+  const firmen = Object.entries(state.rechenzentren?.firmen || {}).filter(([pid]) => state.players?.[pid]);
+  const meine = state.rechenzentren?.websites?.[myId], cfg = state.websiteCfg;
+  const anbieter = meine && (meine.anbieter === "stadtportal" ? t("Stadtportal") : (state.website || []).find(w => w.id === meine.anbieter)?.name);
+  return `<div class="sec" style="margin-top:16px">${t("Rechenzentren und Websites")} <span class="meta">· ${meine ? `${t("deine Website")}: ${t(cfg?.MODULE[meine.modul]?.name || "")} ${t("bei")} ${escapeHtml(rohText(anbieter || "—"))}, +${Math.round((meine.bonus || 0) * 100)} % ${t("Reichweite")}` : t("du hast noch keine Website")}</span></div>
+    ${firmen.length ? `<div class="swListe">${firmen.map(([pid, f]) => {
+      const p = state.players[pid], w = (state.website || []).find(x => x.ownerId === pid), up = f.uptime || [];
+      const q = up.length ? Math.round(up.reduce((a, b) => a + b, 0) / up.length * 100) : 100;
+      return `<button type="button" class="swListeZeile tourHotel${pid === myId ? " meins" : ""}" data-rzauf="${pid}">
+        <span class="swName"><i style="background:${p.color}"></i><span><b>${escapeHtml(rohText(p.name))}</b><small>🌐 status.cs/${shopSlug(p.name)}</small></span></span>
+        <span class="mono">${q} % ${t("online")}</span><span class="mono">${w?.version ? `${t("Websites")} v${w.version}` : "—"}</span><span class="mono">${w ? `${w.kunden}/${w.plaetze}` : ""}</span></button>`; }).join("")}</div>`
+      : `<div class="note">${t("Noch keine Software-Firma mit Rechenzentrum.")}</div>`}`;
+}
+function stadtSoftwareMarktHtml(state, me, myId) {
+  if (!state.stadt) return "";
+  const apps = (state.buergerApp || []).filter(a => a.version >= 1), jobs = (state.jobboerse || []).filter(j => j.version >= 1);
+  const abo = me.lohn?.jobAbo;
+  return `<div class="sec" style="margin-top:16px">${t("Bürger-Apps der Stadt")} <span class="meta">· ${state.stadt.appNutzer || 0} ${t("von")} ${state.stadt.einwohner} ${t("Einwohnern nutzen eine")}</span></div>
+    ${apps.length ? `<div class="swListe">${apps.sort((a, b) => b.nutzer - a.nutzer).map(a => `<div class="swListeZeile${a.ownerId === myId ? " meins" : ""}">
+      <span class="swName"><i style="background:${a.farbe}"></i><span><b>${a.name} <em>v${a.version}</em></b><small>${a.anbieter}</small></span></span>
+      <span class="mono">${fp(a.preis)}/min</span><span class="mono">${a.nutzer} ${t("Nutzer")}</span></div>`).join("")}</div>`
+      : `<div class="note">${t("Noch keine Bürger-App fertig — Software-Firmen entwickeln sie im Reiter „Produkte“.")}</div>`}
+    <div class="sec" style="margin-top:16px">${t("Jobbörsen")} <span class="meta">· ${t("Vorrang bei knappen Arbeitern")}</span></div>
+    ${jobs.length ? `<div class="swListe">${jobs.map(j => `<div class="swListeZeile${j.ownerId === myId ? " meins" : ""}">
+      <span class="swName"><i style="background:${j.farbe}"></i><span><b>${j.name} <em>v${j.version}</em></b><small>${j.anbieter} · ${j.abonnenten}/${j.plaetze} ${t("Abos")}</small></span></span>
+      <span class="mono">+${String(j.vorrang).replace(".", ",")}</span><span class="mono">${fp(j.gebuehr)}/${t("Arbeiter")}</span>
+      ${j.ownerId === myId ? `<span class="meta">${t("deine")}</span>` : abo === j.id ? `<button class="mini" data-jobabo="">${t("Kündigen")}</button>`
+        : `<button class="mini" data-jobabo="${j.id}" ${j.abonnenten >= j.plaetze ? "disabled" : ""}>${t("Abonnieren")}</button>`}</div>`).join("")}</div>`
+      : `<div class="note">${t("Noch keine Jobbörse fertig.")}</div>`}`;
+}
+function softwareRendern(state, me, myId) {
+  const liste = state.software || [];
+  const MOD = state.swModule || {}, cfg = state.swCfg || {};
+  const eigene = liste.find(x => x.ownerId === myId && !x.portal);
+  const binSoftware = (state.players?.[myId]?.industries || [state.players?.[myId]?.industry]).includes("software");
+  const meineBr = state.players?.[myId]?.industry;
+  const wertFuer = x => x.wertJe?.[meineBr] ?? x.wert;
+  const fertig = liste.filter(x => x.version >= 1).sort((a, b) => wertFuer(b) - wertFuer(a));
+  const portal = liste.find(x => x.portal);
+  const chips = x => Object.entries(x.module || {}).filter(([m, an]) => an && !m.includes(":")).map(([m]) => `<span class="swChip">${MOD[m]?.name || m}</span>`).join("") || `<span class="swChip leer">keine Extras</span>`;
+  const proz = v => String(v).replace(".", ",") + " %";
+  const tabelle = `<div class="sec">Shop-Systeme der Stadt</div>
+    <div class="swTab">
+      <div class="swKopf"><span>System</span><span>Gebühr</span><span>Einrichtung</span><span>Kunden</span><span>Wert</span></div>
+      ${fertig.map((x, i) => `<div class="swZeile${x.ownerId === myId ? " meins" : ""}">
+        <span class="swName"><i style="background:${x.farbe}"></i><span><b>${x.name} <em>v${x.version}</em></b><small>${x.anbieter}${x.portal ? " · Notlösung" : ` · Ruf ${x.ruf}`}</small><span class="swChips">${chips(x)}${(x.branchen || []).map(br => `<span class="swChip baum">${state.swBaeume?.[br]?.name || br} ${"●".repeat(x.stufen?.[br] || 0)}${"○".repeat(3 - (x.stufen?.[br] || 0))}</span>`).join("")}</span></span></span>
+        <span class="mono">${proz(x.gebuehr)}</span>
+        <span class="mono">${x.einrichtung ? fmt(x.einrichtung) : "—"}</span>
+        <span class="mono">${x.portal ? x.kunden : `${x.kunden}/${x.plaetze ?? 0}`}${x.steuerKunden ? `<small title="davon Produktionsgebäude mit Steuerung (${fmt(x.steuerAbo)}/min)">⚙ ${x.steuerKunden}</small>` : ""}${!x.portal && x.plaetze === 0 ? ` <b class="swWarn">aus</b>` : x.faktor < 1 ? ` <b class="swWarn">überlastet</b>` : ""}</span>
+        <span class="mono">${portal?.wert ? `${wertFuer(x) >= wertFuer(portal) ? "+" : ""}${Math.round((wertFuer(x) / wertFuer(portal) - 1) * 100)} %` : "—"}${i === 0 && fertig.length > 1 ? ` <b class="swBest">beste Wahl</b>` : ""}</span>
+      </div>`).join("")}
+    </div>
+    <div class="note" style="margin-top:6px">„Wert“ ist ${SW_BAEUME_NAME(state, meineBr)} gerechnet und mit dem Stadtportal verglichen: Tempo der Module für deine Waren × (1 − Gebühr), Preisspielraum, Werbemodul, Ruf und Einrichtung. Genau so entscheiden auch die Bots — jeder aus Sicht seiner Branche — und wechseln ab 5 % Vorsprung.</div>`;
+  let bau = null;
+  if (binSoftware) {
+    const e = { name: eigene?.name ?? "", farbe: eigene?.farbe ?? (state.players?.[myId]?.color || "#60a5fa"),
+      einrichtung: eigene?.einrichtung ?? 400, gebuehr: eigene?.gebuehr ?? 2, werbeAbo: eigene?.werbeAbo ?? 150, steuerAbo: eigene?.steuerAbo ?? (state.steuerAboCfg?.START ?? 40), anzeigenPreis: eigene?.anzeigenPreis ?? 80, ...swEntwurf };
+    const felder = `<div class="swForm">
+        <label class="breit"><span>Name</span><input id="swName" maxlength="16" value="${escapeHtml(rohText(e.name))}" placeholder="z. B. KassenKlick"></label>
+        <label><span>Farbe</span><input id="swFarbe" type="color" value="${e.farbe}"></label>
+        <label><span>Einrichtung $</span><input id="swEinr" type="number" min="0" max="${cfg.einrMax ?? 1500}" step="50" value="${e.einrichtung}"></label>
+        <label><span>Gebühr %</span><input id="swGeb" type="number" min="${cfg.gebMin ?? .5}" max="${cfg.gebMax ?? 4}" step="0.1" value="${e.gebuehr}"></label>
+        <label><span>Werbe-Abo $/min je Marktplatz</span><input id="swAbo" type="number" min="${cfg.aboMin ?? 60}" max="${cfg.aboMax ?? 400}" step="10" value="${e.werbeAbo}"></label>
+        <label><span>Anzeigen $/min je Werbeplatz</span><input id="swAnzPreis" type="number" min="${state.anzeigeCfg?.preisMin ?? 20}" max="${state.anzeigeCfg?.preisMax ?? 500}" step="10" value="${e.anzeigenPreis}"></label>
+        <label><span>Steuerungs-Abo $/min je Gebäude</span><input id="swSteuerAbo" type="number" min="${state.steuerAboCfg?.MIN ?? 10}" max="${state.steuerAboCfg?.MAX ?? 300}" step="5" value="${e.steuerAbo}"></label>
+        <button class="buyb breit" id="swSpeichern">${eigene ? "Preise und Aussehen übernehmen" : "Shop-System anlegen"}</button>
+      </div>`;
+    let entw = "";
+    if (eigene) {
+      const dev = eigene.entwicklung;
+      const BAUM = state.swBaeume || {}, STUFE = state.swStufe || [], AUS = state.swAusbau || [], EFF = state.swBaumEffekt || {};
+      const version = (eigene.version || 0) + 1;
+      const besitzt = m => !!eigene.module?.[m];
+      const gewaehlt = m => swModulWahl.has(m);
+      const eigeneBr = eigene.branchen || [];
+      /* Dieselbe Rechnung wie auf dem Server: Basis, allgemeine Module,
+       * Baumstufen mit dem Faktor ihrer Branche, Lizenz für eine neue Branche. */
+      const neueBr = [...new Set([...swModulWahl].filter(m => m.includes(":")).map(m => m.split(":")[0]).filter(br => !eigeneBr.includes(br)))];
+      const brIndex = br => eigeneBr.includes(br) ? eigeneBr.indexOf(br) : eigeneBr.length;
+      let epSumme = eigene.version >= 1 ? (cfg.versionEp ?? 60) : (MOD.basis?.ep ?? 150), lizenz = 0;
+      for (const m of swModulWahl) {
+        if (besitzt(m)) continue;
+        if (MOD[m]) { epSumme += MOD[m].ep; continue; }
+        const [br, k] = m.split(":");
+        epSumme += Math.round((STUFE[k - 1]?.ep || 0) * (AUS[brIndex(br)]?.epFaktor || 1));
+      }
+      if (neueBr.length) lizenz = AUS[eigeneBr.length]?.cash || 0;
+      const knoten = (m, titel, text, frei, sperre) => {
+        const drin = besitzt(m), an = drin || gewaehlt(m);
+        return `<button type="button" class="swKnoten${drin ? " drin" : an ? " an" : ""}${!drin && !frei ? " zu" : ""}" data-swmod="${m}" ${drin || (!frei && !an) ? "disabled" : ""} title="${!drin && !frei ? sperre : ""}">
+          <b>${titel}</b><span>${text}</span><em>${drin ? "✓ drin" : !frei ? `🔒 ${sperre}` : ""}</em></button>`;
+      };
+      const allgemein = ["werbung", "bewertungen", "lieferung"].map(m => knoten(m, MOD[m]?.name,
+        m === "werbung" ? `bis +${Math.round((cfg.werbeBoost || .2) * 100)} % Preis, Abo an dich · ${MOD[m]?.ep} EP` : `+${Math.round((MOD[m]?.tempo || 0) * 100)} % Tempo, alle Waren · ${MOD[m]?.ep} EP`, true, "")).join("");
+      const reihen = Object.keys(BAUM).sort((x, y) => (eigeneBr.includes(x) ? eigeneBr.indexOf(x) : 9) - (eigeneBr.includes(y) ? eigeneBr.indexOf(y) : 9)).map(br => {
+        const idx = brIndex(br), aus = AUS[idx] || {}, istEigen = eigeneBr.includes(br);
+        const andereNeu = neueBr.some(x => x !== br);
+        const zuFrueh = !istEigen && version < (aus.abVersion || 1);
+        const etikett = istEigen ? (idx === 0 ? "Schwerpunkt" : `${idx + 1}. Branche`)
+          : idx === 0 ? "frei wählbar" : `${idx + 1}. Branche · ab v${aus.abVersion} · ${aus.epFaktor}× EP · ${fmt(aus.cash)}`;
+        const stufen = [1, 2, 3].map(k => {
+          const m = `${br}:${k}`, st = { ...(STUFE[k - 1] || {}), ...(((EFF[br] || [])[k - 1]) || {}) };
+          const vorher = k === 1 || besitzt(`${br}:${k - 1}`) || gewaehlt(`${br}:${k - 1}`);
+          const frei = vorher && !zuFrueh && !(andereNeu && !istEigen);
+          const sperre = zuFrueh ? `ab v${aus.abVersion}` : !vorher ? `erst Stufe ${k - 1}` : "nur eine neue Branche je Version";
+          const ep = Math.round((st.ep || 0) * (aus.epFaktor || 1));
+          return (k > 1 ? `<i class="swLinie${besitzt(m) ? " an" : ""}"></i>` : "") +
+            knoten(m, BAUM[br].module[k - 1], `${st.tempo ? `+${Math.round(st.tempo * 100)} % Tempo` : `+${Math.round((st.preis || 0) * 100)} % Preis`} · ${ep} EP`, frei, sperre);
+        }).join("");
+        return `<div class="swBaum${istEigen ? " eigen" : ""}${zuFrueh ? " fern" : ""}"><div class="swBaumKopf"><b>${BAUM[br].name}</b><span>${etikett}</span></div><div class="swStufen">${stufen}</div></div>`;
+      }).join("");
+      const nichtsNeu = eigene.version >= 1 && ![...swModulWahl].some(m => !besitzt(m));
+      entw = dev
+        ? `<div class="swDev"><div class="swDevKopf"><span>Version ${dev.version} in Arbeit</span><b class="mono">${dev.ep} / ${dev.ziel} EP</b></div>
+            <div class="swBalken"><i style="width:${Math.min(100, dev.ep / dev.ziel * 100).toFixed(1)}%"></i></div>
+            <div class="note" style="margin:4px 0 0">Neu: ${Object.keys(dev.module).filter(m => dev.module[m] && !besitzt(m)).map(m => MOD[m]?.name || BAUM[m.split(":")[0]]?.module[+m.split(":")[1] - 1] || m).join(", ") || "Grundsystem"}</div></div>`
+        : `<div class="sec" style="margin-top:6px">Allgemein · wirkt auf alle Waren</div><div class="swStufen allg">${allgemein}</div>
+           <div class="sec" style="margin-top:12px">Skill-Tree je Branche · wirkt nur auf Waren dieser Branche</div>
+           <div class="note" style="margin:0 0 8px">Die erste Branche ist dein Schwerpunkt. Jede weitere geht erst ab einer höheren Version und kostet mehr EP und eine Lizenz — Spezialisieren lohnt sich, alles können wird teuer.</div>
+           <div class="swBaeume">${reihen}</div>
+           <button class="tmHaupt" id="swEntwickeln" ${nichtsNeu ? "disabled" : ""}>
+             <span>Version ${version} entwickeln</span><small>${epSumme} EP${lizenz ? ` · Lizenz ${fmt(lizenz)}` : ""} · Vorrat ${me.swEp || 0} EP · ein Studio schafft 1 EP/s</small></button>`;
+    }
+    const kennzahlen = `<div class="sec">Dein Shop-System</div>
+      ${eigene ? `<div class="swZahlen">
+          <div><b>${eigene.version >= 1 ? "v" + eigene.version : "—"}</b><span>Version</span></div>
+          <div><b>${eigene.kunden}/${eigene.plaetze ?? 0}</b><span>Kunden / Plätze</span></div>
+          <div><b>${eigene.ruf}</b><span>Ruf</span></div>
+          <div><b style="color:var(--up)">${fmt(eigene.einnahmen10 || 0)}</b><span>Einnahmen 10 min</span></div>
+        </div>
+        <div class="note" style="margin:-4px 0 10px">Markenwert <b>${fmt(eigene.markenwert || 0)}</b> — zählt zum Firmenwert und Aktienkurs (Einnahmen der letzten 10 min × ${cfg.markenwert ?? 2}).</div>` : `<div class="note">Lege Name und Preise fest, dann entwickelst du Version 1 im Entwicklerstudio.</div>`}`;
+    const hinweisErst = `<div class="note">Erst brauchst du ein eigenes Shop-System — lege es im Reiter „Mein System“ an.</div>`;
+    bau = {
+      system: kennzahlen + felder,
+      entwicklung: eigene ? entw : hinweisErst,
+      design: eigene ? swDesignHtml(state, eigene) + leitDesignHtml(state, eigene) : hinweisErst,
+      produkte: eigene ? buergerAppHtml(state, me, eigene) + jobboerseHtml(state, me, eigene) + boerseAppHtml(state, me, eigene) + paintHtml(state, me, eigene) : hinweisErst,
+    };
+    if (eigene && SW_REITER === "design") sfSchriftenLaden();
+  }
+  /* Nur neu setzen, wenn sich etwas geändert hat — sonst liefen Holo- und
+   * Glanz-Animation der Vorschau jede Sekunde von vorn. */
+  /* Reiter: Markt für alle; für Software-Firmen zusätzlich die eigenen Werkzeuge.
+   * Vorher stand alles untereinander auf einer sehr langen Seite. */
+  const reiter = [...(bau ? [["uebersicht", "Übersicht"]] : []), ["markt", "Markt"], ...(bau ? [["system", "Mein System"], ["entwicklung", "Entwicklung"], ["design", "Design"], ["produkte", "Produkte"]] : [])];
+  if (!reiter.some(([k]) => k === SW_REITER)) SW_REITER = reiter[0][0];
+  const leiste = reiter.length > 1 ? `<div class="swReiterLeiste" role="tablist">${reiter.map(([k, n]) =>
+    `<button type="button" role="tab" class="${k === SW_REITER ? "on" : ""}" data-swreiter="${k}" aria-selected="${k === SW_REITER}">${t(n)}${k === "entwicklung" && eigene?.entwicklung ? " ●" : ""}</button>`).join("")}</div>` : "";
+  const ueberblick = bau && SW_REITER !== "uebersicht" ? swUeberblick(state, me, myId, eigene) : "";
+  const inhalt = SW_REITER === "uebersicht" ? swCockpit(state, me, myId, eigene)
+    : SW_REITER === "markt"
+    ? tabelle + rzMarktHtml(state, myId) + stadtSoftwareMarktHtml(state, me, myId) + werbenetzHtml(state, myId, binSoftware)
+    : bau[SW_REITER];
+  const body = document.getElementById("softwarebody"), html = ueberblick + leiste + `<div class="swReiterInhalt">${inhalt}</div>`;
+  if (body._sig !== html) { body._sig = html; body.innerHTML = html; }
+}
+document.getElementById("p-software").addEventListener("input", e => {
+  const map = { swName: "name", swFarbe: "farbe", swEinr: "einrichtung", swGeb: "gebuehr", swAbo: "werbeAbo", swSteuerAbo: "steuerAbo", swAnzPreis: "anzeigenPreis" };
+  if (map[e.target.id]) swEntwurf[map[e.target.id]] = e.target.value;
+  if (e.target.id === "mpName") paintEntwurf.name = e.target.value;
+  if (e.target.id === "mpPreis") paintEntwurf.preis = e.target.value;
+  if (e.target.id === "baName") boerseEntwurf.name = e.target.value;
+  if (e.target.id === "baPreis") boerseEntwurf.preis = e.target.value;
+  if (e.target.id === "anzText") anzEntwurf.text = e.target.value;
+  const lmap = { ldTitel: "titel", ldMeldung: "meldung", ldAkzent: "akzent" };
+  if (lmap[e.target.id]) {
+    leitEntwurf[lmap[e.target.id]] = e.target.value;
+    const mini = document.querySelector("#p-software .lgMini");
+    if (mini && e.target.id === "ldAkzent") mini.style.setProperty("--akz", e.target.value);
+    if (mini && e.target.id === "ldTitel") { const b = mini.querySelector("[data-ldtitel]"); if (b) b.textContent = e.target.value || b.textContent; }
+    if (mini && e.target.id === "ldMeldung") {
+      let tk = mini.querySelector(".lgTicker");
+      if (!tk) { tk = document.createElement("div"); tk.className = "lgTicker"; tk.innerHTML = "<span data-ldmeldung></span>"; mini.querySelector(".lgKopf").after(tk); }
+      tk.querySelector("span").textContent = e.target.value; tk.hidden = !e.target.value;
+    }
+    const knopf = document.getElementById("leitDesignSpeichern"); if (knopf) { knopf.disabled = false; knopf.textContent = "Leitstand übernehmen"; }
+  }
+  const dmap = { swdSlogan: "slogan", swdBanner: "banner", swdAkzent: "akzent" };
+  if (dmap[e.target.id]) {
+    swDesignEntwurf[dmap[e.target.id]] = e.target.value;
+    /* Vorschau sofort mitziehen, ohne das Panel neu zu bauen (Fokus bleibt) */
+    const mini = document.querySelector("#p-software .sfMini");
+    if (mini && e.target.id === "swdAkzent") mini.style.setProperty("--akz", e.target.value);
+    if (mini && e.target.id === "swdSlogan") { const b = mini.querySelector(".sfBadge"); let sl = b?.querySelector(".sfSlogan"); if (b && !sl) { sl = document.createElement("span"); sl.className = "sfSlogan"; b.appendChild(sl); } if (sl) sl.textContent = e.target.value; }
+    if (mini && e.target.id === "swdBanner") { let bn = mini.querySelector(".sfBanner"); if (!bn) { bn = document.createElement("div"); bn.className = "sfBanner"; mini.querySelector(".sfKopf").after(bn); } bn.innerHTML = `<b>✦</b><span></span>`; bn.querySelector("span").textContent = e.target.value; bn.hidden = !e.target.value; }
+    const knopf = document.getElementById("swDesignSpeichern"); if (knopf) { knopf.disabled = false; knopf.textContent = "Design übernehmen"; }
+  }
+});
+document.getElementById("p-software").addEventListener("click", e => {
+  const rt = e.target.closest("[data-swreiter]");
+  if (rt) { SW_REITER = rt.dataset.swreiter; try { localStorage.setItem("cs_swReiter", SW_REITER); } catch {} const S = store.get(); softwareRendern(S.state, S.me, S.myId); return; }
+  const ja = e.target.closest("[data-jobabo]");
+  if (ja) return act("jobAbo", { id: ja.dataset.jobabo || null });
+  const ra = e.target.closest("[data-rzauf]");
+  if (ra) return rzOeffnen(ra.dataset.rzauf);
+  const ga = e.target.closest("[data-genauf]");
+  if (ga) return genOeffnen(ga.dataset.genauf);
+  if (e.target.closest("[data-swnetz]")) return netzOeffnen(null);
+  for (const [knopf, ev, felder, entwurf, ok] of [
+    ["#appSpeichern", "appEinstellen", () => ({ name: document.getElementById("appName")?.value, preis: +document.getElementById("appPreis")?.value }), appEntwurf, "Bürger-App gespeichert"],
+    ["#jobSpeichern", "jobEinstellen", () => ({ name: document.getElementById("jobName")?.value, gebuehr: +document.getElementById("jobGeb")?.value }), jobEntwurf, "Jobbörse gespeichert"]])
+    if (e.target.closest(knopf)) return socket.emit(ev, felder(), r => {
+      if (r?.error) return toast(r.error, true);
+      for (const k of Object.keys(entwurf)) delete entwurf[k];
+      toast(t(ok)); render(store.get());
+    });
+  for (const [knopf, ev] of [["#appEntwickeln", "appEntwickeln"], ["#jobEntwickeln", "jobEntwickeln"]])
+    if (e.target.closest(knopf)) return socket.emit(ev, {}, r => { if (r?.error) return toast(r.error, true); toast(`${t("Entwicklung gestartet")}: ${r.ep} EP`); render(store.get()); });
+  if (e.target.closest("#mpSpeichern")) {
+    socket.emit("paintEinstellen", { name: document.getElementById("mpName")?.value, preis: document.getElementById("mpPreis")?.value }, r => {
+      if (r?.error) return toast(r.error, true);
+      for (const k of Object.keys(paintEntwurf)) delete paintEntwurf[k];
+      toast("Malprogramm gespeichert"); render(store.get());
+    });
+    return;
+  }
+  if (e.target.closest("#mpEntwickeln")) {
+    socket.emit("paintEntwickeln", {}, r => { if (r?.error) return toast(r.error, true); toast(`Entwicklung gestartet: ${r.ep} EP`); render(store.get()); });
+    return;
+  }
+  /* --- Börsen-App --- */
+  if (e.target.closest("#baSpeichern")) {
+    socket.emit("boerseEinstellen", { name: document.getElementById("baName")?.value, preis: document.getElementById("baPreis")?.value }, r => {
+      if (r?.error) return toast(r.error, true);
+      for (const k of Object.keys(boerseEntwurf)) delete boerseEntwurf[k];
+      toast("Börsen-App gespeichert"); render(store.get());
+    });
+    return;
+  }
+  if (e.target.closest("#baEntwickeln")) {
+    socket.emit("boerseEntwickeln", {}, r => { if (r?.error) return toast(r.error, true); toast(`Entwicklung gestartet: ${r.ep} EP`); render(store.get()); });
+    return;
+  }
+  if (e.target.closest("#baGebuehrSetzen")) {
+    const g = (document.getElementById("baGebuehr")?.value || "").replace(",", ".");
+    socket.emit("boerseGebuehrSetzen", { gebuehr: g }, r => { if (r?.error) return toast(r.error, true); toast(`Handelsgebühr ${String(r.gebuehr).replace(".", ",")} %`); render(store.get()); });
+    return;
+  }
+  if (e.target.closest("#baZulAnfragen")) {
+    const companyId = document.getElementById("baZulFirma")?.value;
+    socket.emit("boerseZulassungAnfragen", { companyId }, r => {
+      if (r?.error) return toast(r.error, true);
+      toast(r.auto === "zugelassen" ? "Firma hat zugelassen" : r.auto === "abgelehnt" ? "Firma lehnt ab — mehr Umsatz nötig" : "Anfrage gesendet"); render(store.get());
+    });
+    return;
+  }
+  const bze = e.target.closest("[data-bazulende]");
+  if (bze) {
+    socket.emit("boerseZulassungBeenden", { companyId: bze.dataset.bazulende }, r => { if (r?.error) return toast(r.error, true); toast("Zulassung beendet"); render(store.get()); });
+    return;
+  }
+  /* --- Eigener Fonds (Software-Panel) --- */
+  const pbfPick = e.target.closest("[data-pbfpick]");
+  if (pbfPick) {
+    fondsEntwurf.firmen ??= new Set();
+    const id = pbfPick.dataset.pbfpick;
+    fondsEntwurf.firmen.has(id) ? fondsEntwurf.firmen.delete(id) : fondsEntwurf.firmen.add(id);
+    fondsEntwurf.name = document.getElementById("pbfName")?.value || fondsEntwurf.name;
+    fondsEntwurf.gebuehr = document.getElementById("pbfGebuehr")?.value || fondsEntwurf.gebuehr;
+    render(store.get());
+    return;
+  }
+  if (e.target.closest("#pbfAnlegen")) {
+    const myId = store.get().myId, eigene = (store.get().state?.boerseApp || []).find(x => x.ownerId === myId);
+    if (!eigene) return toast("Keine eigene Börse", true);
+    const name = document.getElementById("pbfName")?.value;
+    const geb = (document.getElementById("pbfGebuehr")?.value || "").replace(",", ".");
+    const firmen = [...(fondsEntwurf.firmen || [])];
+    socket.emit("boerseFondsAnlegen", { venueId: eigene.id, name, gebuehr: geb, firmen }, r => {
+      if (r?.error) return toast(r.error, true);
+      for (const k of Object.keys(fondsEntwurf)) delete fondsEntwurf[k];
+      toast(`Fonds ${r.fonds.name} angelegt`); render(store.get());
+    });
+    return;
+  }
+  if (e.target.closest("#pbfEinlegen")) {
+    const myId = store.get().myId, eigene = (store.get().state?.boerseApp || []).find(x => x.ownerId === myId);
+    if (!eigene) return toast("Keine eigene Börse", true);
+    const betrag = +document.getElementById("pbfEinlage")?.value;
+    socket.emit("boerseFondsEinlegen", { venueId: eigene.id, betrag }, r => {
+      if (r?.error) return toast(r.error, true);
+      toast(`Einlage: ${r.anteile.toFixed(2)} Anteile`); SFX.spiel("kasse"); render(store.get());
+    });
+    return;
+  }
+  if (e.target.closest("#pbfGebuehrSetzen")) {
+    const myId = store.get().myId, eigene = (store.get().state?.boerseApp || []).find(x => x.ownerId === myId);
+    if (!eigene) return toast("Keine eigene Börse", true);
+    const g = (document.getElementById("pbfGebuehrNeu")?.value || "").replace(",", ".");
+    socket.emit("boerseFondsBearbeiten", { venueId: eigene.id, gebuehr: g }, r => {
+      if (r?.error) return toast(r.error, true);
+      toast(`Anteilsgebühr ${String(r.fonds.gebuehr).replace(".", ",")} %`); render(store.get());
+    });
+    return;
+  }
+  if (e.target.closest("#pbfSchliessen")) {
+    const myId = store.get().myId, eigene = (store.get().state?.boerseApp || []).find(x => x.ownerId === myId);
+    if (!eigene) return toast("Keine eigene Börse", true);
+    if (!confirm("Fonds wirklich auflösen? Der Fonds darf keine Aktien und keine fremden Anteilseigner mehr haben.")) return;
+    socket.emit("boerseFondsSchliessen", { venueId: eigene.id }, r => {
+      if (r?.error) return toast(r.error, true);
+      toast("Fonds aufgelöst"); render(store.get());
+    });
+    return;
+  }
+  if (e.target.closest("#mpMalen")) return malOeffnen();
+  const sa = e.target.closest("[data-shopauf]");
+  if (sa) { const [x, y] = sa.dataset.shopauf.split(",").map(Number); return shopOeffnen(x, y); }
+  const ab = e.target.closest("[data-anzbuch]");
+  if (ab) {
+    socket.emit("anzeigeBuchen", { produktId: ab.dataset.anzbuch, minuten: +ab.dataset.min, text: document.getElementById("anzText")?.value }, r => {
+      if (r?.error) return toast(r.error, true);
+      toast(`Anzeige gebucht (${fmt(r.preis)}) — +${r.wirkung} % Preisspielraum in deinen Shops`); SFX.spiel("kasse"); render(store.get());
+    });
+    return;
+  }
+  const ld = e.target.closest("[data-leitdes]");
+  if (ld && !ld.disabled) { leitEntwurf[ld.dataset.leitdes] = ld.dataset.wert; SFX.spiel("klick"); render(store.get()); return; }
+  if (e.target.closest("#leitDesignSpeichern")) {
+    socket.emit("leitDesign", { ...leitEntwurf }, r => {
+      if (r?.error) return toast(r.error, true);
+      for (const k of Object.keys(leitEntwurf)) delete leitEntwurf[k];
+      toast("Leitstand übernommen — alle Kunden mit deiner Steuerung sehen ihn jetzt so"); render(store.get());
+    });
+    return;
+  }
+  const dz = e.target.closest("[data-swdes]");
+  if (dz && !dz.disabled) { swDesignEntwurf[dz.dataset.swdes] = dz.dataset.wert; SFX.spiel("klick"); render(store.get()); return; }
+  if (e.target.closest("#swDesignSpeichern")) {
+    socket.emit("softwareDesign", { ...swDesignEntwurf }, r => {
+      if (r?.error) return toast(r.error, true);
+      for (const k of Object.keys(swDesignEntwurf)) delete swDesignEntwurf[k];
+      toast("Website-Design übernommen — alle Shops mit deinem System sehen jetzt so aus"); render(store.get());
+    });
+    return;
+  }
+  const m = e.target.closest("[data-swmod]");
+  if (m) {
+    const id = m.dataset.swmod;
+    if (swModulWahl.has(id)) {
+      swModulWahl.delete(id);
+      const [br, k] = id.split(":");
+      if (k) for (let k2 = +k + 1; k2 <= 3; k2++) swModulWahl.delete(`${br}:${k2}`);
+    } else swModulWahl.add(id);
+    SFX.spiel("klick"); render(store.get()); return;
+  }
+  if (e.target.closest("#swSpeichern")) {
+    const v = id => document.getElementById(id)?.value;
+    socket.emit("softwareEinstellen", { name: v("swName"), farbe: v("swFarbe"), einrichtung: v("swEinr"), gebuehr: v("swGeb"), werbeAbo: v("swAbo"), steuerAbo: v("swSteuerAbo"), anzeigenPreis: v("swAnzPreis") }, r => {
+      if (r?.error) return toast(r.error, true);
+      for (const k of Object.keys(swEntwurf)) delete swEntwurf[k];
+      toast("Shop-System gespeichert"); render(store.get());
+    });
+    return;
+  }
+  if (e.target.closest("#swEntwickeln")) {
+    const module = Object.fromEntries([...swModulWahl].map(x => [x, true]));
+    socket.emit("softwareEntwickeln", { module }, r => {
+      if (r?.error) return toast(r.error, true);
+      swModulWahl.clear(); toast(`Entwicklung gestartet: ${r.ep} EP`); render(store.get());
+    });
+  }
+});
+
+/* ---------- Online-Shop-Fenster ----------
+ * Das Schaufenster eines Online-Marktplatzes, wie ein Browserfenster: oben die
+ * Adresse des Shop-Systems, die Produkte aus den Regalen mit Lager und Preis,
+ * rechts die Bestellungen der letzten Sekunden. Fremde Spieler kaufen hier
+ * ein; bezahlt wird mit einer Karte im Design des installierten Systems. */
+const WAREN_ICON = { strom: "⚡", wasser: "💧", oel: "🛢️", obst: "🍎", erze: "⛏️", kannabis: "🌿", honig: "🍯", silizium: "🔷",
+  saft: "🧃", stahl: "🔩", medizin: "💊", gebaeck: "🥐", diesel: "⛽", uebernachtung: "🛏️", ziegel: "🧱", beton: "🏗️",
+  elektronik: "🔌", munition: "🎯", rennreifen: "🛞", rennsoftware: "💾" };
+const SHOP = { offen: false, x: 0, y: 0, kasse: null, menge: {}, gesehen: new Set() };
+/* Website-Design des Shop-Systems: Schriften erst laden, wenn eine Shop-Seite
+ * oder der Design-Baukasten zum ersten Mal zu sehen ist. */
+let sfSchriftenGeladen = false;
+function sfSchriftenLaden() {
+  if (sfSchriftenGeladen) return; sfSchriftenGeladen = true;
+  const l = document.createElement("link"); l.rel = "stylesheet";
+  l.href = "https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Caveat:wght@600;700&family=DM+Serif+Display&family=Fredoka:wght@500;700&family=Playfair+Display:wght@700;800&family=Press+Start+2P&display=swap";
+  document.head.appendChild(l);
+}
+/* Design auf ein .sfBrowser-Element anwenden (Shop-Fenster und Vorschau) */
+function sfDesignSetzen(el, design, farbe) {
+  const d = design || {};
+  for (const k of ["schrift", "thema", "ecken", "kopf", "karten", "motiv", "effekt"]) el.dataset[k] = d[k] || "";
+  el.style.setProperty("--sys", farbe || "#64748b");
+  if (d.akzent) el.style.setProperty("--akz", d.akzent); else el.style.removeProperty("--akz");
+}
+const sfDesignAttr = (design, farbe) => {
+  const d = design || {};
+  return ["schrift", "thema", "ecken", "kopf", "karten", "motiv", "effekt"].map(k => `data-${k}="${d[k] || ""}"`).join(" ")
+    + ` style="--sys:${farbe || "#64748b"};${d.akzent ? `--akz:${d.akzent}` : ""}"`;
+};
+/* Firmenlogo (gemalt mit einem Malprogramm) oder Anfangsbuchstabe */
+function logoHtml(pid, cls = "sfLogo", farbe) {
+  const st = store.get().state, p = st.players?.[pid];
+  const bild = logoBild(pid);
+  if (bild) return `<img class="${cls} hatBild" src="${bild}" alt="Logo ${escapeHtml(rohText(p?.name || ""))}">`;
+  return `<span class="${cls}" style="background:${farbe || p?.color || "#64748b"}">${rohText(p?.name || "?").slice(0, 1)}</span>`;
+}
+const shopSlug = s => rohText(s).toLowerCase().replace(/ä/g, "ae").replace(/ö/g, "oe").replace(/ü/g, "ue").replace(/ß/g, "ss").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+function shopOeffnen(x, y) {
+  Object.assign(SHOP, { offen: true, x, y, kasse: null, menge: {}, gesehen: new Set(), sig: {} });
+  const el = document.getElementById("shopFenster");
+  el.hidden = false;
+  /* Gerüst einmal bauen; danach tauscht shopZeichnen nur die Teile aus, die
+   * sich geändert haben. Würde jedes Spiel-Update das ganze Fenster neu
+   * setzen, begänne die Einblendung immer wieder von vorn, und Klicks
+   * gingen zwischen Drücken und Loslassen verloren. */
+  el.innerHTML = `<div class="sfBrowser" role="dialog" aria-label="Online-Shop">
+    <div class="sfLeiste"><span class="sfPunkte"><i></i><i></i><i></i></span>
+      <span class="sfUrl"></span><button type="button" class="sfZu" data-sfzu aria-label="Schließen">✕</button></div>
+    <header class="sfKopf"></header>
+    <div class="sfBanner" hidden></div>
+    <div class="sfAnzeigen" hidden></div>
+    <div class="sfHinweis" hidden></div>
+    <div class="sfInhalt"><div class="sfGrid"></div>
+      <aside class="sfFeed"><h4><span class="sfLive"></span>Bestellungen</h4><ul></ul></aside></div>
+    <footer class="sfFuss"></footer>
+    <div class="sfKasse" hidden></div>
+  </div>`;
+  SFX.spiel("klick");
+  sfSchriftenLaden();
+  shopZeichnen(true);
+}
+function shopSchliessen() {
+  SHOP.offen = false; SHOP.kasse = null;
+  const el = document.getElementById("shopFenster");
+  el.hidden = true; el.innerHTML = "";
+}
+function shopDaten() {
+  const { state, me, myId } = store.get();
+  const t = state.map.find(k => k.x === SHOP.x && k.y === SHOP.y);
+  if (!t || t.btype !== "onlinemarkt") return null;
+  const sys = (state.software || []).find(x => x.id === t.system?.produktId);
+  return { state, me, myId, t, sys, owner: state.players[t.owner], meins: t.owner === myId, offen: !!sys && state.tick >= (t.system?.bis || 0) };
+}
+/* Sternwertung je Produkt: nur mit Modul "Kundenbewertungen", aus Ware und
+ * Kachel abgeleitet, damit sie stabil bleibt. */
+const shopSterne = (g, t) => 3.9 + ((g.length * 7 + t.x * 3 + t.y * 5) % 11) / 10;
+/* Teil nur austauschen, wenn sich sein Inhalt geändert hat */
+const shopSetze = (sel, html, key) => {
+  if (SHOP.sig[key] === html) return;
+  SHOP.sig[key] = html;
+  const el = document.querySelector("#shopFenster " + sel); if (el) el.innerHTML = html;
+};
+function shopZeichnen(neu = false) {
+  const d = shopDaten();
+  if (!d) return shopSchliessen();
+  const { state, me, t, sys, owner, meins, offen } = d;
+  const fenster = document.getElementById("shopFenster");
+  const farbe = sys?.farbe || "#64748b", avg = state.avg || {};
+  sfDesignSetzen(fenster.querySelector(".sfBrowser"), sys?.design, farbe);
+  const dsg = sys?.design || {};
+  const regale = (t.shop || []).map((sl, i) => ({ sl, i })).filter(({ sl }) => sl?.good && sl.price > 0);
+  shopSetze(".sfUrl", `🔒 ${shopSlug(sys?.name || "shop")}.cs/${shopSlug(owner?.name || "firma")}`, "url");
+  shopSetze(".sfKopf", `<div class="sfMarke">${logoHtml(t.owner, "sfLogo", owner?.color || farbe)}
+      <div><b>${owner?.name || "—"}</b><small>Online-Shop · ${regale.length} Produkt${regale.length === 1 ? "" : "e"}${sys?.module?.lieferung ? " · Lieferung sofort" : ""}</small></div></div>
+    <span class="sfBadge">${offen ? `💳 Bezahlt mit <b>${sys.name}</b> v${sys.version}${dsg.slogan ? `<span class="sfSlogan">${dsg.slogan}</span>` : ""}` : "Shop geschlossen"}</span>`, "kopf" + (logoBild(t.owner) || "").length);
+  const banner = fenster.querySelector(".sfBanner");
+  banner.hidden = !(offen && dsg.banner);
+  shopSetze(".sfBanner", dsg.banner ? `<b>✦</b><span>${dsg.banner}</span>` : "", "banner");
+  /* Werbenetz: Anzeigen anderer Firmen, gebucht bei diesem System */
+  const anz = sys && !sys.portal ? (state.anzeigen || []).filter(a => a.produktId === sys.id) : [];
+  fenster.querySelector(".sfAnzeigen").hidden = !(offen && anz.length);
+  shopSetze(".sfAnzeigen", anz.map(a => `<span class="sfAnz"><small>Anzeige</small>${logoHtml(a.firmaId, "sfAnzLogo", a.farbe)}<b>${escapeHtml(rohText(a.firma))}</b> ${escapeHtml(rohText(a.text))}</span>`).join(""), "anz");
+  shopSetze(".sfFuss", sys ? `${sys.portal ? `<span class="sfFussLogo">🏛</span>` : logoHtml(sys.ownerId, "sfFussLogo", sys.farbe)}<span>Diese Website läuft mit <b>${sys.name}</b>${sys.portal ? " — dem Notportal der Stadt" : ` v${sys.version} · entwickelt von <b>${sys.anbieter}</b>`}</span>` : "", "fuss" + (sys && !sys.portal ? (logoBild(sys.ownerId) || "").length : 0));
+  const hinweis = fenster.querySelector(".sfHinweis");
+  hinweis.hidden = !meins;
+  shopSetze(".sfHinweis", "Vorschau: So sehen andere Spieler deinen Shop. Stadtkunden kaufen hier automatisch, Mitspieler können direkt bestellen.", "hinweis");
+  const werbung = !!t.system?.werbung && sys?.module?.werbung;
+  const karten = regale.map(({ sl, i }) => {
+    const vorrat = meins ? Math.floor(Math.min(me.inv[sl.good] || 0, sl.qty ?? Infinity)) : (t.vorrat?.[i] ?? null);
+    const rabatt = avg[sl.good] ? Math.round((1 - sl.price / avg[sl.good]) * 100) : 0;
+    const n = Math.max(1, Math.min(SHOP.menge[i] || 10, vorrat || 1));
+    const sterne = sys?.module?.bewertungen ? shopSterne(sl.good, t) : null;
+    const leer = vorrat != null && vorrat < 1;
+    return `<article class="sfProdukt${leer ? " leer" : ""}">
+      ${leer ? `<span class="sfBand grau">Ausverkauft</span>` : werbung && rabatt > 0 ? `<span class="sfBand">−${rabatt} % unter Ø</span>` : werbung ? `<span class="sfBand">Empfohlen</span>` : ""}
+      <div class="sfBild"><span>${WAREN_ICON[sl.good] || "📦"}</span></div>
+      <h5>${gname(sl.good)}</h5>
+      ${sterne ? `<div class="sfSterne" title="${sterne.toFixed(1)} von 5">${"★".repeat(Math.round(sterne))}${"☆".repeat(5 - Math.round(sterne))}<em>${sterne.toFixed(1).replace(".", ",")}</em></div>` : ""}
+      <div class="sfPreis"><b>${fp(sl.price)}</b><span>je Stück · Ø ${fp(avg[sl.good] || 0)}</span></div>
+      <div class="sfInfo">${sys?.module?.lieferung ? "🚚 Sofort im Lager" : "📦 Abholung im Lager"} · ${vorrat == null ? "—" : leer ? "nichts mehr da" : `${vorrat} auf Lager`}</div>
+      ${meins ? `<div class="sfEigen">Dein Angebot</div>` : `<div class="sfKauf">
+        <div class="sfMenge"><button type="button" data-sfm="${i}" data-d="-1" aria-label="weniger">−</button><input type="number" min="1" max="${vorrat || 1}" step="1" value="${n}" data-sfn="${i}" aria-label="Menge"><button type="button" data-sfm="${i}" data-d="1" aria-label="mehr">+</button></div>
+        <button type="button" class="sfKaufen" data-sfkauf="${i}" ${offen && !leer ? "" : "disabled"}>Kaufen · ${fmt(n * sl.price)}</button></div>`}
+    </article>`; }).join("");
+  /* Malprogramm der Software-Firma: Lizenz als eigenes Produkt im Shop */
+  const mp = (state.paint || []).find(x => x.ownerId === t.owner && x.version >= 1);
+  const lizenzKarte = mp ? (() => {
+    const hat = me.paintLizenz === mp.id, st = mp.stufe || {};
+    return `<article class="sfProdukt sfLizenz"><span class="sfBand">Software</span>
+      <div class="sfBild"><span>🎨</span></div>
+      <h5>${mp.name} <small>v${mp.version}</small></h5>
+      <div class="sfPreis"><b>${fmt(mp.preis)}</b><span>Lizenz · Updates gratis</span></div>
+      <div class="sfInfo">🖌️ Malprogramm fürs Firmenlogo · ${st.groesse}×${st.groesse} Pixel · ${st.farben ? `${st.farben} Farben` : "freie Farben"}</div>
+      ${meins ? `<div class="sfEigen">Dein Programm · ${mp.verkauft} verkauft</div>`
+        : hat ? `<div class="sfKauf"><button type="button" class="sfKaufen" data-sfmalen>🎨 Logo malen</button></div>`
+        : `<div class="sfKauf"><button type="button" class="sfKaufen" data-sflizenz ${offen ? "" : "disabled"}>Lizenz kaufen · ${fmt(mp.preis)}</button></div>`}
+    </article>`; })() : "";
+  /* Börsen-App der Software-Firma: Lizenz als eigenes Produkt im Shop */
+  const ba = (state.boerseApp || []).find(x => x.ownerId === t.owner && x.version >= 1);
+  const baKarte = ba ? (() => {
+    const hat = me.boerseLizenz === ba.id, bst = ba.stufe || {};
+    return `<article class="sfProdukt sfLizenz"><span class="sfBand">Software</span>
+      <div class="sfBild"><span>📈</span></div>
+      <h5>${ba.name} <small>v${ba.version}</small></h5>
+      <div class="sfPreis"><b>${fmt(ba.preis)}</b><span>Lizenz · Updates gratis</span></div>
+      <div class="sfInfo">📊 Börsen-App · bring sie unter ${bst.bewohner} deiner Kunden · du bekommst die Hälfte der Provision auf ihre Anlagen</div>
+      ${meins ? `<div class="sfEigen">Dein Programm · ${ba.verkauft} verkauft</div>`
+        : hat ? `<div class="sfKauf"><button type="button" class="sfKaufen" disabled>Lizenz aktiv ✓</button></div>`
+        : `<div class="sfKauf"><button type="button" class="sfKaufen" data-sfboerselizenz ${offen ? "" : "disabled"}>Lizenz kaufen · ${fmt(ba.preis)}</button></div>`}
+    </article>`; })() : "";
+  shopSetze(".sfGrid", (baKarte + lizenzKarte + karten) || `<div class="sfLeer">Gerade keine Ware im Regal.</div>`, "grid");
+  /* Feed: neu aufbauen nur bei neuen Bestellungen — die Zeitangaben werden
+   * an Ort und Stelle aktualisiert. Sonst entstünden jede Sekunde neue
+   * Elemente, und die Einflug-Animation liefe ständig von vorn. */
+  const bestellungen = t.bestellungen || [];
+  const vorTxt = b => { const vor = Math.max(0, state.tick - b.t); return vor < 5 ? "gerade eben" : vor < 60 ? `vor ${vor} s` : `vor ${Math.floor(vor / 60)} min`; };
+  const feedSig = bestellungen.map(b => b.id).join("|") + farbe;
+  if (SHOP.sig.feed !== feedSig) {
+    SHOP.sig.feed = feedSig;
+    const ul = document.querySelector("#shopFenster .sfFeed ul");
+    ul.innerHTML = bestellungen.map(b => `<li data-bid="${b.id}"><span class="sfFeedIcon">${b.g === "lizenz" ? "🎨" : b.g === "boerse-lizenz" ? "📈" : WAREN_ICON[b.g] || "📦"}</span>
+      <span><b>${b.g === "lizenz" || b.g === "boerse-lizenz" ? `Lizenz ${b.name || ""}` : `${b.n}× ${gname(b.g)}`}</b><small><span>${b.von}</span> · <span class="sfVor">${vorTxt(b)}</span></small></span>
+      <span class="sfFeedBetrag">${fmt(b.b)}<i style="background:${farbe}">${sys?.name ? rohText(sys.name).slice(0, 1) : "$"}</i></span></li>`).join("")
+      || `<li class="sfLeerFeed">Noch keine Bestellung — sie erscheinen hier live.</li>`;
+    ul.querySelectorAll("li[data-bid]").forEach(li => {
+      if (!SHOP.gesehen.has(li.dataset.bid)) { SHOP.gesehen.add(li.dataset.bid); if (!neu) li.classList.add("neu"); }
+    });
+  } else {
+    const spans = document.querySelectorAll("#shopFenster .sfFeed .sfVor");
+    bestellungen.forEach((b, i) => { if (spans[i]) spans[i].textContent = vorTxt(b); });
+  }
+}
+/* Bezahlvorgang: Karte im Design des Systems fährt ins Terminal, Kontaktlos-
+ * Wellen, dann die Antwort des Servers — Haken oder Kreuz, und ein Beleg. */
+function shopBezahlen(slot) {
+  const d = shopDaten(); if (!d) return;
+  const { t, sys, me, owner, state, myId } = d;
+  const lizenz = slot === "lizenz";
+  const boerseLiz = slot === "boerseLizenz";
+  const mp = lizenz ? (state.paint || []).find(x => x.ownerId === t.owner && x.version >= 1) : null;
+  const ba = boerseLiz ? (state.boerseApp || []).find(x => x.ownerId === t.owner && x.version >= 1) : null;
+  if (lizenz && !mp) return;
+  if (boerseLiz && !ba) return;
+  const sl = (lizenz || boerseLiz) ? { good: boerseLiz ? "boerse-lizenz" : "lizenz", price: (mp || ba).preis } : t.shop?.[slot]; if (!sl) return;
+  const feld = (lizenz || boerseLiz) ? null : document.querySelector(`#shopFenster [data-sfn="${slot}"]`);
+  const n = (lizenz || boerseLiz) ? 1 : Math.max(1, Math.floor(+feld?.value || SHOP.menge[slot] || 10));
+  const summe = n * sl.price;
+  const artikel = lizenz ? `Lizenz ${mp.name} v${mp.version}` : boerseLiz ? `Lizenz ${ba.name} v${ba.version}` : `${n}× ${gname(sl.good)}`;
+  const farbe = sys?.farbe || "#64748b";
+  const ich = state.players[myId];
+  const kasse = document.querySelector("#shopFenster .sfKasse");
+  SHOP.kasse = { slot, n };
+  kasse.hidden = false;
+  kasse.innerHTML = `<div class="sfKasseBox" style="--sys:${farbe}">
+    <div class="sfKasseKopf"><b>Kasse</b><span>${artikel} · ${fmt(summe)}</span></div>
+    <div class="sfBuehne">
+      <div class="sfKarte">
+        <div class="sfKarteOben"><b>${sys?.name || "Karte"}</b><span class="sfChip"></span></div>
+        <div class="sfKarteNr">•••• •••• •••• ${String(4000 + (rohText(ich?.name || "").length * 137) % 6000).padStart(4, "0")}</div>
+        <div class="sfKarteUnten"><span>${ich?.name || ""}</span><span>${String((state.tick % 12) + 1).padStart(2, "0")}/29</span></div>
+      </div>
+      <div class="sfTerminal"><div class="sfDisplay"><span class="sfBetrag">${fmt(summe)}</span><span class="sfStatus">Karte auflegen</span></div>
+        <div class="sfWellen"><i></i><i></i><i></i></div></div>
+    </div>
+    <div class="sfBeleg" hidden></div>
+  </div>`;
+  const box = kasse.firstElementChild, status = kasse.querySelector(".sfStatus");
+  SFX.spiel("klick");
+  requestAnimationFrame(() => box.classList.add("auflegen"));
+  setTimeout(() => { box.classList.add("funkt"); status.textContent = "Zahlung wird geprüft …"; }, 900);
+  setTimeout(() => {
+    const cmd = lizenz ? "lizenzKaufen" : boerseLiz ? "boerseLizenzKaufen" : "shopKaufen";
+    socket.emit(cmd, (lizenz || boerseLiz) ? { x: t.x, y: t.y } : { x: t.x, y: t.y, slot, qty: n }, r => {
+      const beleg = kasse.querySelector(".sfBeleg");
+      box.classList.remove("funkt");
+      if (r?.error) {
+        box.classList.add("fehler"); status.textContent = "Abgelehnt";
+        beleg.hidden = false;
+        beleg.innerHTML = `<div class="sfErgebnis"><svg viewBox="0 0 52 52"><circle cx="26" cy="26" r="24"/><path d="M17 17l18 18M35 17L17 35"/></svg><b>Zahlung abgelehnt</b><span>${r.error}</span></div>
+          <button type="button" class="sfWeiter" data-sfweiter>Zurück zum Shop</button>`;
+        SFX.spiel("hinweis");
+        return;
+      }
+      box.classList.add("ok"); status.textContent = "Bezahlt ✓";
+      SFX.spiel("geld");
+      if (sys?.design?.effekt === "konfetti") sfKonfetti(kasse, farbe, sys.design.akzent);
+      beleg.hidden = false;
+      beleg.innerHTML = `<div class="sfErgebnis"><svg viewBox="0 0 52 52"><circle cx="26" cy="26" r="24"/><path d="M15 27l7 7 15-16"/></svg><b>Zahlung erfolgreich</b></div>
+        <dl class="sfBon">
+          <div><dt>${lizenz ? `Lizenz ${r.programm} v${r.version}` : `${r.n}× ${gname(sl.good)} à ${fp(sl.price)}`}</dt><dd>${fmt(r.summe)}</dd></div>
+          <div><dt>Händler</dt><dd>${owner?.name || ""}</dd></div>
+          <div><dt>Zahlungsdienst</dt><dd>${r.system}</dd></div>
+          ${lizenz && !r.gebuehr ? "" : `<div class="klein"><dt>Gebühr ${String(sys?.gebuehr ?? "").replace(".", ",")} % an ${r.system} (zahlt der Händler)</dt><dd>${fp(r.gebuehr)}</dd></div>`}
+          <div class="klein"><dt>Handelssteuer ${String(r.steuerSatz ?? "").replace(".", ",")} % an die Stadt (zahlt der Händler)</dt><dd>${fp(r.steuer || 0)}</dd></div>
+        </dl>
+        ${lizenz ? `<div class="sfBonFuss">Die Lizenz gehört dir — Updates von ${r.programm} bekommst du gratis.</div>
+        <div class="mpZeile"><button type="button" class="sfWeiter" data-sfmalen>🎨 Jetzt Logo malen</button><button type="button" class="sfWeiter hell" data-sfweiter>Zurück zum Shop</button></div>`
+        : `<div class="sfBonFuss">${r.n}× ${gname(sl.good)} liegen jetzt in deinem Lager.</div>
+        <button type="button" class="sfWeiter" data-sfweiter>Weiter einkaufen</button>`}`;
+    });
+  }, 1900);
+}
+function sfKonfetti(ziel, f1, f2) {
+  const box = document.createElement("div"); box.className = "sfKonfetti";
+  const farben = [f1, f2 || "#fbbf24", "#f472b6", "#60a5fa", "#34d399"];
+  box.innerHTML = Array.from({ length: 46 }, (_, i) => `<i style="left:${(i * 37) % 100}%;background:${farben[i % farben.length]};animation-delay:${(i % 9) * 0.05}s;transform:rotate(${i * 23}deg)"></i>`).join("");
+  ziel.appendChild(box); setTimeout(() => box.remove(), 2200);
+}
+document.getElementById("shopFenster").addEventListener("click", e => {
+  if (e.target.closest("[data-sfzu]") || e.target.id === "shopFenster") return shopSchliessen();
+  const m = e.target.closest("[data-sfm]");
+  if (m) { const i = +m.dataset.sfm; SHOP.menge[i] = Math.max(1, (SHOP.menge[i] || 10) + (+m.dataset.d) * ((SHOP.menge[i] || 10) >= 20 ? 5 : 1)); return shopZeichnen(); }
+  if (e.target.closest(".sfKasse") && !e.target.closest(".sfKasseBox")) return;
+  const k = e.target.closest("[data-sfkauf]");
+  if (k) return shopBezahlen(+k.dataset.sfkauf);
+  if (e.target.closest("[data-sflizenz]:not(:disabled)")) return shopBezahlen("lizenz");
+  if (e.target.closest("[data-sfboerselizenz]:not(:disabled)")) return shopBezahlen("boerseLizenz");
+  if (e.target.closest("[data-sfmalen]")) { shopSchliessen(); return malOeffnen(); }
+  if (e.target.closest("[data-sfweiter]")) {
+    SHOP.kasse = null; SHOP.sig = {};
+    const k2 = document.querySelector("#shopFenster .sfKasse"); k2.hidden = true; k2.innerHTML = "";
+    shopZeichnen();
+  }
+});
+document.getElementById("shopFenster").addEventListener("input", e => {
+  const n = e.target.closest("[data-sfn]");
+  if (n) { SHOP.menge[+n.dataset.sfn] = Math.max(1, Math.floor(+n.value) || 1);
+    const b = document.querySelector(`[data-sfkauf="${n.dataset.sfn}"]`); const d = shopDaten(); const sl = d?.t.shop?.[+n.dataset.sfn];
+    if (b && sl) b.textContent = `Kaufen · ${fmt(SHOP.menge[+n.dataset.sfn] * sl.price)}`; }
+});
+document.addEventListener("keydown", e => { if (e.key === "Escape" && SHOP.offen) shopSchliessen(); });
+
+/* ---------- Leitstand: Oberfläche der Steuerungssoftware ----------
+ * Jedes gesteuerte Gebäude hat einen Leitstand im Design der Software-Firma
+ * (Thema, Anzeigen, Schrift, Effekt, Titel, Laufschrift). Funktionen je nach
+ * Version: Live-Anzeigen und Alarm, Turbo, Nachkauf, Auto-Turbo.
+ * Das Gerüst wird nur neu gebaut, wenn sich Aufbau oder Design ändern; die
+ * Werte wandern sonst über data-lw / --f an Ort und Stelle — so gehen Klicks
+ * zwischen zwei Updates nicht verloren. */
+const LEIT = { offen: false, x: 0, y: 0, sig: "" };
+const leitEntwurf = {};
+/* Eine Anzeige in vier Bauarten; die Füllung steuert allein --f (0…1) */
+function leitAnzeige(art, key, titel, f, text, unter = "") {
+  const inner = art === "zeiger"
+    ? `<svg viewBox="0 0 100 56" class="lgZeiger" aria-hidden="true"><path d="M8 50 A42 42 0 0 1 92 50" class="lgSpur"/><path d="M8 50 A42 42 0 0 1 92 50" class="lgFill" pathLength="100"/><line x1="50" y1="50" x2="50" y2="14" class="lgNadel"/><circle cx="50" cy="50" r="4" class="lgNabe"/></svg>`
+    : art === "ringe"
+    ? `<svg viewBox="0 0 60 60" class="lgRing" aria-hidden="true"><circle cx="30" cy="30" r="24" class="lgSpur"/><circle cx="30" cy="30" r="24" class="lgFill" pathLength="100"/></svg>`
+    : art === "ziffern" ? `<div class="lgSegment"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>`
+    : `<div class="lgBalken"><i></i></div>`;
+  return `<div class="lgAnz" data-lf="${key}" style="--f:${Math.max(0, Math.min(1, f || 0)).toFixed(3)}">
+    <span class="lgTitel">${titel}</span>${inner}<b class="lgWert" data-lw="${key}">${text}</b><small data-lw="${key}_u">${unter}</small></div>`;
+}
+/* Daten eines gesteuerten Gebäudes für den Leitstand (aus dem Spielstand) */
+function leitDaten(state, me, t) {
+  const bt = BTYPES()[t.btype], sys = (state.software || []).find(x => x.id === t.steuerung?.produktId);
+  if (!bt || !sys) return null;
+  const def = state.steuerung?.[bt.industry] || {}, T = state.turbo || { DAUER: 60, PAUSE: 120, OUT: .3, IN: .5 }, FN = state.leitFunktion || {};
+  const stufe = sys.stufen?.[bt.industry] || 0, faktor = Math.min(1, sys.faktor ?? 1);
+  const w = (def.wert || 0) * (state.steuerStufe || [0, .5, .8, 1])[stufe] * faktor;
+  const tick = state.tick, offen = tick >= (t.steuerung.bis || 0);
+  const turboAn = offen && sys.version >= FN.turbo && (t.steuerung.turboBis || 0) > tick && faktor > 0;
+  const lvl = 1 + 0.3 * ((t.level || 1) - 1);
+  const inArt = def.art === "in" && !!bt.proc;
+  const plus = (inArt ? 0 : w) + (turboAn ? T.OUT : 0);
+  const sparen = (1 - (inArt ? w : 0)) * (turboAn ? 1 + T.IN : 1);
+  const out = bt.proc ? bt.proc.out : bt.out;
+  const rate = (bt.proc ? bt.proc.rate : bt.rate) * lvl * (offen ? 1 + plus : 1) * 60;
+  const roh = bt.proc ? Object.entries(bt.proc.in).map(([g, n]) => ({ g, je: n * lvl * (offen ? sparen : 1) }))
+    : [{ g: "strom", je: bt.rate * lvl * T.IN, nurTurbo: true }];
+  return { bt, sys, def, T, FN, stufe, w, offen, turboAn, inArt, out, rate, roh, lvl, tick,
+    rest: Math.max(0, (t.steuerung.bis || 0) - tick), turboRest: Math.max(0, (t.steuerung.turboBis || 0) - tick),
+    pauseRest: Math.max(0, (t.steuerung.pauseBis || 0) - tick), lager: me?.inv?.[out] || 0, inv: me?.inv || {} };
+}
+const leitZeit = sek => sek >= 3600 ? "> 60 min" : `${Math.floor(sek / 60)}:${String(Math.floor(sek % 60)).padStart(2, "0")} min`;
+/* Gerüst und Werte. vorschau: Musterdaten fürs Design-Panel. */
+function leitstandHtml(d, design, kopf, vorschau = false) {
+  const g = design || {}, art = g.anzeige || "balken", v = d.sys.version || 0;
+  const titel = g.titel || `${d.sys.name} Leitstand`;
+  const anzeigen = [
+    leitAnzeige(art, "rate", "Ausstoß", (d.rate / 60) / ((d.bt.proc ? d.bt.proc.rate : d.bt.rate) * d.lvl * (1 + (d.def.wert || 0) + d.T.OUT)), `${(d.rate).toFixed(1)}/min`, gname(d.out)),
+    leitAnzeige(art, "bonus", d.inArt ? "Ersparnis" : "Bonus", (d.def.wert ? (d.inArt ? d.w : d.w + (d.turboAn ? d.T.OUT : 0)) / ((d.def.wert || 0) + d.T.OUT) : 0),
+      `${d.offen ? "+" + Math.round((d.inArt ? d.w : d.w + (d.turboAn ? d.T.OUT : 0)) * 100) : 0} %`, d.inArt ? "weniger Rohstoffe" : d.def.name || ""),
+    leitAnzeige(art, "lager", "Lager", Math.min(1, d.lager / Math.max(1, d.rate * 10)), `${Math.floor(d.lager)}`, gname(d.out)),
+  ].join("");
+  const roh = d.roh.map(r => {
+    const sek = r.je > 0 ? (d.inv[r.g] || 0) / r.je : Infinity;
+    return `<div class="lgRoh" data-lf="roh_${r.g}" style="--f:${Math.min(1, sek / 300).toFixed(3)}"><span>${WAREN_ICON[r.g] || "📦"} ${gname(r.g)}${r.nurTurbo ? " <em>(Turbo)</em>" : ""}</span>
+      <div class="lgBalken"><i></i></div><b data-lw="roh_${r.g}">${Number.isFinite(sek) ? leitZeit(sek) : "—"}</b></div>`;
+  }).join("");
+  const turboFrei = v >= (d.FN.turbo || 2), autoFrei = v >= (d.FN.autoTurbo || 4), kaufFrei = v >= (d.FN.nachkauf || 3);
+  const turbo = `<div class="lgTurbo" data-lf="turbo" style="--f:${vorschau && d.turboAn ? .7 : 0}">
+      <button type="button" class="lgKnopf lgTurboKnopf" data-leit="turbo" ${turboFrei && !vorschau ? "" : "disabled"}>🚀 <span data-lw="turbo">${!turboFrei ? `Turbo ab v${d.FN.turbo}` : vorschau ? `Turbo läuft · ${d.turboRest} s` : "Turbo"}</span></button>
+      <div class="lgBalken"><i></i></div>
+      <small>+${Math.round(d.T.OUT * 100)} % Ausstoß für ${d.T.DAUER} s · +${Math.round(d.T.IN * 100)} % ${d.bt.proc ? "Rohstoffe" : "Strom"} · ${d.T.PAUSE} s Pause</small></div>
+    <div class="lgReihe">
+      <button type="button" class="lgKnopf" data-leit="auto" ${autoFrei && !vorschau ? "" : "disabled"}><span data-lw="auto">${autoFrei ? "Auto-Turbo" : `Auto-Turbo ab v${d.FN.autoTurbo}`}</span></button>
+      ${d.bt.proc ? `<button type="button" class="lgKnopf" data-leit="nachkauf" ${kaufFrei && !vorschau ? "" : "disabled"}>${kaufFrei ? "🛒 Rohstoffe für 3 min nachkaufen" : `Nachkauf ab v${d.FN.nachkauf}`}</button>` : ""}
+    </div>`;
+  /* Laufschrift: Meldung der Software-Firma, dazu die Anzeigen aus ihrem Werbenetz */
+  const anz = vorschau ? [] : (store.get().state.anzeigen || []).filter(a => a.produktId === d.sys.id);
+  const lauf = [g.meldung ? escapeHtml(rohText(g.meldung)) : "", ...anz.map(a => `📣 Anzeige · <b>${escapeHtml(rohText(a.firma))}</b>: ${escapeHtml(rohText(a.text))}`)].filter(Boolean);
+  const meldung = lauf.length ? `<div class="lgTicker"><span data-ldmeldung>${lauf.join("   ✦   ")}</span></div>` : "";
+  return `<div class="lgKopf">${logoHtml(d.sys.ownerId, "lgLogo", d.sys.farbe)}
+      <div class="lgName"><b data-ldtitel>${escapeHtml(rohText(titel))}</b><small>${kopf}</small></div>
+      <span class="lgStatus" data-lw="status" data-zustand="an">${vorschau ? (d.turboAn ? "Turbo" : "Online") : ""}</span>${vorschau ? "" : `<button type="button" class="lgZu" data-leitzu aria-label="Schließen">✕</button>`}</div>
+    ${meldung}
+    <div class="lgAnzeigen">${anzeigen}</div>
+    <div class="lgAbschnitt">Rohstoff-Reichweite</div><div class="lgRohListe">${roh}</div>
+    <div class="lgAbschnitt">Steuerung</div>${turbo}
+    <div class="lgFuss"><span data-lw="mehr">${vorschau ? `Mehr produziert: +128 ${gname(d.out)} · 3× Turbo` : ""}</span><span>${escapeHtml(rohText(d.sys.name))} v${v} · von ${escapeHtml(rohText(d.sys.anbieter))}</span></div>`;
+}
+/* Werte, die sich jede Sekunde ändern */
+function leitWerte(el, d, t) {
+  const setze = (k, txt) => el.querySelectorAll(`[data-lw="${k}"]`).forEach(x => { if (x.textContent !== txt) x.textContent = txt; });
+  const fuell = (k, f) => { const x = el.querySelector(`[data-lf="${k}"]`); if (x) x.style.setProperty("--f", Math.max(0, Math.min(1, f)).toFixed(3)); };
+  const maxPlus = (d.def.wert || 0) + d.T.OUT;
+  const plusJetzt = d.offen ? (d.inArt ? d.w : d.w + (d.turboAn ? d.T.OUT : 0)) : 0;
+  fuell("rate", (d.rate / 60) / ((d.bt.proc ? d.bt.proc.rate : d.bt.rate) * d.lvl * (1 + maxPlus))); setze("rate", `${d.rate.toFixed(1)}/min`);
+  fuell("bonus", maxPlus ? plusJetzt / maxPlus : 0); setze("bonus", `+${Math.round(plusJetzt * 100)} %`);
+  fuell("lager", d.lager / Math.max(1, d.rate * 10)); setze("lager", `${Math.floor(d.lager)}`);
+  for (const r of d.roh) {
+    const sek = r.je > 0 ? (d.inv[r.g] || 0) / r.je : Infinity;
+    fuell("roh_" + r.g, sek / 300); setze("roh_" + r.g, (d.inv[r.g] || 0) < 0.5 ? "leer" : Number.isFinite(sek) ? leitZeit(sek) : "—");
+  }
+  const turboFrei = d.sys.version >= (d.FN.turbo || 2);
+  fuell("turbo", d.turboAn ? d.turboRest / d.T.DAUER : d.pauseRest ? 1 - d.pauseRest / d.T.PAUSE : turboFrei ? 1 : 0);
+  setze("turbo", !turboFrei ? `Turbo ab v${d.FN.turbo}` : d.turboAn ? `Turbo läuft · ${d.turboRest} s` : d.pauseRest ? `Kühlt ab · ${d.pauseRest} s` : "Turbo zünden");
+  setze("auto", d.sys.version >= (d.FN.autoTurbo || 4) ? (t.steuerung.auto ? "Auto-Turbo: an" : "Auto-Turbo: aus") : `Auto-Turbo ab v${d.FN.autoTurbo}`);
+  const knopf = el.querySelector('[data-leit="turbo"]');
+  if (knopf) knopf.disabled = !turboFrei || !d.offen || d.turboAn || d.pauseRest > 0;
+  el.querySelector('[data-leit="auto"]')?.classList.toggle("an", !!t.steuerung.auto);
+  el.classList.toggle("turboAn", d.turboAn);
+  setze("status", !d.offen ? `Installation · ${d.rest} s` : (d.sys.faktor ?? 1) <= 0 ? "Ausfall — Rechenzentrum aus" : (d.sys.faktor ?? 1) < 1 ? `Überlastet (${Math.round(d.sys.faktor * 100)} %)` : d.turboAn ? "Turbo" : "Online");
+  el.querySelector(".lgStatus")?.setAttribute("data-zustand", !d.offen ? "warn" : (d.sys.faktor ?? 1) < 1 ? "warn" : "an");
+  const st = t.steuerung;
+  setze("mehr", d.inArt ? `Gespart seit Installation: ${fmt(st.gespart || 0)}${st.mehr ? ` · +${Math.round(st.mehr)} ${gname(d.out)} im Turbo` : ""}` : `Mehr produziert: +${Math.round(st.mehr || 0)} ${gname(d.out)}${st.turbos ? ` · ${st.turbos}× Turbo` : ""}`);
+}
+const leitDesignAttr = (g, farbe) => {
+  const d = g || {};
+  return ["thema", "anzeige", "schrift", "effekt"].map(k => `data-${k}="${d[k] || ""}"`).join(" ") + ` style="--sys:${farbe || "#64748b"};${d.akzent ? `--akz:${d.akzent}` : ""}"`;
+};
+function leitOeffnen(x, y) {
+  Object.assign(LEIT, { offen: true, x, y, sig: "" });
+  document.getElementById("leitFenster").hidden = false;
+  sfSchriftenLaden(); SFX.spiel("klick");
+  leitZeichnen();
+}
+function leitSchliessen() {
+  LEIT.offen = false;
+  const el = document.getElementById("leitFenster"); el.hidden = true; el.innerHTML = "";
+}
+function leitZeichnen() {
+  const { state, me, myId } = store.get();
+  const t = state.map.find(k => k.x === LEIT.x && k.y === LEIT.y);
+  if (!t || t.owner !== myId || !t.steuerung) return leitSchliessen();
+  const d = leitDaten(state, me, t); if (!d) return leitSchliessen();
+  const fenster = document.getElementById("leitFenster");
+  const design = d.sys.leitDesign || {};
+  const sig = JSON.stringify([design, d.sys.version, d.sys.id, t.btype, t.level, d.roh.map(r => r.g), !!d.offen,
+    (state.anzeigen || []).filter(a => a.produktId === d.sys.id).map(a => a.id + a.text)]);
+  if (sig !== LEIT.sig) {
+    LEIT.sig = sig;
+    fenster.innerHTML = `<div class="leitstand" role="dialog" aria-label="Leitstand" ${leitDesignAttr(design, d.sys.farbe)}>${leitstandHtml(d, design, `${bname(t.btype)} · ${escapeHtml(rohText(state.players[myId]?.name || ""))}`)}</div>`;
+  }
+  leitWerte(fenster.querySelector(".leitstand"), d, t);
+}
+document.getElementById("leitFenster").addEventListener("click", e => {
+  if (e.target.closest("[data-leitzu]") || e.target.id === "leitFenster") return leitSchliessen();
+  const k = e.target.closest("[data-leit]"); if (!k || k.disabled) return;
+  const { state, me } = store.get();
+  const t = state.map.find(q => q.x === LEIT.x && q.y === LEIT.y); if (!t?.steuerung) return;
+  if (k.dataset.leit === "turbo") { SFX.spiel("klick"); return act("steuerTurbo", { x: t.x, y: t.y }); }
+  if (k.dataset.leit === "auto") return act("steuerAuto", { x: t.x, y: t.y, an: !t.steuerung.auto });
+  if (k.dataset.leit === "nachkauf") {
+    /* Fehlende Rohstoffe für 3 Minuten als Kaufgebote knapp über dem Ø-Kurs */
+    const d = leitDaten(state, me, t); if (!d) return;
+    let n = 0;
+    for (const r of d.roh) {
+      const fehlt = Math.ceil(r.je * 180 - (me.inv[r.g] || 0));
+      if (fehlt < 1) continue;
+      act("placeOrder", { side: "buy", good: r.g, qty: fehlt, price: Math.round((state.avg?.[r.g] || 1) * 1.05 * 100) / 100 }); n++;
+    }
+    toast(n ? `Leitstand: ${n} Kaufgebot${n > 1 ? "e" : ""} an der Börse eingestellt` : "Die Rohstoffe reichen schon für 3 Minuten");
+  }
+});
+document.addEventListener("keydown", e => { if (e.key === "Escape" && LEIT.offen) leitSchliessen(); });
+/* Werbenetz: Anzeigen bei Software-Firmen buchen. Reichweite = Kunden des
+ * Systems (Online-Marktplätze + gesteuerte Gebäude). */
+const anzEntwurf = { text: "" };
+function werbenetzHtml(state, myId, binSoftware) {
+  const cfg = state.anzeigeCfg; if (!cfg) return "";
+  const systeme = (state.software || []).filter(x => !x.portal && x.version >= 1).sort((a, b) => b.anzeigeWirkung - a.anzeigeWirkung);
+  const alle = state.anzeigen || [];
+  const meine = alle.filter(a => a.firmaId === myId);
+  const meinSys = binSoftware ? systeme.find(x => x.ownerId === myId) : null;
+  const beiMir = meinSys ? alle.filter(a => a.produktId === meinSys.id) : [];
+  const zeile = x => {
+    const eigen = x.ownerId === myId, laeuft = meine.find(a => a.produktId === x.id);
+    const voll = !laeuft && x.anzeigenFrei <= 0;
+    return `<div class="anzZeile">
+      <span class="swName"><i style="background:${x.farbe}"></i><span><b>${escapeHtml(rohText(x.name))} <em>v${x.version}</em></b><small>${escapeHtml(rohText(x.anbieter))} · ${x.kunden} Kunden · ${x.anzeigenPlaetze - x.anzeigenFrei}/${x.anzeigenPlaetze} Plätze belegt</small></span></span>
+      <span class="mono">+${String(x.anzeigeWirkung).replace(".", ",")} %<small>Preisspielraum</small></span>
+      <span class="mono">${fmt(x.anzeigenPreis)}<small>je Minute</small></span>
+      <span class="anzKnoepfe">${eigen ? `<small class="meta">dein System</small>` : voll ? `<small class="meta">voll</small>`
+        : (cfg.dauer || [3, 5, 10]).map(m => `<button type="button" class="mini" data-anzbuch="${x.id}" data-min="${m}">${m} min · ${fmt(x.anzeigenPreis * m)}</button>`).join("")}</span>
+    </div>`;
+  };
+  return `<div class="sec" style="margin-top:16px">Werbenetz · Anzeigen bei Software-Firmen</div>
+    <div class="note" style="margin:0 0 8px">Deine Anzeige läuft in allen Online-Shops und Leitständen mit diesem System. Je Kunde des Systems bekommst du ${String(Math.round(1.2 * 10) / 10).replace(".", ",")} % mehr Preisspielraum in deinen eigenen Shops (höchstens ${Math.round(cfg.maxJe * 100)} % je Anzeige, ${Math.round(cfg.max * 100)} % insgesamt). Bezahlt wird vorab; das Geld geht an die Software-Firma.</div>
+    ${meine.length ? `<div class="anzMeine">${meine.map(a => `<span class="anzChip">📣 ${escapeHtml(rohText(a.text))} <em>${(systeme.find(x => x.id === a.produktId)?.name) ?? ""} · noch ${Math.ceil(a.rest / 60)} min</em></span>`).join("")}</div>` : ""}
+    <label class="anzText"><span>Anzeigentext</span><input id="anzText" maxlength="${cfg.text}" value="${escapeHtml(rohText(anzEntwurf.text))}" placeholder="z. B. Frisches Obst — heute 10 % günstiger"></label>
+    <div class="anzTab">${systeme.length ? systeme.map(zeile).join("") : `<div class="meta">Noch hat keine Software-Firma ein System veröffentlicht.</div>`}</div>
+    ${meinSys ? `<div class="note" style="margin-top:6px">In deinem System laufen ${beiMir.length} von ${meinSys.anzeigenPlaetze} Anzeigen${beiMir.length ? ": " + beiMir.map(a => `${escapeHtml(rohText(a.firma))} (${Math.ceil(a.rest / 60)} min)`).join(", ") : ""}. Jede neue Version bringt einen Werbeplatz mehr (höchstens 3).</div>` : ""}`;
+}
+/* Baukasten im Software-Panel: Leitstand-Design mit Vorschau an einer Chipfabrik */
+function leitDesignHtml(state, eigene) {
+  const OPT = state.leitDesign || {}, AB = state.leitDesignAb || {};
+  const v = Math.max(1, eigene.version || 0);
+  const g = { ...(eigene.leitDesign || {}), ...leitEntwurf };
+  const farbe = swEntwurf.farbe || eigene.farbe;
+  const titel = { thema: "Thema", anzeige: "Anzeigen", schrift: "Schrift", effekt: "Effekt" };
+  const reihen = Object.entries(titel).map(([k, tt]) => `<div class="swDesignReihe"><span>${tt}</span><div class="swDesignWahl">
+    ${Object.entries(OPT[k] || {}).map(([id, o]) => `<button type="button" data-leitdes="${k}" data-wert="${id}" class="${g[k] === id ? "an" : ""}" ${o.ab > v ? "disabled" : ""}>${o.name}${o.ab > v ? `<em>🔒 v${o.ab}</em>` : ""}</button>`).join("")}
+  </div></div>`).join("");
+  const zu = k => v < (AB[k] || 1);
+  const texte = `<div class="swDesignTexte">
+    <label>Titel${zu("titel") ? ` 🔒 v${AB.titel}` : ""}<input id="ldTitel" maxlength="24" value="${escapeHtml(rohText(g.titel || ""))}" placeholder="${escapeHtml(rohText(eigene.name))} Leitstand" ${zu("titel") ? "disabled" : ""}></label>
+    <label>Laufschrift${zu("meldung") ? ` 🔒 v${AB.meldung}` : ""}<input id="ldMeldung" maxlength="70" value="${escapeHtml(rohText(g.meldung || ""))}" placeholder="z. B. Support rund um die Uhr" ${zu("meldung") ? "disabled" : ""}></label>
+    <label>Leuchtfarbe${zu("akzent") ? ` 🔒 v${AB.akzent}` : ""}<input id="ldAkzent" type="color" value="${g.akzent || farbe || "#60a5fa"}" ${zu("akzent") ? "disabled" : ""}></label>
+  </div>`;
+  /* Musterdaten: Chipfabrik mit Technologie-Steuerung, Turbo gerade aktiv */
+  const bt = BTYPES().chipfabrik || { proc: { in: { silizium: .7, strom: .5 }, out: "elektronik", rate: .5 }, industry: "tech" };
+  const def = state.steuerung?.tech || { name: "Fertigungsstraße", art: "out", wert: .12 };
+  const T = state.turbo || { DAUER: 60, PAUSE: 120, OUT: .3, IN: .5 };
+  const d = { bt, sys: { ...eigene, version: v, faktor: 1 }, def, T, FN: state.leitFunktion || {}, stufe: 3, w: def.wert, offen: true, turboAn: v >= (state.leitFunktion?.turbo || 2),
+    inArt: false, out: bt.proc.out, rate: bt.proc.rate * 60 * (1 + def.wert + T.OUT), lvl: 1, tick: 0, rest: 0, turboRest: 42, pauseRest: 0, lager: 64,
+    roh: Object.entries(bt.proc.in).map(([gg, n]) => ({ gg, g: gg, je: n * (1 + T.IN) })), inv: { silizium: 160, strom: 40 } };
+  const vorschau = `<div class="leitstand lgMini${d.turboAn ? " turboAn" : ""}" ${leitDesignAttr(g, farbe)}>${leitstandHtml(d, g, "Chipfabrik · Musterkunde", true)}</div>`;
+  const geaendert = Object.keys(leitEntwurf).length > 0;
+  return `<div class="sec" style="margin-top:16px">Leitstand-Design · so sieht die Steuerung bei deinen Kunden aus</div>
+    <div class="note" style="margin:0 0 8px">Jeder Kunde öffnet den Leitstand auf seinen gesteuerten Gebäuden. Neue Versionen schalten Themen, Anzeigen und Effekte frei — und Funktionen: Turbo ab v${state.leitFunktion?.turbo ?? 2}, Nachkauf ab v${state.leitFunktion?.nachkauf ?? 3}, Auto-Turbo ab v${state.leitFunktion?.autoTurbo ?? 4}.</div>
+    <div class="swDesign">${reihen}${texte}${vorschau}
+      <button class="buyb" id="leitDesignSpeichern" ${geaendert ? "" : "disabled"}>${geaendert ? "Leitstand übernehmen" : "Leitstand ist aktuell"}</button></div>`;
+}
+
+/* ---------- Firmenlogos (gemalt mit einem Malprogramm) ----------
+ * Der Server schickt nur Versionsnummern (state.logoV); fehlende oder neuere
+ * Logos holt der Client gesammelt nach und rendert sie einmal als Canvas. */
+const FLOGO = {};
+let logoHolenLaeuft = false;
+function logoZuCanvas(l) {
+  const c = document.createElement("canvas"); c.width = c.height = l.g;
+  const cx = c.getContext("2d");
+  for (let i = 0; i < l.px.length; i++) {
+    const ch = l.px[i]; if (ch === ".") continue;
+    cx.fillStyle = l.pal[parseInt(ch, 16)] || "#000"; cx.fillRect(i % l.g, Math.floor(i / l.g), 1, 1);
+  }
+  return c;
+}
+function logosAbgleichen(state) {
+  const v = state.logoV || {};
+  for (const pid of Object.keys(FLOGO)) if (!(pid in v)) delete FLOGO[pid];
+  const fehlt = Object.entries(v).filter(([pid, n]) => FLOGO[pid]?.v !== n).map(([pid]) => pid);
+  if (!fehlt.length || logoHolenLaeuft) return;
+  logoHolenLaeuft = true;
+  socket.emit("logoHolen", fehlt, res => {
+    logoHolenLaeuft = false;
+    for (const [pid, l] of Object.entries(res || {})) {
+      if (!l) continue;
+      const c = logoZuCanvas(l);
+      /* Für die Anzeige hochskaliert ohne Weichzeichnen — Pixel bleiben scharf */
+      const gross = document.createElement("canvas"); gross.width = gross.height = 128;
+      const gx = gross.getContext("2d"); gx.imageSmoothingEnabled = false; gx.drawImage(c, 0, 0, 128, 128);
+      FLOGO[pid] = { v: l.v, roh: l, canvas: c, url: gross.toDataURL() };
+    }
+    if (SHOP.offen) { SHOP.sig = {}; shopZeichnen(); }
+    render(store.get());
+  });
+}
+const logoBild = pid => (store.get().state?.logoV?.[pid] != null && FLOGO[pid]?.url) || null;
+
+/* ---------- Malprogramm: Logo-Editor ---------- */
+const MAL = { offen: false, g: 16, px: [], pal: [], farbe: 0, werkzeug: "stift", spiegeln: false, verlauf: [], malt: false };
+function malOeffnen(versuch = 0) {
+  const { state, me, myId } = store.get();
+  const st = me.paintStufe;
+  /* Direkt nach dem Lizenzkauf kann das nächste Update noch unterwegs sein */
+  if (!st && versuch < 2) return setTimeout(() => malOeffnen(versuch + 1), 800);
+  if (!st) return toast("Du brauchst ein Malprogramm — Lizenzen gibt es im Online-Shop einer Software-Firma.", true);
+  const PAL = state.paintCfg?.palette || [];
+  const alt = FLOGO[myId]?.roh;
+  MAL.pal = st.farben ? PAL.slice(0, st.farben) : (alt?.pal?.length ? [...alt.pal, ...PAL].slice(0, 16) : PAL.slice(0, 16));
+  MAL.g = alt ? Math.min(alt.g, st.groesse) : st.groesse;
+  MAL.px = new Array(MAL.g * MAL.g).fill(-1);
+  if (alt && alt.g === MAL.g) for (let i = 0; i < alt.px.length; i++) {
+    if (alt.px[i] === ".") continue;
+    const farbe = alt.pal[parseInt(alt.px[i], 16)], idx = MAL.pal.indexOf(farbe);
+    MAL.px[i] = idx >= 0 ? idx : 0;
+  }
+  Object.assign(MAL, { offen: true, farbe: Math.min(2, MAL.pal.length - 1), werkzeug: "stift", spiegeln: false, verlauf: [] });
+  let el = document.getElementById("malFenster");
+  if (!el) { el = document.createElement("div"); el.id = "malFenster"; document.body.appendChild(el); el.addEventListener("click", malKlick); el.addEventListener("input", malEingabe); }
+  el.hidden = false;
+  malAufbauen();
+}
+function malSchliessen() { MAL.offen = false; const el = document.getElementById("malFenster"); if (el) { el.hidden = true; el.innerHTML = ""; } }
+function malAufbauen() {
+  const { me, state } = store.get(), st = me.paintStufe, my = state.players[store.get().myId];
+  const groessen = [16, 24, 32].filter(n => n <= st.groesse);
+  const w = st.werkzeuge || [];
+  document.getElementById("malFenster").innerHTML = `<div class="malBox" role="dialog" aria-label="Logo malen">
+    <header class="malKopf"><div><b>🎨 ${escapeHtml(rohText(st.programm))} <em>v${st.version}</em></b><small>Firmenlogo für ${escapeHtml(rohText(my?.name || ""))} — erscheint im Shop, an der Börse und an deinen Gebäuden</small></div>
+      <button type="button" class="malZu" data-malzu aria-label="Schließen">✕</button></header>
+    <div class="malHaupt">
+      <div class="malLeinwandRahmen"><canvas id="malLeinwand" width="${MAL.g * 16}" height="${MAL.g * 16}"></canvas></div>
+      <aside class="malSeite">
+        <div class="malGruppe"><span>Werkzeug</span><div class="malWerkzeuge">
+          ${[["stift", "✏️ Stift"], ["radierer", "🧽 Radierer"], ["fuellen", "🪣 Füllen"]].map(([id, t]) => `<button type="button" data-malw="${id}" class="${MAL.werkzeug === id ? "an" : ""}" ${w.includes(id) ? "" : "disabled"}>${t}${w.includes(id) ? "" : " <em>🔒</em>"}</button>`).join("")}
+          <button type="button" data-malspiegel class="${MAL.spiegeln ? "an" : ""}" ${w.includes("spiegeln") ? "" : "disabled"}>🪞 Spiegeln${w.includes("spiegeln") ? "" : " <em>🔒</em>"}</button>
+        </div></div>
+        <div class="malGruppe"><span>Größe</span><div class="malWerkzeuge">${[16, 24, 32].map(n => `<button type="button" data-malg="${n}" class="${MAL.g === n ? "an" : ""}" ${groessen.includes(n) ? "" : "disabled"}>${n}×${n}${groessen.includes(n) ? "" : " <em>🔒</em>"}</button>`).join("")}</div></div>
+        <div class="malGruppe"><span>Farben${st.farben ? ` · ${st.farben} Grundfarben` : " · frei wählbar — gewählte Farbe nochmal antippen"}</span><div class="malPalette">
+          ${MAL.pal.map((c, i) => `<button type="button" data-malf="${i}" class="${MAL.farbe === i ? "an" : ""}" style="background:${c}" aria-label="Farbe ${i + 1}">${st.farben ? "" : `<input type="color" value="${c}" data-malfarbe="${i}" tabindex="-1">`}</button>`).join("")}
+        </div></div>
+        <div class="malGruppe"><span>Vorschau</span><div class="malVorschau"><canvas id="malKlein" width="${MAL.g}" height="${MAL.g}"></canvas><div class="malKopfProbe" style="background:${my?.color || "#64748b"}"><canvas id="malMittel" width="${MAL.g}" height="${MAL.g}"></canvas><b>${escapeHtml(rohText(my?.name || ""))}</b></div></div></div>
+        <div class="malKnoepfe"><button type="button" data-malzurueck>↶ Rückgängig</button><button type="button" data-malleeren>Leeren</button></div>
+        <button type="button" class="buyb" data-malspeichern>Logo speichern</button>
+        ${st.version < 3 ? `<div class="note" style="margin:0">Mit einem Update deines Programms kommen ${st.version < 2 ? "24×24 Pixel, 16 Farben und Füllen" : "32×32 Pixel, freie Farben und Spiegeln"} dazu — gratis.</div>` : ""}
+      </aside>
+    </div></div>`;
+  malZeichnen();
+}
+function malZeichnen() {
+  const c = document.getElementById("malLeinwand"); if (!c) return;
+  const cx = c.getContext("2d"), z = c.width / MAL.g;
+  for (let y = 0; y < MAL.g; y++) for (let x = 0; x < MAL.g; x++) {
+    const v = MAL.px[y * MAL.g + x];
+    cx.fillStyle = v >= 0 ? MAL.pal[v] : ((x + y) % 2 ? "#e5e7eb" : "#f9fafb");
+    cx.fillRect(x * z, y * z, z, z);
+  }
+  cx.strokeStyle = "rgba(0,0,0,.08)"; cx.lineWidth = 1;
+  for (let i = 0; i <= MAL.g; i++) { cx.beginPath(); cx.moveTo(i * z + .5, 0); cx.lineTo(i * z + .5, c.height); cx.moveTo(0, i * z + .5); cx.lineTo(c.width, i * z + .5); cx.stroke(); }
+  if (MAL.spiegeln) { cx.strokeStyle = "rgba(239,68,68,.6)"; cx.lineWidth = 2; cx.beginPath(); cx.moveTo(c.width / 2, 0); cx.lineTo(c.width / 2, c.height); cx.stroke(); }
+  for (const id of ["malKlein", "malMittel"]) {
+    const k = document.getElementById(id); if (!k) continue;
+    const kx = k.getContext("2d"); kx.clearRect(0, 0, k.width, k.height);
+    for (let i = 0; i < MAL.px.length; i++) if (MAL.px[i] >= 0) { kx.fillStyle = MAL.pal[MAL.px[i]]; kx.fillRect(i % MAL.g, Math.floor(i / MAL.g), 1, 1); }
+  }
+}
+function malSetze(x, y, wert) {
+  if (x < 0 || y < 0 || x >= MAL.g || y >= MAL.g) return;
+  MAL.px[y * MAL.g + x] = wert;
+  if (MAL.spiegeln) MAL.px[y * MAL.g + (MAL.g - 1 - x)] = wert;
+}
+function malFuellen(x, y, wert) {
+  const ziel = MAL.px[y * MAL.g + x]; if (ziel === wert) return;
+  const stapel = [[x, y]];
+  while (stapel.length) {
+    const [a, b] = stapel.pop();
+    if (a < 0 || b < 0 || a >= MAL.g || b >= MAL.g || MAL.px[b * MAL.g + a] !== ziel) continue;
+    MAL.px[b * MAL.g + a] = wert;
+    stapel.push([a + 1, b], [a - 1, b], [a, b + 1], [a, b - 1]);
+  }
+}
+function malPunkt(e) {
+  const c = document.getElementById("malLeinwand"), r = c.getBoundingClientRect();
+  return [Math.floor((e.clientX - r.left) / r.width * MAL.g), Math.floor((e.clientY - r.top) / r.height * MAL.g)];
+}
+function malAnwenden(e, neu) {
+  const [x, y] = malPunkt(e);
+  if (neu) { MAL.verlauf.push(MAL.px.slice()); if (MAL.verlauf.length > 40) MAL.verlauf.shift(); MAL.letzt = null; }
+  if (MAL.werkzeug === "fuellen") { if (neu) { malFuellen(x, y, MAL.farbe); if (MAL.spiegeln) malFuellen(MAL.g - 1 - x, y, MAL.farbe); } }
+  else {
+    /* Lückenlos: von der letzten Zelle zur aktuellen eine Linie ziehen —
+     * bei schnellen Bewegungen springt der Zeiger sonst über Zellen hinweg. */
+    const wert = MAL.werkzeug === "radierer" ? -1 : MAL.farbe;
+    const [x0, y0] = MAL.letzt || [x, y];
+    const n = Math.max(Math.abs(x - x0), Math.abs(y - y0), 1);
+    for (let i = 0; i <= n; i++) malSetze(Math.round(x0 + (x - x0) * i / n), Math.round(y0 + (y - y0) * i / n), wert);
+    MAL.letzt = [x, y];
+  }
+  malZeichnen();
+}
+document.addEventListener("pointerdown", e => { if (e.target.id === "malLeinwand") { MAL.malt = true; e.target.setPointerCapture?.(e.pointerId); malAnwenden(e, true); e.preventDefault(); } });
+document.addEventListener("pointermove", e => { if (MAL.malt && e.target.id === "malLeinwand" && MAL.werkzeug !== "fuellen") malAnwenden(e, false); });
+document.addEventListener("pointerup", () => { MAL.malt = false; });
+function malKlick(e) {
+  if (e.target.id === "malFenster" || e.target.closest("[data-malzu]")) return malSchliessen();
+  const w = e.target.closest("[data-malw]"); if (w && !w.disabled) { MAL.werkzeug = w.dataset.malw; return malAufbauen(); }
+  if (e.target.closest("[data-malspiegel]:not(:disabled)")) { MAL.spiegeln = !MAL.spiegeln; return malAufbauen(); }
+  const f = e.target.closest("[data-malf]"); if (f && !e.target.matches("input")) { MAL.farbe = +f.dataset.malf; if (MAL.werkzeug === "radierer") MAL.werkzeug = "stift"; return malAufbauen(); }
+  const g = e.target.closest("[data-malg]");
+  if (g && !g.disabled) {
+    const neu = +g.dataset.malg, alt = MAL.g, altPx = MAL.px;
+    MAL.verlauf.push({ g: alt, px: altPx.slice() });
+    MAL.g = neu; MAL.px = Array.from({ length: neu * neu }, (_, i) => altPx[Math.floor(Math.floor(i / neu) * alt / neu) * alt + Math.floor((i % neu) * alt / neu)]);
+    return malAufbauen();
+  }
+  if (e.target.closest("[data-malzurueck]")) {
+    const v = MAL.verlauf.pop(); if (!v) return;
+    if (Array.isArray(v)) MAL.px = v; else { MAL.g = v.g; MAL.px = v.px; return malAufbauen(); }
+    return malZeichnen();
+  }
+  if (e.target.closest("[data-malleeren]")) { MAL.verlauf.push(MAL.px.slice()); MAL.px.fill(-1); return malZeichnen(); }
+  if (e.target.closest("[data-malspeichern]")) {
+    if (!MAL.px.some(v => v >= 0)) return toast("Das Logo ist noch leer", true);
+    const logo = { g: MAL.g, pal: MAL.pal, px: MAL.px.map(v => v < 0 ? "." : v.toString(16)).join("") };
+    socket.emit("logoSpeichern", { logo }, r => {
+      if (r?.error) return toast(r.error, true);
+      SFX.spiel("geld"); toast("Logo gespeichert — es erscheint jetzt überall bei deiner Firma");
+      malSchliessen();
+    });
+  }
+}
+function malEingabe(e) {
+  const i = e.target.dataset?.malfarbe;
+  if (i != null) { MAL.pal[+i] = e.target.value; e.target.parentElement.style.background = e.target.value; MAL.farbe = +i; malZeichnen(); }
+}
+document.addEventListener("keydown", e => { if (e.key === "Escape" && MAL.offen) malSchliessen(); });
+
+/* Löhne (Sandkasten, Etappe 2): drei Stufen, höher gibt Vorrang bei knappen
+ * Arbeitern. Eine Senkung greift erst nach der Kündigungsfrist. */
+/* Jobbörse im Firma-Panel: eigenes Abo und die Angebote der Stadt */
+function jobAboHtml(me, state) {
+  const jobs = (state.jobboerse || []).filter(j => j.version >= 1 && j.ownerId !== store.get().myId);
+  const abo = jobs.find(j => j.id === me.lohn?.jobAbo);
+  if (me.lohn?.vorrang && !abo) return `<div class="kzrow"><span>${t("Jobbörse")}</span><b>${t("eigene")} · +${String(me.lohn.vorrang).replace(".", ",")} ${t("Vorrang")}</b></div>`;
+  if (!jobs.length) return "";
+  return `<div class="kzrow"><span>${t("Jobbörse")} <span class="meta">· ${t("Vorrang ohne höheren Lohn")}</span></span><b>${abo ? `${abo.name} · +${String(me.lohn.vorrang).replace(".", ",")}` : t("kein Abo")}</b></div>
+    <div class="fJobs">${jobs.map(j => `<button class="${abo?.id === j.id ? "on" : ""}" data-jobabo="${abo?.id === j.id ? "" : j.id}" ${abo?.id !== j.id && j.abonnenten >= j.plaetze ? "disabled" : ""}>
+      <b>${j.name} v${j.version}</b><span>+${String(j.vorrang).replace(".", ",")} · ${fp(j.gebuehr)}/${t("Arbeiter")}${abo?.id === j.id ? ` · ${t("kündigen")}` : ""}</span></button>`).join("")}</div>`;
+}
+function lohnHtml(me, state) {
+  const L = me.lohn, S = state.stadt;
+  if (!L || !S) return "";
+  const stufen = Object.entries(S.loehne);
+  const kosten = L.arbeiter * S.loehne[L.stufe].lohn, rest = L.ab ? Math.max(0, L.ab - state.tick) : 0;
+  return `<div class="sec">${t("Löhne")} <span class="meta">· ${L.arbeiter} / ${L.soll} ${t("Arbeiter")}</span></div>
+    <div class="fLohn">${stufen.map(([k, v]) => `<button class="${k === L.stufe ? "on" : ""}${k === L.wunsch ? " bald" : ""}" data-lohn="${k}">
+      <b>${t(v.name)}</b><span>${v.lohn} $ ${t("je Arbeiter/min")}</span></button>`).join("")}</div>
+    <div class="kzrow"><span>${t("Lohnkosten")}</span><b>${fmt(kosten)}/min</b></div>
+    ${jobAboHtml(me, state)}
+    <div class="kzrow"><span>${t("Insgesamt gezahlt")}</span><b>${fmt(L.gesamt)}</b></div>
+    ${L.wunsch ? `<div class="meta">${t("Senkung auf")} ${t(S.loehne[L.wunsch].name)} ${t("in")} ${rest} s (${t("Kündigungsfrist")}).</div>` : ""}
+    ${L.verzug ? `<div class="meta stMinus">${t("Löhne nicht voll bezahlt — du bekommst zuletzt Arbeiter, bis du wieder zahlst.")}</div>` : ""}
+    <div class="meta" style="padding-bottom:8px">${t("Sind Arbeiter knapp, gehen sie zuerst zur Firma mit dem höchsten Lohn. Vom Lohn gehen 30 % als Steuer und Miete an die Stadt — damit baut sie Wohnungen.")}</div>`;
+}
+/* Rüstungsaufträge (nur Rüstungsfirmen im Sandkasten): verdeckt bieten in
+ * Prozent des Listenpreises, als Gewinner innerhalb der Frist liefern. */
+function ruestHtml(me, state, my) {
+  const R = state.stadt?.ruest;
+  if (!R || !(my?.industries || [my?.industry]).includes("ruestung")) return "";
+  const tick = state.tick || 0, myId = store.get().myId, regel = R.regeln;
+  const auftrag = a => {
+    const liste = Object.entries(a.needs);
+    if (a.phase === "bieten") {
+      const mein = me.ruestGebote?.[a.id];
+      return `<div class="stAuftrag"><div class="faPKopf"><b>${t("Ausschreibung")}: ${t(a.name)}</b><span class="meta">${t("Gebote noch")} ${Math.max(0, a.bisBieten - tick)} s · ${a.gebote} ${t("Gebote")}</span></div>
+        <div class="meta">${liste.map(([g, n]) => `${n.req}× ${gname(g)} (${t("Lager")} ${Math.floor(me.inv?.[g] || 0)})`).join(" · ")}</div>
+        <div class="faPFuss"><span class="meta">${mein ? `${t("Dein Gebot")}: ${mein} %` : `${regel.min}–${regel.max} ${t("% vom Listenpreis")}`}</span>
+          <input type="number" min="${regel.min}" max="${regel.max}" id="rg-${a.id}" value="${mein || 105}">
+          <button class="buyb" data-rgebot="${a.id}">${t(mein ? "Gebot ändern" : "Bieten")}</button></div></div>`;
+    }
+    const meins = a.gewinner === myId;
+    return `<div class="stAuftrag"><div class="faPKopf"><b>${t("Lieferung")}: ${t(a.name)}</b><span class="meta">${t("Zuschlag an")} ${meins ? t("dich") : a.gewinnerName} · ${a.prozent} % · ${t("Frist noch")} ${Math.max(0, a.frist - tick)} s</span></div>
+      ${liste.map(([g, n]) => `<div class="faProjekt">
+        <div class="faPKopf"><b>${gname(g)}</b><span class="meta">${n.have} / ${n.req} · ${fp(a.preise[g])}/Stk</span></div>
+        <div class="faBalken"><i style="width:${Math.min(100, n.have / n.req * 100).toFixed(1)}%"></i></div>
+        ${meins ? `<div class="faPFuss"><span class="meta">${t("Lager")}: ${Math.floor(me.inv?.[g] || 0)}</span>
+          <button class="buyb" data-rliefer="${a.id}" data-rlg="${g}" ${(me.inv?.[g] || 0) < 1 || n.have >= n.req ? "disabled" : ""}>${t("Liefern")}</button></div>` : ""}</div>`).join("")}</div>`;
+  };
+  return `<div class="sec">${t("Rüstungsaufträge")} <span class="meta">· ${t("Lieferruf")} ${R.ruf?.[myId] ?? 100}</span></div>
+    ${R.auftraege.length ? R.auftraege.map(auftrag).join("") : `<div class="kzrow"><span>${t("Nächste Ausschreibung in")}</span><b>${Math.max(0, (R.naechste || tick) - tick)} s</b></div>`}
+    <div class="meta" style="padding:4px 0 6px">${t("Das günstigste Gebot gewinnt, gewichtet mit dem Lieferruf. Wer nicht rechtzeitig liefert, zahlt 20 % des fehlenden Werts als Strafe und verliert Ruf.")}</div>
+    ${(R.log || []).length ? `<div class="stLog">${R.log.slice(0, 4).map(l => `<div class="meta">Min ${Math.floor(l.tick / 60)} · ${l.text}</div>`).join("")}</div>` : ""}`;
+}
+/* Lexikon-Gruppe „Stadt & Arbeit“ (nur wenn die Stadt in diesem Modus wächst) */
+function stadtLexikon() {
+  const S = store.get().state?.stadt;
+  if (!S) return "";
+  return `<details class="lexGruppe" data-lex="lex-stadt" ${LEX_OFFEN.has("lex-stadt") ? "open" : ""}><summary>${t("Stadt & Arbeit")}<span>8</span></summary>
+    <div class="sec">${t("Wohnblöcke der Stadt")}</div>
+    <table><tr><th>${t("Stufe")}</th><th>${t("Plätze")}</th><th>${t("Kosten")}</th><th>${t("ab Einwohnern")}</th></tr>
+    ${S.stufen.map(x => `<tr><td>${t(x.name)}</td><td>${x.plaetze}</td><td>${fmt(x.kosten)}</td><td>${x.ab || "—"}</td></tr>`).join("")}</table>
+    <div class="sec">${t("Arbeiter")}</div>
+    <p class="meta">${t("Rund 1 Arbeiter je 250 $ Baukosten (2 bis 30), +50 % je Ausbaustufe. Leistung = Besetzung, unter 25 % Stillstand. Labor, Studio und Chipfabrik: die Hälfte Fachkräfte. Steuerungssoftware: −25 %.")}</p>
+    <div class="sec">${t("Löhne")}</div>
+    <table>${Object.values(S.loehne).map(l => `<tr><td>${t(l.name)}</td><td style="text-align:right">${l.lohn} $ ${t("je Arbeiter/min")}</td></tr>`).join("")}</table>
+    <p class="meta">${t("30 % der Löhne gehen als Lohnsteuer und Miete an die Stadt, 20 % ins Bürgerdepot.")}</p>
+    <div class="sec">${t("Bürger-Apps und Jobbörse")}</div>
+    <p class="meta">${t("Bürger-App: bis 85 % der Einwohner zahlen ein Abo je Minute, 200 Nutzer je Rechenzentrums-Stufe des Anbieters. Jobbörse: Vorrang wie +0,3 bis +0,7 Lohnstufen gegen eine Gebühr je Arbeiter, 3 Abos je Rechenzentrums-Stufe.")}</p>
+    <div class="sec">${t("Gäste und Hotels")}</div>
+    <p class="meta">${t("Jede Minute 10 Gäste plus 4 je 100 Einwohner, mal Zufriedenheit. Sie wählen nach Bewertung und Zimmerpreis; wer zu teuer ist, verliert Gäste an andere Urlaubsorte. Strandhotel 2 bis 5 Sterne (Renovieren 1.500 / 3.000 / 5.000 $), ab 3 Sternen Frühstück für 3 / 5 / 8 $ je Gast. Stadtfeste: +60 bis +150 % Gäste für 5 bis 8 Minuten.")}</p>
+    <div class="sec">${t("Websites und Rechenzentren")}</div>
+    <p class="meta">${t("Software-Firmen entwickeln einen Website-Baukasten (Grundseite, Branchenportal, Aktionen). Andere Firmen zahlen 400 $ Einrichtung und ein Abo je Minute und bekommen +5 / +10 / +15 % Reichweite: schneller verkaufen, mehr Gäste, mehr Grundbedarf. Je Rechenzentrums-Stufe 2 Websites; der Anbieter verteilt seine Plätze selbst. Ohne Anbieter: Stadtportal-Grundseite für 600 $ und 45 $/min.")}</p>
+    <div class="sec">${t("Stadtnetz und Branchenportale")}</div>
+    <p class="meta">${t("Im Stadtnetz stehen alle Firmen mit Website, sortiert nach Besuchern. Branchenportal: Direktkauf zum Ø-Kurs plus 5 % (Hofladen, Großhandel, Baustoff-Portal, Kundenportal), Rohstoff +5 % auf Wohnbau-Lieferungen, Rüstung 5 % günstigere Gebote, +15 % je Lieferung und häufigere Ausschreibungen. Aktionen: 600 $, 5 Minuten +25 % Reichweite, danach 15 Minuten Pause.")}</p>
+    <div class="sec">${t("Stadtanleihen")}</div>
+    <p class="meta">${fmt(S.anleihe.betrag)} · ${String(S.anleihe.zins * 100).replace(".", ",")} %/min · ${S.anleihe.laufzeit / 60} min · ${t("höchstens")} ${fmt(S.anleihe.max)} ${t("Schulden")}</p>
+  </details>`;
+}
+/* Wohnbau-Aufträge der Stadt (Etappe 3): Baumaterial liefern, die Stadt zahlt
+ * 15 % über Kurs. Nach Ablauf der Frist kauft sie den Rest teurer anderswo. */
+function wohnAuftraegeHtml(S, me) {
+  if (!S.auftraege?.length) return "";
+  const tick = store.get().state?.tick || 0;
+  return `<div class="sec">${t("Baumaterial für die Stadt")} <span class="meta">· ${t("15 % über Kurs, bezahlt sofort")}</span></div>` + S.auftraege.map(a => `
+    <div class="stAuftrag"><div class="faPKopf"><b>${t(a.name)}</b><span class="meta">${t("noch")} ${Math.max(0, a.frist - tick)} s · ${t("danach kauft die Stadt den Rest anderswo")}</span></div>
+    ${Object.entries(a.needs).map(([g, n]) => `<div class="faProjekt">
+      <div class="faPKopf"><b>${gname(g)}</b><span class="meta">${n.have} / ${n.req} · ${fp(n.pay)}/Stk</span></div>
+      <div class="faBalken"><i style="width:${Math.min(100, n.have / n.req * 100).toFixed(1)}%"></i></div>
+      <div class="faPFuss"><span class="meta">${t("Lager")}: ${Math.floor(me.inv?.[g] || 0)}</span>
+        <input type="number" min="1" id="wb-${a.id}-${g}" placeholder="${t("Menge")}">
+        <button class="buyb" data-wb="${a.id}" data-wbg="${g}" ${(me.inv?.[g] || 0) < 1 || n.have >= n.req ? "disabled" : ""}>${t("Liefern")}</button></div></div>`).join("")}
+    ${Object.keys(a.contrib).length ? `<div class="faLieferanten">${Object.values(a.contrib).map(c => `<span style="--f:${c.color || "#888"}">${c.name}</span>`).join("")}</div>` : ""}</div>`).join("");
+}
+/* Stadtübersicht (nur Sandkasten): Einwohner, Wohnungen, Zufriedenheit und
+ * was die Stadt gerade baut. Steht oben im Finanzamt, weil die Stadtkasse den
+ * Wohnbau bezahlt. */
+function stadtHtml(S, F, me = {}) {
+  if (!S) return "";
+  const vz = n => (n > 0 ? "+" : n < 0 ? "−" : "±") + Math.abs(Math.round(n * 100)) + " %";
+  const A = S.arbeit;
+  const bewegung = S.wegzug ? `−${S.wegzug} ${t("Wegzug letzte Minute")}` : `+${S.zuzug} ${t("Zuzug letzte Minute")}`;
+  const v = S.verlauf || [], emax = Math.max(...v.map(p => p.e), 1), emin = Math.min(...v.map(p => p.e), emax);
+  const spanne = Math.max(1, emax - emin), lin = v.length > 1
+    ? v.map((p, i) => `${(i / (v.length - 1) * 300).toFixed(1)},${(52 - (p.e - emin) / spanne * 44).toFixed(1)}`).join(" ") : "";
+  const status = S.baustellen ? `${S.baustellen} ${t(S.baustellen === 1 ? "Baustelle läuft" : "Baustellen laufen")}`
+    : S.wartetAufGeld ? `${t("Wartet auf Geld")}: ${fmt(S.wartetAufGeld)}`
+    : S.frei > 0 ? t("Genug freie Wohnungen") : t("Kein Bauland mehr frei");
+  return `
+    <div class="sec">${t("Die Stadt")} <span class="meta">· ${t("baut Wohnungen aus der Stadtkasse, Bewohner ziehen zu")}</span></div>
+    <div class="faKonten stKonten">
+      <div class="faKonto"><span>${t("Einwohner")}</span><b>${S.einwohner.toLocaleString("de-DE")}</b><em>${bewegung}</em></div>
+      <div class="faKonto"><span>${t("Wohnungen")}</span><b>${(S.kapazitaet - S.frei).toLocaleString("de-DE")} / ${S.kapazitaet.toLocaleString("de-DE")}</b><em>${S.frei} ${t("frei")} · ${S.bloecke.map((n, i) => n ? `${n}× ${t(S.stufen[i].name)}` : "").filter(Boolean).join(", ")}</em>
+        <div class="faBalken"><i style="width:${Math.min(100, (S.kapazitaet - S.frei) / Math.max(1, S.kapazitaet) * 100).toFixed(1)}%"></i></div></div>
+      <div class="faKonto"><span>${t("Zufriedenheit")}</span><b>×${S.zufr.toFixed(2).replace(".", ",")}</b><em>${S.zufr < 0.7 ? t("Bewohner ziehen weg") : t("bremst oder beschleunigt den Zuzug")}</em></div>
+    </div>
+    ${lin ? `<svg class="stVerlauf" viewBox="0 0 300 56" preserveAspectRatio="none" aria-label="${t("Einwohnerverlauf")}"><polyline points="${lin}" fill="none" stroke="var(--accent)" stroke-width="2" vector-effect="non-scaling-stroke"/></svg>
+      <div class="meta stAchse"><span>${emin.toLocaleString("de-DE")}</span><span>${t("Einwohner im Verlauf der Runde")}</span><span>${emax.toLocaleString("de-DE")}</span></div>` : ""}
+    <div class="stTeile">${(S.teile || []).map(x => `<div class="kzrow"><span>${t(x.name)} <span class="meta">· ${t(x.text)}</span></span><b class="${x.wirkung < 0 ? "stMinus" : x.wirkung > 0 ? "stPlus" : "meta"}">${vz(x.wirkung)}</b></div>`).join("")}</div>
+    <div class="kzrow"><span>${t("Wohnbau")} <span class="meta">· ${t("Kasse bleibt über")} ${fmt(S.kasseMin)}</span></span><b class="meta">${status}</b></div>
+    <div class="sec">${t("Arbeitsmarkt")} <span class="meta">· ${Math.round(S.quote * 100)} % ${t("der Einwohner arbeiten")}</span></div>
+    <div class="stArbeit"><div class="stArbeitBalken" title="${t("Beschäftigt / Stellen")}"><i style="width:${Math.min(100, A.beschaeftigt / Math.max(1, A.bedarf, A.faehig) * 100).toFixed(1)}%"></i>${A.bedarf > A.faehig ? `<em style="left:${(A.faehig / A.bedarf * 100).toFixed(1)}%"></em>` : ""}</div>
+      <div class="meta stAchse"><span>${A.beschaeftigt.toLocaleString("de-DE")} ${t("beschäftigt")}</span><span>${A.offen ? `${A.offen} ${t("Stellen offen")}` : `${A.arbeitslos} ${t("arbeitslos")}`}</span><span>${A.bedarf.toLocaleString("de-DE")} ${t("Stellen")}</span></div></div>
+    <div class="kzrow"><span>${t("Löhne aller Firmen")}</span><b>${fmt(A.lohnsumme)}/min</b></div>
+    <div class="kzrow"><span>${t("Lohnsteuer + Miete an die Stadt")} <span class="meta">· ${Math.round((S.anteile.steuer + S.anteile.miete) * 100)} % ${t("der Löhne")}</span></span><b>${fmt(A.lohnsteuer + A.miete)}/min</b></div>
+    ${A.stuetze ? `<div class="kzrow"><span>${t("Stütze für Arbeitslose")}</span><b class="stMinus">−${fmt(A.stuetze)}/min</b></div>` : ""}
+    ${S.appNutzer ? `<div class="kzrow"><span>${t("Bürger-Apps")} <span class="meta">· ${t("ab der Hälfte der Einwohner: Digitale Stadt +5 %")}</span></span><b>${S.appNutzer} ${t("Nutzer")}</b></div>` : ""}
+    ${S.fach ? `<div class="kzrow"><span>${t("Fachkräfte")} <span class="meta">· ${Math.round(S.fach.quote * 100)} % ${t("der Arbeitenden, mehr durch die Stadtbibliothek")}</span></span><b>${S.fach.besetzt} / ${S.fach.bedarf} ${t("Stellen")}</b></div>` : ""}
+    ${S.schulden ? `<div class="kzrow"><span>${t("Stadtanleihen")} <span class="meta">· ${t("gezeichnet, an der Stadtbank")}</span></span><b class="stMinus">${fmt(S.schulden)}</b></div>` : ""}
+    ${wohnAuftraegeHtml(S, me)}
+    <div class="kzrow"><span>${t("Nachfrage in den Läden")} <span class="meta">· ${t("wächst mit der Einwohnerzahl")}</span></span><b>×${String(S.nachfrage).replace(".", ",")}</b></div>
+    ${(S.log || []).length ? `<div class="stLog">${S.log.slice(0, 4).map(l => `<div class="meta">Min ${Math.floor(l.tick / 60)} · ${l.text}</div>`).join("")}</div>` : ""}`;
+}
 function finanzamtRendern(state, me, myId) {
   const F = state.finanzamt, el = document.getElementById("finanzamtbody");
   if (!F?.aktiv) { el.innerHTML = `<div class="meta">In diesem Modus gibt es kein Finanzamt.</div>`; return; }
   /* Perf: Nur rendern wenn sich was ändert (Stadtkasse, Finanzamt-Sätze, etc.) */
   const PP = state.stadtprojekt;
-  const sig = JSON.stringify([F, me.steuer, PP, PP ? Object.keys(PP.needs).map(g => Math.floor(me.inv[g] || 0)) : 0, SPRACHE]);
+  const sig = JSON.stringify([F, state.stadt, ["ziegel", "beton", "stahl", "elektronik"].map(g => Math.floor(me.inv?.[g] || 0)), me.steuer, PP, PP ? Object.keys(PP.needs).map(g => Math.floor(me.inv[g] || 0)) : 0, SPRACHE]);
   if (finanzamtRendern.lastSig === sig) return;
   finanzamtRendern.lastSig = sig;
   const uhr = s => `${Math.floor(s / 60)}:${String(Math.max(0, s) % 60).padStart(2, "0")}`;
   const st = me.steuer || {};
   const P = state.stadtprojekt;
   const pct = n => Math.min(100, n.have / n.req * 100);
-  el.innerHTML = `
+  el.innerHTML = `${stadtHtml(state.stadt, F, me)}
     <div class="faKonten">
       <div class="faKonto"><span>Stadtkasse</span><b>${fmt(F.stadtkasse)}</b><em>${P ? "Projekt läuft" : F.stadtkasse >= F.schwelle ? "Projekt kommt gleich" : `Stadtprojekt ab ${fmt(F.schwelle)}`}</em>
         <div class="faBalken"><i style="width:${Math.min(100, F.stadtkasse / F.schwelle * 100).toFixed(1)}%"></i></div></div>
@@ -5552,7 +9776,13 @@ function finanzamtRendern(state, me, myId) {
     ${F.fertig.length ? `<div class="sec">Gebaute Stadtprojekte</div>${F.fertig.map(f => `<div class="kzrow"><span>${f.name}</span><b class="meta">${f.lieferanten.join(", ")}</b></div>`).join("")}` : ""}
     <div class="meta" style="padding-top:10px">Insgesamt eingenommen: ${fmt(F.gesamt)} — alle Firmen zahlen, auch die Bots.</div>`;
 }
+document.getElementById("einw").addEventListener("click", () => openPanel("finanzamt"));
 document.getElementById("finanzamtbody").addEventListener("click", e => {
+  const wb = e.target.closest("[data-wb]");
+  if (wb) {
+    const g = wb.dataset.wbg, me = store.get().me;
+    return act("wohnbauLiefern", { id: +wb.dataset.wb, good: g, qty: +document.getElementById(`wb-${wb.dataset.wb}-${g}`).value || Math.floor(me.inv[g] || 0) });
+  }
   const b = e.target.closest("[data-sp]");
   if (!b) return;
   const g = b.dataset.sp, me = store.get().me;
@@ -5657,13 +9887,17 @@ document.getElementById("shKurs").addEventListener("click", () => {
   const n = Math.max(1, Math.floor(+document.getElementById("shCount").value) || 1);
   if (!shKursSel) return toast("Erst eine Firma mit Aktien wählen", true);
   document.getElementById("shPrice").value = Math.max(1, Math.round(shKursSel * n));
-  document.getElementById("shHint").textContent = `Kurs ${fk(shKursSel)} je Aktie → ${n} Aktien ≈ ${fmt(shKursSel * n)}. Angeboten zum Kurs.`;
+  handelVorschau();
   SFX.spiel("klick");
 });
+/* Jede Eingabe in den Handelsformularen rechnet die Vorschau neu. */
+["bidCompany", "bidCount", "bidPrice", "shCompany", "shCount", "shPrice"].forEach(id =>
+  document.getElementById(id)?.addEventListener("input", handelVorschau));
 document.getElementById("shList").addEventListener("click", () => act("listShares", {
   companyId: document.getElementById("shCompany").value || null,
   count: document.getElementById("shCount").value, price: document.getElementById("shPrice").value,
-  toId: document.getElementById("shTo").value || null }));
+  toId: document.getElementById("shTo").value || null,
+  venueId: document.getElementById("shVenue")?.value || null }));
 document.getElementById("chatform").addEventListener("submit", e => {
   e.preventDefault(); const inp = document.getElementById("chatin");
   if (inp.value.trim()) act("chat", { room: store.get().room, text: inp.value });
@@ -5806,70 +10040,147 @@ const SFX_AKTION = {
  * geforderte Gebäude auf der Karte steht.
  * ================================================================ */
 /* Tutorial je Industrie: gemeinsamer Rahmen + spezifische Bau-Schritte */
+/* ---- Branchen-Tutorials (Sandkasten) ----
+ * Jede Branche hat ihren eigenen Rundgang: erst bauen, dann verkaufen, dann
+ * das, was nur diese Branche ausmacht (Gäste und Sterne, Ausschreibungen,
+ * Grundbedarf, Bürger-Apps …). Fast jeder Schritt wartet auf die echte
+ * Handlung und hakt sich dann selbst ab; „auslassen“ hilft, wenn etwas gerade
+ * nicht geht. Gemeinsam für alle: Stadt und Arbeiter, Stadtnetz, Vermögensziel. */
+const tutHat = (st, id, ...bts) => st.map.some(t => t.owner === id && bts.includes(t.btype) && !(t.bauBis > st.tick));
+const tutShop = (st, id) => st.map.some(t => t.owner === id && t.btype === "onlinemarkt" && t.system);
+const tutRegal = (st, id, gs) => st.map.some(t => t.owner === id && (t.shop || []).some(sl => sl?.good && (!gs || gs.includes(sl.good))));
+const tutGekauft = (st, me, id, gs) => gs.some(g => (me.sales?.[g]?.buyQty || 0) > 0 || st.orders.some(o => o.playerId === id && o.side === "buy" && o.good === g));
+const tutVerkauft = (st, me, id, gs) => gs.some(g => ((me.sales?.[g]?.botQty || 0) + (me.sales?.[g]?.playerQty || 0)) > 0
+  || st.orders.some(o => o.playerId === id && o.side === "sell" && o.good === g)) || tutRegal(st, id, gs);
 const TUT_IND = {
   agrar: [
-    { t: "Baue eine Farm", build: "farm",
-      p: `Klicke auf eine freie <em>grüne Agrar-Kachel</em> und wähle <b>Farm</b> ($1.200 + 3 Ziegel). Sie produziert <b>Obst</b> — dein Brot-und-Butter-Gut.` },
-    { t: "Baue einen Marktstand", build: "markt",
-      p: `Baue auf einer <em>blauen Zentrums-Kachel</em> einen <b>Marktstand</b> ($1.000 + 3 Ziegel). Klicke ihn danach an und lege <b>Ware, Menge und deinen Stückpreis</b> fest — er verkauft von allein.` },
-    { t: "Baue eine Plantage", build: "plantage",
-      p: `Jetzt eine <b>Plantage</b> ($2.200 + 6 Ziegel) auf einer Agrar-Kachel: <b>Kannabis</b> ist langsam, aber wertvoll (Ø ~$45). Später veredelst du mit Saftpresse und Pharma-Labor.` },
-    { t: "Dein Handelsbedarf",
-      p: `Deine Farmen laufen auf <b>+150 % Tempo</b>, wenn <em>Strom + Wasser</em> im Lager liegen (wird verbraucht). Beides produzieren die <b>Grundversorger</b> — kaufe es im <b>Börse-Panel</b> (Kauforder oder direkt aus dem Buch). Und für jeden weiteren Bau brauchst du <b>Ziegel der Bauindustrie</b>.` },
+    { t: "Bau deine erste Farm", build: "farm", wartetext: "Warte auf die Farm …",
+      p: `Klick eine freie <em>grüne Agrar-Kachel</em> an und bau eine <b>Farm</b>. Sie erntet <b>Obst</b> — Sekunde für Sekunde, direkt in dein Lager.<br><br>Obst ist das Grundnahrungsmittel der Stadt: Bewohner kaufen es im Laden, Bäckereien und Saftpressen verarbeiten es weiter.` },
+    { t: "Bau deinen Laden", build: "onlinemarkt", wartetext: "Warte auf den Online-Marktplatz …",
+      p: `Ware im Lager ist noch kein Geld. Bau im <em>Zentrum</em> einen <b>Online-Marktplatz</b> — das ist der einzige Laden der Stadt, jede Branche darf ihn bauen.` },
+    { t: "Installier ein Shop-System", warte: (st, me, id) => tutShop(st, id), wartetext: "Warte auf das Shop-System …",
+      p: `Klick deinen Marktplatz an und wähl ein <b>Shop-System</b>. Ohne System verkauft er nichts.<br><br>Das <b>Stadtportal</b> ist immer da, nimmt aber 8 % je Verkauf. Systeme der Software-Firmen sind meist günstiger und verkaufen schneller.` },
+    { t: "Leg Obst ins Regal", warte: (st, me, id) => tutRegal(st, id, ["obst", "honig", "saft", "gebaeck", "kannabis", "medizin"]), wartetext: "Warte auf ein belegtes Regal …",
+      p: `Belege im Marktplatz ein <b>Regal</b> mit Obst. Den Preis bestimmst du.<br><br>Faustregel: nah am <b>Ø-Kurs</b> (steht oben im Ticker). Billiger macht kaum schneller, kostet aber bei jedem Stück Geld.` },
+    { t: "Hol dir den Boost", warte: (st, me, id) => tutGekauft(st, me, id, ["wasser", "strom"]), wartetext: "Warte auf Wasser oder Strom …", ziel: '.dockbtn[data-p="netz"]',
+      p: `Liegen <b>Wasser</b> und <b>Strom</b> im Lager, wächst deine Farm bis zu <b>150 % schneller</b>. Beides verkaufen die Versorger.<br><br>Öffne das <b>Stadtnetz</b> (Knopf unten hervorgehoben) → <b>Warenbörse</b>, wähl Wasser oder Strom und kauf ein paar Stück.` },
+    { t: "Veredle deine Ernte", warte: (st, me, id) => tutHat(st, id, "imkerei", "saftpresse", "plantage", "baeckerei"), wartetext: "Warte auf eine Imkerei, Saftpresse oder Plantage …",
+      p: `Rohes Obst bringt wenig. Mehr verdienst du mit Veredelung: Die <b>Imkerei</b> liefert Honig, die <b>Saftpresse</b> macht aus Obst Saft, die <b>Plantage</b> Kannabis für das Pharma-Labor. Später backt die <b>Bäckerei</b> aus Obst und Honig Gebäck — das teuerste Lebensmittel.` },
+    { t: "Deine Kunden in der Stadt",
+      p: `Drei Abnehmer solltest du kennen:<br>· Die <b>Bewohner</b> brauchen Lebensmittel im Laden — fehlen sie, sinkt die Zufriedenheit der Stadt.<br>· <b>Hotels ab 3 Sternen</b> kaufen Frühstück: Obst, Honig, Saft, Gebäck.<br>· Mit dem Website-Modul <b>Branchenportal</b> wird deine Website zum <b>Hofladen</b>: Mitspieler kaufen dort direkt bei dir.` },
   ],
   rohstoff: [
-    { t: "Schalte Industrie frei & baue eine Mine", build: "mine",
-      p: `Deine Gebäude stehen in der <em>braunen Industrie-Zone</em> — klicke eine gesperrte Kachel, schalte sie frei ($2.000) und baue dort eine <b>Mine</b> ($1.400 + 4 Ziegel). Sie fördert <b>Erze</b> — dein Grundstoff für alles Weitere.` },
-    { t: "Baue eine Ziegelei", build: "ziegelei",
-      p: `Schalte eine weitere Industrie-Kachel frei und baue die <b>Ziegelei</b> ($1.500 + 4 Ziegel): Sie macht aus <em>Erzen + Wasser</em> → <b>Ziegel</b>. Und Ziegel braucht <b>jeder Spieler für jedes Gebäude</b> — du sitzt an der Quelle des gesamten Stadtwachstums.` },
-    { t: "Dein Handelsbedarf",
-      p: `Kaufe <em>Wasser, Strom + Öl</em> von den <b>Grundversorgern</b> über die Börse (Minen laufen mit Strom + Öl auf +150 %). Verkaufe Ziegel &amp; Erze über einen <b>Baustoffhandel</b> ($2.800) zu deinem Preis. Fernziele: <b>Stahlwerk</b> (Erze + Öl → Stahl, Ø ~$80) und <b>Betonwerk</b> (→ Beton für alle großen Gebäude).` },
+    { t: "Bau eine Mine", build: "mine", wartetext: "Warte auf die Mine …",
+      p: `Deine Gebäude stehen in der <em>braunen Industrie-Zone</em>. Klick eine gesperrte Kachel an, schalte sie frei und bau eine <b>Mine</b>. Sie fördert <b>Erze</b> — den Grundstoff für Ziegel, Beton und Stahl.` },
+    { t: "Bau eine Ziegelei", build: "ziegelei", wartetext: "Warte auf die Ziegelei …",
+      p: `Die <b>Ziegelei</b> macht aus Erzen und Wasser <b>Ziegel</b>. Und Ziegel braucht <b>jede Firma für jedes Gebäude</b> — und die Stadt für jeden Wohnblock. Du sitzt an der Quelle des ganzen Wachstums.` },
+    { t: "Wasser, Strom und Öl", warte: (st, me, id) => tutGekauft(st, me, id, ["wasser", "strom", "oel"]), wartetext: "Warte auf einen Einkauf …", ziel: '.dockbtn[data-p="netz"]',
+      p: `Die Ziegelei braucht <b>Wasser</b>, die Mine läuft mit <b>Strom und Öl</b> bis zu 150 % schneller. Kauf beides bei den Versorgern: <b>Stadtnetz</b> (unten) → <b>Warenbörse</b>.` },
+    { t: "Verkauf deine Ziegel", warte: (st, me, id) => tutVerkauft(st, me, id, ["ziegel", "erze", "beton", "stahl"]), wartetext: "Warte auf ein Angebot …", ziel: '.dockbtn[data-p="netz"]',
+      p: `Ziegel verkaufst du am besten an der <b>Warenbörse</b> (Stadtnetz): Dort suchen andere Firmen laufend welche. Stell eine <b>Verkaufsorder</b> zum Ø-Kurs ein — oder bau einen Online-Marktplatz und leg sie ins Regal.` },
+    { t: "Liefer an die Stadt", warte: () => TUT_GESEHEN.has("finanzamt"), wartetext: "Warte, bis du die Stadtübersicht öffnest …", ziel: "#einw, #players",
+      p: `Die Stadt baut Wohnblöcke und bestellt das Baumaterial bei euch — <b>15 % über Kurs</b>, sofort bezahlt. Klick oben auf die <b>Einwohnerzahl</b> (hervorgehoben): In der Stadtübersicht stehen die offenen <b>Wohnbau-Aufträge</b>, dort lieferst du direkt.` },
+    { t: "Dein Weg nach oben",
+      p: `Sobald Geld da ist: <b>Betonwerk</b> (Erze und Öl → Beton) und <b>Stahlwerk</b> (Erze und Öl → Stahl). Beton brauchen große Gebäude und Wohnblöcke, Stahl die Autowerke und die Rüstung.<br><br>Mit dem Website-Modul <b>Branchenportal</b> wird deine Seite zum <b>Baustoff-Portal</b>: +5 % auf jede Wohnbau-Lieferung.` },
   ],
   versorger: [
-    { t: "Baue einen Brunnen", build: "brunnen",
-      p: `Starte günstig: <b>Brunnen</b> ($800 + 2 Ziegel) auf einer <em>grünen Agrar-Kachel</em> — produziert <b>Wasser</b>, das Agrar- und Bauspieler ständig brauchen.` },
-    { t: "Baue ein Handelskontor", build: "kontor",
-      p: `Im <em>blauen Zentrum</em>: <b>Handelskontor</b> ($3.500 + 9 Ziegel) mit 2 Verkaufsslots für alles — hier verkaufst du Wasser, Strom &amp; Öl zu <b>deinem Preis</b>.` },
-    { t: "Dein Ausbau-Pfad",
-      p: `Sobald Kapital da ist: Industrie-Kachel freischalten ($2.000) und <b>E-Werk</b> ($2.000) bauen — <em>Strom braucht jede andere Industrie</em>. Danach Wasserwerk und an der Küste ($12.000) die <b>Ölpumpe</b>. Du bist das Rückgrat der Stadt: Alle Boosts laufen über deine Waren.` },
+    { t: "Bau einen Brunnen", build: "brunnen", wartetext: "Warte auf den Brunnen …",
+      p: `Starte günstig: Bau auf einer <em>grünen Agrar-Kachel</em> einen <b>Brunnen</b>. Er fördert <b>Wasser</b> — das brauchen Farmen, Ziegeleien, Hotels und jeder Haushalt der Stadt.` },
+    { t: "Bau ein E-Werk", build: "ewerk", wartetext: "Warte auf das E-Werk …",
+      p: `Schalte in der <em>braunen Industrie-Zone</em> eine Kachel frei und bau ein <b>E-Werk</b>. <b>Strom</b> braucht fast jede Branche: Chipfabriken, Rechenzentren, Hotels, Minen für den Boost.` },
+    { t: "Verkauf an der Börse", warte: (st, me, id) => tutVerkauft(st, me, id, ["strom", "wasser", "oel", "diesel"]), wartetext: "Warte auf ein Angebot …", ziel: '.dockbtn[data-p="netz"]',
+      p: `Deine Kunden sind die anderen Firmen. Stell an der <b>Warenbörse</b> (Stadtnetz, unten) eine <b>Verkaufsorder</b> für Strom oder Wasser zum Ø-Kurs ein. Liegt ein passendes Gesuch im Buch, verkaufst du sofort.` },
+    { t: "Die Stadt kauft bei dir", warte: () => TUT_GESEHEN.has("finanzamt"), wartetext: "Warte, bis du die Stadtübersicht öffnest …", ziel: "#einw, #players",
+      p: `Jede Minute kauft die Stadt für ihre Haushalte <b>Strom und Wasser</b> — direkt aus den Lagern der Firmen, zu mindestens 70 % des Grundpreises. Je mehr du auf Lager hast, desto mehr geht an dich.<br><br>Klick oben auf die <b>Einwohnerzahl</b> (hervorgehoben): Unter „Grundbedarf“ siehst du, was die Stadt braucht.` },
+    { t: "Dein Ausbau",
+      p: `Mit Kapital: <b>Wasserwerk</b> für mehr Wasser, an der Küste <b>Windpark</b> und <b>Ölpumpe</b>, dazu die <b>Raffinerie</b> (Öl → Diesel für Autowerke und Panzer).<br><br>Mit dem Website-Modul <b>Branchenportal</b> wird deine Seite zum <b>Kundenportal</b>: Rechenzentren und Hotels kaufen dort Strom und Wasser direkt bei dir.` },
   ],
   tech: [
-    { t: "Schalte Industrie frei & baue eine Siliziummine", build: "siliziummine",
-      p: `Klicke eine gesperrte Kachel in der <em>braunen Industrie-Zone</em>, schalte sie frei ($2.000) und baue die <b>Siliziummine</b> ($1.400 + 4 Ziegel) — produziert <b>Silizium</b>, dein Rohstoff für alles Weitere.` },
-    { t: "Baue eine Chipfabrik", build: "chipfabrik",
-      p: `Schalte eine weitere Industrie-Kachel frei und baue die <b>Chipfabrik</b> ($3.200 + 8 Ziegel): Sie macht aus <em>Silizium + Strom</em> → <b>Elektronik</b>. Damit können <b>alle Spieler jeder Industrie</b> ihre Produktionsgebäude auflevel — jede Stufe +30 % Ausstoß, bis Stufe 5. Du lieferst den Rohstoff für das Wachstum der ganzen Stadt.` },
-    { t: "Dein Handelsbedarf",
-      p: `Kaufe <em>Strom</em> von den <b>Grundversorgern</b> über die Börse (Minen laufen damit auf +150 %). Verkaufe Elektronik &amp; Silizium über einen <b>Baustoffhandel</b> ($2.800) zu deinem Preis. Elektronik wird nicht zum Bauen gebraucht, sondern zum <b>Auflevel</b> bestehender Gebäude — je größer die Stadt wird, desto mehr wird nachgefragt.` },
+    { t: "Bau eine Siliziummine", build: "siliziummine", wartetext: "Warte auf die Siliziummine …",
+      p: `Schalte in der <em>braunen Industrie-Zone</em> eine Kachel frei und bau die <b>Siliziummine</b>. Sie fördert <b>Silizium</b>, deinen Rohstoff.` },
+    { t: "Bau eine Chipfabrik", build: "chipfabrik", wartetext: "Warte auf die Chipfabrik …",
+      p: `Die <b>Chipfabrik</b> macht aus Silizium und Strom <b>Elektronik</b>. Elektronik braucht <b>jede Firma</b>, um ihre Gebäude auszubauen — je größer die Stadt, desto größer die Nachfrage.` },
+    { t: "Strom für die Fabrik", warte: (st, me, id) => tutGekauft(st, me, id, ["strom"]), wartetext: "Warte auf Strom …", ziel: '.dockbtn[data-p="netz"]',
+      p: `Ohne <b>Strom</b> steht die Chipfabrik still. Kauf ihn bei den Versorgern: <b>Stadtnetz</b> (unten) → <b>Warenbörse</b> → Strom.` },
+    { t: "Verkauf deine Elektronik", warte: (st, me, id) => tutVerkauft(st, me, id, ["elektronik", "silizium"]), wartetext: "Warte auf ein Angebot …", ziel: '.dockbtn[data-p="netz"]',
+      p: `Stell an der <b>Warenbörse</b> (Stadtnetz) eine Verkaufsorder für Elektronik ein — oder leg sie in einem Online-Marktplatz ins Regal. Elektronik ist teuer (rund 100 $), schon kleine Mengen bringen viel.` },
+    { t: "Bau selbst aus", warte: (st, me, id) => st.map.some(t => t.owner === id && (t.level || 1) >= 2), wartetext: "Warte auf einen Ausbau …",
+      p: `Klick eines deiner Gebäude an und bau es auf <b>Stufe 2</b> aus. Jede Stufe bringt 30 % mehr Ausstoß auf derselben Kachel — und du hast die Elektronik dafür selbst.` },
+    { t: "Dein Weg nach oben",
+      p: `Später: <b>Autowerke</b> (Elektronik, Stahl und Öl, Diesel oder Strom → Autos, über 300 $ das Stück) und das <b>Renn-Softwarelabor</b>.<br><br>Mit dem Website-Modul <b>Branchenportal</b> wird deine Seite zum <b>Großhandel</b>: Mitspieler kaufen Elektronik direkt bei dir.` },
   ],
   touristik: [
-    { t: "Baue einen Campingplatz", build: "campingplatz",
-      p: `Klicke eine freie <em>grüne Agrar-Kachel</em> und baue den <b>Campingplatz</b> ($1.500 + 4 Ziegel). Er braucht <b>keine Zutaten</b> und liefert dir sofort erste <b>Übernachtungen</b> — dein Einstieg ohne Handelspartner.` },
-    { t: "Schalte die Küste frei & baue ein Strandhotel", build: "strandhotel",
-      p: `Das <b>Strandhotel</b> ($2.400 + 6 Ziegel) ist das eigentliche Geschäft: Es macht aus <em>Wasser + Strom</em> deutlich mehr <b>Übernachtungen</b> als der Campingplatz. Achtung, es ist hungrig — 150 Wasser und 75 Strom pro Minute. Ohne Nachschub steht es still.` },
-    { t: "Dein Handelsbedarf",
-      p: `Du bist der <b>größte Kunde der Grundversorger</b>: Kaufe <em>Wasser und Strom</em> laufend an der Börse — beides liegt dort meist im Überfluss, weil es sonst kaum jemand abnimmt. Verkaufe deine Übernachtungen über ein <b>Handelskontor</b> ($3.500). Eine <b>Werbeagentur</b> lohnt sich für dich besonders: Sie hebt den Preis, den die Stadt in deinen eigenen Läden akzeptiert.` },
+    { t: "Bau einen Campingplatz", build: "campingplatz", wartetext: "Warte auf den Campingplatz …",
+      p: `Bau auf einer freien <em>grünen Agrar-Kachel</em> einen <b>Campingplatz</b>. Er braucht keine Zutaten und liefert sofort <b>Zimmer</b> (Übernachtungen) — dein Einstieg ohne Handelspartner.` },
+    { t: "Dein Touristik-Panel", warte: () => TUT_GESEHEN.has("touristik"), wartetext: "Warte, bis du das Touristik-Panel öffnest …", ziel: '.dockbtn[data-p="touristik"]',
+      p: `Unten erscheint jetzt der Knopf <b>Touristik</b> (hervorgehoben). Öffne ihn.<br><br>Jede Minute kommen <b>Gäste</b> in die Stadt — mehr, je größer und zufriedener sie ist. Sie wählen ein Hotel nach <b>Bewertung</b> und <b>Zimmerpreis</b> und zahlen direkt an dich. Den Preis stellst du dort ein.` },
+    { t: "Bau ein Strandhotel", build: "strandhotel", wartetext: "Warte auf das Strandhotel …",
+      p: `Das eigentliche Geschäft: das <b>Strandhotel</b> an der <em>Küste</em> (Kachel freischalten). Es macht aus Wasser und Strom viel mehr Zimmer als der Campingplatz und startet mit <b>2 Sternen</b>.` },
+    { t: "Wasser und Strom fürs Hotel", warte: (st, me, id) => tutGekauft(st, me, id, ["wasser", "strom"]), wartetext: "Warte auf Wasser oder Strom …", ziel: '.dockbtn[data-p="netz"]',
+      p: `Ohne Nachschub steht das Hotel still. Kauf <b>Wasser und Strom</b> an der <b>Warenbörse</b> im Stadtnetz (unten) — beides liegt dort meist reichlich.` },
+    { t: "Renovier auf 3 Sterne", warte: (st, me, id) => st.map.some(t => t.owner === id && t.btype === "strandhotel" && (t.sterne || 2) >= 3), wartetext: "Warte auf die Renovierung …",
+      p: `Mehr Sterne = bessere Bewertung = mehr Gäste oder höhere Preise. Klick dein Strandhotel an und <b>renovier auf 3 Sterne</b> (1.500 $).` },
+    { t: "Frühstück einkaufen", warte: (st, me, id) => ["obst", "honig", "saft", "gebaeck"].some(g => (me.inv?.[g] || 0) >= 1) || tutGekauft(st, me, id, ["obst", "honig", "saft", "gebaeck"]), wartetext: "Warte auf Lebensmittel im Lager …", ziel: '.dockbtn[data-p="netz"]',
+      p: `Ab 3 Sternen erwarten deine Gäste <b>Frühstück</b>: Obst, Honig, Saft oder Gebäck aus deinem Lager. Fehlt es, sinkt die Bewertung. Kauf <b>Obst</b> an der Warenbörse — oder direkt im <b>Hofladen</b> einer Agrar-Firma im Stadtnetz.` },
+    { t: "Feste und deine Buchungsseite",
+      p: `Im Touristik-Panel veranstaltest du <b>Stadtfeste</b>: Strandfest, Konzert oder Festival locken für einige Minuten viel mehr Gäste in die Stadt — du bekommst den größten Teil. Halte vorher genug Zimmer auf Lager.<br><br>Deine <b>Buchungsseite</b> zeigt allen deine Häuser, Preise und Gästebewertungen.` },
+  ],
+  software: [
+    { t: "Bau ein Entwicklerstudio", build: "entwicklerstudio", wartetext: "Warte auf das Entwicklerstudio …",
+      p: `Bau im <em>Zentrum</em> ein <b>Entwicklerstudio</b>. Es macht aus Strom <b>Entwicklungspunkte</b> (EP) — mit etwas Elektronik doppelt so schnell. Damit entwickelst du alle deine Programme.` },
+    { t: "Leg dein Shop-System an", warte: (st, me, id) => (st.software || []).some(x => x.ownerId === id && !x.portal), wartetext: "Warte auf dein Shop-System …",
+      p: `Klick das Studio an → <b>Software-Baukasten öffnen</b>. Im Reiter „Mein System“ legst du Name, Farbe und Gebühr deines <b>Shop-Systems</b> fest, unter „Entwicklung“ startest du Version 1.<br><br>Jede Firma braucht ein Shop-System für ihren Laden — und soll deins nehmen statt des teuren Stadtportals.` },
+    { t: "Bau ein Rechenzentrum", build: "rechenzentrum", wartetext: "Warte auf das Rechenzentrum …",
+      p: `Deine Kunden laufen auf deinem <b>Rechenzentrum</b> (Zentrum): je Stufe 5 Shops, dazu Plätze für Apps und Websites. Es braucht dauernd <b>Strom</b> — ohne ihn fallen alle Kunden aus.` },
+    { t: "Version 1 fertigstellen", warte: (st, me, id) => (st.software || []).some(x => x.ownerId === id && x.version >= 1), wartetext: "Warte auf Version 1 …",
+      p: `Die Entwicklung dauert ein paar Minuten. Sorg dafür, dass Studio und Rechenzentrum <b>Strom</b> haben: <b>Stadtnetz</b> → <b>Warenbörse</b> → Strom kaufen. Sobald Version 1 fertig ist, wechseln die Bots zu dir, wenn du besser bist als die Konkurrenz.` },
+    { t: "Deine Statusseite", warte: () => TUT_GESEHEN.has("rz"), wartetext: "Warte, bis du die Statusseite öffnest …",
+      p: `Klick dein Rechenzentrum an → <b>Statusseite öffnen</b>. Dort siehst du Verfügbarkeit, Auslastung und Strom, stellst Preise ein und verteilst deine Plätze auf Shops, Apps und Websites. Kunden sehen dieselbe Seite und bestellen dort.` },
+    { t: "Eine Bürger-App", warte: (st, me, id) => (st.buergerApp || []).some(x => x.ownerId === id), wartetext: "Warte auf deine Bürger-App …",
+      p: `Im Baukasten, Reiter <b>Produkte</b>, legst du eine <b>Bürger-App</b> an. Die Einwohner zahlen ein Abo je Minute — je größer die Stadt, desto mehr. Entwickeln, Preis setzen, fertig.` },
+    { t: "Was noch geht",
+      p: `· <b>Jobbörse</b>: Firmen abonnieren sie und bekommen bei knappen Arbeitern Vorrang.<br>· <b>Website-Baukasten</b> (ab Shop-System v2): Andere Firmen bestellen ihre Website bei dir.<br>· <b>Malprogramm</b> und <b>Börsen-App</b>: Lizenzen in deinem eigenen Online-Shop.<br><br>Behalte Strom und Rechenzentren im Blick — Ausfälle sieht jeder auf deiner Statusseite.` },
   ],
   ruestung: [
-    { t: "Schalte Industrie frei & baue eine Munitionsfabrik", build: "munitionsfabrik",
-      p: `Klicke eine gesperrte Kachel in der <em>braunen Industrie-Zone</em>, schalte sie frei und baue die <b>Munitionsfabrik</b> ($1.400 + 4 Ziegel). Sie macht aus <em>Erze + Öl</em> <b>Munition</b> — billig im Bau, damit früh Geld hereinkommt.` },
-    { t: "Baue einen Waffenhandel", build: "waffenhandel",
-      p: `Pistolen und Panzer lassen sich <b>nicht</b> am Handelskontor verkaufen — dafür brauchst du den <b>Waffenhandel</b> ($5.200) im Zentrum. Zwei Verkaufsslots, du setzt den Preis selbst.` },
-    { t: "Dein Handelsbedarf",
-      p: `Ab der <b>Waffenschmiede</b> ($4.000) hängst du an anderen: Sie braucht <em>Stahl</em> von der Bauindustrie und <em>Elektronik</em> von der Technologie. Das <b>Panzerwerk</b> ($8.000) kommt noch mit <em>Diesel</em> von den Versorgern dazu — drei fremde Branchen für ein Produkt. Dafür spielt der Panzer preislich in der Liga der Fahrzeuge. Kaufe die Vorprodukte früh, bevor andere sie wegkaufen.` },
+    { t: "Bau eine Munitionsfabrik", build: "munitionsfabrik", wartetext: "Warte auf die Munitionsfabrik …",
+      p: `Schalte in der <em>braunen Industrie-Zone</em> eine Kachel frei und bau die <b>Munitionsfabrik</b>. Sie macht aus Erzen und Öl <b>Munition</b> — billig im Bau, damit früh Geld hereinkommt.` },
+    { t: "Erze und Öl einkaufen", warte: (st, me, id) => tutGekauft(st, me, id, ["erze", "oel"]), wartetext: "Warte auf Erze oder Öl …", ziel: '.dockbtn[data-p="netz"]',
+      p: `Du stellst nichts aus dem Nichts her: <b>Erze</b> kommen von der Rohstoff-Industrie, <b>Öl</b> von den Versorgern. Kauf beides an der <b>Warenbörse</b> im Stadtnetz (unten).` },
+    { t: "Dein Laden mit Shop-System", warte: (st, me, id) => tutShop(st, id), wartetext: "Warte auf Laden und Shop-System …",
+      p: `Bau im Zentrum einen <b>Online-Marktplatz</b> und installier ein Shop-System — am besten eins mit <b>Rüstungs-Baum</b>, es verkauft Waffen schneller.` },
+    { t: "Verkauf deine Munition", warte: (st, me, id) => tutVerkauft(st, me, id, ["munition", "pistole", "panzer"]), wartetext: "Warte auf ein Angebot …", ziel: '.dockbtn[data-p="netz"]',
+      p: `Leg <b>Munition</b> ins Regal oder stell eine Verkaufsorder an der Börse (Stadtnetz) ein. Polizei, Stadtwache und Schützenverein kaufen in der Stadt.` },
+    { t: "Ausschreibungen", warte: () => TUT_GESEHEN.has("firma"), wartetext: "Warte, bis du das Firma-Panel öffnest …", ziel: '.dockbtn[data-p="firma"]',
+      p: `Dein größtes Geschäft: <b>Ausschreibungen</b> der Stadt. Polizei, Stadtwache oder Grenzschutz suchen größere Mengen; du gibst 60 Sekunden lang ein verdecktes Gebot ab (80–140 % des Listenpreises). Wer liefert, steigert seinen Lieferruf. Geboten wird im <b>Firma</b>-Panel — öffne es einmal.` },
+    { t: "Bau die Waffenschmiede", build: "waffenschmiede", wartetext: "Warte auf die Waffenschmiede …",
+      p: `Die <b>Waffenschmiede</b> macht Pistolen aus Stahl, Elektronik und Munition. Stahl kaufst du bei der Rohstoff-, Elektronik bei der Technik-Branche. Kauf die Vorprodukte früh, bevor andere sie wegkaufen.` },
+    { t: "Dein Weg nach oben",
+      p: `Ganz oben steht das <b>Panzerwerk</b> (Stahl, Elektronik, Diesel) — Panzer bringen über 400 $ das Stück.<br><br>Mit dem Website-Modul <b>Branchenportal</b> bekommst du das <b>Ausschreibungsportal</b>: Deine Gebote zählen 5 % günstiger, jede Lieferung bringt 15 % mehr, und Ausschreibungen kommen häufiger.` },
   ],
 };
 function buildTut(ind) {
-  const IND_NAME = { agrar: "Agrarwirtschaft", rohstoff: "Rohstoff- & Bauindustrie", versorger: "Grundversorgung", tech: "Technologie & Elektronik", touristik: "Touristik", ruestung: "Rüstungsindustrie" };
+  const IND_NAME = { agrar: "Agrarwirtschaft", rohstoff: "Rohstoff- & Bauindustrie", versorger: "Grundversorgung", tech: "Technologie & Elektronik", touristik: "Touristik", ruestung: "Rüstungsindustrie", software: "Software-Branche" };
+  const ROLLE = {
+    agrar: "Du ernährst die Stadt: Obst, Honig, Saft und Gebäck für Bewohner, Bäckereien und Hotels.",
+    rohstoff: "Ohne dich wird nichts gebaut: Ziegel, Beton und Stahl braucht jede Firma und die Stadt selbst.",
+    versorger: "Du hältst die Stadt am Laufen: Strom und Wasser für Firmen und Haushalte.",
+    tech: "Du lieferst die Elektronik, mit der alle anderen ihre Gebäude ausbauen.",
+    touristik: "Du holst Gäste in die Stadt: Zimmer, Sterne, Frühstück und Stadtfeste.",
+    software: "Du baust die digitale Stadt: Shop-Systeme, Apps, Websites und Rechenzentren für alle anderen.",
+    ruestung: "Du belieferst Polizei, Stadtwache und Grenzschutz — mit Ausschreibungen als großem Geschäft.",
+  };
   return [
-    { t: "Willkommen bei Capital Sandbox",
-      p: `Ich habe diese Stadt dreißig Jahre lang als CEO geführt — jetzt zeige ich <b>dir</b>, wie man in der <b>${IND_NAME[ind]}</b> ein Imperium aufbaut. Dein Ziel: als Erster das <b>Rundenziel</b> erreichen (oben links). Die Leiste ganz oben ist der <b>Börsenticker</b> mit den Ø-Kursen.` },
-    { t: "Deine Rolle in der Stadt",
-      p: `Jeder Spieler führt EINE Industrie — du kannst <b>nur deren Gebäude</b> bauen (Läden kann jeder). Alles andere lieferst du dir über die <b>Börse</b>: Agrar braucht Wasser+Strom der Versorger, Rohstoff &amp; Bau braucht Strom+Öl+Wasser — und <b>alle brauchen Ziegel</b> der Rohstoff- &amp; Bauindustrie zum Bauen. Nur zusammen entsteht ein fertiges Produkt.` },
-    ...TUT_IND[ind],
-    { t: "Verkaufen: dein Preis, dein Tempo",
-      p: `Deine Läden verkaufen automatisch — du legst <b>Menge und Preis</b> fest (z. B. „100 für $7"): Beim Ø-Kurs volle Geschwindigkeit, teurer = langsamer, billiger = schneller. An der Börse warten außerdem die <b>Industrie-Bots</b>: Sie kaufen dir deine Waren ab und verkaufen dir Nachschub, ohne den Markt zu fluten.` },
-    { t: "Großaufträge & Finanzen",
-      p: `Städte stellen <b>Großaufträge</b> (Ø×2, fixiert!) — alle zahlen gemeinsam ein, im Lager-Panel. Im <b>Finanzen-Panel</b> gibt es Anleihen (Vorsicht: Pfändung bei Verzug). Unter <b>Firma</b> siehst du deinen Rang, im <b>Lexikon</b> alles Wissen. Und nun: Zeig dieser Stadt, was in dir steckt — ich behalte dich im Auge.` },
+    { t: "Willkommen bei Capital Sandbox", ziel: "#networth",
+      p: `Ich habe diese Stadt dreißig Jahre lang als CEO geführt — jetzt zeige ich <b>dir</b>, wie man in der <b>${IND_NAME[ind] || ind}</b> groß wird.<br><br>${ROLLE[ind] || ""}<br><br>Dein Ziel: als Erster das <b>Vermögensziel</b> erreichen (oben links — hervorgehoben). Ganz oben läuft der <b>Kursticker</b> mit den Ø-Kursen aller Waren.` },
+    { t: "Die Stadt und deine Leute", ziel: "#einw, #players",
+      p: `Die Stadt wächst mit euch: Oben neben deinem Geld steht die <b>Einwohnerzahl</b>. Die Bewohner arbeiten in euren Gebäuden und kaufen in euren Läden.<br><br>Jedes Gebäude braucht <b>Arbeiter</b>. Sind sie knapp, gehen sie zur Firma mit dem besseren Lohn — den stellst du im <b>Firma</b>-Panel ein. Du baust nur Gebäude <b>deiner</b> Branche; alles andere kaufst du von den anderen.` },
+    ...(TUT_IND[ind] || TUT_IND.agrar),
+    { t: "Das Stadtnetz", warte: () => TUT_GESEHEN.has("netz"), wartetext: "Warte, bis du das Stadtnetz öffnest …", ziel: '.dockbtn[data-p="netz"]',
+      p: `Unten findest du das <b>Stadtnetz</b> — das Internet der Stadt. Öffne es (unten hervorgehoben).<br><br>Dort sind der <b>Stadtkurier</b> (Nachrichten alle zwei Minuten), die <b>Warenbörse</b>, die <b>Stadtbank</b> (Aktien und Fonds), der <b>Anleihenmarkt</b> und die Websites aller Firmen. Eine eigene <b>Website</b> bringt dir Reichweite — bestellen kannst du sie bei einer Software-Firma.` },
+    { t: "Bring dein Vermögen auf 16.000 $", warte: (st, me, id) => (st.players[id]?.netWorth || 0) >= 16000, wartetext: "Warte, bis dein Nettovermögen 16.000 $ erreicht …", ziel: "#networth",
+      p: `Jetzt läuft alles zusammen: produzieren, verkaufen, nachkaufen, ausbauen.<br><br>Dein <b>Nettovermögen</b> (oben links) ist Bargeld plus Lager plus Gebäude minus Schulden. Bring es von 9.500 $ auf <b>16.000 $</b> — mit einem zweiten Gebäude, Preisen nah am Ø-Kurs und vollem Lager bei den Zutaten.` },
+    { t: "Jetzt gehört die Stadt dir",
+      p: `Das war der Rundgang. Was dir im Spiel noch begegnet, erklären kurze <b>Hinweise</b> genau dann, wenn es wichtig wird. Im <b>Lexikon</b> steht jede Regel nach.<br><br>Mein letzter Rat: Schau regelmäßig in den <b>Stadtkurier</b>. Wer zuerst weiß, welche Ware knapp wird, verdient am meisten.` },
   ];
 }
 /* Kartellmodus: eigenes Tutorial — hier gelten andere Regeln (keine Branchen,
@@ -5903,14 +10214,18 @@ const TUT_SPIEL = [
   { t: "Schritt 1 — Baue eine Farm", build: "farm",
     p: `Klicke auf eine freie <em>grüne Agrar-Kachel</em> und wähle <b>Farm</b> ($1.200 + 3 Ziegel).<br><br>Sie produziert von allein <b>Obst</b>, Sekunde für Sekunde. Achte oben links auf dein Bargeld — Bauen kostet sofort, verdient wird erst später.` },
 
-  { t: "Schritt 2 — Baue einen Marktstand", build: "markt",
-    p: `Obst im Lager bringt noch kein Geld. Du brauchst einen Laden.<br><br>Baue im <em>blauen Zentrum</em> einen <b>Marktstand</b> ($1.000 + 3 Ziegel). Läden darf jede Branche bauen — nur Produktionsgebäude sind an deine Branche gebunden.` },
+  { t: "Schritt 2 — Baue einen Online-Marktplatz", build: "onlinemarkt",
+    p: `Obst im Lager bringt noch kein Geld. Du brauchst einen Laden — und den gibt es nur noch online.<br><br>Baue im <em>blauen Zentrum</em> einen <b>Online-Marktplatz</b> ($3.000 + 8 Ziegel). Den darf jede Branche bauen — nur Produktionsgebäude sind an deine Branche gebunden.` },
 
-  { t: "Schritt 3 — Stelle dein Obst zum Verkauf",
-    warte: (st, me, id) => st.map.some(t => t.owner === id && t.btype === "markt" && (t.shop || []).some(sl => sl && sl.good)),
-    p: `Klicke deinen <b>Marktstand</b> an und belege einen Verkaufsslot mit <b>Obst</b>.<br><br>Den <b>Preis bestimmst du selbst</b>. Und Achtung, das ist die Stelle, an der sich die meisten verrechnen: Billiger ist nicht besser. Das Verkaufstempo ist gedeckelt — unter etwa <b>70 % des Ø-Kurses</b> wirst du nicht mehr schneller, verschenkst aber Geld bei jedem Stück.` },
+  { t: "Schritt 3 — Installiere ein Shop-System",
+    warte: (st, me, id) => st.map.some(t => t.owner === id && t.btype === "onlinemarkt" && t.system),
+    p: `Ein Online-Marktplatz verkauft erst mit einem <b>Shop-System</b>. Klicke ihn an und wähle eins: von einer Software-Firma (günstiger, schneller) oder das <b>Stadtportal</b> (kostet 8 % je Verkauf, ist aber immer da).<br><br>Tipp: Ein System mit <b>Agrar-Baum</b> verkauft dein Obst schneller als ein Allrounder.` },
 
-  { t: "Schritt 4 — Kaufe Wasser und Strom",
+  { t: "Schritt 4 — Stelle dein Obst zum Verkauf",
+    warte: (st, me, id) => st.map.some(t => t.owner === id && t.btype === "onlinemarkt" && (t.shop || []).some(sl => sl && sl.good)),
+    p: `Klicke deinen <b>Online-Marktplatz</b> an und belege ein Regal mit <b>Obst</b>.<br><br>Den <b>Preis bestimmst du selbst</b>. Und Achtung, das ist die Stelle, an der sich die meisten verrechnen: Billiger ist nicht besser. Das Verkaufstempo ist gedeckelt — unter etwa <b>70 % des Ø-Kurses</b> wirst du nicht mehr schneller, verschenkst aber Geld bei jedem Stück.` },
+
+  { t: "Schritt 5 — Kaufe Wasser und Strom",
     /* Zwei Fallen umgangen, beide im Test aufgetreten:
      * 1. Nicht am Lagerbestand messen — der Boost verbraucht Wasser und Strom
      *    laufend, im Test stand Wasser Sekunden nach dem Kauf wieder auf null.
@@ -5924,13 +10239,18 @@ const TUT_SPIEL = [
         || st.orders.some(o => o.playerId === id && o.side === "buy" && o.good === g);
       return hat("wasser") && hat("strom");
     },
-    p: `Öffne die <b>Börse</b> unten und besorge dir <b>Wasser</b> und <b>Strom</b> — entweder direkt aus einem Angebot oder über eine eigene Kauforder, falls gerade nichts im Buch steht.<br><br>Liegen beide im Lager, läuft deine Farm mit bis zu <b>+150 % Tempo</b> — sie werden dabei verbraucht. Das ist der größte Hebel im frühen Spiel und kostet fast nichts.` },
+    ziel: '.dockbtn[data-p="boerse"], .dockbtn[data-p="netz"]',
+    p: `Öffne die <b>Börse</b> unten (hervorgehoben) und besorge dir <b>Wasser</b> und <b>Strom</b> — entweder direkt aus einem Angebot oder über eine eigene Kauforder, falls gerade nichts im Buch steht.<br><br>Liegen beide im Lager, läuft deine Farm mit bis zu <b>+150 % Tempo</b> — sie werden dabei verbraucht. Das ist der größte Hebel im frühen Spiel und kostet fast nichts.` },
 
-  { t: "Schritt 5 — Stelle eine eigene Order ein",
+  { t: "Zwischenstopp — Deine Leute",
+    p: `Jedes Gebäude braucht <b>Arbeiter</b> aus der Stadt. Klick eins deiner Gebäude an: Unter <b>Belegschaft</b> siehst du, wie viele da sind — mit 3 von 5 läuft es zu 60 %.<br><br>Sind Leute knapp, gehen sie zur Firma mit dem besten Lohn. Den stellst du im <b>Firma</b>-Panel ein. Wie viele Einwohner die Stadt hat, steht oben neben deinem Bargeld.` },
+
+  { t: "Schritt 6 — Stelle eine eigene Order ein",
     warte: (st, me, id) => st.orders.some(o => o.playerId === id),
+    ziel: '.dockbtn[data-p="boerse"], .dockbtn[data-p="netz"]',
     p: `Bisher hast du aus dem Buch gekauft. Jetzt umgekehrt: Stelle an der Börse eine <b>eigene Order</b> ein — verkaufe Obst oder suche eine Ware, die du brauchst.<br><br>Deine Order bleibt stehen, bis jemand sie bedient. Ware und Geld liegen so lange treuhänderisch fest, niemand kann dich hängen lassen.` },
 
-  { t: "Schritt 6 — Bring dein Vermögen auf 16.000 $",
+  { t: "Schritt 7 — Bring dein Vermögen auf 16.000 $",
     /* Deutlich über dem Startkapital von 9.500 $. Mit 12.000 war das Ziel im
      * Test schon nach dem ersten Verkauf erreicht (13.199 $), ohne dass man
      * dafür etwas verstanden haben musste. */
@@ -5962,9 +10282,12 @@ const TUT_EINSTEIGER = [
     warte: (st, me, id) => st.map.some(t => t.owner === id && t.btype && !istLaden(t)),
     p: `Klick eine freie Kachel an und bau ein Gebäude <b>deiner Branche</b>.<br><br>Es produziert von allein, Sekunde für Sekunde, ins Lager. Bauen kostet sofort — verdient wird erst später. Das ist der Grundrhythmus des ganzen Spiels.` },
 
+  { t: "Zwischenstopp — Deine Leute",
+    p: `Jedes Gebäude braucht <b>Arbeiter</b> aus der Stadt. Klick eins deiner Gebäude an: Unter <b>Belegschaft</b> siehst du, wie viele da sind — mit 3 von 5 läuft es zu 60 %.<br><br>Sind Leute knapp, gehen sie zur Firma mit dem besten Lohn. Den stellst du im <b>Firma</b>-Panel ein. Wie viele Einwohner die Stadt hat, steht oben neben deinem Bargeld.` },
+
   { t: "Schritt 2 — Bau einen Laden",
     warte: (st, me, id) => st.map.some(t => t.owner === id && istLaden(t)),
-    p: `Ware im Lager ist noch kein Geld. Du brauchst einen <b>Laden</b> — Marktstand, Bäckerei, Handelskontor, was dir zusagt.<br><br>Läden darf <b>jede</b> Branche bauen. Nur Produktionsgebäude sind an deine Branche gebunden.` },
+    p: `Ware im Lager ist noch kein Geld. Du brauchst einen <b>Online-Marktplatz</b> mit Shop-System — das ist der einzige Laden der Stadt.<br><br>Den darf <b>jede</b> Branche bauen. Nur Produktionsgebäude sind an deine Branche gebunden.` },
 
   { t: "Schritt 3 — Leg eine Ware in den Verkauf",
     warte: (st, me, id) => st.map.some(t => t.owner === id && (t.shop || []).some(sl => sl && sl.good)),
@@ -5972,7 +10295,8 @@ const TUT_EINSTEIGER = [
 
   { t: "Schritt 4 — Lies den Kursticker",
     warte: () => TUT_GESEHEN.has("boerse"),
-    p: `Öffne die <b>Börse</b> unten in der Leiste.<br><br>Oben im Ticker steht zu jeder Ware ein Ø-Kurs mit Trendpfeil. Der Wert steht bewusst <b>30 Sekunden still</b>, bevor er nachzieht — eine Zahl, die im Sekundentakt zappelt, taugt nicht, um den eigenen Preis danach zu setzen. Der Pfeil vergleicht deshalb 30 Sekunden gegen 30 Sekunden.` },
+    ziel: "#ticker",
+    p: `Öffne die <b>Börse</b> — im Sandkasten die Website <b>boerse.cs</b> im Stadtnetz (Knopf unten).<br><br>Oben im Ticker steht zu jeder Ware ein Ø-Kurs mit Trendpfeil. Der Wert steht bewusst <b>30 Sekunden still</b>, bevor er nachzieht — eine Zahl, die im Sekundentakt zappelt, taugt nicht, um den eigenen Preis danach zu setzen. Der Pfeil vergleicht deshalb 30 Sekunden gegen 30 Sekunden.` },
 
   { t: "Schritt 5 — Kauf etwas an der Börse",
     /* Nur Wasser oder Strom zaehlen, nicht "irgendein Einkauf": Ziegel kauft
@@ -5984,27 +10308,33 @@ const TUT_EINSTEIGER = [
         || st.orders.some(o => o.playerId === id && o.side === "buy" && o.good === g);
       return hat("wasser") || hat("strom");
     },
+    ziel: '.dockbtn[data-p="boerse"], .dockbtn[data-p="netz"]',
     p: `Kauf dir <b>Wasser</b> oder <b>Strom</b> — direkt aus einem Angebot, oder über eine eigene Kauforder, falls das Buch gerade leer ist.<br><br>Liegen beide im Lager, läuft deine Produktion mit bis zu <b>+150 % Tempo</b>. Sie werden dabei verbraucht. Das ist der größte Hebel im frühen Spiel und kostet fast nichts.` },
 
   { t: "Schritt 6 — Stell eine eigene Order ein",
     warte: (st, me, id) => st.orders.some(o => o.playerId === id),
+    ziel: '.dockbtn[data-p="boerse"], .dockbtn[data-p="netz"]',
     p: `Bisher hast du aus dem Buch gekauft. Jetzt andersherum: Stell eine <b>eigene Order</b> ein — verkauf deine Ware oder such etwas, das du brauchst.<br><br>Sie bleibt stehen, bis jemand sie bedient. Ware und Geld liegen so lange treuhänderisch fest; niemand kann dich hängen lassen.` },
 
   { t: "Schritt 7 — Schau ins Lager",
     warte: () => TUT_GESEHEN.has("lager"),
-    p: `Öffne das <b>Lager</b>.<br><br>Hier steht jede Ware mit Bestand — und hier findest du die <b>Großaufträge</b> der Städte: feste Mengen zum doppelten Ø-Kurs, an denen sich alle Spieler gemeinsam beteiligen. Der Preis ist bei Auftragsvergabe fixiert, egal wohin der Markt danach läuft.` },
+    ziel: '.dockbtn[data-p="lager"]',
+    p: `Öffne das <b>Lager</b> (unten hervorgehoben).<br><br>Hier steht jede Ware mit Bestand — und hier findest du die <b>Großaufträge</b> der Städte: feste Mengen zum doppelten Ø-Kurs, an denen sich alle Spieler gemeinsam beteiligen. Der Preis ist bei Auftragsvergabe fixiert, egal wohin der Markt danach läuft.` },
 
   { t: "Schritt 8 — Lies die Nachrichten",
-    warte: () => TUT_GESEHEN.has("news"),
-    p: `Öffne die <b>Nachrichten</b>.<br><br>Dort laufen Marktberichte und Ereignisse: welche Ware knapp wird, wo Preise anziehen, was die anderen Firmen treiben. Wer den Bericht liest, bevor er den Ladenpreis setzt, verdient schlicht mehr.` },
+    warte: () => TUT_GESEHEN.has("news") || TUT_GESEHEN.has("kurier"),
+    ziel: '.dockbtn[data-p="netz"]',
+    p: `Öffne die <b>Nachrichten</b> — im Sandkasten den <b>Stadtkurier</b> im Stadtnetz (Knopf unten).<br><br>Dort laufen Marktberichte und Ereignisse: welche Ware knapp wird, wo Preise anziehen, was die anderen Firmen treiben. Wer den Bericht liest, bevor er den Ladenpreis setzt, verdient schlicht mehr.` },
 
   { t: "Schritt 9 — Kauf Anteile an einer Firma",
     warte: (st, me, id) => (me.portfolio || []).length > 0 || (me.balance?.holdings || 0) > 0,
-    p: `Geh zur <b>Stadtbank</b> — sie steht mitten im Zentrum, du kannst sie auch auf der Karte anklicken.<br><br>Dort handelst du <b>Anteile</b> anderer Firmen. Wächst eine Firma, wächst dein Anteil mit, ohne dass du selbst baust. Kauf dir ein Paket von irgendjemandem.` },
+    ziel: '.dockbtn[data-p="bank"], .dockbtn[data-p="netz"]',
+    p: `Geh zur <b>Stadtbank</b> — im Sandkasten die Website <b>bank.cs</b> im Stadtnetz; das Bankgebäude mitten im Zentrum führt auch dorthin.<br><br>Dort handelst du <b>Anteile</b> anderer Firmen. Wächst eine Firma, wächst dein Anteil mit, ohne dass du selbst baust. Kauf dir ein Paket von irgendjemandem.` },
 
   { t: "Schritt 10 — Wirf einen Blick auf die Finanzen",
     warte: () => TUT_GESEHEN.has("bonds"),
-    p: `Öffne <b>Finanzen</b>.<br><br>Hier gibst du <b>Anleihen</b> aus: Geld sofort, Rückzahlung mit Zins über die Laufzeit. Nützlich, um schneller zu wachsen — aber bei Verzug wird gepfändet. Ich sage nicht, dass du eine aufnehmen sollst. Du sollst nur wissen, dass es sie gibt.` },
+    ziel: '.dockbtn[data-p="bonds"], .dockbtn[data-p="netz"]',
+    p: `Öffne <b>Finanzen</b> — im Sandkasten die Website <b>anleihen.cs</b> im Stadtnetz.<br><br>Hier gibst du <b>Anleihen</b> aus: Geld sofort, Rückzahlung mit Zins über die Laufzeit. Nützlich, um schneller zu wachsen — aber bei Verzug wird gepfändet. Ich sage nicht, dass du eine aufnehmen sollst. Du sollst nur wissen, dass es sie gibt.` },
 
   { t: "Schritt 11 — Bau ein Gebäude aus",
     warte: (st, me, id) => st.map.some(t => t.owner === id && (t.level || 1) >= 2),
@@ -6029,7 +10359,7 @@ function tutShow(i) {
   else if (i === 0 && store.get().state?.mode !== "kartell" && TUT.length && TUT[0].t === "Willkommen in der Kartellwirtschaft")
     TUT = buildTut(store.get().meta?.industry || "agrar");
   tutIdx = i;
-  if (i < 0 || i >= TUT.length) { tutEl.style.display = "none"; return; }
+  if (i < 0 || i >= TUT.length) { tutEl.style.display = "none"; tutSpotSetzen(null); return; }
   const s = TUT[i];
   tutEl.style.display = "block";
   document.getElementById("tutStep").textContent = `Tutorial ${i + 1}/${TUT.length}`;
@@ -6038,13 +10368,70 @@ function tutShow(i) {
   document.getElementById("tutDots").innerHTML = TUT.map((_, j) => `<span class="${j <= i ? "on" : ""}"></span>`).join("");
   const wartet = !!(s.build || s.warte);
   document.getElementById("tutNext").style.display = wartet ? "none" : "";
-  document.getElementById("tutWait").style.display = wartet ? "flex" : "none";
+  const tw = document.getElementById("tutWait");
+  tw.style.display = wartet ? "flex" : "none";
+  /* Worauf der Schritt wartet, plus „auslassen“ — sonst hinge man fest, wenn
+   * etwas gerade nicht geht (kein Angebot an der Börse, zu wenig Geld …) */
+  if (wartet) tw.innerHTML = `<span>${s.wartetext || t("Warte auf Bau …")}</span><button type="button" id="tutAuslassen">${t("auslassen")}</button>`;
   /* Beschriftung immer setzen, nicht nur beim letzten Schritt: sonst traegt der
    * Knopf in einer zweiten Runde ab Schritt 1 noch das "Los geht's!" der
    * vorigen. */
   document.getElementById("tutNext").textContent = t(i === TUT.length - 1 ? "Los geht's!" : "Weiter");
+  tutSpotSetzen(s.ziel);
 }
-function tutDone() { tutIdx = -1; tutEl.style.display = "none"; try { localStorage.setItem("cs_tut_done", "1"); } catch {} }
+/* ---- Scheinwerfer auf das passende Bedienelement ----
+ * Jeder Schritt kann ein `ziel` (CSS-Auswahl) tragen. Dann legt sich ein
+ * pulsierender Ring um dieses Element und der Rest wird abgedunkelt — so sieht
+ * der Spieler sofort, wovon der Text spricht, und kann es anklicken. Der Ring
+ * folgt dem Element per Lauf, denn Dock und Statusleiste verschieben sich beim
+ * Öffnen von Panels oder beim Drehen des Geräts. */
+let tutZielSel = null, tutSpotLauf = 0;
+function tutSpotEl() {
+  let el = document.getElementById("tutSpot");
+  if (!el) { el = document.createElement("div"); el.id = "tutSpot"; el.setAttribute("aria-hidden", "true"); document.body.append(el); }
+  return el;
+}
+function tutSpotPositionieren() {
+  const spot = tutSpotEl();
+  /* `ziel` darf mehrere Auswahlen tragen (durch Komma) — genommen wird die
+   * erste, die wirklich sichtbar ist. So kann ein Schritt im Sandkasten den
+   * Stadtnetz-Knopf und im Einsteiger-Modus den Börsen-Knopf meinen. */
+  let ziel = null, r = null;
+  if (tutZielSel && tutIdx >= 0) {
+    for (const sel of tutZielSel.split(",")) {
+      const el = document.querySelector(sel.trim());
+      if (!el) continue;
+      const rr = el.getBoundingClientRect();
+      if (rr.width || rr.height) { ziel = el; r = rr; break; }
+    }
+  }
+  if (!ziel) { spot.classList.remove("on"); tutEl.classList.remove("oben"); return; }
+  const pad = 7;
+  spot.style.top = (r.top - pad) + "px";
+  spot.style.left = (r.left - pad) + "px";
+  spot.style.width = (r.width + pad * 2) + "px";
+  spot.style.height = (r.height + pad * 2) + "px";
+  spot.classList.add("on");
+  /* Zeigt das Ziel in die untere Bildschirmhälfte (Dock, Statusleiste), würde
+   * die Mentor-Box unten links den Ring verdecken — dann nach oben rücken. */
+  tutEl.classList.toggle("oben", (r.top + r.height / 2) > window.innerHeight * 0.58);
+}
+function tutSpotSetzen(sel) {
+  tutZielSel = sel || null;
+  const spot = tutSpotEl();
+  if (!tutZielSel) { spot.classList.remove("on"); tutEl.classList.remove("oben"); if (tutSpotLauf) { cancelAnimationFrame(tutSpotLauf); tutSpotLauf = 0; } return; }
+  tutSpotPositionieren();
+  /* Laufende Nachführung, solange ein Ziel aktiv ist. */
+  if (!tutSpotLauf) {
+    const tick = () => {
+      if (!tutZielSel || tutIdx < 0) { tutSpotLauf = 0; return; }
+      tutSpotPositionieren();
+      tutSpotLauf = requestAnimationFrame(tick);
+    };
+    tutSpotLauf = requestAnimationFrame(tick);
+  }
+}
+function tutDone() { tutIdx = -1; tutEl.style.display = "none"; tutSpotSetzen(null); try { localStorage.setItem("cs_tut_done", "1"); } catch {} }
 document.getElementById("tutNext").addEventListener("click", () => {
   if (tutIdx < TUT.length - 1) return tutShow(tutIdx + 1);
   /* Im Einsteiger-Modus endet die Runde mit dem Tutorial — sonst bleibt sie
@@ -6053,6 +10440,7 @@ document.getElementById("tutNext").addEventListener("click", () => {
   tutDone();
 });
 document.getElementById("tutSkip").addEventListener("click", tutDone);
+tutEl.addEventListener("click", e => { if (e.target.closest("#tutAuslassen")) tutShow(tutIdx + 1); });
 document.getElementById("help").addEventListener("click", () => tutShow(0));
 /* Schritte haken sich selbst ab, sobald die Handlung wirklich passiert ist.
  * `build` war der einzige Auslöser — damit liess sich nur Bauen üben. `warte`
@@ -6062,7 +10450,7 @@ document.getElementById("help").addEventListener("click", () => tutShow(0));
 function tutCheck(state, myId) {
   /* Das Tutorial erklärt Börse und Stadtbank — in der Planwirtschaft
    * führt es in die Irre, dort bleibt es aus. */
-  if (state?.mode === "plan") { document.getElementById("tut").style.display = "none"; return; }
+  if (state?.mode === "plan") { document.getElementById("tut").style.display = "none"; tutSpotSetzen(null); return; }
   if (tutIdx < 0 || !state) return;
   const s = TUT[tutIdx];
   if (!s) return;
@@ -6099,6 +10487,65 @@ function refAvg(live) {
  * nehmen. Beim ersten Zustand nach dem Beitritt wird nur der Ausgangsstand
  * gemerkt, sonst käme eine Salve für alles, was ohnehin schon dalag. */
 let bekannteAngebote = null;
+/* ---- Hinweise im Spielverlauf ----
+ * Der Sandkasten hat viele Systeme. Statt alles im Tutorial vorab zu erklären,
+ * erscheint je System ein kurzer Hinweis genau dann, wenn es zum ersten Mal
+ * wichtig wird — einmal, höchstens einer je 45 s, nie während des Tutorials.
+ * Abschaltbar unter Einstellungen → Steuerung („Hinweise im Spiel“). */
+const HINWEISE = [
+  { id: "stadt", wann: st => st.stadt && st.tick > 90, titel: "Die Stadt wächst mit",
+    text: "Oben neben deinem Geld steht, wie viele Einwohner die Stadt hat. Sie wohnen im Wohngebiet, arbeiten in euren Gebäuden und kaufen in euren Läden. Ein Klick auf die Einwohnerzahl öffnet die Stadtübersicht.", panel: ["finanzamt", "Stadtübersicht"] },
+  { id: "arbeiter", wann: (st, me) => me.lohn?.soll > 0 && me.lohn.arbeiter < me.lohn.soll, titel: "Dir fehlen Arbeiter",
+    text: "Deine Gebäude sind nicht voll besetzt und stellen weniger her. Ein höherer Lohn holt Leute von anderen Firmen — günstiger ist oft eine Jobbörse. Beides findest du im Firma-Panel.", panel: ["firma", "Firma-Panel"] },
+  { id: "loehne", wann: (st, me) => me.lohn?.letzt?.zahl > 0, titel: "Löhne",
+    text: "Jede Minute zahlst du deinen Arbeitern Lohn. 30 % davon gehen als Steuer und Miete an die Stadt — damit baut sie neue Wohnungen, und es ziehen mehr Leute zu.", panel: ["firma", "Firma-Panel"] },
+  { id: "baumaterial", wann: st => st.stadt?.auftraege?.length > 0, titel: "Die Stadt kauft Baumaterial",
+    text: "Für neue Wohnblöcke bestellt die Stadt Ziegel, Beton, Stahl oder Elektronik und zahlt 15 % über Kurs. Liefern kannst du in der Stadtübersicht.", panel: ["finanzamt", "Stadtübersicht"] },
+  { id: "versorgung", wann: st => st.stadt?.teile?.some(x => x.key === "versorgung" && x.wirkung < 0), titel: "Der Stadt fehlt etwas",
+    text: "In keinem Online-Marktplatz gibt es gerade Strom, Wasser oder Lebensmittel. Dann ziehen weniger Leute zu. Wer das ins Regal stellt, hat sichere Kundschaft.", panel: ["finanzamt", "Stadtübersicht"] },
+  { id: "steuer", wann: (st, me) => (me.steuer?.steuer || 0) > 0, titel: "Das Finanzamt",
+    text: "Alle 10 Minuten zahlst du Gewinnsteuer. Bauen und Ausbauen senken den Gewinn nach und nach (Abschreibung). Die Steuer geht an die Stadt.", panel: ["finanzamt", "Finanzamt"] },
+  { id: "stadtanleihe", wann: st => (st.bonds || []).some(b => !b.holderId && String(b.issuer).startsWith("Stadt")), titel: "Die Stadt leiht sich Geld",
+    text: "Für neue Wohnungen gibt die Stadt eine Anleihe aus. Wer sie zeichnet, bekommt jede Minute Zinsen und das Geld nach 15 Minuten zurück — zu finden auf anleihen.cs im Stadtnetz.", panel: ["bonds", "Anleihenmarkt"] },
+  { id: "software", wann: (st, me, id) => st.players?.[id]?.industry === "software" && st.tick > 30, titel: "Dein Software-Panel",
+    text: "Als Software-Firma baust du Shop-Systeme, Bürger-Apps und Jobbörsen für die anderen. Alles liegt im Software-Panel in Reitern: Markt, Mein System, Entwicklung, Design und Produkte.", panel: ["software", "Software"] },
+  { id: "touristik", wann: (st, me, id) => !!st.touristik && (st.map || []).some(x => x.owner === id && (x.btype === "campingplatz" || x.btype === "strandhotel") && !(x.bauBis > st.tick)), titel: "Gäste für deine Hotels",
+    text: "Jede Minute kommen Gäste in die Stadt und wählen ein Hotel nach Bewertung und Zimmerpreis. Renovierte Strandhotels bekommen mehr Sterne (ab 3 Sternen mit Frühstück), und ein Stadtfest lockt viele Gäste auf einmal.", panel: ["touristik", "Touristik"] },
+  { id: "website", wann: (st, me, id) => (st.website || []).some(w => w.version >= 1 && w.ownerId !== id) && !st.rechenzentren?.websites?.[id], titel: "Eine Website für deine Firma",
+    text: "Software-Firmen bauen jetzt Websites. Eine eigene Website bringt mehr Reichweite: Deine Läden verkaufen schneller, Hotels bekommen mehr Gäste. Bestellen kannst du sie auf der Statusseite eines Rechenzentrums.", panel: ["software", "Software"] },
+  { id: "stadtnetz", wann: st => Object.values(st.rechenzentren?.websites || {}).filter(w => w.stufe > 0).length >= 2, titel: "Das Stadtnetz",
+    text: "Im Stadtnetz (Knopf unten) stehen alle Firmen mit Website. Mit einem Branchenportal kaufst du dort direkt ein — zum Beispiel Obst im Hofladen oder Strom im Kundenportal.", panel: null },
+  { id: "aktien", wann: st => st.tick > 900, titel: "Aktien und Übernahmen",
+    text: "Jede Firma hat 100 Aktien. An der Stadtbank kaufst du Anteile anderer Firmen und kassierst Dividende — oder übernimmst eine Firma ganz. Behalte die Mehrheit an deiner eigenen.", panel: ["bank", "Stadtbank"] },
+  { id: "ziel", wann: st => st.tick > 1500, titel: "Auf dem Weg zum Ziel",
+    text: "Es gewinnt, wer zuerst das Vermögensziel erreicht (oben links). Vermögen sind Geld, Lager, Gebäude und Beteiligungen — Ausbauen lohnt sich also, auch wenn dabei Geld aus der Kasse geht." },
+];
+const HINWEIS = { gesehen: (() => { try { return new Set(JSON.parse(localStorage.getItem("cs_hinweise") || "[]")); } catch { return new Set(); } })(), zuletzt: -Infinity, offen: null };
+function spielHinweise(state, me, myId) {
+  if (EINST.hinweise === false || tutIdx >= 0 || !state?.started || state.winner || !me) return;
+  if (HINWEIS.offen || performance.now() - HINWEIS.zuletzt < 45000) return;
+  const h = HINWEISE.find(x => !HINWEIS.gesehen.has(x.id) && (() => { try { return x.wann(state, me, myId); } catch { return false; } })());
+  if (!h) return;
+  HINWEIS.gesehen.add(h.id); HINWEIS.offen = h;
+  try { localStorage.setItem("cs_hinweise", JSON.stringify([...HINWEIS.gesehen])); } catch {}
+  let el = document.getElementById("spielHinweis");
+  if (!el) { el = document.createElement("div"); el.id = "spielHinweis"; el.setAttribute("role", "status"); document.body.append(el); }
+  el.innerHTML = `<div class="shKopf"><b>💡 ${t(h.titel)}</b><button type="button" data-sh="zu" aria-label="${t("Schließen")}">×</button></div>
+    <p>${t(h.text)}</p>
+    <div class="shFuss">${h.panel ? `<button type="button" class="buyb" data-sh="panel">${t(h.panel[1])}</button>` : ""}
+      <button type="button" class="mini" data-sh="zu">${t("Verstanden")}</button>
+      <button type="button" class="shAus" data-sh="aus">${t("Keine Hinweise mehr")}</button></div>`;
+  el.hidden = false;
+  SFX.spiel?.("hinweis");
+}
+document.addEventListener("click", e => {
+  const b = e.target.closest("#spielHinweis [data-sh]"); if (!b) return;
+  const h = HINWEIS.offen;
+  if (b.dataset.sh === "panel" && h?.panel) openPanel(h.panel[0]);
+  if (b.dataset.sh === "aus") EINST.setzen("hinweise", false);
+  document.getElementById("spielHinweis").hidden = true;
+  HINWEIS.offen = null; HINWEIS.zuletzt = performance.now();
+});
 function kapitalmarktHinweis(state, myId) {
   const offen = new Set();
   for (const b of state.bonds || [])
@@ -6212,6 +10659,58 @@ function statBalken(basis, jetzt) {
       <div style="position:absolute;inset:0 auto 0 0;width:${Math.min(b, j)}%;background:var(--line2,#4a5a6a)"></div>
       <div style="position:absolute;inset:0 auto 0 ${Math.min(b, j)}%;width:${Math.abs(j - b)}%;background:${runter ? "var(--bad,#e05a5a)" : "var(--accent)"}"></div>
     </div>`;
+}
+
+function hauptsitzRendern(state, me, myId) {
+  const knopf = document.getElementById("dockHQ");
+  const hqTile = (state.map || []).find(t => t.owner === myId && (BTYPES()[t.btype] || {}).hauptsitz);
+  if (knopf) knopf.style.display = hqTile ? "" : "none";
+  const body = document.getElementById("hqbody");
+  if (!body || !document.getElementById("p-hauptsitz").classList.contains("open")) return;
+  if (!hqTile) { body.innerHTML = `<div class="note">${t("Baue einen Hauptsitz im Zentrum, um Rollen zu besetzen.")}</div>`; return; }
+  const cfg = state.hqCfg;
+  if (!cfg) return;
+  const hq = me?.hq;
+  const besetzt = hq?.besetzt || {};
+  const stufe = hq?.stufe || (hqTile.level || 1);
+  const lohn = hq?.lohn || 0;
+  const myPlayer = state.players?.[myId];
+  const meineIndustrien = myPlayer?.industries || [myPlayer?.industry];
+  const extras = (hq?.extras || []);
+  let html = `<div class="sec">${t("Hauptsitz")} · ${t("Stufe")} ${stufe}</div>`;
+  html += `<div class="swZahlen"><div><b>${Object.values(besetzt).filter(Boolean).length}</b><span>${t("Rollen besetzt")}</span></div>`;
+  html += `<div><b>${lohn} $</b><span>${t("Gehälter/Min")}</span></div></div>`;
+  html += `<div class="sec" style="margin-top:12px">${t("Grundrollen")} <span class="meta">(${t("ab Stufe 1")})</span></div>`;
+  for (const [key, def] of Object.entries(cfg.rollen)) {
+    const aktiv = !!besetzt[key];
+    html += `<div class="hqRolle" style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--line,#e0e0e0)">`;
+    html += `<div style="flex:1"><b>${t(def.name)}</b> <span class="meta">${def.lohn} $/min</span><br><span class="meta">${t(def.beschreibung)}</span></div>`;
+    if (aktiv) html += `<button class="btn bad hqFire" data-rolle="${key}">${t("Entlassen")}</button>`;
+    else html += `<button class="btn hqHire" data-rolle="${key}">${t("Einstellen")}</button>`;
+    html += `</div>`;
+  }
+  const verfuegbar = Object.entries(cfg.extras).filter(([ind]) => meineIndustrien.includes(ind));
+  if (verfuegbar.length) {
+    html += `<div class="sec" style="margin-top:12px">${t("Branchen-Extras")} <span class="meta">(${t("ab Stufe 2")})</span></div>`;
+    for (const [ind, def] of verfuegbar) {
+      const key = def.rolle;
+      const aktiv = !!besetzt[key];
+      const gesperrt = stufe < 2;
+      html += `<div class="hqRolle" style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--line,#e0e0e0)">`;
+      html += `<div style="flex:1"><b>${t(def.name)}</b> <span class="meta">${def.lohn} $/min · ${iname(ind)}</span><br><span class="meta">${t(def.beschreibung)}</span></div>`;
+      if (gesperrt) html += `<button class="btn" disabled>${t("Stufe 2")}</button>`;
+      else if (aktiv) html += `<button class="btn bad hqFire" data-rolle="${key}">${t("Entlassen")}</button>`;
+      else html += `<button class="btn hqHire" data-rolle="${key}">${t("Einstellen")}</button>`;
+      html += `</div>`;
+    }
+  }
+  body.innerHTML = html;
+  body.querySelectorAll(".hqHire").forEach(b => b.addEventListener("click", () => {
+    socket.emit("hqEinstellen", { rolle: b.dataset.rolle }, r => { if (r?.error) meldung(r.error); });
+  }));
+  body.querySelectorAll(".hqFire").forEach(b => b.addEventListener("click", () => {
+    socket.emit("hqEntlassen", { rolle: b.dataset.rolle }, r => { if (r?.error) meldung(r.error); });
+  }));
 }
 
 function motorsportRendern(state, me, myId) {
@@ -6495,7 +10994,11 @@ function motorsportRendern(state, me, myId) {
  * mit animierter Strecke, dann die Siegerehrung. Der Server schickt jede
  * Sekunde neue Distanzen; die Streckengrafik interpoliert dazwischen, damit
  * die Wagen flüssig fahren statt zu springen. */
-let rennMinimiert = false;
+/* Der Renntag startet zugeklappt. Frueher sprang das Overlay bei jedem
+ * Renntag von selbst auf und stand dann minutenlang vor der Karte — wer
+ * gerade baute oder handelte, wurde jedes Mal herausgerissen. Jetzt ist der
+ * einzige Einstieg die kurze Meldung auf den Seiten im Stadtnetz. */
+let rennMinimiert = true;
 const RENN_ANIM = new Map();     // autoId -> { shown, ziel }
 /* ---- Renn-Sounds (WebAudio, synthetisch — keine Dateien nötig) ----
  * Respektiert den Stummschalter der Musik. Kurzer Piep je Ampellicht,
@@ -6582,18 +11085,21 @@ function rennenRendern(state, myId) {
   const r = state.rennen;
   if (!r) {
     if (!ov.hidden) ov.hidden = true;
-    chip.hidden = true; rennMinimiert = false; RENN_ANIM.clear();
+    chip.hidden = true; rennMinimiert = true; RENN_ANIM.clear();
     rennenRendern.phase = null;
     return;
   }
-  /* Bei jedem Phasenwechsel wieder aufklappen — den Start will niemand verpassen. */
   if (rennenRendern.phase !== r.phase) {
-    if (r.phase === "ergebnis" && rennenRendern.phase === "laeuft") rennJubel();
-    rennenRendern.phase = r.phase; rennMinimiert = false; rennenRendern.sig = "";
+    /* Jubel nur, wenn jemand auch hinsieht — ein Tusch aus dem Nichts, waehrend
+     * man anderswo arbeitet, erklaert sich nicht. */
+    if (r.phase === "ergebnis" && rennenRendern.phase === "laeuft" && !rennMinimiert) rennJubel();
+    rennenRendern.phase = r.phase; rennenRendern.sig = "";
   }
   ov.hidden = rennMinimiert;
-  chip.hidden = !rennMinimiert;
-  rennAmpelRendern(r);
+  /* Kein schwebender Chip mehr: Der Renntag meldet sich ausschliesslich auf
+   * den Seiten im Stadtnetz. */
+  chip.hidden = true;
+  rennAmpelRendern(rennMinimiert ? null : r);
   document.getElementById("rennChipText").textContent =
     r.phase === "anmeldung" ? `${t("Anmeldung")} ${r.rest}s` : r.phase === "laeuft" ? t("RENNEN LÄUFT") : t("Siegerehrung");
   if (rennMinimiert) return;
@@ -6726,7 +11232,7 @@ function rennenRendern(state, myId) {
               return eigenes + fremd;
             })()}
             ${r.sponsoren.length ? `<div class="lbl" style="margin-top:12px">${t("Sponsoren an Bord")}</div>` +
-              r.sponsoren.map(s => `<div class="gesuch" style="padding:6px 10px"><span class="was">${escapeHtml(s.name)} → <b>${escapeHtml(s.team || "?")}</b>${
+              r.sponsoren.map(s => `<div class="gesuch" style="padding:6px 10px"><span class="was">${escapeHtml(s.name)} → <b>${escapeHtml(rohText(s.team || "?"))}</b>${
                 s.was ? `<br><span class="meta">${escapeHtml(s.was)}</span>` : ""}</span><span class="quotepill">${fmt(s.betrag)}</span></div>`).join("") : ""}
           </div>
         </div>
@@ -6888,7 +11394,7 @@ function rennenRendern(state, myId) {
           const wmp = state.mode === "renntag" ? [10, 6, 4, 3, 2, 1][e.platz - 1] : 0;
           return `<div class="stufe p${e.platz}">
             <div class="krone">${medaille[e.platz - 1] || ""}</div>
-            <div class="wer2"><b>${escapeHtml(e.name)}</b><br><span class="meta">${escapeHtml(e.team)} · ${escapeHtml(e.fahrer)}</span>${
+            <div class="wer2"><b>${escapeHtml(e.name)}</b><br><span class="meta">${escapeHtml(rohText(e.team))} · ${escapeHtml(e.fahrer)}</span>${
               wmp && !e.ausgefallen ? `<br><span class="wmdelta">+${wmp} Punkte</span>` : ""}</div>
             <div class="sockel" style="height:${hoehe}px;--liv:${e.farbe}"><span class="nr">${e.platz}</span></div>
           </div>`; }).join("")}</div>
@@ -7216,9 +11722,9 @@ function planRendern(state, myId) {
    * die Starter-Aufgaben sind Marktinstrumente — in der Planwirtschaft weg. */
   const planAktiv = state.mode === "plan";
   const boerseKnopf = document.querySelector('.dockbtn[data-p="boerse"]');
-  if (boerseKnopf) boerseKnopf.style.display = planAktiv ? "none" : "";
+  if (boerseKnopf) boerseKnopf.style.display = planAktiv || state.stadt ? "none" : "";   // Sandkasten: Börse im Stadtnetz
   const bondsKnopf = document.querySelector('.dockbtn[data-p="bonds"]');
-  if (bondsKnopf) bondsKnopf.style.display = planAktiv ? "none" : "";
+  if (bondsKnopf) bondsKnopf.style.display = planAktiv || state.stadt ? "none" : "";   // Sandkasten: Anleihen im Stadtnetz
   const ctrbar = document.getElementById("ctrbar");
   if (ctrbar) ctrbar.style.display = planAktiv ? "none" : "";
   if (planAktiv) document.getElementById("quests").style.display = "none";
@@ -7953,27 +12459,39 @@ document.addEventListener("click", e => {
   store.set({});
 });
 function render({ state, me, myId, chat, room }) {
+  if (state?.logoV) logosAbgleichen(state);
   if (!state || !me) return;
   tutCheck(state, myId);
   kapitalmarktHinweis(state, myId);
+  spielHinweise(state, me, myId);
   planRendern(state, myId);
   kartellRendern(state, me, myId);
   kartellFremdeRendern(state, myId);
   rennenRendern(state, myId);
   motorsportRendern(state, me, myId);
+  kryptoRendern(state, me, myId);
   /* Tipp-Schutz: Panel nicht neu rendern, während man in einem seiner Felder tippt */
   const typingIn = el => el && el.contains(document.activeElement) &&
     /INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName);
   const my = state.players[myId];
   document.getElementById("cash").textContent = fmt(me.cash);
+  { const eb = document.getElementById("einw"), S = state.stadt;
+    eb.hidden = !S;
+    if (S) eb.textContent = `${S.einwohner.toLocaleString("de-DE")} ${t("Einw.")}`; }
   document.getElementById("lvl").textContent = me.lvl;
   document.getElementById("xpfill").style.width = (me.xp / (me.lvl*100) * 100) + "%";
   if (my) { document.getElementById("nwv").textContent = fmt(my.netWorth);
     document.getElementById("myrat").textContent = my.rating;
     document.getElementById("coname").textContent = rohText(my.name);
-    document.getElementById("mylogo").style.background = my.color;
-    document.getElementById("mylogo").textContent = rohText(my.name)[0].toUpperCase(); }
-  if (state.winGoal) document.getElementById("goalv").textContent = fmt(state.winGoal);
+    const ml = document.getElementById("mylogo"), mb = logoBild(myId);
+    ml.style.background = mb ? `#fff url(${mb}) center/cover` : my.color;
+    ml.style.imageRendering = mb ? "pixelated" : "";
+    ml.textContent = mb ? "" : rohText(my.name)[0].toUpperCase(); }
+  if (state.winGoal) {
+    /* Mit Zeitlimit läuft die Restzeit neben dem Ziel mit */
+    const rest = state.zeitLimit && !state.winner ? Math.max(0, state.zeitLimit * 60 - state.tick) : null;
+    document.getElementById("goalv").textContent = fmt(state.winGoal) + (rest != null ? ` · ⏱ ${Math.floor(rest / 60)}:${String(rest % 60).padStart(2, "0")}` : "");
+  }
 
   /* Starter-Aufgaben-Widget: offene Aufgaben mit Fortschritt, fertig = ausgeblendet */
   const qdefs = state.questDefs || store.get().meta?.questDefs || [];
@@ -8022,7 +12540,10 @@ function render({ state, me, myId, chat, room }) {
      * Mit fester Höhe und freier Breite bleiben die Logos schmal (die meisten
      * sind nahezu quadratisch, nur AgrarGenossen ist breit) und die ganze
      * Reihe passt weiterhin in die Kopfleiste. */
-    .map(p => { const u = logoUrl(p.name), t = `${p.name} · ${fmt(p.netWorth)} · ${p.rating}`;
+    .map(p => { const t = `${p.name} · ${fmt(p.netWorth)} · ${p.rating}`, gemalt = logoBild(p.id);
+      /* Selbst gemaltes Logo (Malprogramm) geht vor */
+      if (gemalt) return `<img class="plLogo gemalt" src="${gemalt}" alt="${p.name}" title="${t}">`;
+      const u = logoUrl(p.name);
       return u ? `<img class="plLogo" src="${u}" alt="${p.name}" title="${t}">`
                : `<span class="pl" style="background:${p.color}" title="${t}">${p.name[0].toUpperCase()}</span>`; }).join("");
   if (state.winner) { document.getElementById("win").style.display = WIN_ZU ? "none" : "grid";
@@ -8207,6 +12728,26 @@ function render({ state, me, myId, chat, room }) {
       : `<div class="meta" style="margin-top:10px">Die erste Ausgabe erscheint nach zwei Minuten Spielzeit.</div>`;
   }
 
+  /* Online-Shop-Fenster live halten (Lager, Bestellungen) — außer während
+   * der Bezahlanimation und solange eine Menge eingetippt wird. */
+  if (LEIT.offen) leitZeichnen();
+  if (SHOP.offen && !SHOP.kasse && !(document.activeElement && document.getElementById("shopFenster").contains(document.activeElement) && document.activeElement.tagName === "INPUT")) shopZeichnen();
+
+  /* Software: Systemvergleich für alle, Baukasten für Software-Firmen */
+  if (document.getElementById("p-software").classList.contains("open") &&
+      !typingIn(document.getElementById("p-software"))) softwareRendern(state, me, myId);
+  /* Touristik: Dock-Knopf immer, das Panel nur offen und ohne Eingabe */
+  if (!typingIn(document.getElementById("p-touristik"))) touristikRendern(state, me, myId);
+  hauptsitzRendern(state, me, myId);
+  if (HOTEL.offen && !typingIn(document.getElementById("hotelFenster"))) hotelZeichnen();
+  if (RZW.offen && !typingIn(document.getElementById("rzFenster"))) rzZeichnen();
+  { const dn = document.getElementById("dockNetz"); if (dn) { dn.style.display = state.stadt ? "" : "none"; dn.classList.toggle("neu", ((state.news || [])[0]?.ts || 0) > KURIER.gelesen); }
+    const db = document.getElementById("dockBoerse"); if (db && state.stadt) db.style.display = "none"; }   // Börse steht im Stadtnetz
+  if (state.stadt) KURIER.merken(state);
+  if (NETZ.offen && !(document.activeElement && document.getElementById("netzFenster").contains(document.activeElement) && document.activeElement.tagName === "INPUT" && document.activeElement.type === "number")) netzZeichnen();
+  if (GEN.offen) { const a = state?.rechenzentren?.websites?.[GEN.kunde]?.auftrag, f = document.querySelector("#genFenster .genFrist");
+    if (f && a?.status === "offen") f.textContent = `${Math.floor(a.rest / 60)}:${String(a.rest % 60).padStart(2, "0")}`; }
+
   /* Stadtbank: Kurstafel, Angebote und Depot — der gesamte Anteilshandel */
   if (document.getElementById("p-bank").classList.contains("open") &&
       !typingIn(document.getElementById("p-bank"))) {
@@ -8247,27 +12788,30 @@ function render({ state, me, myId, chat, room }) {
       || `<option value="">Keine Aktien</option>`;
     if (sellable.some(o => o.id === shCoPrev)) shCo.value = shCoPrev;
     const sel = sellable.find(o => o.id === shCo.value);
-    const shN = Math.max(1, Math.min(sel?.aktien || 1, +document.getElementById("shCount").value || 1));
     document.getElementById("shCount").max = sel?.aktien || 1;
     shKursSel = sel?.kurs || 0;
-    document.getElementById("shHint").textContent = sel
-      ? `Kurs ${fk(sel.kurs)} je Aktie → ${shN} Aktien ≈ ${fmt(sel.kurs * shN)}. Du hältst ${sel.aktien}.`
-      : "Du hältst gerade keine Aktien zum Verkauf.";
 
     const shToSel = document.getElementById("shTo"), shToPrev = shToSel.value;
     shToSel.innerHTML = `<option value="">Offener Markt (alle)</option>` + Object.values(state.players)
       .filter(p => p.id !== myId).map(p => `<option value="${p.id}">Nur an ${p.name}</option>`).join("");
     shToSel.value = shToPrev;
+    /* Handelsplatz-Auswahl: private Börsen, die die Aktien der gewählten Firma
+     * zugelassen haben. Nur anzeigen, wenn es überhaupt eine gibt. */
+    const shVenueSel = document.getElementById("shVenue"), shVenuePrev = shVenueSel?.value;
+    if (shVenueSel) {
+      const venues = (state.boerseApp || []).filter(ba => ba.ownerId !== myId
+        && (ba.zugelassen || []).some(z => z.id === shCo.value));
+      document.getElementById("shVenueWrap").hidden = !venues.length;
+      shVenueSel.innerHTML = `<option value="">Stadtbank (offen)</option>` + venues.map(ba =>
+        `<option value="${ba.id}">${escapeHtml(rohText(ba.name))} · ${String(ba.handelGebuehr).replace(".", ",")} % Gebühr</option>`).join("");
+      if (venues.some(ba => ba.id === shVenuePrev)) shVenueSel.value = shVenuePrev;
+    }
 
-    /* Kurstafel als Tabelle: eine Zeile je Firma, gleiche Spalten untereinander
-     * (Kurs, Verlauf, Abstand zum Wert F). Vorher war jede Firma eine eigene
-     * Karte mit großem Logo und Fließtext — bei sieben Firmen musste man
-     * scrollen, um Kurse überhaupt vergleichen zu können. Details (Marktwert,
-     * Dividende, Angebote) stehen weiter in der aufgeklappten Zeile. */
-    const kurstafel = Object.values(state.players).sort((a, b) => (b.marketValue || 0) - (a.marketValue || 0));
-    document.getElementById("bankboard").innerHTML = `<div class="kt">
-      <div class="kt-kopf"><span>Firma</span><span class="kt-trend">Verlauf</span><span>Kurs</span><span>zum Wert F</span><span></span></div>` +
-      kurstafel.map(p => {
+    /* Kurstafel: jede Firma aufklappbar — Wertverlauf, Dividende je Block und
+     * die daraus gerechnete Rendite. */
+    document.getElementById("bankboard").innerHTML = Object.values(state.players)
+      .sort((a, b) => (b.marketValue || 0) - (a.marketValue || 0))
+      .map(p => {
         const held = p.id === myId ? (me.ownPct ?? 0)
           : ((me.portfolio || []).find(h => h.id === p.id)?.pct || 0);
         const auf = firmenAuf.has(p.id);
@@ -8276,15 +12820,22 @@ function render({ state, me, myId, chat, room }) {
         const angebote = state.shareListings.filter(l => l.companyId === p.id && l.sellerId !== myId && (!l.toId || l.toId === myId))
           .sort((a, b) => a.price / a.count - b.price / b.count);
         const guenstig = angebote[0];
-        return `<div class="kt-zeile${auf ? " auf" : ""}${p.id === myId ? " ich" : ""}" data-firm="${p.id}">
-          <span class="kt-name"><i class="kt-punkt" style="background:${p.color || "var(--dim)"}"></i><b>${p.name}</b>
-            ${p.id === myId ? `<em class="kt-tag ich">du</em>` : ""}
-            ${held && p.id !== myId ? `<em class="kt-tag">${held} %</em>` : ""}
-            ${angebote.length ? `<em class="kt-tag angebot" title="günstigstes Angebot ${fk(guenstig.price / guenstig.count)} je Aktie">${angebote.length}<span class="kt-lang"> Angebot${angebote.length > 1 ? "e" : ""}</span></em>` : ""}</span>
-          <span class="kt-trend">${firmHist[p.id] ? sparklineVon(firmHist[p.id], 56, 16) : ""}</span>
-          <span class="kt-kurs">${fk(p.kurs || 0)}</span>
-          <span class="kt-luecke">${lueckeKurz(p.luecke)}</span>
-          <span class="kt-pfeil">${auf ? "⌃" : "⌄"}</span>
+        /* Veränderung über die letzten 10 Minuten (60 Punkte à 10 s). Ohne diese
+         * Spalte sagte die Tafel nur, was eine Aktie kostet — nicht, wohin sie
+         * läuft, und genau danach sucht man beim Überfliegen. */
+        const d10 = aend10(firmHist[p.id]);
+        return `<div class="bzeile${auf ? " auf" : ""}" data-firm="${p.id}">
+          <span class="bzFirma">${bankAvatar(p)}<span class="bzText">
+            <b>${escapeHtml(rohText(p.name))}${p.id === myId ? ` <span class="bzDu">(du)</span>` : ""}</b>
+            <small>${t(BRANCHE_NAME[p.industry] || "")}${held ? ` · <b class="bzHalt">du: ${held} %</b>` : ""}${angebote.length ? ` · <span class="bAngebotChip">${angebote.length} Angebot${angebote.length > 1 ? "e" : ""} ab ${fk(guenstig.price / guenstig.count)}</span>` : ""}</small></span></span>
+          <span class="bzSpark">${firmHist[p.id] ? sparklineVon(firmHist[p.id], 52, 20) : ""}</span>
+          <span class="bzKurs">${fk(p.kurs || 0)}${p.luecke != null && Math.abs(p.luecke) > 0.01 ? ` <em class="bzLuecke">${lueckeHtml(p.luecke)}</em>` : ""}</span>
+          <span class="bzAend ${d10 == null ? "null" : d10 > 0.05 ? "auf" : d10 < -0.05 ? "ab" : "null"}">${d10 == null ? "—" : `${d10 >= 0 ? "+" : "−"}${Math.abs(d10).toFixed(1).replace(".", ",")} %`}</span>
+          <span class="bzMwert">${fmt(p.marketValue || 0)}</span>
+          <span class="bzTat">${p.id !== myId && (p.ownPct ?? 0) > 0
+            ? `<button type="button" class="bzKauf" data-zu-handeln="${p.id}">Kaufen</button>`
+            : p.id === myId ? `<button type="button" class="bzKauf aus" data-zu-verkauf="1">Anbieten</button>` : `<span class="bzLeer">—</span>`}
+            <i class="bzPfeil">${auf ? "⌃" : "⌄"}</i></span>
         </div>` + (auf ? `<div class="firmdetail">
           ${verlaufChart(firmHist[p.id], "Marktwert (Kurs × Aktien)", fmt)}
           <div class="kzrow"><span>Marktwert</span><b>${fmt(p.marketValue || 0)}${held ? ` <span class="meta">· du hältst ${held} %</span>` : ""}</b></div>
@@ -8296,14 +12847,17 @@ function render({ state, me, myId, chat, room }) {
           <div class="kzrow"><span>Dividendenrendite zum Kurs</span><b style="color:${urteil?.farbe || "var(--dim)"}">${rend == null ? "—" : rend.toFixed(1) + " %"}${urteil ? ` <span style="font-weight:400">· ${urteil.text}</span>` : ""}</b></div>
           ${angebote.length ? `<div class="bAngebote"><div class="bAngKopf">Angebote</div>${angebote.map(l => {
               const fair = (p.kurs || 0) * l.count, diff = fair ? Math.round((l.price / fair - 1) * 100) : 0;
-              return `<div class="bAng"><span>${l.count} Aktien · ${l.isIssue ? "Emission" : `von ${l.seller}`}${l.toId ? " · <b>nur für dich</b>" : ""}
+              return `<div class="bAng"><span>${l.count} Aktien · ${l.isIssue ? "Emission" : `von ${l.seller}`}${l.venueName ? ` · <b>über ${escapeHtml(rohText(l.venueName))}</b> (+${String(l.venueGebuehr).replace(".", ",")} %)` : ""}${l.toId ? " · <b>nur für dich</b>" : ""}
                 <em class="${diff <= 0 ? "plus" : diff > 25 ? "minus" : ""}">${diff > 0 ? "+" : ""}${diff} % zum Kurs</em></span>
                 <b>${fmt(l.price)}<span class="meta"> · ${fk(l.price / l.count)} je Aktie</span></b>${shKaufZeile(l)}</div>`; }).join("")}</div>` : ""}
           ${p.id !== myId && (p.ownPct ?? 0) > 0 ? `<button type="button" class="mini bAnfrage" data-zu-handeln="${p.id}">Kaufanfrage an ${p.name} stellen</button>` : ""}
           <div class="meta" style="padding-top:4px">${p.ausschuettung != null ? `${p.name} schüttet fest ${fmt(p.ausschuettung)}` : `Ausgeschüttet werden ${Math.round((store.get().meta?.dividendRate ?? 0) * 100)} % des Umsatzes`} je ${takt} Minuten, verteilt auf ${AKTIEN_JE_FIRMA()} Aktien. Der Kurs folgt dem Wert F mit Verzögerung.</div>
         </div>` : "");
-      }).join("") + `</div>`;
-    document.querySelectorAll("[data-firm]").forEach(el => el.addEventListener("click", () => {
+      }).join("");
+    document.querySelectorAll("[data-firm]").forEach(el => el.addEventListener("click", e => {
+      /* Die Knöpfe in der Zeile führen zum Handeln-Reiter — sie dürfen die
+       * Zeile nicht nebenbei auf- oder zuklappen. */
+      if (e.target.closest("[data-zu-handeln],[data-zu-verkauf]")) return;
       const id = el.dataset.firm;
       firmenAuf.has(id) ? firmenAuf.delete(id) : firmenAuf.add(id);
       SFX.spiel("klick");
@@ -8323,7 +12877,7 @@ function render({ state, me, myId, chat, room }) {
       return ` · <span style="color:${col}">${diff > 0 ? "+" : ""}${diff} % zum Kurs</span>`;
     };
     const offerRow = l => `<div class="bond">
-      <div><b>${l.company}</b><div class="meta">${l.count} Aktien · ${l.isIssue ? "Emission der Firma" : `von ${l.seller}`}${priceTag(l)}</div></div>
+      <div><b>${l.company}</b><div class="meta">${l.count} Aktien · ${l.isIssue ? "Emission der Firma" : `von ${l.seller}`}${l.venueName ? ` · über ${escapeHtml(rohText(l.venueName))} (+${String(l.venueGebuehr).replace(".", ",")} %)` : ""}${priceTag(l)}</div></div>
       <div style="display:flex;align-items:center;gap:8px"><span style="font-family:var(--mono)">${fmt(l.price)}<span class="meta"> · ${fk(l.price / l.count)} je Aktie</span></span>
       ${shKaufZeile(l)}</div></div>`;
     document.getElementById("sharelist").innerHTML =
@@ -8331,7 +12885,9 @@ function render({ state, me, myId, chat, room }) {
         `<div class="bond"><div><b>${l.company}</b><div class="meta">${l.count} Aktien für ${fmt(l.price)}${l.toId ? ` · nur für ${l.toName}` : " · offener Markt"}</div></div>
          <button class="mini" data-shcancel="${l.id}">${t("Storno")}</button></div>`).join("") : "") +
       (toMe.length ? `<div class="sec">Nur für dich</div>` + toMe.map(offerRow).join("") : "") +
-      `<div class="sec bTafelKopf"><span>Aktien · ${kurstafel.length} Firmen</span><span class="meta">${open.length ? `${open.length} offene${open.length > 1 ? "" : "s"} Angebot${open.length > 1 ? "e" : ""} — Zeile antippen` : "Zeile antippen für Details"}</span></div>`;
+      `<div class="sec bTafelKopf"><span>Kurstafel</span><span class="meta">${Object.keys(state.players).length} Firmen · ${open.length ? `${open.length} offene Angebote — Firma antippen` : "keine offenen Angebote"}</span></div>
+       <div class="bzeile kopf"><span class="bzFirma">Firma</span><span class="bzSpark">Verlauf</span><span class="bzKurs">Kurs</span><span class="bzAend">10 min</span><span class="bzMwert">Marktwert</span><span class="bzTat"></span></div>`;
+    document.getElementById("depotboard").innerHTML = depotKarte(state.depot);
 
     /* Branchenfonds: eine Zeile je Fonds mit Kurs, Verlauf und seinen Firmen.
      * Kaufen klappt ein kleines Feld auf, statt in jeder Zeile ein Eingabefeld
@@ -8355,7 +12911,7 @@ function render({ state, me, myId, chat, room }) {
           <span class="fd-seit ${seit == null ? "" : seit >= 0 ? "plus" : "minus"}">${seit == null ? "—" : `${seit >= 0 ? "+" : ""}${seit.toFixed(1)} %`}</span>
           <button type="button" class="${auf ? "mini" : "buyb"} fd-knopf" data-etf-auf="${e.branche}">${auf ? "Schließen" : "Kaufen"}</button>
         </div>
-        <div class="fd-chips">${chips}<span class="fd-kasse" title="Fondswert ${fmt(e.wert || 0)}">Kasse ${fmt(e.kasse || 0)}</span></div>
+        <div class="fd-chips">${chips}<span class="fd-kasse" title="Fondswert ${fmt(e.wert || 0)}">Kasse ${fmt(e.kasse || 0)}${e.ausschuettung ? ` · zuletzt ${fmt(e.ausschuettung)} ausgeschüttet` : ""}</span></div>
         ${auf ? `<div class="fd-kauf">
           <input type="number" class="etfBetrag" data-etf-betrag="${e.branche}" min="100" step="100" placeholder="Betrag $" value="${etfBetrag[e.branche] ?? ""}">
           ${[500, 1000, 5000].map(v => `<button type="button" class="mini" data-etf-schnell="${e.branche}" data-wert="${v}">${fmt(v)}</button>`).join("")}
@@ -8385,16 +12941,18 @@ function render({ state, me, myId, chat, room }) {
     bidCo.innerHTML = targets.map(p => `<option value="${p.id}">${p.name} (hält ${Math.round(p.ownPct * AKTIEN_JE_FIRMA() / 100)} eigene Aktien)</option>`).join("")
       || `<option value="">Keine Firma hält noch eigene Aktien</option>`;
     if (targets.some(p => p.id === bidCoPrev)) bidCo.value = bidCoPrev;
-    const bidTarget = targets.find(p => p.id === bidCo.value);
-    const bidCount = +document.getElementById("bidCount").value || 1;
-    document.getElementById("bidHint").textContent = bidTarget
-      ? `Kurs ${fk(bidTarget.kurs || 0)} je Aktie → ${bidCount} Aktien ≈ ${fmt((bidTarget.kurs || 0) * bidCount)}. Darunter lehnen die meisten ab.`
-      : "Alle Firmen haben ihre eigenen Aktien bereits vollständig abgegeben.";
+    handelVorschau();
 
     const bids = state.shareBids || [];
     const bidsToMe = bids.filter(b => b.companyId === myId);
     const myBids = bids.filter(b => b.bidderId === myId);
+    const boAnf = me.boerseAnfragen || [];
     document.getElementById("bidlist").innerHTML =
+      (boAnf.length ? `<div class="sec">Zulassung an fremder Börse</div>` + boAnf.map(a => `<div class="bond">
+        <div><b>${escapeHtml(rohText(a.anbieter))}</b><div class="meta">will eure Aktien an <b>${escapeHtml(rohText(a.name))}</b> anbieten · ${String(a.gebuehr).replace(".", ",")} % Handelsgebühr</div></div>
+        <div style="display:flex;align-items:center;gap:8px">
+        <button class="buyb" data-bazulja="${a.venueId}">Zulassen</button>
+        <button class="mini" data-bazulnein="${a.venueId}">Ablehnen</button></div></div>`).join("") : "") +
       (bidsToMe.length ? `<div class="sec">Anfragen an dich</div>` + bidsToMe.map(b => `<div class="bond">
         <div><b>${b.bidder}</b><div class="meta">will ${b.count} Aktien deiner Firma · zum Kurs ${fmt((me.kurs || 0) * b.count)} · noch ${b.ttl}s</div></div>
         <div style="display:flex;align-items:center;gap:8px"><span style="font-family:var(--mono)">${fmt(b.price)}</span>
@@ -8404,7 +12962,26 @@ function render({ state, me, myId, chat, room }) {
         <div><b>${b.company}</b><div class="meta">${b.count} Aktien für ${fmt(b.price)} · wartet auf Antwort · noch ${b.ttl}s</div></div>
         <button class="mini" data-bidcancel="${b.id}">Zurückziehen</button></div>`).join("") : "");
 
-    document.getElementById("bReiterHandeln").textContent = bidsToMe.length ? bidsToMe.length : "";
+    /* --- Private Fonds: Kauf-/Verkauf-Karten in der Stadtbank ---
+     * Für jede Software-Börse, die einen Fonds anbietet, eine Karte mit
+     * Kennzahlen und einem Mini-Formular. Eigener Fonds ohne Formular. */
+    const fonds = (state.boerseApp || []).filter(x => x.fonds).map(x => ({ venueId: x.id, venue: x.name, anbieter: x.anbieter, ownerId: x.ownerId, farbe: x.farbe, ...x.fonds }));
+    const pbfBoard = document.getElementById("pbfBoard");
+    if (pbfBoard) {
+      pbfBoard.innerHTML = fonds.length ? `<div class="sec">Fonds privater Börsen</div>` + fonds.map(f => {
+        const halt = me.pbf?.[f.venueId] || 0, selbst = f.ownerId === myId;
+        const bidK = "pbfk_" + f.venueId, bidV = "pbfv_" + f.venueId;
+        return `<div class="bond pbfKarte"><div style="flex:1">
+          <b>${escapeHtml(rohText(f.name))}</b><div class="meta">über ${escapeHtml(rohText(f.venue))} · ${f.firmen.map(x => escapeHtml(rohText(x.name))).join(", ") || "—"} · Gebühr ${String(f.gebuehr).replace(".", ",")} %</div>
+          <div class="meta" style="margin-top:4px"><span class="mono">${fmt(f.preis)}</span> je Anteil · Fondswert <span class="mono">${fmt(f.wert)}</span>${halt ? ` · dein Bestand <b class="mono" style="color:var(--up)">${halt.toLocaleString("de-DE", { maximumFractionDigits: 2 })} Anteile</b>` : ""}</div></div>
+          ${selbst ? `<div class="meta" style="align-self:center">Dein eigener Fonds — Einlage im Software-Panel</div>` : `<div style="display:flex;gap:6px;align-items:center">
+          <input class="pbfBetrag" id="${bidK}" type="number" min="1" step="100" value="500" style="width:88px" placeholder="$">
+          <button class="buyb" data-pbfkauf="${f.venueId}" data-input="${bidK}">Kaufen</button>
+          ${halt ? `<input class="pbfBetrag" id="${bidV}" type="number" min="0.01" step="0.1" value="${halt.toFixed(2)}" style="width:88px" placeholder="Anteile">
+            <button class="mini" data-pbfverkauf="${f.venueId}" data-input="${bidV}">Verkaufen</button>` : ""}</div>`}</div>`;
+      }).join("") : "";
+    }
+    document.getElementById("bReiterHandeln").textContent = (bidsToMe.length + boAnf.length) ? (bidsToMe.length + boAnf.length) : "";
     document.getElementById("bReiterDepot").textContent = me.portfolio?.length ? me.portfolio.length : "";
     kurswettenRendern();
     bankReiterZeigen();
@@ -8423,16 +13000,13 @@ function render({ state, me, myId, chat, room }) {
           const gv = h.einstand > 0 ? h.value - h.einstand : null;
           const gvFarbe = gv == null ? "var(--dim)" : gv >= 0 ? "var(--up)" : "var(--down)";
           const gvProz = h.einstand > 0 ? (h.value / h.einstand - 1) * 100 : null;
-          return `<div class="bond">
-            <div style="min-width:0">${firmenMarke(h.company, "var(--text)", 38)}${h.pct >= 100 ? ` <b style="color:var(--accent)">· bereit zur Fusion</b>` : ""}
-              <div class="depotzahlen">
-                <span>${h.count} Aktien (${h.pct} %)</span>
-                <span>Einstand <b>${h.einstand > 0 ? fmt(h.einstand) : "—"}</b></span>
-                <span>zum Kurs <b>${fmt(h.value)}</b></span>
-                <span class="meta">Buchwert ${fmt(h.buchwert || 0)}</span>
-                ${gv == null ? "" : `<span style="color:${gvFarbe}">${gv >= 0 ? "+" : "−"}${fmt(Math.abs(gv))} (${gvProz >= 0 ? "+" : ""}${gvProz.toFixed(0)} %)</span>`}
-              </div></div>
-            <div style="display:flex;gap:5px">${mergeUi}</div></div>`;
+          const firma = state.players[h.id] || { id: h.id, name: h.company };
+          return `<div class="bpos">
+            ${bankAvatar(firma)}
+            <span class="bposText"><b>${escapeHtml(rohText(h.company))}${h.pct >= 100 ? ` <span class="bposFusion">bereit zur Fusion</span>` : ""}</b>
+              <small>${h.count} Aktien · ${h.pct} % · Einstand ${h.einstand > 0 ? fmt(h.einstand) : "—"} · Buchwert ${fmt(h.buchwert || 0)}</small></span>
+            <span class="bposWert"><b>${fmt(h.value)}</b>${gv == null ? "" : `<em style="color:${gvFarbe}">${gv >= 0 ? "+" : "−"}${fmt(Math.abs(gv))} · ${gvProz >= 0 ? "+" : "−"}${Math.abs(gvProz).toFixed(0)} %</em>`}</span>
+            ${mergeUi ? `<span class="bposTat">${mergeUi}</span>` : ""}</div>`;
         }).join("") + (() => {
           /* Depotsumme: Einzelposten sagen nichts darueber, wie das Depot als
            * Ganzes steht — und das ist die Zahl, die man mit dem Bargeld
@@ -8445,7 +13019,9 @@ function render({ state, me, myId, chat, room }) {
             <span><b>${fmt(wert)}</b>${einst > 0 ? ` <span class="meta">Einstand ${fmt(einst)}</span>` : ""}
               ${gv == null ? "" : `<b style="color:${gv >= 0 ? "var(--up)" : "var(--down)"}">${gv >= 0 ? "+" : "−"}${fmt(Math.abs(gv))}</b>`}</span></div>`;
         })()
-      : `<span class="meta">Du hältst keine fremden Aktien. Kauf welche — liegt der Kurs unter dem Wert F, holt er meist auf, und du kannst teurer weiterverkaufen.</span>`;
+      : `<div class="bLeer"><b>Noch keine fremden Aktien</b>
+          <span>Kauf welche — liegt der Kurs unter dem Wert F, holt er meist auf, und du kannst teurer weiterverkaufen.</span>
+          <button type="button" class="bknopf zur" data-breiter="markt">Zur Kurstafel</button></div>`;
     /* ETF-Bestände */
     if ((me.etf || []).length) document.getElementById("bankdepot").insertAdjacentHTML("beforeend",
       `<div class="sec">Branchen-ETFs</div>` + me.etf.map(x => {
@@ -8470,7 +13046,17 @@ function render({ state, me, myId, chat, room }) {
     const tx = me.tx || [];
     let alleTx = false; try { alleTx = sessionStorage.getItem("cs_tx_alle") === "1"; } catch {}
     const offen = id => LEX_OFFEN.has(id) ? "open" : "";
-    document.getElementById("firmabody").innerHTML = `
+    const eigenesBild = logoBild(myId);
+    const programme = (state.paint || []).filter(x => x.version >= 1 && x.ownerId !== myId);
+    const logoBox = `<div class="fLogo">
+      ${eigenesBild ? `<img src="${eigenesBild}" alt="Dein Logo">` : `<span class="fLogoLeer" style="background:${my?.color || "#64748b"}">${rohText(my?.name || "?").slice(0, 1)}</span>`}
+      <div><b>Firmenlogo</b>
+        ${me.paintStufe ? `<small>Mit ${escapeHtml(rohText(me.paintStufe.programm))} v${me.paintStufe.version} · bis ${me.paintStufe.groesse}×${me.paintStufe.groesse} Pixel</small>
+          <button class="mini" data-malen>🎨 ${eigenesBild ? "Logo bearbeiten" : "Logo malen"}</button>`
+        : `<small>${programme.length ? "Kaufe eine Malprogramm-Lizenz im Online-Shop einer Software-Firma, dann malst du dein Logo selbst." : "Noch bietet keine Software-Firma ein Malprogramm an."}</small>
+          <span class="mpZeile">${programme.map(x => { const l = x.laeden.find(l2 => l2.offen); return l ? `<button class="mini" data-shopauf="${l.x},${l.y}">🛒 ${x.name} · ${fmt(x.preis)}</button>` : `<span class="meta">${x.name} — Shop zu</span>`; }).join("")}</span>`}
+      </div></div>`;
+    document.getElementById("firmabody").innerHTML = logoBox + `
       <div class="fKennzahlen">
         <div><span>Rang</span><b>#${nRank}</b><small>von ${nPlayers}</small></div>
         <div class="haupt"><span>Nettovermögen</span><b>${geld(bal.total)}</b><small>Ziel ${geld(state.winGoal)}</small></div>
@@ -8488,6 +13074,7 @@ function render({ state, me, myId, chat, room }) {
         ${zeile("Bargeld", bal.cash)}
         ${zeile("Warenlager (Marktwert)", bal.invVal)}
         ${zeile("Gebäude", bal.bldVal)}
+        ${bal.markenwert ? zeile("Markenwert (Software)", bal.markenwert) : ""}
         ${bal.bondVal ? zeile("Anleihen", bal.bondVal) : ""}
         ${bal.debtVal ? zeile("Verbindlichkeiten", bal.debtVal, true) : ""}
         ${zeile("Firmenwert", bal.firmVal, false, "summe")}
@@ -8499,6 +13086,8 @@ function render({ state, me, myId, chat, room }) {
         <div><span>Zinserträge</span><b class="plus">${geld(me.fin?.zinsErtrag || 0)}</b></div>
         <div><span>Zinsausgaben</span><b class="${me.fin?.zinsAufwand ? "minus" : ""}">${me.fin?.zinsAufwand ? "− " : ""}${geld(me.fin?.zinsAufwand || 0)}</b></div>
       </div>
+      ${lohnHtml(me, state)}
+      ${ruestHtml(me, state, my)}
       <div class="sec">Deine Aktie</div>
       <div class="fAktie">
         <div><span>Kurs</span><b>${fk(me.kurs ?? 0)}</b></div>
@@ -8539,7 +13128,7 @@ function render({ state, me, myId, chat, room }) {
   if (document.getElementById("p-lexikon").classList.contains("open")) {
     const B = BTYPES(), avg = state.avg || {};
     const ZNAME = { agrar: "Agrar", zentrum: "Zentrum", industrie: "Industrie · $2.500/Kachel", kueste: "Küste · $12.000/Kachel" };
-    const INAME = { agrar: "Agrar", rohstoff: "Rohstoff & Bau", versorger: "Versorger", tech: "Technologie", touristik: "Touristik", ruestung: "Rüstung" };
+    const INAME = { agrar: "Agrar", rohstoff: "Rohstoff & Bau", versorger: "Versorger", tech: "Technologie", touristik: "Touristik", ruestung: "Rüstung", software: "Software" };
     const kartell = store.get().state?.mode === "kartell";
     const suche = (LEX_SUCHE || "").trim().toLowerCase();
     const r2 = n => (+(+n).toFixed(2)).toLocaleString("de-DE");   // 0.333333 → 0,33
@@ -8553,9 +13142,15 @@ function render({ state, me, myId, chat, room }) {
         mehr = "Läuft automatisch, solange die Zutaten im Lager sind."; }
       else if (b.ad) { was = "<b>Werbekampagnen</b>";
         mehr = "Reichweite hebt den Preis, den deine Läden ohne Tempoverlust verlangen können — bis +20 % mit einer Agentur, je weitere +10 % (max. +40 %). Ohne neue Kampagne nach gut zwei Minuten wieder beim Ø-Kurs."; }
+      else if (b.online) { was = `<b>${b.retail.slots} Regale</b> · alles außer Fahrzeugen und Waffen`;
+        mehr = "Verkauft erst, wenn ein Shop-System installiert ist — von einer Software-Firma oder das Stadtportal (8 % je Verkauf). Das System bestimmt Tempo, Gebühr und ob es ein Werbemodul gibt."; }
       else if (b.retail) { was = `<b>${b.retail.slots} Regal${b.retail.slots > 1 ? "e" : ""}</b> · ${b.retail.goods.map(g => gname(g)).join(", ")}`;
         mehr = "Du setzt den Preis: Ø-Kurs = volle Rate, teurer verkauft langsamer, billiger schneller (max. ×2). Einrichten per Klick aufs Gebäude."; }
       else if (b.racing) { was = "<b>Motorsport</b> · Garage für Rennwagen"; }
+      else if (b.studio) { was = `${Object.entries(b.studio.in).map(([g, n]) => `${r2(n)} ${gname(g)}`).join(" + ")} → <b>${r2(b.studio.ep)} EP</b>/s`;
+        mehr = "Entwicklungspunkte für dein Shop-System: Version 1 kostet 150 EP plus Module, jede weitere 60 EP plus neue Module."; }
+      else if (b.rz) { was = `${r2(b.rz.in.strom)} ${gname("strom")}/s → <b>${b.rz.plaetze} Kunden</b> je Stufe`;
+        mehr = "Trägt die Online-Marktplätze, die dein System nutzen. Mehr Kunden als Plätze bremst alle; ohne Strom fällt das System aus."; }
       const chips = [
         ZNAME[b.zone] || b.zone,
         kartell ? "bar bezahlt" : `${Math.ceil(b.cost / 400)} Ziegel${b.cost >= 4000 && b.proc?.out !== "beton" ? ` + ${Math.ceil(b.cost / 2000)} Beton` : ""}`,
@@ -8579,7 +13174,8 @@ function render({ state, me, myId, chat, room }) {
       ["tech", "Technologie & Elektronik", ["siliziummine","chipfabrik","autowerk","dieselwerk","eautowerk","rennlabor"]],
       ["touristik", "Touristik", ["campingplatz","strandhotel"]],
       ["ruestung", "Rüstung", ["munitionsfabrik","waffenschmiede","panzerwerk"]],
-      ["laden", "Läden (jede Branche)", ["markt","bauhandel","kontor","laden","autohaus","waffenhandel","werbeagentur"]],
+      ["software", "Software & Digitales", ["entwicklerstudio","rechenzentrum"]],
+      ["laden", "Verkauf (jede Branche)", ["onlinemarkt", ...(state.mode === "sandbox" ? [] : ["werbeagentur"])]],
       ["renn", "Motorsport", ["rennstall"]],
     ];
     const gruppe = ([id, titel, ids]) => {
@@ -8602,6 +13198,7 @@ function render({ state, me, myId, chat, room }) {
       ${Object.entries(GOODS()).map(([k]) => `<tr><td>${gname(k)}</td><td>${catname(k)}</td><td>${fmt(avg[k] ?? 0)}</td></tr>`).join("")}</table>
       <p class="meta">Kurse regeln sich selbst: Überangebot drückt den Anker bis −50 %, Knappheit hebt ihn bis +30 %. Kurzfristige Schwankung max. ±$5.</p>
       </details>
+      ${stadtLexikon()}
       <details class="lexGruppe" data-lex="lex-regeln" ${LEX_OFFEN.has("lex-regeln") ? "open" : ""}><summary>Regeln kompakt<span>2</span></summary>
       <div class="sec">Geld verdienen — die Rangfolge</div>
       <table>
@@ -8866,13 +13463,12 @@ const TUT_BUCH = [
       billiger heißt schneller — bis zum doppelten Tempo. Du entscheidest zwischen
       Marge und Umschlag.</div>
       <ul>
-        <li><b>Marktstand</b> — Agrarwaren</li>
-        <li><b>Baustoffhandel</b> — Baumaterial</li>
-        <li><b>Handelskontor</b> — fast alles, zwei Slots</li>
-        <li><b>Autohaus</b> — nur Fahrzeuge</li>
+        <li>Der einzige Laden ist der <b>Online-Marktplatz</b>: 3 Regale für alle Waren, jede Ausbaustufe bringt eins dazu.</li>
+        <li>Er verkauft erst mit einem <b>Shop-System</b> — von einer Software-Firma oder das Stadtportal (8 % je Verkauf).</li>
+        <li>Systeme mit dem <b>Baum deiner Branche</b> verkaufen deine Waren schneller.</li>
       </ul>
-      <div class="merk">Achte beim Bauen darauf, was der Laden überhaupt führt — ein
-      Marktstand nützt dir nichts, wenn du Strom verkaufen willst.</div>`,
+      <div class="merk">Mitspieler können in deinem Online-Shop direkt einkaufen. Dafür
+      fällt die halbe Börsengebühr als Handelssteuer an — immer noch günstiger als die Börse.</div>`,
     en: { t: "Your own shops", lead: "Selling to the city", html: `
       <p>Shops sell continuously to the city's population — no other player has to buy.
       You build a shop, click it and set per sales slot:
@@ -8881,13 +13477,12 @@ const TUT_BUCH = [
       At the average rate you sell at full speed. Dearer means slower, cheaper means
       faster — up to double the pace. You decide between margin and turnover.</div>
       <ul>
-        <li><b>Market stall</b> — farm goods</li>
-        <li><b>Builders merchant</b> — building material</li>
-        <li><b>Trading house</b> — almost everything, two slots</li>
-        <li><b>Car dealership</b> — vehicles only</li>
+        <li>The only shop is the <b>online marketplace</b>: 3 shelves for every good, each upgrade adds one.</li>
+        <li>It only sells with a <b>shop system</b> installed — from a software company or the city portal (8 % per sale).</li>
+        <li>Systems with your <b>industry's tree</b> sell your goods faster.</li>
       </ul>
-      <div class="merk">When building, check what the shop actually carries — a market
-      stall is no use if you want to sell power.</div>` } },
+      <div class="merk">Other players can buy directly in your online shop. Half the exchange
+      fee applies as trade tax — still cheaper than the exchange.</div>` } },
 
   { t: "Börse", lead: "Handel unter Spielern",
     html: `
@@ -8914,6 +13509,70 @@ const TUT_BUCH = [
       pay more than the actual market price.</p>
       <p>The ticker at the top shows <b>real trades only</b>. If a price rises there,
       somebody genuinely paid that much.</p>` } },
+
+  { t: "Bürgerdepot &amp; Fonds", lead: "Wer an der Aktienbörse kauft",
+    html: `
+      <p>Die Bewohner der Stadt <b>sparen</b>: Für jeden Dollar, den sie in den
+      Online-Shops ausgeben, legen sie 40 Cent zurück. Dieses Geld kauft einmal je
+      Markttag Aktien — das ist frisches Geld für die Börse.</p>
+      <ul>
+        <li>Rund 70 % gehen in <b>Branchenfonds</b>, der Rest in einzelne Aktien aus dem
+        Orderbuch. Bevorzugt werden unterbewertete Firmen mit guter Dividende.</li>
+        <li>Bei einer <b>Panik</b> oder wenn Kurse deutlich über dem Wert liegen,
+        verkauft das Depot einen Teil.</li>
+        <li>Ohne <b>Börsen-App</b> kommt nur die Hälfte der Ersparnisse über die
+        Stadtsparkasse an die Börse. Mit Apps der Software-Firmen kommt alles an — gegen
+        Provision.</li>
+      </ul>
+      <div class="kasten"><div class="t">Fonds schütten aus</div>
+      Ein Branchenfonds hält echte Aktien. 80 % der Dividenden, die er dafür bekommt,
+      reicht er alle 10 Minuten an seine Anteilseigner weiter.</div>
+      <div class="merk">Wer Dividende zahlt, zieht die Sparer an — das stützt den Kurs.</div>`,
+    en: { t: "Citizens' depot &amp; funds", lead: "Who buys on the stock exchange", html: `
+      <p>The city's residents <b>save</b>: for every dollar they spend in online shops
+      they put aside 40 cents. Once per market day this money buys shares — fresh
+      money for the exchange.</p>
+      <ul>
+        <li>About 70 % goes into <b>sector funds</b>, the rest into single shares from the
+        order book, preferring undervalued companies with good dividends.</li>
+        <li>In a <b>panic</b> or when prices run well above value, the depot sells part
+        of its holdings.</li>
+        <li>Without a <b>stock app</b> only half the savings reach the exchange via the
+        city savings bank. With apps from software companies all of it does — for a
+        commission.</li>
+      </ul>
+      <div class="kasten"><div class="t">Funds pay out</div>
+      A sector fund holds real shares. 80 % of the dividends it receives go to its unit
+      holders every 10 minutes.</div>
+      <div class="merk">Paying dividends attracts the savers — that supports the price.</div>` } },
+
+  { t: "Steuerungssoftware", lead: "Software für Produktionsgebäude",
+    html: `
+      <p>Das System einer Software-Firma läuft nicht nur im Online-Marktplatz, sondern
+      auch auf <b>Produktionsgebäuden</b>: Farm, Mine, E-Werk, Chipfabrik, Hotel …</p>
+      <ul>
+        <li>Jede Branche hat ihre eigene Steuerung, z. B. Ernteplaner (Agrar, mehr Ernte)
+        oder Förderleitstand (Rohstoff &amp; Bau, weniger Rohstoffe je Stück).</li>
+        <li>Die Wirkung kommt aus dem <b>Branchenbaum</b> des Systems: Stufe 1 bringt die
+        Hälfte, Stufe 2 80 %, Stufe 3 die volle Wirkung. Ohne Baum keine Steuerung.</li>
+        <li>Jedes gesteuerte Gebäude belegt einen Platz im <b>Rechenzentrum</b> des
+        Anbieters und kostet ein Abo je Minute. Fällt das Rechenzentrum aus, fehlt der
+        Bonus bei allen Kunden.</li>
+      </ul>
+      <div class="merk">Lohnt sich vor allem bei teuren Waren: Chipfabrik, Autowerk, Stahlwerk.</div>`,
+    en: { t: "Control software", lead: "Software for production buildings", html: `
+      <p>A software company's system does not only run your online marketplace but also
+      <b>production buildings</b>: farm, mine, power plant, chip factory, hotel …</p>
+      <ul>
+        <li>Every industry has its own control software, e.g. harvest planner (farming,
+        more output) or mining control (raw materials, fewer inputs per unit).</li>
+        <li>The effect comes from the system's <b>industry tree</b>: level 1 gives half,
+        level 2 80 %, level 3 the full effect. No tree, no control software.</li>
+        <li>Every controlled building takes a slot in the provider's <b>data centre</b> and
+        costs a subscription per minute. If the data centre fails, all customers lose the
+        bonus.</li>
+      </ul>
+      <div class="merk">Pays off most for valuable goods: chip factory, car plant, steel mill.</div>` } },
 
   { t: "Preise &amp; Ankerkurs", lead: "Warum dein Angebot den Kurs bewegt",
     html: `
@@ -9002,10 +13661,62 @@ const TUT_BUCH = [
       <div class="merk">Bulk orders are the best way to move large quantities without
       wrecking the rate.</div>` } },
 
+  { t: "Die Stadt wächst", lead: "Einwohner, Arbeiter und Löhne",
+    html: `
+      <p>Im Sandkasten und in der Einsteiger-Runde hat die Stadt <b>Einwohner</b>. Sie wohnen
+      im <b>Wohngebiet</b> rund ums Zentrum — dort baut allein die Stadt, aus der Stadtkasse.</p>
+      <div class="kasten"><div class="t">Wohnblöcke</div>
+      Siedlungshaus (40 Plätze), ab 800 Einwohnern Mietblock (120), ab 2.500 Wohnturm (300).
+      Das Baumaterial kauft die Stadt bei euch: In der Stadtübersicht (Finanzamt) steht, was sie
+      braucht — sie zahlt 15 % über Kurs. Liefert niemand, kauft sie nach 90 s teurer anderswo.</div>
+      <p><b>Jedes Gebäude braucht Arbeiter</b> — rund einen je 250 $ Baukosten, jede Ausbaustufe 50 %
+      mehr. Mit 3 von 5 Arbeitern läuft es zu 60 %, unter 25 % steht es still. Labor, Studio und
+      Chipfabrik brauchen zur Hälfte <b>Fachkräfte</b>; die Stadtbibliothek bildet mehr aus.
+      Steuerungssoftware spart ein Viertel der Arbeiter.</p>
+      <div class="kasten"><div class="t">Löhne</div>
+      Im Firma-Panel wählst du Spar-, Tarif- oder Spitzenlohn (4/6/9 $ je Arbeiter und Minute).
+      Sind Leute knapp, gehen sie zuerst zum besten Lohn. Eine Senkung greift erst nach 60 s.
+      Vom Lohn gehen 30 % als Steuer und Miete an die Stadt — damit baut sie neue Wohnungen.</div>
+      <p>Neue Bewohner ziehen nur zu, wenn es <b>freie Stellen</b> und freie Wohnungen gibt — und wenn
+      Strom, Wasser und Lebensmittel zu kaufen sind. Fehlt der Stadt Geld, gibt sie
+      <b>Stadtanleihen</b> aus, die du an der Stadtbank zeichnen kannst.</p>
+      <div class="kasten"><div class="t">Software für die Stadt</div>
+      Software-Firmen entwickeln <b>Bürger-Apps</b> (die Einwohner zahlen ein Abo je Minute) und
+      <b>Jobbörsen</b>. Eine Jobbörse abonnierst du im Firma-Panel: Sie gibt dir bei knappen
+      Arbeitern Vorrang, günstiger als ein höherer Lohn.</div>
+      <div class="merk">Mehr Einwohner heißt mehr Kundschaft: Die Nachfrage in den Läden wächst mit
+      der Stadt, bis ×1,6.</div>`,
+    en: { t: "The city grows", lead: "Residents, workers and wages", html: `
+      <p>In sandbox and beginner rounds the city has <b>residents</b>. They live in the
+      <b>residential ring</b> around the centre — only the city builds there, from its treasury.</p>
+      <div class="kasten"><div class="t">Housing</div>
+      House (40 homes), apartment block from 800 residents (120), tower from 2,500 (300).
+      The city buys its building materials from you: the city overview (tax office) lists what it
+      needs — it pays 15 % above market. If nobody delivers, it buys elsewhere at a higher price after 90 s.</div>
+      <p><b>Every building needs workers</b> — about one per $250 of building cost, 50 % more per
+      upgrade. With 3 of 5 workers it runs at 60 %, below 25 % it stops. Lab, studio and chip
+      factory need half <b>skilled workers</b>; the city library trains more. Control software
+      saves a quarter of the workers.</p>
+      <div class="kasten"><div class="t">Wages</div>
+      In the company panel you pick low, standard or top wage (4/6/9 $ per worker and minute).
+      When people are scarce they go to the best payer first. A cut only takes effect after 60 s.
+      30 % of wages go to the city as tax and rent — it builds new housing with that.</div>
+      <p>New residents only move in when there are <b>open jobs</b> and free homes — and when power,
+      water and food are for sale. If the city runs short of money it issues <b>city bonds</b>
+      you can buy at the city bank.</p>
+      <div class="kasten"><div class="t">Software for the city</div>
+      Software companies develop <b>citizen apps</b> (residents pay a subscription per minute) and
+      <b>job boards</b>. You subscribe to a job board in the company panel: it gives you priority when
+      workers are scarce, cheaper than higher wages.</div>
+      <div class="merk">More residents means more customers: shop demand grows with the city, up to ×1.6.</div>` } },
+
   { t: "Werbeagentur", lead: "Höhere Preise ohne Tempoverlust",
     html: `
       <p>Normalerweise gilt: Wer teurer verkauft, verkauft langsamer. Die Werbeagentur
       hebelt genau das aus.</p>
+      <div class="merk">Im Sandbox-Modus gibt es keine Werbeagentur mehr: Werbung kommt dort aus dem
+      <b>Werbemodul</b> eines Shop-Systems — ein Abo je Online-Marktplatz und Minute, das an die
+      Software-Firma geht. Die Wirkung ist dieselbe wie eine volle Kampagne (+20 %).</div>
       <div class="kasten"><div class="t">Reichweite</div>
       Du buchst eine Kampagne und baust <b>Reichweite</b> auf. Solange sie hoch ist,
       akzeptiert die Kundschaft in <b>deinen eigenen Läden</b> einen höheren Preis, ohne
@@ -9248,10 +13959,10 @@ const TUT_BUCH = [
       <p>Jede Handlung bringt <b>Erfahrung</b>. Mit steigendem Level wächst nichts an deiner
       Produktion, es ist ein Fortschrittsmaß, kein Vorteil — die Wirtschaft soll durch
       Entscheidungen gewonnen werden, nicht durch Spielzeit.</p>
-      <div class="kasten"><div class="t">Die Nachrichtenzentrale</div>
-      Sie steht im Zentrum der Karte und schickt regelmäßig einen <b>Marktbericht</b> in den
-      Chat: welche Ware knapp ist, welche im Überfluss liegt. Wer nicht ständig auf die
-      Kursleiste schaut, erfährt hier, wo gerade etwas zu holen ist.</div>
+      <div class="kasten"><div class="t">Der Stadtkurier</div>
+      Die Nachrichten der Stadt stehen im <b>Stadtnetz</b> (Knopf unten): Alle zwei Minuten
+      erscheint ein <b>Marktbericht</b> — welche Ware knapp ist, welche im Überfluss liegt —,
+      dazu Börse, Stadt und Firmen. Großaufträge und Ausschreibungen laufen als Eilmeldung.</div>
       <p>Fällt dir etwas auf, das nicht stimmt, gibt es unten den Knopf <b>Fehler melden</b>
       — die Meldung landet direkt beim Server, mitsamt dem, was gerade auf dem Bildschirm
       war.</p>`,
@@ -9510,6 +14221,17 @@ const kap = k => (SPRACHE === "en" && k.en) ? { ...k, ...k.en } : k;
 
 /* Ausschüttung im Firmen-Panel festlegen */
 document.getElementById("firmabody").addEventListener("click", e => {
+  const lb = e.target.closest("[data-lohn]");
+  if (lb) return act("lohnStufe", { stufe: lb.dataset.lohn });
+  const jb = e.target.closest("[data-jobabo]");
+  if (jb) return act("jobAbo", { id: jb.dataset.jobabo || null });
+  const rg = e.target.closest("[data-rgebot]");
+  if (rg) return act("ruestBieten", { id: +rg.dataset.rgebot, prozent: +document.getElementById(`rg-${rg.dataset.rgebot}`).value });
+  const rl = e.target.closest("[data-rliefer]");
+  if (rl) return act("ruestLiefern", { id: +rl.dataset.rliefer, good: rl.dataset.rlg });
+  if (e.target.closest("[data-malen]")) return malOeffnen();
+  const sa = e.target.closest("[data-shopauf]");
+  if (sa) { const [x, y] = sa.dataset.shopauf.split(",").map(Number); return shopOeffnen(x, y); }
   if (e.target.closest("[data-aus-auto]")) { act("setAusschuettung", { betrag: "auto" }); return; }
   if (e.target.closest("[data-aus-setzen]")) {
     const v = document.getElementById("ausBetrag").value;

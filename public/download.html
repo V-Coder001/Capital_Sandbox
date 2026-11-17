@@ -1,0 +1,204 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Herunterladen — Capital Sandbox</title>
+<meta name="description" content="Capital Sandbox für den eigenen Rechner — volle Grafik, offline spielbar, Online-Runden mit Freunden.">
+<!-- Gleiches Thema wie im Spiel, im Browser gemerkt -->
+<script>try{document.documentElement.dataset.theme=localStorage.getItem("cs_thema")==="papier"?"papier":"vermessung"}catch(e){}</script>
+<style>
+:root{
+  --bg:#0a0e15; --panel:#121824; --panel2:#1a2231; --line:#273144;
+  --text:#e3e9f4; --dim:#8695ab; --accent:#38bdf8; --accent2:#a78bfa;
+  --font:system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box}
+body{margin:0;background:#070b10;color:var(--text);font-family:var(--font);
+  line-height:1.6;padding:40px 20px 80px}
+a{color:var(--accent)}
+/* Höhenlinien-Karte als Kulisse, hinter dem Inhalt (sonst verdeckt der Canvas alles) */
+#bgTopo{position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:-1;
+  color:#7dd3fc;opacity:0;transition:opacity .8s ease-out;
+  -webkit-mask-image:radial-gradient(ellipse 120% 100% at 50% 45%,#000 55%,transparent 100%);
+          mask-image:radial-gradient(ellipse 120% 100% at 50% 45%,#000 55%,transparent 100%)}
+html[data-theme="papier"] #bgTopo{color:#3b3226}
+.wrap{max-width:820px;margin:0 auto;position:relative;background:rgba(10,14,21,.72);
+  border:1px solid rgba(56,189,248,.14);border-radius:18px;padding:34px 36px;
+  -webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);box-shadow:0 24px 80px rgba(0,0,0,.6)}
+
+h1{font-size:40px;font-weight:800;letter-spacing:-.02em;margin:0 0 6px}
+h1 span{color:var(--accent)}
+.beta{font-size:12px;font-weight:700;color:#0a0e15;background:var(--accent);
+  border-radius:6px;padding:2px 8px;vertical-align:middle;margin-left:8px}
+.lead{color:var(--dim);font-size:15px;max-width:52ch;margin:0 0 30px}
+
+/* ---- Download-Knoepfe ---- */
+.dls{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:0 0 10px}
+.dl{display:flex;align-items:center;gap:13px;background:rgba(18,24,36,.82);
+  border:1px solid var(--line);border-radius:13px;padding:15px 17px;text-decoration:none;
+  color:var(--text);transition:border-color .15s,background .15s}
+.dl:hover{border-color:rgba(56,189,248,.5);background:rgba(24,32,48,.9)}
+.dl[aria-disabled="true"]{opacity:.5;pointer-events:none}
+.dl.primary{border-color:rgba(56,189,248,.55);background:rgba(56,189,248,.1)}
+.dl svg{width:26px;height:26px;flex:none;color:var(--accent)}
+.dl .t{font-weight:700;font-size:14.5px}
+.dl .s{font-size:11.5px;color:var(--dim);font-family:var(--mono)}
+.dl .arr{margin-left:auto;color:var(--dim)}
+.hint{font-size:11px;color:var(--dim);margin:0 0 26px;text-align:center}
+
+.warn{background:rgba(251,113,133,.08);border:1px solid rgba(251,113,133,.35);border-radius:11px;
+  padding:13px 16px;font-size:12.5px;color:var(--dim);margin:0 0 30px}
+.warn b{color:#fb7185}
+.warn code{font-family:var(--mono);font-size:11.5px;background:var(--panel2);border-radius:4px;padding:1px 5px}
+
+.shots{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:8px 0 30px}
+.shots img{width:100%;height:110px;object-fit:cover;border-radius:10px;border:1px solid var(--line)}
+
+h2{font-size:16px;margin:30px 0 10px;border-bottom:1px solid var(--line);padding-bottom:8px}
+p,li{font-size:13.5px;color:#c3cede}
+ul{padding-left:20px;margin:8px 0}
+.back{display:inline-block;margin-top:34px;font-size:13px}
+
+@media(max-width:620px){
+  .wrap{padding:22px 18px} h1{font-size:30px}
+  .dls{grid-template-columns:1fr} .shots{grid-template-columns:1fr;gap:8px}
+  .shots img{height:160px}
+}
+</style>
+</head>
+<body>
+<canvas id="bgTopo"></canvas>
+<div class="wrap" data-topo-avoid>
+
+  <h1>Capital <span>Sandbox</span><span class="beta">BETA</span></h1>
+  <p class="lead">Die Download-Fassung läuft komplett auf deinem Rechner: schärfere Grafik,
+    kein Warten auf den Server, offline spielbar. Online mit Freunden geht weiterhin —
+    über eine Runde, die du direkt aus dem Spiel eröffnest.</p>
+
+  <!-- Die Knoepfe werden aus dem neuesten GitHub-Release gefuellt (s. Skript unten).
+       Bis ein Release veroeffentlicht ist, stehen sie auf "in Vorbereitung". -->
+  <div class="dls" id="dls">
+    <a class="dl" data-key="mac-arm" aria-disabled="true" href="#">
+      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M16.3 1.5c.1 1-.3 2-.9 2.7-.6.8-1.6 1.4-2.6 1.3-.1-1 .4-2 .9-2.6.6-.8 1.7-1.4 2.6-1.4zM19 17c-.5 1.2-.8 1.7-1.4 2.7-.9 1.4-2.2 3.1-3.8 3.1-1.4 0-1.8-.9-3.7-.9s-2.4.9-3.7.9c-1.6 0-2.8-1.5-3.7-2.9C-.2 16.4-.5 11 1.7 8.2 2.8 6.8 4.5 6 6.1 6c1.6 0 2.6 1 3.9 1 1.3 0 2-.9 3.9-1 1.4 0 2.9.8 4 2.1-3.5 1.9-2.9 6.9.1 8.9z"/></svg>
+      <div><div class="t">macOS · Apple Silicon</div><div class="s" data-size>.dmg</div></div>
+      <span class="arr">↓</span>
+    </a>
+    <a class="dl" data-key="mac-intel" aria-disabled="true" href="#">
+      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M16.3 1.5c.1 1-.3 2-.9 2.7-.6.8-1.6 1.4-2.6 1.3-.1-1 .4-2 .9-2.6.6-.8 1.7-1.4 2.6-1.4zM19 17c-.5 1.2-.8 1.7-1.4 2.7-.9 1.4-2.2 3.1-3.8 3.1-1.4 0-1.8-.9-3.7-.9s-2.4.9-3.7.9c-1.6 0-2.8-1.5-3.7-2.9C-.2 16.4-.5 11 1.7 8.2 2.8 6.8 4.5 6 6.1 6c1.6 0 2.6 1 3.9 1 1.3 0 2-.9 3.9-1 1.4 0 2.9.8 4 2.1-3.5 1.9-2.9 6.9.1 8.9z"/></svg>
+      <div><div class="t">macOS · Intel</div><div class="s" data-size>.dmg</div></div>
+      <span class="arr">↓</span>
+    </a>
+    <a class="dl" data-key="win" aria-disabled="true" href="#">
+      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M0 3.4 9.8 2v9.5H0zM11 1.9 24 0v11.4H11zM0 12.6h9.8v9.5L0 20.7zM11 12.6h13V24l-13-1.8z"/></svg>
+      <div><div class="t">Windows · Installer</div><div class="s" data-size>.exe</div></div>
+      <span class="arr">↓</span>
+    </a>
+    <a class="dl" data-key="linux" aria-disabled="true" href="#">
+      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2c-2 0-3.3 1.8-3.3 4 0 1.3.3 2 .3 3 0 1.5-2.7 3.8-2.7 7.3 0 2.3 1.3 3.7 1.3 4.4 0 .8-.6 1-.6 1.6 0 .5.5.7 1.2.7h7.6c.7 0 1.2-.2 1.2-.7 0-.6-.6-.8-.6-1.6 0-.7 1.3-2.1 1.3-4.4 0-3.5-2.7-5.8-2.7-7.3 0-1 .3-1.7.3-3 0-2.2-1.3-4-3.3-4z"/></svg>
+      <div><div class="t">Linux · AppImage</div><div class="s" data-size>.AppImage</div></div>
+      <span class="arr">↓</span>
+    </a>
+  </div>
+  <p class="hint" id="hint">Version wird geladen …</p>
+
+  <div class="warn">
+    <b>Beim ersten Start warnt das System.</b> Die App ist noch nicht signiert, deshalb
+    meldet macOS „nicht verifizierter Entwickler" (Rechtsklick auf die App → <code>Öffnen</code>)
+    und Windows zeigt den SmartScreen-Hinweis (<code>Weitere Informationen</code> → <code>Trotzdem ausführen</code>).
+    Das ist bei jeder unsignierten App so und sagt nichts über Schadsoftware aus.
+  </div>
+
+  <div class="shots">
+    <img src="/presse/stadt-tag.jpg" alt="Stadtansicht bei Tag" loading="lazy">
+    <img src="/presse/planwirtschaft.jpg" alt="Planwirtschaft-Modus" loading="lazy">
+    <img src="/presse/renntag.jpg" alt="Renntag" loading="lazy">
+  </div>
+
+  <h2>Lieber ohne Download?</h2>
+  <p>Das Spiel läuft auch direkt im Browser — dieselbe Welt, nur mit auf die Leitung
+    abgestimmter Grafik. <a href="/">Hier geht es zum Spiel.</a></p>
+
+  <h2>Online mit Freunden</h2>
+  <p>In der Desktop-App gibt es auf dem Startbildschirm drei Wege: eine Runde auf deinem
+    Rechner (für dich allein oder fürs eigene WLAN), eine <b>Online-Runde erstellen</b>
+    über unseren Server, oder einer bestehenden Runde mit dem Code deiner Freunde beitreten.</p>
+
+  <a class="back" href="/">← Zum Spiel</a>
+  <a class="back" href="impressum.html" style="margin-left:18px">Impressum</a>
+  <a class="back" href="datenschutz.html" style="margin-left:18px">Datenschutz</a>
+</div>
+
+<script>
+/* Die Knoepfe zeigen auf das neueste veroeffentlichte GitHub-Release. So muss
+ * diese Seite bei jeder neuen Version nicht angefasst werden — sie liest die
+ * aktuellen Dateien selbst aus. Entwuerfe zaehlen nicht: /releases/latest gibt
+ * nur veroeffentlichte, nicht-Vorab-Releases zurueck. */
+const REPO = "V-Coder001/Capital_Sandbox";
+
+/* Jede Datei wird ueber ihren Namen der richtigen Plattform zugeordnet. Die
+ * Reihenfolge zaehlt: der Installer (Setup...exe) muss vor der portablen exe
+ * geprueft werden, sonst faengt die allgemeine .exe-Regel ihn ab. */
+const ZUORDNUNG = [
+  ["mac-arm",   n => /arm64\.dmg$/i.test(n)],
+  ["mac-intel", n => /\.dmg$/i.test(n) && !/arm64/i.test(n)],
+  ["win",       n => /setup.*\.exe$/i.test(n) || (/\.exe$/i.test(n) && /win|x64/i.test(n))],
+  ["linux",     n => /\.appimage$/i.test(n)],
+];
+
+/* Welcher Knopf wird hervorgehoben? Grob nach Betriebssystem des Besuchers.
+ * Intel vs. Apple Silicon laesst der Browser nicht zuverlaessig erkennen —
+ * auf dem Mac heben wir Apple Silicon hervor (die neueren Geraete) und zeigen
+ * Intel gleichwertig daneben. */
+function eigenePlattform() {
+  const s = (navigator.userAgent + " " + (navigator.platform || "")).toLowerCase();
+  if (s.includes("win")) return "win";
+  if (s.includes("linux") && !s.includes("android")) return "linux";
+  if (s.includes("mac")) return "mac-arm";
+  return null;
+}
+
+function mb(bytes) { return (bytes / 1048576).toFixed(0) + " MB"; }
+
+async function ladeRelease() {
+  const hint = document.getElementById("hint");
+  try {
+    const r = await fetch(`https://api.github.com/repos/${REPO}/releases/latest`, {
+      headers: { Accept: "application/vnd.github+json" },
+    });
+    if (r.status === 404) {
+      hint.textContent = "Die Download-Fassung ist in Vorbereitung — bis dahin läuft das Spiel im Browser.";
+      return;
+    }
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    const rel = await r.json();
+    let gefunden = 0;
+    for (const [key, passt] of ZUORDNUNG) {
+      const asset = (rel.assets || []).find(a => passt(a.name));
+      const el = document.querySelector(`.dl[data-key="${key}"]`);
+      if (!el) continue;
+      if (asset) {
+        el.href = asset.browser_download_url;
+        el.removeAttribute("aria-disabled");
+        el.querySelector("[data-size]").textContent =
+          el.querySelector("[data-size]").textContent + " · " + mb(asset.size);
+        gefunden++;
+      }
+    }
+    if (!gefunden) { hint.textContent = "Für dieses Release liegen noch keine Dateien bereit."; return; }
+    hint.innerHTML = `Version <b>${rel.tag_name}</b> · <a href="${rel.html_url}">alle Dateien & Änderungen</a>`;
+    const eigen = eigenePlattform();
+    if (eigen) document.querySelector(`.dl[data-key="${eigen}"]`)?.classList.add("primary");
+  } catch (e) {
+    hint.innerHTML = `Download-Liste konnte nicht geladen werden — <a href="https://github.com/${REPO}/releases/latest">direkt auf GitHub ansehen</a>.`;
+  }
+}
+ladeRelease();
+</script>
+<script src="topo.js"></script>
+<script>
+  if (window.startTopo) startTopo(document.body, document.getElementById("bgTopo"), { seed: 7 });
+</script>
+</body>
+</html>
