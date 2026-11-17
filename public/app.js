@@ -121,6 +121,23 @@ function bankAvatar(p) {
  * Renderns leben: die Tafel wird jede Sekunde neu gebaut, ein Zustand im DOM
  * waere danach jedes Mal weg. */
 const firmenAuf = new Set();
+/* Stadtbank/Markt: Zustände, die das sekündliche Neuzeichnen überleben müssen —
+ * welcher Fonds sein Kauffeld offen hat, der eingetippte Betrag, ob die
+ * Fonds-Erklärung und das ganze Marktgeschehen aufgeklappt sind. */
+let etfKaufAuf = null;
+const etfBetrag = {};
+let bankInfoAuf = false, marktLogAlle = false;
+/* Kurze Branchennamen für die engen Tabellen; die langen stehen im Lexikon. */
+const BRANCHE_KURZ = { agrar: "Agrar", rohstoff: "Rohstoff & Bau", versorger: "Versorger", tech: "Technologie",
+  touristik: "Touristik", ruestung: "Rüstung", rennclub: "Race Club", rennindustrie: "Rennindustrie" };
+const BRANCHE_LANG = { agrar: "Agrarwirtschaft", rohstoff: "Rohstoff- & Bauindustrie", versorger: "Grundbedürfnisse (Wasser, Energie, Öl)",
+  tech: "Technologie & Elektronik", touristik: "Touristik", ruestung: "Rüstungsindustrie" };
+/* Lange Fondsnamen in den Texten des Marktgeschehens kürzen */
+const brancheKuerzen = s => Object.entries(BRANCHE_LANG).reduce((t, [k, lang]) => t.split(lang + "-Fonds").join(BRANCHE_KURZ[k] + "-Fonds"), s);
+/* Abstand Kurs ↔ Wert F als kurzes Etikett für die Kurstafel */
+const lueckeKurz = g => g == null ? `<span class="meta">—</span>`
+  : Math.abs(g) < 0.03 ? `<span class="kt-fair">≈ fair</span>`
+  : `<span class="${g > 0.1 ? "kt-unter" : g < -0.1 ? "kt-ueber" : "kt-nah"}">${Math.abs(Math.round(g * 100))} % ${g > 0 ? "unter" : "über"}</span>`;
 
 /* Firmenlogos der Bots. Menschliche Mitspieler haben keins — überall, wo ein
  * Logo stehen kann, muss der farbige Namenszug weiterhin greifen.
@@ -12791,9 +12808,7 @@ function render({ state, me, myId, chat, room }) {
     }
 
     /* Kurstafel: jede Firma aufklappbar — Wertverlauf, Dividende je Block und
-     * die daraus gerechnete Rendite. Der Blockpreis allein sagt naemlich nicht,
-     * ob ein Kauf sich lohnt: eine teure Firma ohne Umsatz schuettet nichts
-     * aus, eine billige mit hohem Umsatz holt den Kaufpreis schnell herein. */
+     * die daraus gerechnete Rendite. */
     document.getElementById("bankboard").innerHTML = Object.values(state.players)
       .sort((a, b) => (b.marketValue || 0) - (a.marketValue || 0))
       .map(p => {
@@ -12823,6 +12838,7 @@ function render({ state, me, myId, chat, room }) {
             <i class="bzPfeil">${auf ? "⌃" : "⌄"}</i></span>
         </div>` + (auf ? `<div class="firmdetail">
           ${verlaufChart(firmHist[p.id], "Marktwert (Kurs × Aktien)", fmt)}
+          <div class="kzrow"><span>Marktwert</span><b>${fmt(p.marketValue || 0)}${held ? ` <span class="meta">· du hältst ${held} %</span>` : ""}</b></div>
           <div class="kzrow"><span>Kurs je Aktie</span><b>${fk(p.kurs || 0)}</b></div>
           <div class="kzrow"><span>Wert je Aktie (Fundament F)</span><b>${fk(p.fundament || 0)} <span class="meta">· ${lueckeHtml(p.luecke)}</span></b></div>
           <div class="kzrow"><span>Buchwert der Firma</span><b>${fmt(p.buchwert || 0)}</b></div>
@@ -12871,29 +12887,54 @@ function render({ state, me, myId, chat, room }) {
       (toMe.length ? `<div class="sec">Nur für dich</div>` + toMe.map(offerRow).join("") : "") +
       `<div class="sec bTafelKopf"><span>Kurstafel</span><span class="meta">${Object.keys(state.players).length} Firmen · ${open.length ? `${open.length} offene Angebote — Firma antippen` : "keine offenen Angebote"}</span></div>
        <div class="bzeile kopf"><span class="bzFirma">Firma</span><span class="bzSpark">Verlauf</span><span class="bzKurs">Kurs</span><span class="bzAend">10 min</span><span class="bzMwert">Marktwert</span><span class="bzTat"></span></div>`;
-    /* Branchen-ETFs: Index je Branche (Kurse gewichtet nach Wert F, Start 100) */
-    const etfs = state.etf || [];
-    document.getElementById("etfboard").innerHTML = etfs.length ? `<div class="sec bTafelKopf"><span>Branchen-ETFs</span><span class="meta">ein Kauf streut über alle Firmen der Branche</span></div>` +
-      etfs.map(e => {
-        const h = e.verlauf || [], seit = h.length > 1 ? (h[h.length - 1] / h[0] - 1) * 100 : null;
-        const meins = (me.etf || []).find(x => x.branche === e.branche);
-        return `<div class="bond etfrow">
-          <div style="min-width:0;flex:1"><b>${e.name}-Fonds</b>
-            <div class="meta">Fondswert ${fmt(e.wert || 0)} · davon flüssig ${fmt(e.kasse || 0)}${e.ausschuettung ? ` · <span style="color:var(--up)">zuletzt ${fmt(e.ausschuettung)} ausgeschüttet</span>` : ""}${(e.aktien || []).length ? ` · hält ${e.aktien.map(a => `${a.aktien} ${a.firma}`).join(", ")}` : " · noch keine Aktien"}${meins ? ` · <b style="color:var(--accent)">du: ${fmt(meins.wert)}</b>` : ""}</div></div>
-          <span style="display:flex;align-items:center;gap:8px">
-            ${h.length > 1 ? sparklineVon(h, 52, 16) : ""}
-            <span class="fpreis">${(e.preis || 0).toFixed(1)}${seit == null ? "" : ` <em class="${seit >= 0 ? "plus" : "minus"}" style="font-size:11px">${seit >= 0 ? "+" : ""}${seit.toFixed(1)} %</em>`}</span>
-            <input type="number" class="etfBetrag" data-etf-betrag="${e.branche}" min="100" step="100" placeholder="$" style="width:84px">
-            <button class="buyb" data-etf-kauf="${e.branche}">Kaufen</button>
-          </span></div>`; }).join("") +
-      `<div class="meta" style="padding-top:4px">Jede Branche hat einen Fonds. Dein Geld kauft echte Aktien der Firmen dieser Branche (gewichtet nach Wert F) — das hebt ihre Kurse. Anteilspreis = Fondswert ÷ Anteile, Start 100. Auszahlen kann der Fonds nur aus seiner Kasse; ist sie knapp, bietet er Aktien an. ${Math.round((store.get().meta?.fondsAusschuettung ?? 0.8) * 100)} % der Dividenden seiner Aktien schüttet er alle 10 Minuten an die Anteilseigner aus. 1 % Gebühr je Kauf und Verkauf.</div>` : "";
     document.getElementById("depotboard").innerHTML = depotKarte(state.depot);
-    /* Marktgeschehen: Käufe, Verkäufe, Ausschüttungen, Bauten, Flauten, Panik */
-    const mlog = (state.marktLog || []).slice(0, 8);
-    document.getElementById("marktlog").innerHTML = mlog.length
-      ? `<div class="sec">Marktgeschehen</div>` + mlog.map(e => `<div class="mlog ${e.art}"><span class="meta">min ${Math.floor(e.tick / 60)}</span> ${e.text}</div>`).join("")
-      : "";
 
+    /* Branchenfonds: eine Zeile je Fonds mit Kurs, Verlauf und seinen Firmen.
+     * Kaufen klappt ein kleines Feld auf, statt in jeder Zeile ein Eingabefeld
+     * stehen zu haben. Die Mitglieder stehen als Chips darunter — so sieht man
+     * auch, wenn nach einer Fusion eine neue Firma im Fonds ist. */
+    const etfs = state.etf || [];
+    const etfZeile = e => {
+      const h = e.verlauf || [], seit = h.length > 1 ? (h[h.length - 1] / h[0] - 1) * 100 : null;
+      const meins = (me.etf || []).find(x => x.branche === e.branche);
+      const mitglieder = e.mitglieder || (e.firmen || []).map(name => ({ name, aktien: (e.aktien || []).find(a => a.firma === name)?.aktien || 0 }));
+      const auf = etfKaufAuf === e.branche;
+      const chips = mitglieder.length
+        ? mitglieder.map(m => `<span class="fd-chip${m.aktien > 0 ? "" : " leer"}" title="${m.aktien > 0 ? `Fonds hält ${m.aktien} Aktien (${fmt(m.wert || 0)})` : "noch keine Aktien im Fonds"}${m.fusion ? " · per Fusion in der Branche" : ""}">
+            <i style="background:${m.farbe || "var(--dim)"}"></i>${m.name}${m.aktien > 0 ? ` <b>${m.aktien}</b>` : ""}${m.fusion ? ` <span class="fd-fusion">Fusion</span>` : ""}</span>`).join("")
+        : `<span class="fd-chip leer">keine Firma in der Branche</span>`;
+      return `<div class="fd-zeile${auf ? " auf" : ""}">
+        <div class="fd-oben">
+          <span class="fd-name"><b>${BRANCHE_KURZ[e.branche] || e.name}</b>${meins ? `<em class="kt-tag ich" title="Deine Anteile zum Kurs">du: ${fmt(meins.wert)}</em>` : ""}</span>
+          <span class="kt-trend">${h.length > 1 ? sparklineVon(h, 56, 16) : ""}</span>
+          <span class="kt-kurs">${(e.preis || 0).toFixed(1)}</span>
+          <span class="fd-seit ${seit == null ? "" : seit >= 0 ? "plus" : "minus"}">${seit == null ? "—" : `${seit >= 0 ? "+" : ""}${seit.toFixed(1)} %`}</span>
+          <button type="button" class="${auf ? "mini" : "buyb"} fd-knopf" data-etf-auf="${e.branche}">${auf ? "Schließen" : "Kaufen"}</button>
+        </div>
+        <div class="fd-chips">${chips}<span class="fd-kasse" title="Fondswert ${fmt(e.wert || 0)}">Kasse ${fmt(e.kasse || 0)}${e.ausschuettung ? ` · zuletzt ${fmt(e.ausschuettung)} ausgeschüttet` : ""}</span></div>
+        ${auf ? `<div class="fd-kauf">
+          <input type="number" class="etfBetrag" data-etf-betrag="${e.branche}" min="100" step="100" placeholder="Betrag $" value="${etfBetrag[e.branche] ?? ""}">
+          ${[500, 1000, 5000].map(v => `<button type="button" class="mini" data-etf-schnell="${e.branche}" data-wert="${v}">${fmt(v)}</button>`).join("")}
+          <button type="button" class="buyb" data-etf-kauf="${e.branche}">Anteile kaufen</button>
+          <span class="meta fd-hinweis">1 % Gebühr · Anteilspreis ${(e.preis || 0).toFixed(2)} · du hast ${fmt(me.cash || 0)}</span>
+        </div>` : ""}
+      </div>`;
+    };
+    document.getElementById("etfboard").innerHTML = etfs.length ? `<div class="sec bTafelKopf"><span>Branchenfonds · ${etfs.length}</span>
+        <button type="button" class="bInfoKnopf${bankInfoAuf ? " on" : ""}" data-bank-info>ⓘ So funktionieren Fonds</button></div>` +
+      (bankInfoAuf ? `<div class="bInfo">Jede Branche hat einen Fonds. Dein Geld kauft echte Aktien der Firmen dieser Branche (gewichtet nach Wert F) — das hebt ihre Kurse.
+        Anteilspreis = Fondswert ÷ Anteile, Start 100. Auszahlen kann der Fonds nur aus seiner Kasse; ist sie knapp, bietet er Aktien an. 1 % Gebühr je Kauf und Verkauf.
+        <b>Fusion:</b> Kauft eine Firma eine andere ganz auf, fliegt die aufgekaufte aus dem Fonds, und die übernehmende kommt hinein.</div>` : "") +
+      `<div class="kt fd">
+        <div class="kt-kopf"><span>Fonds</span><span class="kt-trend">Verlauf</span><span>Preis</span><span>seit Start</span><span></span></div>
+        ${etfs.map(etfZeile).join("")}</div>` : "";
+
+    /* Marktgeschehen: die letzten Ereignisse knapp, der Rest auf Wunsch */
+    const mlogAlle = state.marktLog || [], mlog = mlogAlle.slice(0, marktLogAlle ? 20 : 5);
+    document.getElementById("marktlog").innerHTML = mlog.length
+      ? `<div class="sec bTafelKopf"><span>Marktgeschehen</span>${mlogAlle.length > 5 ? `<button type="button" class="bInfoKnopf" data-mlog-alle>${marktLogAlle ? "weniger" : `alle ${Math.min(20, mlogAlle.length)} zeigen`}</button>` : ""}</div>` +
+        `<div class="mlog-liste">` + mlog.map(e => `<div class="mlog ${e.art}"><span class="mlog-zeit">min ${Math.floor(e.tick / 60)}</span><span>${brancheKuerzen(e.text)}</span></div>`).join("") + `</div>`
+      : "";
     /* Kaufanfragen: Zielauswahl, eingegangene Anfragen, eigene laufende Anfragen */
     const bidCo = document.getElementById("bidCompany"), bidCoPrev = bidCo.value;
     const targets = Object.values(state.players).filter(p => p.id !== myId && p.ownPct > 0);
@@ -14200,13 +14241,37 @@ document.getElementById("firmabody").addEventListener("click", e => {
 });
 
 /* Branchen-ETFs kaufen und verkaufen */
+document.getElementById("p-bank").addEventListener("input", e => {
+  const f = e.target.closest("[data-etf-betrag]");
+  if (f) etfBetrag[f.dataset.etfBetrag] = f.value;
+});
 document.getElementById("p-bank").addEventListener("click", e => {
+  /* Fokus vorher lösen: Steht er im Betragsfeld, überspringt render() das
+   * ganze Panel (typingIn) — "Schließen" bliebe dann sichtbar offen. */
+  const neuZeichnen = () => { document.activeElement?.blur?.(); SFX.spiel("klick"); render(store.get()); };
+  const a = e.target.closest("[data-etf-auf]");
+  if (a) {
+    etfKaufAuf = etfKaufAuf === a.dataset.etfAuf ? null : a.dataset.etfAuf;
+    neuZeichnen();
+    if (etfKaufAuf) document.querySelector(`[data-etf-betrag="${etfKaufAuf}"]`)?.focus();
+    return;
+  }
+  const s = e.target.closest("[data-etf-schnell]");
+  if (s) {
+    etfBetrag[s.dataset.etfSchnell] = s.dataset.wert;
+    const feld = document.querySelector(`[data-etf-betrag="${s.dataset.etfSchnell}"]`);
+    if (feld) feld.value = s.dataset.wert;
+    return;
+  }
+  if (e.target.closest("[data-bank-info]")) { bankInfoAuf = !bankInfoAuf; return neuZeichnen(); }
+  if (e.target.closest("[data-mlog-alle]")) { marktLogAlle = !marktLogAlle; return neuZeichnen(); }
   const k = e.target.closest("[data-etf-kauf]");
   if (k) {
     const feld = document.querySelector(`[data-etf-betrag="${k.dataset.etfKauf}"]`);
     const betrag = +feld?.value || 0;
     if (betrag < 100) return toast("Betrag eingeben — mindestens 100 $", true);
     act("etfKaufen", { branche: k.dataset.etfKauf, betrag }); if (feld) feld.value = "";
+    delete etfBetrag[k.dataset.etfKauf]; etfKaufAuf = null;
     return;
   }
   const v = e.target.closest("[data-etf-verkauf]");
